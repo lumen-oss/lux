@@ -1,12 +1,10 @@
 <h1 align="center">
   <a href="https://nvim-neorocks.github.io/tutorial/getting-started"><img src="./lux-logo.svg" alt="Lux" width="200"></a>
-  <!-- <br> -->
-  <!-- <img src="./lux-logo.svg" alt="Lux" width="200"> -->
-  <!-- <br> -->
   <br>
+  <h1 align="center">Lux</h1>
 </h1>
 
-<h4 align="center">Lux - A luxurious package manager for <a href="https://www.lua.org/" target="_blank">Lua</a>.</h4>
+<h4 align="center">A luxurious package manager for <a href="https://www.lua.org/" target="_blank">Lua</a>.</h4>
 
 <p align="center">
   <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/nvim-neorocks/lux/integration-tests.yml?style=for-the-badge">
