@@ -8,7 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-lux-lib = { version = "0.3.11", path = "../lux-lib", default-features = false }
+lux-lib = { version = "0.3.10", path = "../lux-lib", default-features = false }
 mlua = { version = "0.10.1", features = ["module", "async"] }
 path-absolutize = "3.1.1"
 lux-workspace-hack = { version = "0.1", path = "../lux-workspace-hack" }
