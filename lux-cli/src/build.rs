@@ -144,7 +144,13 @@ Use --no-lock to force a new build.
         let dependencies = lockfile
             .rocks()
             .iter()
-            .map(|(_, value)| value)
+            .filter_map(|(pkg_id, value)| {
+                if lockfile.is_entrypoint(pkg_id) {
+                    Some(value)
+                } else {
+                    None
+                }
+            })
             .cloned()
             .collect_vec();
         let mut lockfile = lockfile.write_guard();

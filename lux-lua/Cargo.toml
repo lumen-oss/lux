@@ -14,7 +14,6 @@ path-absolutize = "3.1.1"
 lux-workspace-hack = { version = "0.1", path = "../lux-workspace-hack" }
 
 [features]
-default = ["luajit"]
 lua51 = ["mlua/lua51", "lux-lib/lua51"]
 lua52 = ["mlua/lua52", "lux-lib/lua52"]
 lua53 = ["mlua/lua53", "lux-lib/lua53"]
