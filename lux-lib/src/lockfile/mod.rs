@@ -1205,6 +1205,17 @@ impl Lockfile<ReadWrite> {
         self.lock.entrypoints.push(rock.id().clone())
     }
 
+    pub fn remove_entrypoint(&mut self, rock: &LocalPackage) {
+        if let Some(index) = self
+            .lock
+            .entrypoints
+            .iter()
+            .position(|pkg_id| *pkg_id == rock.id())
+        {
+            self.lock.entrypoints.remove(index);
+        }
+    }
+
     fn add(&mut self, rock: &LocalPackage) {
         self.lock.rocks.insert(rock.id(), rock.clone());
     }

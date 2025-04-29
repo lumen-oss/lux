@@ -157,6 +157,7 @@ Use --no-lock to force a new build.
         lockfile.add_entrypoint(&package);
         for dep in dependencies {
             lockfile.add_dependency(&package, &dep);
+            lockfile.remove_entrypoint(&dep);
         }
     }
 
