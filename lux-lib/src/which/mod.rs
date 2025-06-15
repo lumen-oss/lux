@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use bon::{builder, Builder};
+use bon::Builder;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -59,7 +59,7 @@ pub enum WhichError {
 
 fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
     let config = which.config;
-    let lua_version = LuaVersion::from(config)?;
+    let lua_version = LuaVersion::from_config(config)?;
     let tree = config.user_tree(lua_version.clone())?;
     let lockfile = tree.lockfile()?;
     let local_packages = if which.packages.is_empty() {

@@ -38,7 +38,7 @@ pub fn current_project_or_user_tree(config: &Config) -> Result<Tree> {
     Ok(match &project {
         Some(project) => project.tree(config)?,
         None => {
-            let lua_version = LuaVersion::from(config)?.clone();
+            let lua_version = LuaVersion::from_config(config)?.clone();
             config.user_tree(lua_version)?
         }
     })

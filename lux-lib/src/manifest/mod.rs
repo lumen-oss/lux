@@ -98,10 +98,11 @@ async fn get_manifest(
 /// if the cache doesn't exist or is outdated.
 async fn manifest_from_cache_or_server(
     server_url: &Url,
+    manifest_version: &LuaVersion,
     config: &Config,
     bar: &Progress<ProgressBar>,
 ) -> Result<String, ManifestFromServerError> {
-    let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
+    let manifest_version = manifest_version.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
 
     // Stores a path to the manifest cache (this allows us to operate on a manifest without
@@ -153,10 +154,11 @@ async fn manifest_from_cache_or_server(
 /// This still populates the cache.
 pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
+    manifest_version: &LuaVersion,
     config: &Config,
     bar: &Progress<ProgressBar>,
 ) -> Result<String, ManifestFromServerError> {
-    let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
+    let manifest_version = manifest_version.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     let cache = mk_manifest_cache(&url, config).await?;
     let client = Client::new();
@@ -324,14 +326,26 @@ impl Manifest {
         config: &Config,
         progress: &Progress<ProgressBar>,
     ) -> Result<Self, ManifestError> {
-        let content =
-            crate::manifest::manifest_from_cache_or_server(&server_url, config, progress).await?;
+        let manifest_version = LuaVersion::from_current_project_or_config(config)
+            .map_err(|err| ManifestError::Server(err.into()))?;
+
+        let content = crate::manifest::manifest_from_cache_or_server(
+            &server_url,
+            &manifest_version,
+            config,
+            progress,
+        )
+        .await?;
         match ManifestMetadata::new(&content) {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
             Err(_) => {
-                let manifest =
-                    crate::manifest::manifest_from_server_only(&server_url, config, progress)
-                        .await?;
+                let manifest = crate::manifest::manifest_from_server_only(
+                    &server_url,
+                    &manifest_version,
+                    config,
+                    progress,
+                )
+                .await?;
                 Ok(Self::new(server_url, ManifestMetadata::new(&manifest)?))
             }
         }
@@ -415,7 +429,7 @@ mod tests {
     use httptest::{matchers::request, responders::status_code, Expectation, Server};
     use serial_test::serial;
 
-    use crate::{config::ConfigBuilder, package::PackageReq, progress::MultiProgress};
+    use crate::{config::ConfigBuilder, package::PackageReq};
 
     use super::*;
 
@@ -457,11 +471,14 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config, &bar)
-            .await
-            .unwrap();
+        manifest_from_cache_or_server(
+            &Url::parse(&url_str).unwrap(),
+            &LuaVersion::LuaJIT,
+            &config,
+            &Progress::no_progress(),
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -479,12 +496,15 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
 
-        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config, &bar)
-            .await
-            .unwrap();
+        manifest_from_cache_or_server(
+            &Url::parse(&url_str).unwrap(),
+            &LuaVersion::Lua51,
+            &config,
+            &Progress::no_progress(),
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -508,11 +528,14 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        let result = manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config, &bar)
-            .await
-            .unwrap();
+        let result = manifest_from_cache_or_server(
+            &Url::parse(&url_str).unwrap(),
+            &LuaVersion::Lua51,
+            &config,
+            &Progress::no_progress(),
+        )
+        .await
+        .unwrap();
         assert_eq!(result, manifest_content);
     }
 

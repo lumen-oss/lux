@@ -228,7 +228,7 @@ variables = {{
 }}
 "#,
             lua_version_str,
-            LuaVersion::from(&self.config)?,
+            LuaVersion::from_current_project_or_config(&self.config)?,
             self.config.make_cmd(),
         );
         let luarocks_config_content =

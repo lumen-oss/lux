@@ -93,9 +93,11 @@ impl<State: build_project_builder::State + build_project_builder::IsComplete>
             .collect_vec();
 
         let build_tree = project.build_tree(config)?;
-        let lua =
-            LuaInstallation::new_from_config(config, &progress.map(|progress| progress.new_bar()))
-                .await?;
+        let lua = LuaInstallation::new_from_current_project_or_config(
+            config,
+            &progress.map(|progress| progress.new_bar()),
+        )
+        .await?;
         let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
 
         if args.no_lock {

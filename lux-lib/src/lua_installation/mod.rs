@@ -99,7 +99,19 @@ impl LuaInstallation {
         config: &Config,
         progress: &Progress<ProgressBar>,
     ) -> Result<Self, LuaInstallationError> {
-        Self::new(LuaVersion::from(config)?, config, progress).await
+        Self::new(&LuaVersion::from_config(config)?, config, progress).await
+    }
+
+    pub async fn new_from_current_project_or_config(
+        config: &Config,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<Self, LuaInstallationError> {
+        Self::new(
+            &LuaVersion::from_current_project_or_config(config)?,
+            config,
+            progress,
+        )
+        .await
     }
 
     pub async fn new(
@@ -545,7 +557,11 @@ mod test {
             println!("Skipping impure test");
             return;
         }
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(Some(LuaVersion::from_detected().unwrap()))
+            .build()
+            .unwrap();
         let lua_version = config.lua_version().unwrap();
         let progress = MultiProgress::new(&config);
         let bar = progress.map(MultiProgress::new_bar);

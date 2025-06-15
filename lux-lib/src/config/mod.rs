@@ -12,6 +12,7 @@ use thiserror::Error;
 use tree::RockLayoutConfig;
 use url::Url;
 
+use crate::project::Project;
 use crate::tree::{Tree, TreeError};
 use crate::variables::GetVariableError;
 use crate::{
@@ -175,7 +176,7 @@ fn lux_lib_resource_dir() -> Option<PathBuf> {
 
 #[derive(Error, Debug)]
 #[error(
-    r#"lua version not set.
+    r#"lua version couldn't be inferred!
 Please provide a version through `lx --lua-version <ver> <cmd>`
 Valid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.
 "#
@@ -183,8 +184,26 @@ Valid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.
 pub struct LuaVersionUnset;
 
 impl LuaVersion {
-    pub fn from(config: &Config) -> Result<&Self, LuaVersionUnset> {
-        config.lua_version.as_ref().ok_or(LuaVersionUnset)
+    pub fn from_detected() -> Result<Self, LuaVersionUnset> {
+        crate::lua_installation::detect_installed_lua_version().ok_or(LuaVersionUnset)
+    }
+
+    pub fn from_config(config: &Config) -> Result<Self, LuaVersionUnset> {
+        config
+            .lua_version
+            .clone()
+            .or_else(crate::lua_installation::detect_installed_lua_version)
+            .ok_or(LuaVersionUnset)
+    }
+
+    pub fn from_current_project_or_config(config: &Config) -> Result<Self, LuaVersionUnset> {
+        match config.lua_version.clone() {
+            Some(lua_version) => Ok(lua_version),
+            None => match Project::current_or_err() {
+                Ok(project) => project.lua_version(config).map_err(|_| LuaVersionUnset),
+                Err(_) => LuaVersion::from_detected(),
+            },
+        }
     }
 }
 
@@ -316,7 +335,7 @@ impl Config {
     }
 
     /// The tree in which to install rocks.
-    /// If installing packges for a project, use `Project::tree` instead.
+    /// If installing packages for a project, use `Project::tree` instead.
     pub fn user_tree(&self, version: LuaVersion) -> Result<Tree, TreeError> {
         Tree::new(self.user_tree.clone(), version, self)
     }
@@ -434,6 +453,7 @@ pub struct ConfigBuilder {
 
 /// A builder for the lux `Config`.
 impl ConfigBuilder {
+    #[cfg(not(test))]
     /// Create a new `ConfigBuilder` from a config file by deserializing from a config file
     /// if present, or otherwise by instantiating the default config.
     pub fn new() -> Result<Self, ConfigError> {
@@ -443,6 +463,12 @@ impl ConfigBuilder {
         } else {
             Ok(Self::default())
         }
+    }
+
+    #[cfg(test)]
+    /// Create a new `ConfigBuilder` without reading from a config file.
+    pub fn new() -> Result<Self, std::convert::Infallible> {
+        Ok(Self::default())
     }
 
     /// Get the path to the lux config file.
@@ -576,10 +602,6 @@ impl ConfigBuilder {
         let cache_dir = self.cache_dir.unwrap_or(Config::get_default_cache_path()?);
         let user_tree = self.user_tree.unwrap_or(data_dir.join("tree"));
 
-        let lua_version = self
-            .lua_version
-            .or(crate::lua_installation::detect_installed_lua_version());
-
         Ok(Config {
             enable_development_packages: self.enable_development_packages.unwrap_or(false),
             server: self.server.unwrap_or_else(|| unsafe {
@@ -589,7 +611,7 @@ impl ConfigBuilder {
             only_sources: self.only_sources,
             namespace: self.namespace,
             lua_dir: self.lua_dir,
-            lua_version,
+            lua_version: self.lua_version,
             user_tree,
             verbose: self.verbose.unwrap_or(false),
             no_progress: self.no_progress.unwrap_or(false),
