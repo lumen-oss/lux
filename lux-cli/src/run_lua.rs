@@ -12,7 +12,6 @@ use lux_lib::{
     operations,
     progress::MultiProgress,
     project::Project,
-    rockspec::LuaVersionCompatibility,
 };
 
 use crate::build::{self, Build};
@@ -54,7 +53,7 @@ pub async fn run_lua(run_lua: RunLua, config: Config) -> Result<()> {
     let project = Project::current()?;
     let (lua_version, root, tree, mut welcome_message) = match &project {
         Some(project) => (
-            project.toml().lua_version_matches(&config)?,
+            project.lua_version(&config)?,
             project.root().to_path_buf(),
             project.tree(&config)?,
             format!(
@@ -63,7 +62,7 @@ pub async fn run_lua(run_lua: RunLua, config: Config) -> Result<()> {
             ),
         ),
         None => {
-            let version = LuaVersion::from(&config)?.clone();
+            let version = LuaVersion::from_config(&config)?.clone();
             (
                 version.clone(),
                 std::env::current_dir()?,

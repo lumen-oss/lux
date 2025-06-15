@@ -27,7 +27,7 @@ pub struct Install {
 pub async fn install(data: Install, config: Config) -> Result<()> {
     let pin = PinnedState::from(data.pin);
 
-    let lua_version = LuaVersion::from(&config)?.clone();
+    let lua_version = LuaVersion::from_config(&config)?.clone();
     let tree = config.user_tree(lua_version)?;
 
     let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree)?;

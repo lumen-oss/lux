@@ -7,7 +7,7 @@ use lux_lib::{
 
 /// Purge the user tree
 pub async fn purge(config: Config) -> Result<()> {
-    let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+    let tree = config.user_tree(LuaVersion::from_config(&config)?.clone())?;
 
     let len = tree.list()?.len();
 
