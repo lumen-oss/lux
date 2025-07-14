@@ -905,6 +905,8 @@ version = "{}""#,
             template.push(test.display_lua());
         }
 
+        if self.local.deploy != PerPlatform::default() {}
+
         template.push(self.local.internal.build.display_lua());
 
         Ok(std::iter::once(starter)
@@ -1148,6 +1150,9 @@ mod tests {
         command = "my-command"
         args = ["--foo", "--bar"]
 
+        [deploy]
+        wrap_bin_scripts = false
+
         [build]
         type = "builtin"
 
@@ -1217,6 +1222,10 @@ mod tests {
                 type = "command",
                 script = "test.lua",
                 flags = {"foo", "bar"},
+            }
+
+            deploy = {
+                wrap_bin_scripts = false,
             }
 
             build = {
