@@ -27,21 +27,21 @@ jobs:
         name: neorocks
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - name: Formatting
-      run: nix build ".#checks.${{matrix.job.target}}.git-hooks-check" --accept-flake-config --log-lines 500
+      run: nix build ".#checks.${{matrix.job.target}}.git-hooks-check" --accept-flake-config --log-lines 500 --fallback
       if: ${{ matrix.job.target == 'x86_64-linux' }}
       shell: bash
     - name: Clippy
-      run: nix build ".#checks.${{matrix.job.target}}.clippy" --accept-flake-config --log-lines 500
+      run: nix build ".#checks.${{matrix.job.target}}.clippy" --accept-flake-config --log-lines 500 --fallback
       shell: bash
     - name: Tests
-      run: nix build ".#checks.${{matrix.job.target}}.tests" --accept-flake-config --log-lines 500
+      run: nix build ".#checks.${{matrix.job.target}}.tests" --accept-flake-config --log-lines 500 --fallback
       shell: bash
     - name: Lua tests
-      run: nix build ".#checks.${{matrix.job.target}}.lua-tests" --accept-flake-config --log-lines 500
+      run: nix build ".#checks.${{matrix.job.target}}.lua-tests" --accept-flake-config --log-lines 500 --fallback
       shell: bash
     - name: Build devShell
-      run: nix build ".#devShells.${{matrix.job.target}}.default" --accept-flake-config --log-lines 500
+      run: nix build ".#devShells.${{matrix.job.target}}.default" --accept-flake-config --log-lines 500 --fallback
       shell: bash
     - name: Build lux-cli
-      run: nix build ".#packages.${{matrix.job.target}}.lux-cli" -Lv --accept-flake-config
+      run: nix build ".#packages.${{matrix.job.target}}.lux-cli" -Lv --accept-flake-config --log-lines 500 --fallback
       shell: bash
