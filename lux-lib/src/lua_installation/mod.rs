@@ -132,21 +132,26 @@ impl LuaInstallation {
         version: &LuaVersion,
         search_config: &ExternalDependencySearchConfig,
     ) -> Option<Self> {
-        let pkg_name = match version {
-            LuaVersion::Lua51 => "lua5.1",
-            LuaVersion::Lua52 => "lua5.2",
-            LuaVersion::Lua53 => "lua5.3",
-            LuaVersion::Lua54 => "lua5.4",
-            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => "luajit",
+        let pkg_name_probes = match version {
+            LuaVersion::Lua51 => vec!["lua5.1", "lua-5.1"],
+            LuaVersion::Lua52 => vec!["lua5.2", "lua-5.2"],
+            LuaVersion::Lua53 => vec!["lua5.3", "lua-5.3"],
+            LuaVersion::Lua54 => vec!["lua5.4", "lua-5.4"],
+            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => vec!["luajit"],
         };
 
-        let mut dependency_info = ExternalDependencyInfo::probe(
-            pkg_name,
-            &ExternalDependencySpec::default(),
-            search_config,
-        );
+        let mut dependency_info = pkg_name_probes
+            .iter()
+            .map(|pkg_name| {
+                ExternalDependencyInfo::probe(
+                    pkg_name,
+                    &ExternalDependencySpec::default(),
+                    search_config,
+                )
+            })
+            .find_map(Result::ok);
 
-        if let Ok(info) = &mut dependency_info {
+        if let Some(info) = &mut dependency_info {
             let bin = info.lib_dir.as_ref().and_then(|lib_dir| {
                 lib_dir
                     .parent()

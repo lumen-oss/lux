@@ -6,10 +6,9 @@ use std::{
 };
 
 use crate::{
-    build::{external_dependency::ExternalDependencyInfo, utils},
-    config::{external_deps::ExternalDependencySearchConfig, Config, LuaVersion},
+    build::utils,
+    config::{Config, LuaVersion},
     hash::HasIntegrity,
-    lua_rockspec::ExternalDependencySpec,
     operations::{self, UnpackError},
     progress::{Progress, ProgressBar},
 };
@@ -341,32 +340,11 @@ async fn do_build_lua_unix(
 
     progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", &pkg_version)));
 
-    let readline_spec = ExternalDependencySpec {
-        header: Some("readline/readline.h".into()),
-        library: None,
-    };
-    let build_target = match ExternalDependencyInfo::probe(
-        "readline",
-        &readline_spec,
-        &ExternalDependencySearchConfig::default(),
-    ) {
-        Ok(_) => {
-            // NOTE: The Lua < 5.4 linux targets depend on readline
-            if cfg!(target_os = "linux") {
-                if matches!(&lua_version, LuaVersion::Lua54) {
-                    "linux-readline"
-                } else {
-                    "linux"
-                }
-            } else if cfg!(target_os = "macos") {
-                "macosx"
-            } else if matches!(&lua_version, LuaVersion::Lua54) {
-                "linux"
-            } else {
-                "generic"
-            }
-        }
-        _ => "generic",
+    let build_target = if cfg!(target_os = "linux") && matches!(&lua_version, LuaVersion::Lua54) {
+        "linux"
+    } else {
+        // For older lua versions, the "linux" target uses readline.
+        "generic"
     };
 
     match Command::new(config.make_cmd())
