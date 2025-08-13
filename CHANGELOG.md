@@ -6,6 +6,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.13.3](https://github.com/nvim-neorocks/lux/compare/v0.13.2...v0.13.3) - 2025-08-13
+
+### Other
+- *(deps)* bump spdx from 0.10.8 to 0.11.0 ([#969](https://github.com/nvim-neorocks/lux/pull/969))
+- *(deps)* bump emmylua_check from 0.10.0 to 0.11.0 ([#970](https://github.com/nvim-neorocks/lux/pull/970))
+
+## `lux-lib` - [0.19.3](https://github.com/nvim-neorocks/lux/compare/lux-lib-v0.19.2...lux-lib-v0.19.3) - 2025-08-13
+
+### Other
+- improvements to detecting/installing lua [do not squash] ([#976](https://github.com/nvim-neorocks/lux/pull/976))
+- *(deps)* bump bon from 3.6.3 to 3.7.0 ([#971](https://github.com/nvim-neorocks/lux/pull/971))
+
 ## `lux-cli` - [0.13.2](https://github.com/nvim-neorocks/lux/compare/v0.13.1...v0.13.2) - 2025-08-08
 
 ### Other
