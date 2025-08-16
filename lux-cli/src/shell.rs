@@ -69,6 +69,16 @@ exit the current shell if you would like to enter a new one."#,
                 .into_diagnostic()
                 .map_err(|_| miette!("cannot find `zsh` on your system!"))?;
 
+            #[cfg(not(any(
+                target_os = "linux",
+                target_os = "android",
+                target_os = "windows",
+                target_os = "macos"
+            )))]
+            let fallback = which("sh")
+                .into_diagnostic()
+                .map_err(|_| miette!("cannot find `sh` on your system!"))?;
+
             fallback
         }
     };

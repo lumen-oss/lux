@@ -22,54 +22,50 @@ jobs:
     name: ${{ matrix.target }}
     if: github.repository_owner == 'lumen-oss' && (
       ( github.event_name == 'release' && startsWith(github.event.release.name, 'v')) ||
-        github.event_name == 'workflow_dispatch' ||
-        github.event_name == 'pull_request'
+        github.event_name == 'workflow_dispatch'
       )
     continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
+            packages: true
           - target: x86_64-pc-windows-msvc
             os: windows-2025
           - target: aarch64-apple-darwin
             os: macos-15
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
-          # - target: aarch64-unknown-linux-musl
-          #   os: ubuntu-22.04
-          # - target: aarch64-pc-windows-msvc
-          #   os: windows-2022
-          # - target: x86_64-apple-darwin
-          #   os: macos-13
-          # - target: x86_64-unknown-freebsd
-          #   os: ubuntu-22.04
-          # - target: x86_64-unknown-linux-musl
-          #   os: ubuntu-22.04
-      fail-fast: false
+            packages: true
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-22.04
     timeout-minutes: 120
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Setup cross toolchain
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+        if: startsWith(matrix.os, 'ubuntu')
+
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
+        if: startsWith(matrix.os, 'macos') || endsWith(matrix.target, 'windows-msvc')
 
-      # NOTE: We cannot cross-compile yet because of dynamically linked dependencies:
-      # - gpgme -> lgpg-error, lgpgme
-      # - git2 -> lgit2
-      #
-      # - name: Setup cross toolchain
-      #   uses: taiki-e/setup-cross-toolchain-action@v1
-      #   with:
-      #     target: ${{ matrix.target }}
-      #   if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.target, '-musl')
-      #
-      # - name: Add target via rustup
-      #   run: rustup target add ${{ matrix.target }}
-      #   if: "!endsWith(matrix.target, 'windows-msvc')"
+      - name: Set host target
+        if: "!startsWith(matrix.os, 'windows')"
+        shell: bash
+        run: |
+          echo "HOST_TARGET=$(rustc -vV | sed -n 's/^host: //p')" >> "${GITHUB_ENV}"
 
       - name: "Setup environment for MSVC"
         # mirrors .cargo/config.toml [target.x86_64-pc-windows-msvc] rustflags
@@ -92,8 +88,8 @@ jobs:
 
       - name: Build binary distributions (*nix)
         if: "!startsWith(matrix.os, 'windows')"
-        run: |
-          cargo xtask dist-package
+        shell: bash
+        run: cargo --locked run --package xtask --target "${HOST_TARGET}" -- dist-package
         env:
           SYSTEM_DEPS_LINK: static
           LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
@@ -101,8 +97,7 @@ jobs:
 
       - name: Build binary distributions (Windows)
         if: "startsWith(matrix.os, 'windows')"
-        run: |
-          cargo xtask dist-package
+        run: cargo xtask dist-package
         env:
           SYSTEM_DEPS_LINK: static
           LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
@@ -110,7 +105,7 @@ jobs:
 
       - name: Upload .deb package
         uses: actions/upload-artifact@v7
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.packages && github.event_name != 'release'
         with:
           path: target/dist/*.deb
           overwrite: true
@@ -118,7 +113,7 @@ jobs:
 
       - name: Upload AppImage
         uses: actions/upload-artifact@v7
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.packages && github.event_name != 'release'
         with:
           path: target/dist/*.AppImage
           overwrite: true
@@ -126,7 +121,7 @@ jobs:
 
       - name: Upload PKGBUILD
         uses: actions/upload-artifact@v7
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.packages && github.event_name != 'release'
         with:
           path: target/dist/PKGBUILD
           overwrite: true
@@ -166,7 +161,7 @@ jobs:
 
       - name: Upload .deb package to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.packages && github.event_name == 'release'
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.deb
@@ -176,7 +171,7 @@ jobs:
 
       - name: Upload AppImage to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.packages && github.event_name == 'release'
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.AppImage
@@ -186,7 +181,7 @@ jobs:
 
       - name: Upload PKGBUILD to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu') && github.event_name == 'release'
+        if: matrix.target == 'x86_64-unknown-linux-gnu' && github.event_name == 'release'
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/PKGBUILD
@@ -196,7 +191,7 @@ jobs:
 
       - name: Upload tar archive to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.tar.gz

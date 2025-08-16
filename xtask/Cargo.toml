@@ -9,6 +9,7 @@ bzip2 = "0.6"
 cargo-packager = { version = "0.11", default-features = false, features = [
   "rustls-tls",
 ] }
+flate2 = "1.1"
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.13", default-features = false, features = [
   "blocking",
@@ -21,6 +22,7 @@ tar = "0.4"
 
 lux-workspace-hack = { workspace = true }
 strum = { workspace = true }
+target-lexicon = { workspace = true }
 toml = { workspace = true }
 
 [dependencies.xtask-lua]

@@ -23,23 +23,50 @@ jobs:
   dist-package-dry-run:
     name: ${{ matrix.target }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
+            arch: x86-64
           - target: x86_64-pc-windows-msvc
             os: windows-2025
           - target: aarch64-apple-darwin
             os: macos-15
-    continue-on-error: true
+            arch: arm64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+            arch: aarch64
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            arch: x86-64
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            arch: aarch64
+          - target: x86_64-unknown-freebsd
+            os: ubuntu-22.04
+            arch: x86-64
     timeout-minutes: 120
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Setup cross toolchain
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+        if: startsWith(matrix.os, 'ubuntu')
+
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
+        if: startsWith(matrix.os, 'macos') || endsWith(matrix.target, 'windows-msvc')
+
+      - name: Set host target
+        if: "!startsWith(matrix.os, 'windows')"
+        shell: bash
+        run: |
+          echo "HOST_TARGET=$(rustc -vV | sed -n 's/^host: //p')" >> "${GITHUB_ENV}"
 
       - name: "Setup environment for MSVC"
         # mirrors .cargo/config.toml [target.x86_64-pc-windows-msvc] rustflags
@@ -62,8 +89,8 @@ jobs:
 
       - name: Build binary distributions (*nix)
         if: "!startsWith(matrix.os, 'windows')"
-        run: |
-          cargo xtask dist-package-dry-run
+        shell: bash
+        run: cargo --locked run --package xtask --target "${HOST_TARGET}" -- dist-package-dry-run
         env:
           SYSTEM_DEPS_LINK: static
           LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
@@ -71,15 +98,71 @@ jobs:
 
       - name: Build binary distributions (Windows)
         if: "startsWith(matrix.os, 'windows')"
-        run: |
-          cargo xtask dist-package-dry-run
+        run: cargo xtask dist-package-dry-run
         env:
           SYSTEM_DEPS_LINK: static
           LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
           LUX_SIGN_PRIVATE_KEY_PASS: ${{ secrets.LUX_SIGN_PRIVATE_KEY_PASS }}
 
+      - name: Verify artifact architecture
+        if: "!startsWith(matrix.os, 'windows')"
+        shell: bash
+        run: |
+          file target/dist/lx
+          file target/dist/lx | grep -q '${{ matrix.arch }}'
+
+      - name: Verify static musl artifacts
+        if: contains(matrix.target, '-musl')
+        shell: bash
+        run: |
+          file target/dist/lx | grep -Eq 'statically linked|static-pie linked'
+          if readelf -l target/dist/lx | grep -qi INTERP; then
+            readelf -l target/dist/lx
+            exit 1
+          fi
+          if readelf -d target/dist/lx | grep -Ei 'NEEDED|RPATH|RUNPATH'; then
+            exit 1
+          fi
+          if grep -aq /nix/store target/dist/lx; then
+            exit 1
+          fi
+          for lib in target/dist/lux-lua*-${{ matrix.target }}.*; do
+            if readelf -d "${lib}" | grep -Ei 'RPATH|RUNPATH'; then
+              exit 1
+            fi
+            if grep -aq /nix/store "${lib}"; then
+              exit 1
+            fi
+          done
+
+      - name: Verify cross tarball
+        if: contains(matrix.target, '-musl') || contains(matrix.target, '-freebsd')
+        shell: bash
+        run: |
+          target="${{ matrix.target }}"
+          tarball="$(ls target/dist/lux-*-"$target".tar.gz)"
+          contents="$(tar tzf "$tarball")"
+          grep -qx 'lx' <<< "$contents"
+          grep -q '^share/lux-lua/' <<< "$contents"
+          if [[ "$target" == *-musl ]]; then
+            grep -qx 'lx.1' <<< "$contents"
+          fi
+
+      - name: Verify lux-lua artifacts
+        shell: bash
+        run: |
+          for lua in lua51 lua52 lua53 lua54 lua55 luajit; do
+            if ! ls target/dist/lux-${lua}-${{ matrix.target }}.* > /dev/null 2>&1; then
+              echo "missing lux-${lua} for ${{ matrix.target }}"
+              exit 1
+            fi
+          done
+
       - name: Verify static GnuPG linkage (Linux)
-        if: startsWith(matrix.os, 'ubuntu')
+        if: >-
+          startsWith(matrix.os, 'ubuntu') &&
+          !contains(matrix.target, '-musl') &&
+          !contains(matrix.target, '-freebsd')
         run: |
           deps="$(ldd target/dist/lx)"
           if grep -Eiq 'gpgme|assuan|gpg-error' <<< "${deps}"; then
@@ -105,4 +188,3 @@ jobs:
             echo "${deps}"
             exit 1
           fi
-

@@ -89,6 +89,14 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     };
 
     let target_dir = project_root.join("target");
+    let target = env::var("CARGO_BUILD_TARGET").ok();
+    let host = Triple::host().to_string();
+    let is_cross = target
+        .as_deref()
+        .is_some_and(|target| target != host.as_str());
+    let is_freebsd = target
+        .as_deref()
+        .is_some_and(|target| target.contains("-freebsd"));
 
     let (lua_feature_flag, canonical_lua_version) = lua_feature.lua_feature_strs();
 
@@ -120,10 +128,23 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     }
 
     println!("Building lux-lua...");
-    let status = Command::new(&cargo)
-        .current_dir(&project_root)
-        .args(args)
-        .status()?;
+    let mut command = Command::new(&cargo);
+    command.current_dir(&project_root).args(args);
+    if is_cross {
+        command.env("PKG_CONFIG_ALLOW_CROSS", "1");
+        command.env("LIBZ_SYS_STATIC", "1");
+    }
+    if target
+        .as_deref()
+        .is_some_and(|target| target.contains("-musl"))
+    {
+        let rustflags = env::var("RUSTFLAGS").unwrap_or_default();
+        command.env(
+            "RUSTFLAGS",
+            format!("{rustflags} -C target-feature=-crt-static"),
+        );
+    }
+    let status = command.status()?;
 
     if !status.success() {
         Err("cargo build failed")?;
@@ -140,26 +161,29 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     println!("creating {}", lib_dir.display());
     fs::create_dir_all(&lib_dir)?;
 
-    let target_profile_dir = project_root.join(format!("target/{profile}"));
+    let target_profile_dir = match &target {
+        Some(target) => project_root.join("target").join(target).join(profile),
+        None => project_root.join("target").join(profile),
+    };
 
     println!("{} contents:", target_profile_dir.display());
     for entry in fs::read_dir(&target_profile_dir)?.filter_map(Result::ok) {
         println!("{}", entry.file_name().display());
     }
 
-    let host = Triple::host();
+    let target = target.unwrap_or(host);
     #[cfg(not(target_env = "msvc"))]
     let (src_file, dest_file, dest_arch_file) = (
         target_profile_dir.join(format!("liblux_lua.{DLL_EXTENSION}")),
         lib_dir.join("lux.so"),
-        dist_dir.join(format!("lux-{lua_feature_flag}-{host}.so")),
+        dist_dir.join(format!("lux-{lua_feature_flag}-{target}.so")),
     );
 
     #[cfg(target_env = "msvc")]
     let (src_file, dest_file, dest_arch_file) = (
         target_profile_dir.join(format!("lux_lua.{DLL_EXTENSION}")),
         lib_dir.join(format!("lux.{DLL_EXTENSION}")),
-        dist_dir.join(format!("lux-{lua_feature_flag}-{host}.{DLL_EXTENSION}")),
+        dist_dir.join(format!("lux-{lua_feature_flag}-{target}.{DLL_EXTENSION}")),
     );
 
     if !src_file.is_file() {
@@ -220,7 +244,7 @@ Libs: -L${{libdir}}"#
 
     // Generate Lua definitions
     #[cfg(feature = "definitions")]
-    {
+    if !is_freebsd {
         let definitions_dir = dist_dir.join("definitions");
         let mut args = vec![
             "run".into(),
@@ -244,6 +268,7 @@ Libs: -L${{libdir}}"#
         let status = Command::new(cargo)
             .current_dir(&project_root)
             .args(args)
+            .env_remove("CARGO_BUILD_TARGET")
             .status()?;
         if !status.success() {
             Err("lux-definitions failed")?;
