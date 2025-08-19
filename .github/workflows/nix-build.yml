@@ -74,5 +74,3 @@ jobs:
         fi
         nix build ".#packages.${{matrix.job.target}}.${PACKAGE}" -Lv --accept-flake-config --log-lines 500 --fallback
       shell: bash
-      # FIXME: This fails with permission denied on darwin
-      if: ${{ matrix.job.target == 'x86_64-linux' }}

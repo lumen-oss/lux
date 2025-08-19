@@ -130,7 +130,6 @@
         pname = "lux-lua";
         inherit (luxCargo) version;
 
-        # FIXME: This fails with permission denied on darwin
         buildPhaseCargoCommand = "xtask-lua ${dist-cmd}";
         nativeBuildInputs =
           crateArgs.nativeBuildInputs
