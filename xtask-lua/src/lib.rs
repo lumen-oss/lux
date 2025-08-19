@@ -87,6 +87,8 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
 
     let mut args = vec![
         "build".into(),
+        "--package".into(),
+        "lux-lua".into(),
         "--locked".into(),
         "--target-dir".into(),
         target_dir.to_string_lossy().to_string(),
@@ -105,7 +107,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     }
 
     let status = Command::new(&cargo)
-        .current_dir(project_root.join("lux-lua"))
+        .current_dir(&project_root)
         .args(args)
         .status()?;
 

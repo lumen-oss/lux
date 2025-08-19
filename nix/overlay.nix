@@ -56,6 +56,19 @@
       doCheck = false;
     };
 
+  mk-xtask-lua = luaFeature:
+    craneLib.buildPackage (individualCrateArgs
+      // {
+        pname = "xtask-${luaFeature}";
+        inherit (luxCargo) version;
+
+        buildInputs = individualCrateArgs.buildInputs ++ [final.lua5_4];
+
+        cargoExtraArgs = "-p xtask-lua --features ${luaFeature}";
+
+        meta.mainProgram = "xtask-lua";
+      });
+
   mk-lux-lua = {
     buildType ? "release",
     luaPkg,
@@ -75,7 +88,14 @@
       // {
         pname = "lux-lua";
         inherit (luxCargo) version;
-        cargoExtraArgs = "-p lux-lua --locked --no-default-features --features ${luaFeature}";
+
+        # FIXME: This fails with permission denied on darwin
+        cargoBuildCommand = "xtask-lua dist";
+        nativeBuildInputs =
+          individualCrateArgs.nativeBuildInputs
+          ++ [
+            (mk-xtask-lua luaFeature)
+          ];
 
         buildInputs = individualCrateArgs.buildInputs ++ [luaPkg];
 
@@ -87,10 +107,6 @@
             LUA_INCLUDE_DIR = "${luaPkg}/include";
             RUSTFLAGS = "-L ${luaPkg}/lib -llua";
           };
-
-        postBuild = ''
-          cargo xtask-${luaFeature} dist
-        '';
 
         installPhase = ''
           runHook preInstall
@@ -107,7 +123,7 @@
 
       buildInputs = individualCrateArgs.buildInputs ++ [final.lua5_4];
 
-      cargoExtraArgs = "-p xtask --locked";
+      cargoExtraArgs = "-p xtask";
 
       meta.mainProgram = "xtask";
     });
