@@ -17,7 +17,11 @@ use toml_edit::{DocumentMut, Item};
 use crate::{
     build,
     config::{Config, LuaVersion},
-    git::{self, shorthand::GitUrlShorthand, utils::GitError},
+    git::{
+        self,
+        shorthand::GitUrlShorthand,
+        utils::{GitError, SemVerTagOrSha},
+    },
     lockfile::{LockfileError, ProjectLockfile, ReadOnly},
     lua::lua_runtime,
     lua_rockspec::{
@@ -512,9 +516,22 @@ impl Project {
             | LuaDependencyType::Test(ref urls) => {
                 for url in urls {
                     let git_url: git_url_parse::GitUrl = url.clone().into();
-                    let rev = git::utils::latest_semver_tag_or_commit_sha(&git_url)?;
-                    table[git_url.name.clone()]["version"] = Item::Value(rev.into());
-                    table[git_url.name.clone()]["git"] = Item::Value(url.to_string().into());
+                    let mut dep_entry = toml_edit::table();
+                    match git::utils::latest_semver_tag_or_commit_sha(&git_url)? {
+                        SemVerTagOrSha::SemVerTag(tag) => {
+                            dep_entry["git"] = Item::Value(url.to_string().into());
+                            dep_entry["version"] = Item::Value(tag.clone().into());
+                            if tag.contains("-") {
+                                // Tag contains a specrev.
+                                dep_entry["rev"] = Item::Value(tag.into());
+                            }
+                        }
+                        SemVerTagOrSha::CommitSha(sha) => {
+                            dep_entry["git"] = Item::Value(url.to_string().into());
+                            dep_entry["version"] = Item::Value(sha.into());
+                        }
+                    }
+                    table[git_url.name.clone()] = dep_entry;
                 }
             }
         }
@@ -613,14 +630,23 @@ impl Project {
                                     .as_str()
                                     .ok_or(ProjectEditError::ExpectedString(git_value.clone()))?;
                                 let shorthand: GitUrlShorthand = git_url_str.parse()?;
-                                let latest_rev =
-                                    git::utils::latest_semver_tag_or_commit_sha(&shorthand.into())?;
-                                let key = if tbl.contains_key("rev") {
-                                    "rev".to_string()
-                                } else {
-                                    "version".to_string()
-                                };
-                                dep_item[key] = toml_edit::value(latest_rev);
+                                match git::utils::latest_semver_tag_or_commit_sha(
+                                    &shorthand.into(),
+                                )? {
+                                    SemVerTagOrSha::SemVerTag(latest_tag) => {
+                                        table[dep.to_string()]["version"] =
+                                            Item::Value(latest_tag.clone().into());
+                                        if latest_tag.contains("-") {
+                                            // Tag contains a specrev.
+                                            table[dep.to_string()]["rev"] =
+                                                Item::Value(latest_tag.into());
+                                        }
+                                    }
+                                    SemVerTagOrSha::CommitSha(latest_sha) => {
+                                        table[dep.to_string()]["version"] =
+                                            Item::Value(latest_sha.into());
+                                    }
+                                }
                                 table[dep.to_string()] = dep_item;
                             } else {
                                 let dep_version_str = latest_rock_version_str(dep)?;

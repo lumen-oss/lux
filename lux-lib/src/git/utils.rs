@@ -22,10 +22,18 @@ pub enum GitError {
     NoTagOrCommitSha(String),
 }
 
-pub(crate) fn latest_semver_tag_or_commit_sha(url: &GitUrl) -> Result<String, GitError> {
+pub(crate) enum SemVerTagOrSha {
+    SemVerTag(String),
+    CommitSha(String),
+}
+
+pub(crate) fn latest_semver_tag_or_commit_sha(url: &GitUrl) -> Result<SemVerTagOrSha, GitError> {
     match latest_semver_tag(url)? {
-        Some(tag) => Ok(tag),
-        None => latest_commit_sha(url)?.ok_or(GitError::NoTagOrCommitSha(url.to_string())),
+        Some(tag) => Ok(SemVerTagOrSha::SemVerTag(tag)),
+        None => {
+            let sha = latest_commit_sha(url)?.ok_or(GitError::NoTagOrCommitSha(url.to_string()))?;
+            Ok(SemVerTagOrSha::CommitSha(sha))
+        }
     }
 }
 
