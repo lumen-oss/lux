@@ -71,7 +71,7 @@ mod test {
     use url::Url;
 
     use crate::{
-        manifest::{Manifest, ManifestMetadata},
+        manifest::luarocks::{LuarocksManifest, LuarocksManifestMetadata},
         package::PackageSpec,
     };
 
@@ -80,8 +80,8 @@ mod test {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
+        let metadata = LuarocksManifestMetadata::new(&content).unwrap();
+        let package_db = LuarocksManifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
 
         let test_package =
             PackageSpec::parse("lua-cjson".to_string(), "2.0.0".to_string()).unwrap();

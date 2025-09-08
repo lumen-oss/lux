@@ -833,7 +833,7 @@ mod tests {
     use super::*;
     use crate::{
         lua_rockspec::ExternalDependencySpec,
-        manifest::{Manifest, ManifestMetadata},
+        manifest::luarocks::{LuarocksManifest, LuarocksManifestMetadata},
         package::PackageReq,
         rockspec::Rockspec,
     };
@@ -854,8 +854,8 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
+        let metadata = LuarocksManifestMetadata::new(&content).unwrap();
+        let package_db = LuarocksManifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
 
         project
             .add(
