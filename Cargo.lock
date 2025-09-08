@@ -1302,9 +1302,9 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "emmylua_check"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3530b26a7709e811515b23eb66deffc87d30c70e4e716e4f3cfb3843f88d9677"
+checksum = "f2ea336903435bff57982a69db416683013e14adf18ce9f861d0746d75ac380f"
 dependencies = [
  "ansi_term",
  "clap 4.5.45",
@@ -1324,9 +1324,9 @@ dependencies = [
 
 [[package]]
 name = "emmylua_code_analysis"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90ed8cdc3d52a11a0cd4fa0f1637147e0b734d6fc9f1687e14b9ac5a8070e281"
+checksum = "b7caec9105ee05138703053992e09d33f9d99edcfce5ab4f9e18130841e36655"
 dependencies = [
  "dirs 6.0.0",
  "emmylua_codestyle",
@@ -1378,9 +1378,9 @@ dependencies = [
 
 [[package]]
 name = "emmylua_parser"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0307d394d4f846fc659fbd187c7e32e8116aa8591000ef35b2cc4c0622c961d9"
+checksum = "adaef00666db09db7941dc26c5a80848399746d812611fa5faf89e4ccdf0eade"
 dependencies = [
  "rowan",
  "rust-i18n",

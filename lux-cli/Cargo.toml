@@ -51,7 +51,7 @@ toml = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
 which = { workspace = true }
-emmylua_check = { version = "0.12", features = [] }
+emmylua_check = { version = "0.13", features = [] }
 emmylua_codestyle = "0.5.0"
 
 [dev-dependencies]
