@@ -1685,10 +1685,9 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Url { .. }));
         if let RockSourceSpec::Url(url) = source_spec {
-            let expected_url: Url =
-                "https://github.com/lumen-oss/lux/archive/refs/tags/v1.0.0.zip"
-                    .parse()
-                    .unwrap();
+            let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/v1.0.0.zip"
+                .parse()
+                .unwrap();
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));
@@ -1707,10 +1706,9 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Url { .. }));
         if let RockSourceSpec::Url(url) = source_spec {
-            let expected_url: Url =
-                "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
-                    .parse()
-                    .unwrap();
+            let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
+                .parse()
+                .unwrap();
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));
@@ -1747,10 +1745,9 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Url { .. }));
         if let RockSourceSpec::Url(url) = source_spec {
-            let expected_url: Url =
-                "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
-                    .parse()
-                    .unwrap();
+            let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
+                .parse()
+                .unwrap();
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));
