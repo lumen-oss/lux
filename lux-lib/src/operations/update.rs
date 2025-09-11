@@ -259,21 +259,19 @@ async fn update(
     config: &Config,
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<Vec<LocalPackage>, UpdateError> {
-    let updatable = packages
-        .clone()
-        .into_iter()
-        .filter_map(|(package, constraint)| {
-            match package
-                .to_package()
-                .has_update_with(&constraint, &package_db)
-            {
-                Ok(Some(_)) if package.pinned() == PinnedState::Unpinned => {
-                    Some((package, constraint))
-                }
-                _ => None,
+    let mut updatable = Vec::new();
+    for (package, constraint) in packages.clone() {
+        match package
+            .to_package()
+            .has_update_with(&constraint, &package_db)
+            .await
+        {
+            Ok(Some(_)) if package.pinned() == PinnedState::Unpinned => {
+                updatable.push((package, constraint));
             }
-        })
-        .collect_vec();
+            _ => {}
+        }
+    }
     if updatable.is_empty() {
         Ok(Vec::new())
     } else {

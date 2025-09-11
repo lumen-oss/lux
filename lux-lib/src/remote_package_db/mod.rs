@@ -13,6 +13,7 @@ use crate::{
     },
     progress::{Progress, ProgressBar},
 };
+use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use mlua::{FromLua, UserData};
 use thiserror::Error;
@@ -75,20 +76,27 @@ impl RemotePackageDB {
     }
 
     /// Find a remote package that matches the requirement, returning the latest match.
-    pub(crate) fn find(
+    pub(crate) async fn find(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
         progress: &Progress<ProgressBar>,
     ) -> Result<RemotePackage, SearchError> {
         match &self.0 {
-            Impl::Manifests(manifests) => match manifests.iter().find_map(|manifest| {
-                progress.map(|p| p.set_message(format!("🔎 Searching {}", &manifest.server_url())));
-                manifest.find(package_req, filter.clone())
-            }) {
-                Some(package) => Ok(package),
-                None => Err(SearchError::RockNotFound(package_req.clone())),
-            },
+            Impl::Manifests(manifests) => {
+                let search = stream::iter(manifests).filter_map(async |manifest| {
+                    progress
+                        .map(|p| p.set_message(format!("🔎 Searching {}", &manifest.server_url())));
+                    manifest.find(package_req, filter.clone()).await
+                });
+
+                tokio::pin!(search);
+
+                match search.next().await {
+                    Some(package) => Ok(package),
+                    None => Err(SearchError::RockNotFound(package_req.clone())),
+                }
+            }
             Impl::Lock(lockfile) => {
                 match lockfile.has_rock(package_req, filter).map(|local_package| {
                     RemotePackage::new(
@@ -131,6 +139,7 @@ impl RemotePackageDB {
                                 }
                             })
                     }
+                    Manifest::LuanoxManifest(_m) => todo!(),
                 })
                 .collect(),
             Impl::Lock(lockfile) => lockfile
@@ -151,18 +160,22 @@ impl RemotePackageDB {
     }
 
     /// Find the latest version for a package by name.
-    pub(crate) fn latest_version(&self, rock_name: &PackageName) -> Option<PackageVersion> {
+    pub(crate) async fn latest_version(&self, rock_name: &PackageName) -> Option<PackageVersion> {
         self.latest_match(&rock_name.clone().into(), None)
+            .await
             .map(|result| result.version().clone())
     }
 
     /// Find the latest package that matches the requirement.
-    pub fn latest_match(
+    pub async fn latest_match(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<PackageSpec> {
-        match self.find(package_req, filter, &Progress::no_progress()) {
+        match self
+            .find(package_req, filter, &Progress::no_progress())
+            .await
+        {
             Ok(result) => Some(result.package),
             Err(_) => None,
         }
@@ -183,8 +196,8 @@ impl UserData for RemotePackageDB {
                 })
                 .collect::<HashMap<_, _>>())
         });
-        methods.add_method("latest_match", |_, this, package_req| {
-            Ok(this.latest_match(&package_req, None))
+        methods.add_async_method("latest_match", |_, this, package_req| async move {
+            Ok(this.latest_match(&package_req, None).await)
         });
     }
 }

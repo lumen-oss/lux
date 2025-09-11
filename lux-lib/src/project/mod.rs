@@ -469,6 +469,7 @@ impl Project {
                     let dep_version_str = if dep.version_req().is_any() {
                         package_db
                             .latest_version(dep.name())
+                            .await
                             .map(|latest_version| latest_version.to_string())
                             .unwrap_or_else(|| dep.version_req().to_string())
                     } else {
@@ -605,18 +606,15 @@ impl Project {
             LuaDependencyType::Regular(ref deps)
             | LuaDependencyType::Build(ref deps)
             | LuaDependencyType::Test(ref deps) => {
-                let latest_rock_version_str =
-                    |dep: &PackageName| -> Result<String, ProjectEditError> {
-                        Ok(package_db
-                            .latest_version(dep)
-                            .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
-                            .to_string())
-                    };
                 for dep in deps {
                     let mut dep_item = table[dep.to_string()].clone();
                     match &dep_item {
                         Item::Value(_) => {
-                            let dep_version_str = latest_rock_version_str(dep)?;
+                            let dep_version_str = package_db
+                                .latest_version(dep)
+                                .await
+                                .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
+                                .to_string();
                             table[dep.to_string()] = toml_edit::value(dep_version_str);
                         }
                         Item::Table(tbl) => {
@@ -650,7 +648,13 @@ impl Project {
                                     table[dep.to_string()] = dep_item;
                                 }
                                 None => {
-                                    let dep_version_str = latest_rock_version_str(dep)?;
+                                    let dep_version_str = package_db
+                                        .latest_version(dep)
+                                        .await
+                                        .ok_or(ProjectEditError::LatestVersionNotFound(
+                                            dep.clone(),
+                                        ))?
+                                        .to_string();
                                     dep_item["version".to_string()] =
                                         toml_edit::value(dep_version_str);
                                     table[dep.to_string()] = dep_item;
@@ -855,7 +859,8 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = LuarocksManifestMetadata::new(&content).unwrap();
-        let package_db = LuarocksManifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
+        let package_db =
+            LuarocksManifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
 
         project
             .add(

@@ -330,7 +330,10 @@ impl LuarocksManifest {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
             Err(_) => {
                 let manifest = manifest_from_server_only(&server_url, config, progress).await?;
-                Ok(Self::new(server_url, LuarocksManifestMetadata::new(&manifest)?))
+                Ok(Self::new(
+                    server_url,
+                    LuarocksManifestMetadata::new(&manifest)?,
+                ))
             }
         }
     }
@@ -341,7 +344,7 @@ impl LuarocksManifest {
 }
 
 impl ManifestMetadata for LuarocksManifest {
-    fn find(
+    async fn find(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
