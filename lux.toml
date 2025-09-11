@@ -4,14 +4,14 @@ lua = ">=5.1"
 [description]
 summary = "The Lua API for the lux package manager"
 maintainer = "neorocks"
-homepage = "https://nvim-neorocks.github.io/"
-issues_url = "https://github.com/nvim-neorocks/lux/issues"
+homepage = "https://lumen-oss.github.io/"
+issues_url = "https://github.com/lumen-oss/lux/issues"
 labels = ["luarocks", "lux", "package-manager", "packagemanager", "build"]
 license = "LGPL-3.0+"
 
 [source]
-url = "https://github.com/nvim-neorocks/lux/archive/refs/tags/$(REF).zip"
-dev = "git+https://github.com/nvim-neorocks/lux.git"
+url = "https://github.com/lumen-oss/lux/archive/refs/tags/$(REF).zip"
+dev = "git+https://github.com/lumen-oss/lux.git"
 
 [build]
 type = "rust-mlua"

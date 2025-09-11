@@ -1646,7 +1646,7 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Git { .. }));
         if let RockSourceSpec::Git(GitSource { url, checkout_ref }) = source_spec {
-            let expected_url: GitUrl = "https://github.com/nvim-neorocks/lux.git".parse().unwrap();
+            let expected_url: GitUrl = "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
             assert!(checkout_ref.is_some());
         }
@@ -1665,7 +1665,7 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Git { .. }));
         if let RockSourceSpec::Git(GitSource { url, checkout_ref }) = source_spec {
-            let expected_url: GitUrl = "https://github.com/nvim-neorocks/lux.git".parse().unwrap();
+            let expected_url: GitUrl = "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
             assert_eq!(checkout_ref, &Some(tag_name.to_string()));
         }
@@ -1685,10 +1685,9 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Url { .. }));
         if let RockSourceSpec::Url(url) = source_spec {
-            let expected_url: Url =
-                "https://github.com/nvim-neorocks/lux/archive/refs/tags/v1.0.0.zip"
-                    .parse()
-                    .unwrap();
+            let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/v1.0.0.zip"
+                .parse()
+                .unwrap();
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));
@@ -1707,10 +1706,9 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Url { .. }));
         if let RockSourceSpec::Url(url) = source_spec {
-            let expected_url: Url =
-                "https://github.com/nvim-neorocks/lux/archive/refs/tags/1.0.0.zip"
-                    .parse()
-                    .unwrap();
+            let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
+                .parse()
+                .unwrap();
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));
@@ -1747,10 +1745,9 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Url { .. }));
         if let RockSourceSpec::Url(url) = source_spec {
-            let expected_url: Url =
-                "https://github.com/nvim-neorocks/lux/archive/refs/tags/1.0.0.zip"
-                    .parse()
-                    .unwrap();
+            let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
+                .parse()
+                .unwrap();
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));

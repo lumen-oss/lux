@@ -104,7 +104,7 @@ mod tests {
             println!("Skipping impure test");
             return;
         }
-        let url = "https://github.com/nvim-neorocks/lux.git".parse().unwrap();
+        let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_semver_tag(&url).unwrap().is_some());
     }
 
@@ -114,7 +114,7 @@ mod tests {
             println!("Skipping impure test");
             return;
         }
-        let url = "https://github.com/nvim-neorocks/lux.git".parse().unwrap();
+        let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_commit_sha(&url).unwrap().is_some());
     }
 }

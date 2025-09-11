@@ -20,7 +20,7 @@ env:
 jobs:
   dist-package:
     name: ${{ matrix.target }}
-    if: github.repository_owner == 'nvim-neorocks' && (
+    if: github.repository_owner == 'lumen-oss' && (
       ( github.event_name == 'release' && startsWith(github.event.release.name, 'v')) ||
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'pull_request'

@@ -709,7 +709,7 @@ mod tests {
         package = 'foo'\n
         version = '1.0.0-1'\n
         source = {\n
-            url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+            url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
         }\n
         "
         .to_string();
@@ -724,7 +724,7 @@ mod tests {
         version = '2.0.0-1'\n
         description = {}\n
         source = {\n
-            url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+            url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
         }\n
         "
         .to_string();
@@ -741,12 +741,12 @@ mod tests {
             summary = 'some summary',
             detailed = 'some detailed description',
             license = 'MIT',
-            homepage = 'https://github.com/nvim-neorocks/rocks.nvim',
-            issues_url = 'https://github.com/nvim-neorocks/rocks.nvim/issues',
+            homepage = 'https://github.com/lumen-oss/rocks.nvim',
+            issues_url = 'https://github.com/lumen-oss/rocks.nvim/issues',
             maintainer = 'neorocks',
         }\n
         source = {\n
-            url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+            url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
         }\n
         "
         .to_string();
@@ -758,8 +758,8 @@ mod tests {
             summary: Some("some summary".into()),
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
-            homepage: Some(Url::parse("https://github.com/nvim-neorocks/rocks.nvim").unwrap()),
-            issues_url: Some("https://github.com/nvim-neorocks/rocks.nvim/issues".into()),
+            homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
+            issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
             maintainer: Some("neorocks".into()),
             labels: Vec::new(),
         };
@@ -772,14 +772,14 @@ mod tests {
             summary = 'some summary',
             detailed = 'some detailed description',
             license = 'MIT',
-            homepage = 'https://github.com/nvim-neorocks/rocks.nvim',
-            issues_url = 'https://github.com/nvim-neorocks/rocks.nvim/issues',
+            homepage = 'https://github.com/lumen-oss/rocks.nvim',
+            issues_url = 'https://github.com/lumen-oss/rocks.nvim/issues',
             maintainer = 'neorocks',
             labels = {},
         }\n
         external_dependencies = { FOO = { library = 'foo' } }\n
         source = {\n
-            url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+            url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
         }\n
         "
         .to_string();
@@ -791,8 +791,8 @@ mod tests {
             summary: Some("some summary".into()),
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
-            homepage: Some(Url::parse("https://github.com/nvim-neorocks/rocks.nvim").unwrap()),
-            issues_url: Some("https://github.com/nvim-neorocks/rocks.nvim/issues".into()),
+            homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
+            issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
             maintainer: Some("neorocks".into()),
             labels: Vec::new(),
         };
@@ -817,8 +817,8 @@ mod tests {
             summary = 'some summary',
             detailed = 'some detailed description',
             license = 'MIT',
-            homepage = 'https://github.com/nvim-neorocks/rocks.nvim',
-            issues_url = 'https://github.com/nvim-neorocks/rocks.nvim/issues',
+            homepage = 'https://github.com/lumen-oss/rocks.nvim',
+            issues_url = 'https://github.com/lumen-oss/rocks.nvim/issues',
             maintainer = 'neorocks',
             labels = { 'package management', },
         }\n
@@ -828,7 +828,7 @@ mod tests {
         external_dependencies = { FOO = { header = 'foo.h' } }\n
         test_dependencies = { 'busted >= 2.0.0' }\n
         source = {\n
-            url = 'git+https://github.com/nvim-neorocks/rocks.nvim',\n
+            url = 'git+https://github.com/lumen-oss/rocks.nvim',\n
             hash = 'sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek=',\n
         }\n
         "
@@ -841,8 +841,8 @@ mod tests {
             summary: Some("some summary".into()),
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
-            homepage: Some(Url::parse("https://github.com/nvim-neorocks/rocks.nvim").unwrap()),
-            issues_url: Some("https://github.com/nvim-neorocks/rocks.nvim/issues".into()),
+            homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
+            issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
             maintainer: Some("neorocks".into()),
             labels: vec!["package management".into()],
         };
@@ -1181,7 +1181,7 @@ mod tests {
           },\n
         }\n
         source = {\n
-            url = 'git+https://github.com/nvim-neorocks/rocks.nvim',\n
+            url = 'git+https://github.com/lumen-oss/rocks.nvim',\n
             hash = 'sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek=',\n
         }\n
         "
@@ -1243,7 +1243,7 @@ mod tests {
             },\n
         }\n
         source = {\n
-            url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+            url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
         }\n
         "
         .to_string();
@@ -1462,7 +1462,7 @@ mod tests {
         package = 'foo'\n
         version = 'scm-1'\n
         source = {\n
-            url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+            url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
         }\n
         "
         .to_string();
@@ -1575,7 +1575,7 @@ mod tests {
     package = 'foo'\n
     version = 'scm-1'\n
     source = {\n
-        url = 'https://github.com/nvim-neorocks/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+        url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
     }\n
     build = {
         type = 'rust-mlua',

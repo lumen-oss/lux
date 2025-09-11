@@ -2,6 +2,6 @@ package = "lux"
 lua = ">=5.1"
 
 [source]
-url = "https://github.com/nvim-neorocks/$(PACKAGE)/archive/refs/tags/$(REF).zip"
-dev = "git+https://github.com/nvim-neorocks/$(PACKAGE).git"
+url = "https://github.com/lumen-oss/$(PACKAGE)/archive/refs/tags/$(REF).zip"
+dev = "git+https://github.com/lumen-oss/$(PACKAGE).git"
 dir = "$(PACKAGE)-$(VERSION)"
