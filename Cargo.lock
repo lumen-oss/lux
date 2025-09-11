@@ -2977,7 +2977,7 @@ dependencies = [
  "vfs",
  "walkdir",
  "which 8.0.0",
- "zip 5.0.0",
+ "zip 5.1.0",
 ]
 
 [[package]]
@@ -6928,9 +6928,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "5.0.0"
+version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9fdfa5f34b5980f2c21b3a2c68c09ade4debddc7be52c51056695effc73a08c"
+checksum = "014d9123d252f20eb6e9cfd9c1cbbcd84fe2409a67c4a0b5b7cc36593d18566d"
 dependencies = [
  "aes",
  "arbitrary",
