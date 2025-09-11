@@ -4,7 +4,7 @@ lua = ">=5.1"
 
 [description]
 summary = ""
-maintainer = "nvim-neorocks"
+maintainer = "lumen-oss"
 labels = [""]
 
 [run]

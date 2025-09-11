@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <a href="https://nvim-neorocks.github.io/tutorial/getting-started"><img src="./lux-logo.svg" alt="Lux" width="200"></a>
+  <a href="https://lumen-oss.github.io/tutorial/getting-started"><img src="./lux-logo.svg" alt="Lux" width="200"></a>
   <br>
   <br>
   <span>Lux</span>
@@ -9,9 +9,9 @@
 <h4 align="center">A luxurious package manager for <a href="https://www.lua.org/" target="_blank">Lua</a>.</h4>
 
 <p align="center">
-  <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/nvim-neorocks/lux/integration-tests.yml?style=for-the-badge">
-  <img alt="GitHub Top Language" src="https://img.shields.io/github/languages/top/nvim-neorocks/lux?style=for-the-badge">
-  <img alt="GitHub License" src="https://img.shields.io/github/license/nvim-neorocks/lux?style=for-the-badge">
+  <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/lumen-oss/lux/integration-tests.yml?style=for-the-badge">
+  <img alt="GitHub Top Language" src="https://img.shields.io/github/languages/top/lumen-oss/lux?style=for-the-badge">
+  <img alt="GitHub License" src="https://img.shields.io/github/license/lumen-oss/lux?style=for-the-badge">
 </p>
 
 <p align="center">
@@ -58,7 +58,7 @@
 
 ## :gear: How To Use
 
-Feel free to consult the [documentation](https://nvim-neorocks.github.io/tutorial/getting-started) on how to get started with Lux!
+Feel free to consult the [documentation](https://lumen-oss.github.io/tutorial/getting-started) on how to get started with Lux!
 
 It features a tutorial and several guides to make you good at managing Lua projects.
 
@@ -131,11 +131,11 @@ Lux includes the following packages and libraries:
 > [!NOTE]
 >
 > We do not yet provide a way to install `lux-lua` as a Lua library using Lux.
-> See [#663](https://github.com/nvim-neorocks/lux/issues/663).
+> See [#663](https://github.com/lumen-oss/lux/issues/663).
 > Lux can detect a lux-lua installation using pkg-config
 > or via the `LUX_LIB_DIR` environment variable.
 >
-> Our [pre-built binary release artifacts](https://github.com/nvim-neorocks/lux/releases/latest)
+> Our [pre-built binary release artifacts](https://github.com/lumen-oss/lux/releases/latest)
 > are bundled with `lux-lua`.
 
 ## :wrench: Building from source
@@ -225,7 +225,7 @@ Lux will auto-detect `lux-lua`.
 ## :bulb: You may also like...
 
 - [luarocks](https://github.com/luarocks/luarocks) - The original Lua package manager
-- [rocks.nvim](https://github.com/nvim-neorocks/rocks.nvim) - A Neovim plugin manager that uses `luarocks` under the hood, and will soon be undergoing a rewrite to use Lux instead.
+- [rocks.nvim](https://github.com/lumen-oss/rocks.nvim) - A Neovim plugin manager that uses `luarocks` under the hood, and will soon be undergoing a rewrite to use Lux instead.
 
 ## :purple_heart: Credits
 

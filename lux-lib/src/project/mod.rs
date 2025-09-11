@@ -328,7 +328,7 @@ impl Project {
             }
             // NOTE: If we hit a read error, it could be because we haven't found a PROJECT_TOML
             // and have started searching too far upwards.
-            // See for example https://github.com/nvim-neorocks/lux/issues/532
+            // See for example https://github.com/lumen-oss/lux/issues/532
             _ => Ok(None),
         }
     }

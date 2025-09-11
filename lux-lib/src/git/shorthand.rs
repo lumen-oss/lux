@@ -192,47 +192,47 @@ mod tests {
 
     #[tokio::test]
     async fn owner_repo_shorthand() {
-        let url_shorthand: GitUrlShorthand = "nvim-neorocks/lux".parse().unwrap();
-        assert_eq!(url_shorthand.0.owner, Some("nvim-neorocks".to_string()));
+        let url_shorthand: GitUrlShorthand = "lumen-oss/lux".parse().unwrap();
+        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
         assert_eq!(url_shorthand.0.name, "lux".to_string());
     }
 
     #[tokio::test]
     async fn github_shorthand() {
-        let url_shorthand_str = "github:nvim-neorocks/lux";
+        let url_shorthand_str = "github:lumen-oss/lux";
         let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.host, Some("github.com".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("nvim-neorocks".to_string()));
+        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
         assert_eq!(url_shorthand.0.name, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn gitlab_shorthand() {
-        let url_shorthand_str = "gitlab:nvim-neorocks/lux";
+        let url_shorthand_str = "gitlab:lumen-oss/lux";
         let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.host, Some("gitlab.com".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("nvim-neorocks".to_string()));
+        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
         assert_eq!(url_shorthand.0.name, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn sourcehut_shorthand() {
-        let url_shorthand_str = "sourcehut:nvim-neorocks/lux";
+        let url_shorthand_str = "sourcehut:lumen-oss/lux";
         let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.host, Some("git.sr.ht".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("~nvim-neorocks".to_string()));
+        assert_eq!(url_shorthand.0.owner, Some("~lumen-oss".to_string()));
         assert_eq!(url_shorthand.0.name, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn codeberg_shorthand() {
-        let url_shorthand_str = "codeberg:nvim-neorocks/lux";
+        let url_shorthand_str = "codeberg:lumen-oss/lux";
         let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.host, Some("codeberg.org".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("~nvim-neorocks".to_string()));
+        assert_eq!(url_shorthand.0.owner, Some("~lumen-oss".to_string()));
         assert_eq!(url_shorthand.0.name, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
@@ -240,35 +240,35 @@ mod tests {
     #[tokio::test]
     async fn regular_https_url() {
         let url_shorthand: GitUrlShorthand =
-            "https://github.com/nvim-neorocks/lux.git".parse().unwrap();
+            "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.host, Some("github.com".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("nvim-neorocks".to_string()));
+        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
         assert_eq!(url_shorthand.0.name, "lux".to_string());
         assert_eq!(
             url_shorthand.to_string(),
-            "github:nvim-neorocks/lux".to_string()
+            "github:lumen-oss/lux".to_string()
         );
     }
 
     #[tokio::test]
     async fn regular_ssh_url() {
-        let url_str = "git@github.com:nvim-neorocks/lux.git";
+        let url_str = "git@github.com:lumen-oss/lux.git";
         let url_shorthand: GitUrlShorthand = url_str.parse().unwrap();
         assert_eq!(url_shorthand.0.host, Some("github.com".to_string()));
         assert_eq!(
             url_shorthand.0.owner,
-            Some("git@github.com:nvim-neorocks".to_string())
+            Some("git@github.com:lumen-oss".to_string())
         );
         assert_eq!(url_shorthand.0.name, "lux".to_string());
     }
 
     #[tokio::test]
     async fn parse_with_prefix() {
-        GitUrlShorthand::parse_with_prefix("nvim-neorocks/lux").unwrap_err();
-        GitUrlShorthand::parse_with_prefix("github:nvim-neorocks/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("gitlab:nvim-neorocks/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("sourcehut:nvim-neorocks/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("codeberg:nvim-neorocks/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("bla:nvim-neorocks/lux").unwrap_err();
+        GitUrlShorthand::parse_with_prefix("lumen-oss/lux").unwrap_err();
+        GitUrlShorthand::parse_with_prefix("github:lumen-oss/lux").unwrap();
+        GitUrlShorthand::parse_with_prefix("gitlab:lumen-oss/lux").unwrap();
+        GitUrlShorthand::parse_with_prefix("sourcehut:lumen-oss/lux").unwrap();
+        GitUrlShorthand::parse_with_prefix("codeberg:lumen-oss/lux").unwrap();
+        GitUrlShorthand::parse_with_prefix("bla:lumen-oss/lux").unwrap_err();
     }
 }

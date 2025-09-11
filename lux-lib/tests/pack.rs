@@ -40,7 +40,7 @@ async fn pack_project_with_etc_directories() {
 copy_directories = [ "plugin" ]
 
 [source]
-url = "https://github.com/nvim-neorocks/luarocks-stub"
+url = "https://github.com/lumen-oss/luarocks-stub"
 
 [build.install.conf]
 "cfg.toml" = "cfg.toml"
