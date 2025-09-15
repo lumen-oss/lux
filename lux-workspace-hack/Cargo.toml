@@ -42,6 +42,7 @@ indexmap = { version = "1", default-features = false, features = ["std"] }
 libgit2-sys = { version = "0.18", default-features = false, features = ["https", "ssh", "vendored"] }
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
+lsp-types = { version = "0.97", features = ["proposed"] }
 memchr = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-traits = { version = "0.2", features = ["i128"] }
@@ -51,13 +52,15 @@ parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
 percent-encoding = { version = "2" }
 predicates = { version = "3" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
+serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
 simd-adler32 = { version = "0.3" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 stable_deref_trait = { version = "1", default-features = false, features = ["alloc"] }
+strum = { version = "0.27", features = ["derive"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
@@ -67,7 +70,6 @@ toml_edit = { version = "0.22", default-features = false, features = ["display",
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
-url = { version = "2", features = ["serde"] }
 winnow = { version = "0.7" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
@@ -83,9 +85,10 @@ log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = { version = "1" }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
+serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 stable_deref_trait = { version = "1", default-features = false, features = ["alloc"] }
