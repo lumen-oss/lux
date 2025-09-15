@@ -109,6 +109,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.17.1](https://github.com/lumen-oss/lux/compare/v0.17.0...v0.17.1) - 2025-09-15
+
+### Other
+- *(deps)* bulk update ([#1066](https://github.com/lumen-oss/lux/pull/1066))
+- *(docs)* rename nvim-neorocks -> lumen-oss ([#1057](https://github.com/lumen-oss/lux/pull/1057))
+- *(deps)* bump emmylua_check from 0.12.0 to 0.13.0 ([#1055](https://github.com/lumen-oss/lux/pull/1055))
+- *(readme)* exclude unsupported repos in packaging status badge
+
+## `lux-lib` - [0.24.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.24.0...lux-lib-v0.24.1) - 2025-09-15
+
+### Other
+- *(deps)* bulk update ([#1066](https://github.com/lumen-oss/lux/pull/1066))
+- *(docs)* rename nvim-neorocks -> lumen-oss ([#1057](https://github.com/lumen-oss/lux/pull/1057))
+- *(deps)* bump zip from 5.0.0 to 5.1.0 ([#1056](https://github.com/lumen-oss/lux/pull/1056))
+- *(deps)* bump zip from 4.6.0 to 5.0.0 ([#1053](https://github.com/lumen-oss/lux/pull/1053))
+- *(deps)* bump zip from 4.5.0 to 4.6.0 ([#1048](https://github.com/lumen-oss/lux/pull/1048))
+- *(readme)* exclude unsupported repos in packaging status badge
+
 ## `lux-cli` - [0.15.1](https://github.com/lumen-oss/lux/compare/v0.15.0...v0.15.1) - 2025-08-16
 
 ### Other
