@@ -9,6 +9,9 @@ name: Integration tests (Windows/MSVC)
 
 jobs:
   test:
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.event.pull_request.draft == false
     runs-on: windows-2025
     steps:

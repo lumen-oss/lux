@@ -9,6 +9,9 @@ name: Integration tests (Linux/MacOS)
 
 jobs:
   test:
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.event.pull_request.draft == false
     strategy:
       matrix:
