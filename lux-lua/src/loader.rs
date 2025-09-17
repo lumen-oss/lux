@@ -18,13 +18,13 @@ const fn lua_version() -> &'static str {
     }
 }
 
-fn current_file(lua: &Lua) -> String {
-    lua.inspect_stack(2)
-        .unwrap()
-        .source()
-        .short_src
-        .unwrap()
-        .to_string()
+fn current_file(lua: &Lua) -> Option<String> {
+    lua.inspect_stack(2, |debug| {
+        debug
+            .source()
+            .short_src
+            .map(|short_src| short_src.to_string())
+    })?
 }
 
 fn load_file(lua: &Lua, module: String, path: PathBuf) -> mlua::Result<mlua::Function> {
@@ -80,9 +80,10 @@ pub fn load_loader(lua: &Lua) -> mlua::Result<()> {
 }
 
 pub fn loader(lua: &Lua, module: String) -> mlua::Result<Option<mlua::Function>> {
-    let current_file = match current_file(lua).as_str() {
-        "stdin" => return Ok(None),
-        current_file => PathBuf::from(current_file),
+    let current_file = match current_file(lua) {
+        None => return Ok(None),
+        Some(current_file) if current_file == "stdin" => return Ok(None),
+        Some(current_file) => PathBuf::from(current_file),
     };
     let current_file = current_file.absolutize().into_lua_err()?;
 
