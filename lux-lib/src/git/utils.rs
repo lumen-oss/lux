@@ -5,7 +5,7 @@ use itertools::Itertools;
 use tempfile::tempdir;
 use thiserror::Error;
 
-use crate::git::url::GitUrl;
+use crate::git::url::RemoteGitUrl;
 
 #[derive(Debug, Error)]
 pub enum GitError {
@@ -28,7 +28,9 @@ pub(crate) enum SemVerTagOrSha {
     CommitSha(String),
 }
 
-pub(crate) fn latest_semver_tag_or_commit_sha(url: &GitUrl) -> Result<SemVerTagOrSha, GitError> {
+pub(crate) fn latest_semver_tag_or_commit_sha(
+    url: &RemoteGitUrl,
+) -> Result<SemVerTagOrSha, GitError> {
     match latest_semver_tag(url)? {
         Some(tag) => Ok(SemVerTagOrSha::SemVerTag(tag)),
         None => {
@@ -38,7 +40,7 @@ pub(crate) fn latest_semver_tag_or_commit_sha(url: &GitUrl) -> Result<SemVerTagO
     }
 }
 
-fn latest_semver_tag(url: &GitUrl) -> Result<Option<String>, GitError> {
+fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
     let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
 
     let url_str = url.to_string();
@@ -72,7 +74,7 @@ fn latest_semver_tag(url: &GitUrl) -> Result<Option<String>, GitError> {
         .cloned())
 }
 
-fn latest_commit_sha(url: &GitUrl) -> Result<Option<String>, GitError> {
+fn latest_commit_sha(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
     let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;

@@ -6,7 +6,7 @@ use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
 use crate::git::{
-    url::{GitUrl, GitUrlParseError},
+    url::{RemoteGitUrl, RemoteGitUrlParseError},
     GitSource,
 };
 
@@ -294,14 +294,14 @@ pub(crate) enum SourceUrl {
     /// Web URLs
     Url(Url),
     /// For the Git source control manager
-    Git(GitUrl),
+    Git(RemoteGitUrl),
 }
 
 #[derive(Error, Debug)]
 #[error("failed to parse source url: {0}")]
 pub enum SourceUrlError {
     Io(#[from] io::Error),
-    Git(#[from] GitUrlParseError),
+    Git(#[from] RemoteGitUrlParseError),
     Url(#[source] <Url as FromStr>::Err),
     #[error("lux does not support rockspecs with CVS sources.")]
     CVS,
@@ -381,23 +381,23 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let url: SourceUrl = format!("file://{}", dir.to_string_lossy()).parse().unwrap();
         assert_eq!(url, SourceUrl::File(dir.path().to_path_buf()));
-        let url: SourceUrl = "ftp://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "ftp://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Url { .. }));
-        let url: SourceUrl = "git://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "git://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "git+file://example.com/foo".parse().unwrap();
+        // We don't support file-like URLs, as they are not remote.
+        SourceUrl::from_str("git+file:///path/to/repo.git").unwrap_err();
+        let url: SourceUrl = "git+http://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "git+http://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "git+https://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "git+https://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "git+ssh://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "git+ssh://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "gitrec+https://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "gitrec+https://example.com/foo".parse().unwrap();
-        assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "https://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "https://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Url { .. }));
-        let url: SourceUrl = "http://example.com/foo".parse().unwrap();
+        let url: SourceUrl = "http://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Url { .. }));
     }
 }

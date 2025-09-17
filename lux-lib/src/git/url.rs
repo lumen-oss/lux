@@ -8,43 +8,56 @@ use thiserror::Error;
 
 /// GitUrl represents an input url that is a url used by git
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct GitUrl {
+pub struct RemoteGitUrl {
     /// The fully qualified domain name (FQDN) or IP of the repo
-    pub(crate) host: Option<String>,
+    pub(crate) host: String,
     /// The name of the repo
-    pub(crate) name: String,
+    pub(crate) repo: String,
     /// The owner/account/project name
-    pub(crate) owner: Option<String>,
+    pub(crate) owner: String,
     /// The raw URL string
     url_str: String,
 }
 
 #[derive(Debug, Error)]
-#[error("error parsing git URL:\n{0}")]
-pub struct GitUrlParseError(String);
+pub enum RemoteGitUrlParseError {
+    #[error("error parsing git URL:\n{0}")]
+    GitUrlParse(String),
+    #[error("not a remote git URL: {0}")]
+    NotARemoteGitUrl(String),
+}
 
-impl FromStr for GitUrl {
-    type Err = GitUrlParseError;
+impl FromStr for RemoteGitUrl {
+    type Err = RemoteGitUrlParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let url =
-            git_url_parse::GitUrl::parse(s).map_err(|err| GitUrlParseError(err.to_string()))?;
-        Ok(GitUrl {
-            host: url.host.clone(),
-            name: url.name.clone(),
-            owner: url.owner.clone(),
+        let url = git_url_parse::GitUrl::parse(s)
+            .map_err(|err| RemoteGitUrlParseError::GitUrlParse(err.to_string()))?;
+        let host = url
+            .host()
+            .ok_or_else(|| RemoteGitUrlParseError::NotARemoteGitUrl(url.to_string()))?;
+        let provider: Result<
+            git_url_parse::types::provider::GenericProvider,
+            git_url_parse::GitUrlParseError,
+        > = url.provider_info();
+        let provider =
+            provider.map_err(|_err| RemoteGitUrlParseError::NotARemoteGitUrl(s.to_string()))?;
+        Ok(RemoteGitUrl {
+            host: host.to_string(),
+            repo: provider.repo().to_string(),
+            owner: provider.owner().to_string(),
             url_str: url.to_string(),
         })
     }
 }
 
-impl Display for GitUrl {
+impl Display for RemoteGitUrl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.url_str.fmt(f)
     }
 }
 
-impl<'de> Deserialize<'de> for GitUrl {
+impl<'de> Deserialize<'de> for RemoteGitUrl {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -55,7 +68,7 @@ impl<'de> Deserialize<'de> for GitUrl {
     }
 }
 
-impl Serialize for GitUrl {
+impl Serialize for RemoteGitUrl {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

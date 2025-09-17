@@ -12,7 +12,7 @@ use thiserror::Error;
 
 use crate::build::utils::recursive_copy_dir;
 use crate::config::Config;
-use crate::git::url::GitUrlParseError;
+use crate::git::url::RemoteGitUrlParseError;
 use crate::git::GitSource;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
@@ -102,7 +102,7 @@ pub enum FetchSrcError {
     #[error("failed to clone rock source: {0}")]
     GitClone(#[from] git2::Error),
     #[error("failed to parse git URL: {0}")]
-    GitUrlParse(#[from] GitUrlParseError),
+    GitUrlParse(#[from] RemoteGitUrlParseError),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]

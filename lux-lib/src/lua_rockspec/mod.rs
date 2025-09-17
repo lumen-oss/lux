@@ -894,7 +894,7 @@ mod tests {
         package = 'foo'\n
         version = '1.0.0-1'\n
         source = {\n
-            url = 'git+https://hub.com/example-project/',\n
+            url = 'git+https://hub.com/owner/example-project/',\n
             branch = 'bar',\n
         }\n
         "
@@ -903,7 +903,7 @@ mod tests {
         assert_eq!(
             rockspec.local.source.default.source_spec,
             RockSourceSpec::Git(GitSource {
-                url: "https://hub.com/example-project/".parse().unwrap(),
+                url: "https://hub.com/owner/example-project/".parse().unwrap(),
                 checkout_ref: Some("bar".into())
             })
         );
@@ -913,7 +913,7 @@ mod tests {
         package = 'foo'\n
         version = '1.0.0-1'\n
         source = {\n
-            url = 'git+https://hub.com/example-project/',\n
+            url = 'git+https://hub.com/owner/example-project/',\n
             tag = 'bar',\n
         }\n
         "
@@ -922,7 +922,7 @@ mod tests {
         assert_eq!(
             rockspec.local.source.default.source_spec,
             RockSourceSpec::Git(GitSource {
-                url: "https://hub.com/example-project/".parse().unwrap(),
+                url: "https://hub.com/owner/example-project/".parse().unwrap(),
                 checkout_ref: Some("bar".into())
             })
         );
@@ -931,7 +931,7 @@ mod tests {
         package = 'foo'\n
         version = '1.0.0-1'\n
         source = {\n
-            url = 'git+https://hub.com/example-project/',\n
+            url = 'git+https://hub.com/owner/example-project/',\n
             branch = 'bar',\n
             tag = 'baz',\n
         }\n
@@ -943,7 +943,7 @@ mod tests {
         package = 'foo'\n
         version = '1.0.0-1'\n
         source = {\n
-            url = 'git+https://hub.com/example-project/',\n
+            url = 'git+https://hub.com/owner/example-project/',\n
             tag = 'bar',\n
             file = 'foo.tar.gz',\n
         }\n
@@ -1695,7 +1695,7 @@ mod tests {
     pub async fn remote_lua_rockspec_from_package_and_source_spec() {
         let package_req = "foo@1.0.5".parse().unwrap();
         let source = GitSource {
-            url: "https://hub.com/example-project.git".parse().unwrap(),
+            url: "https://hub.com/owner/example-project.git".parse().unwrap(),
             checkout_ref: Some("1.0.5".into()),
         };
         let source_spec = RockSourceSpec::Git(source);

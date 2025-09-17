@@ -19,8 +19,8 @@ use crate::{
     config::{Config, LuaVersion},
     git::{
         self,
-        shorthand::GitUrlShorthand,
-        url::GitUrl,
+        shorthand::RemoteGitUrlShorthand,
+        url::RemoteGitUrl,
         utils::{GitError, SemVerTagOrSha},
     },
     lockfile::{LockfileError, ProjectLockfile, ReadOnly},
@@ -499,7 +499,7 @@ impl Project {
 
     pub async fn add_git(
         &mut self,
-        dependencies: LuaDependencyType<GitUrlShorthand>,
+        dependencies: LuaDependencyType<RemoteGitUrlShorthand>,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
@@ -516,7 +516,7 @@ impl Project {
             | LuaDependencyType::Build(ref urls)
             | LuaDependencyType::Test(ref urls) => {
                 for url in urls {
-                    let git_url: GitUrl = url.clone().into();
+                    let git_url: RemoteGitUrl = url.clone().into();
                     let mut dep_entry = toml_edit::table();
                     match git::utils::latest_semver_tag_or_commit_sha(&git_url)? {
                         SemVerTagOrSha::SemVerTag(tag) => {
@@ -532,7 +532,7 @@ impl Project {
                             dep_entry["version"] = Item::Value(sha.into());
                         }
                     }
-                    table[git_url.name.clone()] = dep_entry;
+                    table[git_url.repo.clone()] = dep_entry;
                 }
             }
         }
@@ -630,7 +630,7 @@ impl Project {
                                 let git_url_str = git_value
                                     .as_str()
                                     .ok_or(ProjectEditError::ExpectedString(git_value.clone()))?;
-                                let shorthand: GitUrlShorthand = git_url_str.parse()?;
+                                let shorthand: RemoteGitUrlShorthand = git_url_str.parse()?;
                                 match git::utils::latest_semver_tag_or_commit_sha(
                                     &shorthand.into(),
                                 )? {

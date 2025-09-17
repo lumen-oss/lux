@@ -1,7 +1,7 @@
 use mlua::UserData;
 
 use crate::{
-    git::url::GitUrl,
+    git::url::RemoteGitUrl,
     lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue},
 };
 
@@ -11,7 +11,7 @@ pub mod utils;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GitSource {
-    pub url: GitUrl,
+    pub url: RemoteGitUrl,
     pub checkout_ref: Option<String>,
 }
 

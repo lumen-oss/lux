@@ -1,6 +1,6 @@
 //! Structs and utilities for `lux.toml`
 
-use crate::git::shorthand::GitUrlShorthand;
+use crate::git::shorthand::RemoteGitUrlShorthand;
 use crate::git::GitSource;
 use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
@@ -67,7 +67,7 @@ struct DependencyTableEntry {
     #[serde(default)]
     pin: Option<bool>,
     #[serde(default)]
-    git: Option<GitUrlShorthand>,
+    git: Option<RemoteGitUrlShorthand>,
     #[serde(default)]
     rev: Option<String>,
 }
@@ -1076,7 +1076,7 @@ mod tests {
     use url::Url;
 
     use crate::{
-        git::{url::GitUrl, GitSource},
+        git::{url::RemoteGitUrl, GitSource},
         lua_rockspec::{PartialLuaRockspec, PerPlatform, RemoteLuaRockspec, RockSourceSpec},
         project::{Project, ProjectRoot},
         rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
@@ -1594,7 +1594,7 @@ mod tests {
             lua = ">=5.1"
 
             [source]
-            url = "git+https://exaple.com/repo.git"
+            url = "git+https://exaple.com/owner/repo.git"
             tag = "v0.1.0"
 
             [build]
@@ -1645,7 +1645,8 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Git { .. }));
         if let RockSourceSpec::Git(GitSource { url, checkout_ref }) = source_spec {
-            let expected_url: GitUrl = "https://github.com/lumen-oss/lux.git".parse().unwrap();
+            let expected_url: RemoteGitUrl =
+                "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
             assert!(checkout_ref.is_some());
         }
@@ -1664,7 +1665,8 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Git { .. }));
         if let RockSourceSpec::Git(GitSource { url, checkout_ref }) = source_spec {
-            let expected_url: GitUrl = "https://github.com/lumen-oss/lux.git".parse().unwrap();
+            let expected_url: RemoteGitUrl =
+                "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
             assert_eq!(checkout_ref, &Some(tag_name.to_string()));
         }

@@ -4,7 +4,7 @@ use chumsky::{prelude::*, Parser};
 use serde::{de, Deserialize, Deserializer};
 use thiserror::Error;
 
-use crate::git::url::{GitUrl, GitUrlParseError};
+use crate::git::url::{RemoteGitUrl, RemoteGitUrlParseError};
 
 const GITHUB: &str = "github";
 const GITLAB: &str = "gitlab";
@@ -17,9 +17,9 @@ pub struct ParseError(Vec<String>);
 
 /// Helper for parsing Git URLs from shorthands, e.g. "gitlab:owner/repo"
 #[derive(Debug, Clone)]
-pub struct GitUrlShorthand(GitUrl);
+pub struct RemoteGitUrlShorthand(RemoteGitUrl);
 
-impl GitUrlShorthand {
+impl RemoteGitUrlShorthand {
     pub fn parse_with_prefix(s: &str) -> Result<Self, ParseError> {
         prefix_parser()
             .parse(s)
@@ -29,7 +29,7 @@ impl GitUrlShorthand {
     pub fn repo_name() {}
 }
 
-impl FromStr for GitUrlShorthand {
+impl FromStr for RemoteGitUrlShorthand {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -48,7 +48,7 @@ impl FromStr for GitUrlShorthand {
     }
 }
 
-impl<'de> Deserialize<'de> for GitUrlShorthand {
+impl<'de> Deserialize<'de> for RemoteGitUrlShorthand {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -59,14 +59,14 @@ impl<'de> Deserialize<'de> for GitUrlShorthand {
     }
 }
 
-impl From<GitUrl> for GitUrlShorthand {
-    fn from(value: GitUrl) -> Self {
+impl From<RemoteGitUrl> for RemoteGitUrlShorthand {
+    fn from(value: RemoteGitUrl) -> Self {
         Self(value)
     }
 }
 
-impl From<GitUrlShorthand> for GitUrl {
-    fn from(value: GitUrlShorthand) -> Self {
+impl From<RemoteGitUrlShorthand> for RemoteGitUrl {
+    fn from(value: RemoteGitUrlShorthand) -> Self {
         value.0
     }
 }
@@ -84,7 +84,7 @@ fn url_from_git_host(
     host: GitHost,
     owner: String,
     repo: String,
-) -> Result<GitUrlShorthand, GitUrlParseError> {
+) -> Result<RemoteGitUrlShorthand, RemoteGitUrlParseError> {
     let url_str = match host {
         GitHost::Github => format!("https://github.com/{owner}/{repo}.git"),
         GitHost::Gitlab => format!("https://gitlab.com/{owner}/{repo}.git"),
@@ -92,7 +92,7 @@ fn url_from_git_host(
         GitHost::Codeberg => format!("https://codeberg.org/~{owner}/{repo}.git"),
     };
     let url = url_str.parse()?;
-    Ok(GitUrlShorthand(url))
+    Ok(RemoteGitUrlShorthand(url))
 }
 
 fn to_tuple<T>(v: Vec<T>) -> (T, T)
@@ -104,7 +104,7 @@ where
 
 // A parser that expects a prefix
 fn prefix_parser<'a>(
-) -> impl Parser<'a, &'a str, GitUrlShorthand, chumsky::extra::Err<Rich<'a, char>>> {
+) -> impl Parser<'a, &'a str, RemoteGitUrlShorthand, chumsky::extra::Err<Rich<'a, char>>> {
     let git_host_prefix = just(GITHUB)
         .or(just(GITLAB).or(just(SOURCEHUT).or(just(CODEBERG))))
         .then_ignore(just(":"))
@@ -137,7 +137,8 @@ fn prefix_parser<'a>(
 }
 
 // A more lenient parser that defaults to github: if there is not prefix
-fn parser<'a>() -> impl Parser<'a, &'a str, GitUrlShorthand, chumsky::extra::Err<Rich<'a, char>>> {
+fn parser<'a>(
+) -> impl Parser<'a, &'a str, RemoteGitUrlShorthand, chumsky::extra::Err<Rich<'a, char>>> {
     let git_host_prefix = just(GITHUB)
         .or(just(GITLAB).or(just(SOURCEHUT).or(just(CODEBERG))))
         .then_ignore(just(":"))
@@ -166,22 +167,28 @@ fn parser<'a>() -> impl Parser<'a, &'a str, GitUrlShorthand, chumsky::extra::Err
         })
 }
 
-impl Display for GitUrlShorthand {
+impl Display for RemoteGitUrlShorthand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (&self.0.host, &self.0.owner) {
-            (Some(host), Some(owner)) if host == "github.com" => {
-                format!("{}:{}/{}", GITHUB, owner, self.0.name)
-            }
-            (Some(host), Some(owner)) if host == "gitlab.com" => {
-                format!("{}:{}/{}", GITLAB, owner, self.0.name)
-            }
-            (Some(host), Some(owner)) if host == "git.sr.ht" => {
-                format!("{}:{}/{}", SOURCEHUT, owner.replace('~', ""), self.0.name)
-            }
-            (Some(host), Some(owner)) if host == "codeberg.org" => {
-                format!("{}:{}/{}", CODEBERG, owner.replace('~', ""), self.0.name)
-            }
-            _ => format!("{}", self.0),
+        if self.0.host == "github.com" {
+            format!("{}:{}/{}", GITHUB, self.0.owner, self.0.repo)
+        } else if self.0.host == "gitlab.com" {
+            format!("{}:{}/{}", GITLAB, self.0.owner, self.0.repo)
+        } else if self.0.host == "git.sr.ht" {
+            format!(
+                "{}:{}/{}",
+                SOURCEHUT,
+                self.0.owner.replace('~', ""),
+                self.0.repo
+            )
+        } else if self.0.host == "codeberg.org" {
+            format!(
+                "{}:{}/{}",
+                CODEBERG,
+                self.0.owner.replace('~', ""),
+                self.0.repo
+            )
+        } else {
+            format!("{}", self.0)
         }
         .fmt(f)
     }
@@ -193,58 +200,58 @@ mod tests {
 
     #[tokio::test]
     async fn owner_repo_shorthand() {
-        let url_shorthand: GitUrlShorthand = "lumen-oss/lux".parse().unwrap();
-        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        let url_shorthand: RemoteGitUrlShorthand = "lumen-oss/lux".parse().unwrap();
+        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
     }
 
     #[tokio::test]
     async fn github_shorthand() {
         let url_shorthand_str = "github:lumen-oss/lux";
-        let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, Some("github.com".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
+        assert_eq!(url_shorthand.0.host, "github.com".to_string());
+        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn gitlab_shorthand() {
         let url_shorthand_str = "gitlab:lumen-oss/lux";
-        let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, Some("gitlab.com".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
+        assert_eq!(url_shorthand.0.host, "gitlab.com".to_string());
+        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn sourcehut_shorthand() {
         let url_shorthand_str = "sourcehut:lumen-oss/lux";
-        let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, Some("git.sr.ht".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("~lumen-oss".to_string()));
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
+        assert_eq!(url_shorthand.0.host, "git.sr.ht".to_string());
+        assert_eq!(url_shorthand.0.owner, "~lumen-oss".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn codeberg_shorthand() {
         let url_shorthand_str = "codeberg:lumen-oss/lux";
-        let url_shorthand: GitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, Some("codeberg.org".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("~lumen-oss".to_string()));
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
+        assert_eq!(url_shorthand.0.host, "codeberg.org".to_string());
+        assert_eq!(url_shorthand.0.owner, "~lumen-oss".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
     #[tokio::test]
     async fn regular_https_url() {
-        let url_shorthand: GitUrlShorthand =
+        let url_shorthand: RemoteGitUrlShorthand =
             "https://github.com/lumen-oss/lux.git".parse().unwrap();
-        assert_eq!(url_shorthand.0.host, Some("github.com".to_string()));
-        assert_eq!(url_shorthand.0.owner, Some("lumen-oss".to_string()));
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        assert_eq!(url_shorthand.0.host, "github.com".to_string());
+        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
         assert_eq!(
             url_shorthand.to_string(),
             "github:lumen-oss/lux".to_string()
@@ -254,22 +261,22 @@ mod tests {
     #[tokio::test]
     async fn regular_ssh_url() {
         let url_str = "git@github.com:lumen-oss/lux.git";
-        let url_shorthand: GitUrlShorthand = url_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, Some("github.com".to_string()));
+        let url_shorthand: RemoteGitUrlShorthand = url_str.parse().unwrap();
+        assert_eq!(url_shorthand.0.host, "github.com".to_string());
         assert_eq!(
             url_shorthand.0.owner,
-            Some("git@github.com:lumen-oss".to_string())
+            "git@github.com:lumen-oss".to_string(),
         );
-        assert_eq!(url_shorthand.0.name, "lux".to_string());
+        assert_eq!(url_shorthand.0.repo, "lux".to_string());
     }
 
     #[tokio::test]
     async fn parse_with_prefix() {
-        GitUrlShorthand::parse_with_prefix("lumen-oss/lux").unwrap_err();
-        GitUrlShorthand::parse_with_prefix("github:lumen-oss/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("gitlab:lumen-oss/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("sourcehut:lumen-oss/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("codeberg:lumen-oss/lux").unwrap();
-        GitUrlShorthand::parse_with_prefix("bla:lumen-oss/lux").unwrap_err();
+        RemoteGitUrlShorthand::parse_with_prefix("lumen-oss/lux").unwrap_err();
+        RemoteGitUrlShorthand::parse_with_prefix("github:lumen-oss/lux").unwrap();
+        RemoteGitUrlShorthand::parse_with_prefix("gitlab:lumen-oss/lux").unwrap();
+        RemoteGitUrlShorthand::parse_with_prefix("sourcehut:lumen-oss/lux").unwrap();
+        RemoteGitUrlShorthand::parse_with_prefix("codeberg:lumen-oss/lux").unwrap();
+        RemoteGitUrlShorthand::parse_with_prefix("bla:lumen-oss/lux").unwrap_err();
     }
 }
