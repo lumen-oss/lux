@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use tempdir::TempDir;
+use tempfile::tempdir;
 use thiserror::Error;
 
 use crate::{
@@ -148,7 +148,7 @@ impl<'a> BinaryRockInstall<'a> {
         match self.tree.lockfile()?.get(&package.id()) {
             Some(package) if self.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
             _ => {
-                let unpack_dir = TempDir::new("lux-cli-rock").unwrap().into_path();
+                let unpack_dir = tempdir()?;
                 let cursor = Cursor::new(self.rock_bytes);
                 let mut zip = zip::ZipArchive::new(cursor)?;
                 zip.extract(&unpack_dir)?;
@@ -157,7 +157,7 @@ impl<'a> BinaryRockInstall<'a> {
                 //     let src_dir = unpack_dir.join("lua");
                 //     tokio::fs::rename(lua_dir, src_dir).await?;
                 // }
-                let rock_manifest_file = unpack_dir.join("rock_manifest");
+                let rock_manifest_file = unpack_dir.path().join("rock_manifest");
                 if !rock_manifest_file.is_file() {
                     return Err(InstallBinaryRockError::RockManifestNotFound);
                 }
@@ -169,31 +169,31 @@ impl<'a> BinaryRockInstall<'a> {
                 let rock_manifest = RockManifest::new(&rock_manifest_content)?;
                 install_manifest_entries(
                     &rock_manifest.lib.entries,
-                    &unpack_dir.join("lib"),
+                    &unpack_dir.path().join("lib"),
                     &output_paths.lib,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.lua.entries,
-                    &unpack_dir.join("lua"),
+                    &unpack_dir.path().join("lua"),
                     &output_paths.src,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.bin.entries,
-                    &unpack_dir.join("bin"),
+                    &unpack_dir.path().join("bin"),
                     &output_paths.bin,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.doc.entries,
-                    &unpack_dir.join("doc"),
+                    &unpack_dir.path().join("doc"),
                     &output_paths.doc,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.root.entries,
-                    &unpack_dir,
+                    unpack_dir.path(),
                     &output_paths.etc,
                 )
                 .await?;

@@ -370,15 +370,15 @@ fn starts_with_any(str: &str, prefixes: Vec<&str>) -> bool {
 #[cfg(test)]
 mod tests {
 
-    use tempdir::TempDir;
+    use assert_fs::TempDir;
 
     use super::*;
 
     #[tokio::test]
     async fn parse_source_url() {
-        let dir = TempDir::new("lux-test").unwrap().into_path();
+        let dir = TempDir::new().unwrap();
         let url: SourceUrl = format!("file://{}", dir.to_string_lossy()).parse().unwrap();
-        assert_eq!(url, SourceUrl::File(dir));
+        assert_eq!(url, SourceUrl::File(dir.path().to_path_buf()));
         let url: SourceUrl = "ftp://example.com/foo".parse().unwrap();
         assert!(matches!(url, SourceUrl::Url { .. }));
         let url: SourceUrl = "git://example.com/foo".parse().unwrap();

@@ -3,7 +3,7 @@ use std::io;
 use git2::{AutotagOption, FetchOptions, Repository};
 use git_url_parse::GitUrl;
 use itertools::Itertools;
-use tempdir::TempDir;
+use tempfile::tempdir;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -38,7 +38,7 @@ pub(crate) fn latest_semver_tag_or_commit_sha(url: &GitUrl) -> Result<SemVerTagO
 }
 
 fn latest_semver_tag(url: &GitUrl) -> Result<Option<String>, GitError> {
-    let temp_dir = TempDir::new("lux-git-meta").map_err(GitError::CreateTempDir)?;
+    let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
 
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
@@ -72,7 +72,7 @@ fn latest_semver_tag(url: &GitUrl) -> Result<Option<String>, GitError> {
 }
 
 fn latest_commit_sha(url: &GitUrl) -> Result<Option<String>, GitError> {
-    let temp_dir = TempDir::new("lux-git-meta").map_err(GitError::CreateTempDir)?;
+    let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
     let mut remote = repo

@@ -4,7 +4,6 @@ use ssri::{Algorithm, Integrity, IntegrityOpts};
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use tempdir::TempDir;
 
 pub trait HasIntegrity {
     fn hash(&self) -> io::Result<Integrity>;
@@ -31,12 +30,6 @@ impl HasIntegrity for Path {
     fn hash(&self) -> io::Result<Integrity> {
         let path_buf: PathBuf = self.into();
         path_buf.hash()
-    }
-}
-
-impl HasIntegrity for TempDir {
-    fn hash(&self) -> io::Result<Integrity> {
-        self.path().hash()
     }
 }
 

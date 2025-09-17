@@ -11,7 +11,7 @@ use crate::{
     tree::RockLayout,
 };
 
-use tempdir::TempDir;
+use tempfile::tempdir;
 use thiserror::Error;
 
 use super::utils::recursive_copy_dir;
@@ -47,8 +47,8 @@ pub(crate) async fn build<R: Rockspec>(
             rockspec.version()
         ))
     });
-    let rockspec_temp_dir = TempDir::new("temp-rockspec")?.into_path();
-    let rockspec_file = rockspec_temp_dir.join(format!(
+    let rockspec_temp_dir = tempdir()?;
+    let rockspec_file = rockspec_temp_dir.path().join(format!(
         "{}-{}.rockspec",
         rockspec.package(),
         rockspec.version()
@@ -61,11 +61,11 @@ pub(crate) async fn build<R: Rockspec>(
     )
     .await?;
     let luarocks = LuaRocksInstallation::new(config, tree.build_tree(config)?)?;
-    let luarocks_tree = TempDir::new("luarocks-compat-tree")?;
+    let luarocks_tree = tempdir()?;
     luarocks
         .make(&rockspec_file, build_dir, luarocks_tree.path(), lua)
         .await?;
-    install(rockspec, &luarocks_tree.into_path(), output_paths, config).await
+    install(rockspec, luarocks_tree.path(), output_paths, config).await
 }
 
 async fn install<R: Rockspec>(
