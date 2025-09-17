@@ -3,7 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use eyre::{Context, Result};
 use lux_lib::{
     config::{Config, LuaVersion},
-    git::shorthand::GitUrlShorthand,
+    git::shorthand::RemoteGitUrlShorthand,
     operations::Sync,
     package::PackageReq,
     progress::{MultiProgress, Progress},
@@ -17,14 +17,14 @@ use lux_lib::{
 #[derive(Debug, Clone)]
 pub enum PackageReqOrGitShorthand {
     PackageReq(PackageReq),
-    GitShorthand(GitUrlShorthand),
+    GitShorthand(RemoteGitUrlShorthand),
 }
 
 impl FromStr for PackageReqOrGitShorthand {
     type Err = eyre::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match GitUrlShorthand::parse_with_prefix(s) {
+        match RemoteGitUrlShorthand::parse_with_prefix(s) {
             Ok(shorthand) => Ok(Self::GitShorthand(shorthand)),
             Err(_) => Ok(Self::PackageReq(PackageReq::parse(s)?)),
         }
