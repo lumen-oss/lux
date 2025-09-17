@@ -1,4 +1,3 @@
-use git_url_parse::{GitUrl, GitUrlParseError};
 use mlua::{FromLua, IntoLua, Lua, UserData, Value};
 use path_slash::PathBufExt;
 use reqwest::Url;
@@ -6,7 +5,10 @@ use serde::{de, Deserialize, Deserializer};
 use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
-use crate::git::GitSource;
+use crate::git::{
+    url::{GitUrl, GitUrlParseError},
+    GitSource,
+};
 
 use super::{
     DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, FromPlatformOverridable, PartialOverride,

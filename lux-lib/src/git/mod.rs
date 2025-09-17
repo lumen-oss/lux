@@ -1,9 +1,12 @@
-use git_url_parse::GitUrl;
 use mlua::UserData;
 
-use crate::lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue};
+use crate::{
+    git::url::GitUrl,
+    lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue},
+};
 
 pub mod shorthand;
+pub mod url;
 pub mod utils;
 
 #[derive(Debug, PartialEq, Clone)]

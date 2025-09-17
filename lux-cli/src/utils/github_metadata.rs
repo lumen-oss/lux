@@ -1,6 +1,7 @@
 use eyre::eyre;
 use eyre::Result;
 use git2::Repository;
+use git_url_parse::GitUrl;
 use path_absolutize::Absolutize as _;
 use std::io;
 use std::path::Path;
@@ -41,7 +42,7 @@ pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<Repo
 
     // NOTE(vhyrro): Temporary value is required. Thank the borrow checker.
     let ret = if let Some(remote) = repo.find_remote("origin")?.url() {
-        let parsed_url = git_url_parse::GitUrl::parse(remote)?;
+        let parsed_url = GitUrl::parse(remote)?;
 
         let (owner, name) = match (parsed_url.owner, parsed_url.name) {
             (Some(owner), name) => (owner, name),

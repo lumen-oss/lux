@@ -1,10 +1,11 @@
 use std::io;
 
 use git2::{AutotagOption, FetchOptions, Repository};
-use git_url_parse::GitUrl;
 use itertools::Itertools;
 use tempfile::tempdir;
 use thiserror::Error;
+
+use crate::git::url::GitUrl;
 
 #[derive(Debug, Error)]
 pub enum GitError {

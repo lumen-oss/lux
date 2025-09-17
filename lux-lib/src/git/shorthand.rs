@@ -1,9 +1,10 @@
 use std::{fmt::Display, str::FromStr};
 
 use chumsky::{prelude::*, Parser};
-use git_url_parse::{GitUrl, GitUrlParseError};
 use serde::{de, Deserialize, Deserializer};
 use thiserror::Error;
+
+use crate::git::url::{GitUrl, GitUrlParseError};
 
 const GITHUB: &str = "github";
 const GITLAB: &str = "gitlab";

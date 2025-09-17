@@ -1073,11 +1073,10 @@ mod tests {
 
     use assert_fs::prelude::{PathChild, PathCopy, PathCreateDir};
     use git2::{Repository, RepositoryInitOptions};
-    use git_url_parse::GitUrl;
     use url::Url;
 
     use crate::{
-        git::GitSource,
+        git::{url::GitUrl, GitSource},
         lua_rockspec::{PartialLuaRockspec, PerPlatform, RemoteLuaRockspec, RockSourceSpec},
         project::{Project, ProjectRoot},
         rockspec::{lua_dependency::LuaDependencySpec, Rockspec},

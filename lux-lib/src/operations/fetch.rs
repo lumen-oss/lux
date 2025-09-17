@@ -1,7 +1,6 @@
 use bon::Builder;
 use git2::build::RepoBuilder;
 use git2::FetchOptions;
-use git_url_parse::GitUrlParseError;
 use ssri::Integrity;
 use std::fs::File;
 use std::io;
@@ -13,6 +12,7 @@ use thiserror::Error;
 
 use crate::build::utils::recursive_copy_dir;
 use crate::config::Config;
+use crate::git::url::GitUrlParseError;
 use crate::git::GitSource;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;

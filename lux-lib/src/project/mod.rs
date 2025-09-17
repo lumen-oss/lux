@@ -20,6 +20,7 @@ use crate::{
     git::{
         self,
         shorthand::GitUrlShorthand,
+        url::GitUrl,
         utils::{GitError, SemVerTagOrSha},
     },
     lockfile::{LockfileError, ProjectLockfile, ReadOnly},
@@ -515,7 +516,7 @@ impl Project {
             | LuaDependencyType::Build(ref urls)
             | LuaDependencyType::Test(ref urls) => {
                 for url in urls {
-                    let git_url: git_url_parse::GitUrl = url.clone().into();
+                    let git_url: GitUrl = url.clone().into();
                     let mut dep_entry = toml_edit::table();
                     match git::utils::latest_semver_tag_or_commit_sha(&git_url)? {
                         SemVerTagOrSha::SemVerTag(tag) => {
