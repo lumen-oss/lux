@@ -20,7 +20,7 @@ ignore = "0.4"
 indicatif = "0.18"
 itertools = "0.14"
 lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
-mlua = { version = "0.10", features = [
+mlua = { version = "0.11", features = [
   "serialize",
   "macros",
   "error-send",
