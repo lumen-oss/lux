@@ -74,7 +74,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 stylua = { workspace = true }
 target-lexicon = { workspace = true }
-tempdir = { workspace = true }
+tempfile = { workspace = true }
 toml = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }

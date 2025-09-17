@@ -306,7 +306,7 @@ where
 
     let tree = build.tree;
 
-    let temp_dir = tempdir::TempDir::new(&rockspec.package().to_string())?;
+    let temp_dir = tempfile::tempdir()?;
 
     let source_metadata = match build.source_spec {
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {

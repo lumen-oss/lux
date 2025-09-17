@@ -16,7 +16,7 @@ use bon::Builder;
 use git2::{build::RepoBuilder, FetchOptions};
 use ssri::Integrity;
 use target_lexicon::Triple;
-use tempdir::TempDir;
+use tempfile::tempdir;
 use thiserror::Error;
 use tokio::{fs, process::Command};
 use url::Url;
@@ -88,9 +88,7 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
 async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let progress = args.progress;
 
-    let build_dir = TempDir::new("lux_luajit_build_dir")
-        .expect("failed to create lua_installation temp directory")
-        .into_path();
+    let build_dir = tempdir().expect("failed to create lua_installation temp directory");
     // XXX luajit.org responds with an invalid content-type, so we'll use the github mirror for now.
     // let luajit_url = "https://luajit.org/git/luajit.git";
     let luajit_url = "https://github.com/LuaJIT/LuaJIT.git";
@@ -101,14 +99,14 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
         fetch_options.update_fetchhead(false);
         let mut repo_builder = RepoBuilder::new();
         repo_builder.fetch_options(fetch_options);
-        let repo = repo_builder.clone(luajit_url, &build_dir)?;
+        let repo = repo_builder.clone(luajit_url, build_dir.path())?;
         let (object, _) = repo.revparse_ext(&format!("v{LUAJIT_MM_VERSION}"))?;
         repo.checkout_tree(&object, None)?;
     }
     if cfg!(target_env = "msvc") {
-        do_build_luajit_msvc(args, &build_dir).await
+        do_build_luajit_msvc(args, build_dir.path()).await
     } else {
-        do_build_luajit_unix(args, &build_dir).await
+        do_build_luajit_unix(args, build_dir.path()).await
     }
 }
 
@@ -282,9 +280,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
     let progress = args.progress;
 
-    let build_dir = TempDir::new("lux_lua_build_dir")
-        .expect("failed to create lua_installation temp directory")
-        .into_path();
+    let build_dir = tempdir().expect("failed to create lua_installation temp directory");
 
     let (source_integrity, pkg_version): (Integrity, &str) = match lua_version {
         LuaVersion::Lua51 => (LUA51_HASH.parse().unwrap(), LUA51_VERSION),
@@ -321,12 +317,20 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 
     let cursor = Cursor::new(response);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
-    operations::unpack::unpack(mime_type, cursor, true, file_name, &build_dir, progress).await?;
+    operations::unpack::unpack(
+        mime_type,
+        cursor,
+        true,
+        file_name,
+        build_dir.path(),
+        progress,
+    )
+    .await?;
 
     if cfg!(target_env = "msvc") {
-        do_build_lua_msvc(args, &build_dir, lua_version, pkg_version).await
+        do_build_lua_msvc(args, build_dir.path(), lua_version, pkg_version).await
     } else {
-        do_build_lua_unix(args, &build_dir, lua_version, pkg_version).await
+        do_build_lua_unix(args, build_dir.path(), lua_version, pkg_version).await
     }
 }
 

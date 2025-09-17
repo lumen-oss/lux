@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::ExitStatus,
 };
-use tempdir::TempDir;
+use tempfile::tempdir;
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -162,17 +162,18 @@ impl LuaRocksInstallation {
         }
         let cursor = Cursor::new(response);
         let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
-        let unpack_dir = TempDir::new("luarocks-exe")?.into_path();
+        let unpack_dir = tempdir()?;
         operations::unpack(
             mime_type,
             cursor,
             false,
             "luarocks-3.11.1-windows-64.zip".into(),
-            &unpack_dir,
+            unpack_dir.path(),
             progress,
         )
         .await?;
         let luarocks_exe = unpack_dir
+            .path()
             .join("luarocks-3.11.1-windows-64")
             .join(LUAROCKS_EXE);
         tokio::fs::copy(luarocks_exe, &self.tree.bin().join(LUAROCKS_EXE)).await?;
@@ -209,7 +210,7 @@ impl LuaRocksInstallation {
     ) -> Result<(), ExecLuaRocksError> {
         let luarocks_paths = Paths::new(&self.tree)?;
         // Ensure a pure environment so we can do parallel builds
-        let temp_dir = TempDir::new("lux-run-luarocks").unwrap();
+        let temp_dir = tempdir()?;
         let lua_version_str = match lua.version {
             LuaVersion::Lua51 | LuaVersion::LuaJIT => "5.1",
             LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2",
@@ -245,7 +246,7 @@ variables = {{
             .env("PATH", luarocks_paths.path_prepended().joined())
             .env("LUA_PATH", luarocks_paths.package_path().joined())
             .env("LUA_CPATH", luarocks_paths.package_cpath().joined())
-            .env("HOME", temp_dir.into_path().to_slash_lossy().to_string())
+            .env("HOME", temp_dir.path().to_slash_lossy().to_string())
             .env(
                 "LUAROCKS_CONFIG",
                 luarocks_config.to_slash_lossy().to_string(),

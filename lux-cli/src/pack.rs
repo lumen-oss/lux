@@ -15,7 +15,7 @@ use lux_lib::{
     rockspec::Rockspec as _,
     tree,
 };
-use tempdir::TempDir;
+use tempfile::tempdir;
 
 #[derive(Debug, Clone)]
 pub enum PackageOrRockspec {
@@ -72,8 +72,8 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             let user_tree = config.user_tree(lua_version.clone())?;
             match user_tree.match_rocks(&package_req)? {
                 lux_lib::tree::RockMatches::NotFound(_) => {
-                    let temp_dir = TempDir::new("lux-pack")?.into_path();
-                    let temp_config = config.with_tree(temp_dir);
+                    let temp_dir = tempdir()?;
+                    let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
                     let packages = Install::new(&temp_config)
                         .package(
@@ -123,9 +123,9 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     "expected a path to a .rockspec or a package requirement."
                 )),
             }?;
-            let temp_dir = TempDir::new("lux-pack")?.into_path();
+            let temp_dir = tempdir()?;
             let bar = progress.map(|p| p.new_bar());
-            let config = config.with_tree(temp_dir);
+            let config = config.with_tree(temp_dir.path().to_path_buf());
             let lua = LuaInstallation::new(
                 &lua_version,
                 &config,

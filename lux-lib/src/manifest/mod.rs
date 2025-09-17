@@ -67,7 +67,7 @@ async fn get_manifest(
         let mut archive = ZipArchive::new(std::io::Cursor::new(manifest_bytes))
             .map_err(|err| ManifestFromServerError::ZipRead(url.clone(), err))?;
 
-        let temp = tempdir::TempDir::new("lux-manifest")?;
+        let temp = tempfile::tempdir()?;
 
         archive
             .extract_unwrapped_root_dir(&temp, zip::read::root_dir_common_filter)

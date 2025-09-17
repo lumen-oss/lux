@@ -23,7 +23,7 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use tempdir::TempDir;
+use tempfile::tempdir;
 use thiserror::Error;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
@@ -82,14 +82,14 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let doc_entries = add_rock_entries(&mut zip, &layout.doc, "doc".into())?;
     let conf_entries = add_rock_entries(&mut zip, &layout.conf, "conf".into())?;
     // We copy entries from `etc` to the root directory, as luarocks doesn't have an etc directory.
-    let temp_dir = TempDir::new("lux-pack-temp-root").unwrap().into_path();
-    utils::recursive_copy_dir(&layout.etc, &temp_dir).await?;
+    let temp_dir = tempdir()?;
+    utils::recursive_copy_dir(&layout.etc, temp_dir.path()).await?;
     // prevent duplicate doc and conf entries
-    let doc = temp_dir.join("doc");
+    let doc = temp_dir.path().join("doc");
     if doc.is_dir() {
         tokio::fs::remove_dir_all(&doc).await?;
     }
-    let conf = temp_dir.join("conf");
+    let conf = temp_dir.path().join("conf");
     if conf.is_dir() {
         tokio::fs::remove_dir_all(&conf).await?;
     }
@@ -99,9 +99,9 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
         return Err(PackError::MissingRockspec);
     }
     let packed_rockspec_name = format!("{}-{}.rockspec", &package.name(), &package.version());
-    let renamed_rockspec_entry = temp_dir.join(packed_rockspec_name);
+    let renamed_rockspec_entry = temp_dir.path().join(packed_rockspec_name);
     tokio::fs::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
-    let root_entries = add_rock_entries(&mut zip, &temp_dir, "".into())?;
+    let root_entries = add_rock_entries(&mut zip, temp_dir.path(), "".into())?;
     let mut bin_entries = HashMap::new();
     for relative_binary_path in package.spec.binaries() {
         let binary_path = tree.bin().join(
@@ -160,7 +160,7 @@ fn is_binary_rock(layout: &RockLayout) -> bool {
 
 fn add_rock_entries(
     zip: &mut ZipWriter<File>,
-    source_dir: &PathBuf,
+    source_dir: &Path,
     zip_dir: PathBuf,
 ) -> Result<HashMap<PathBuf, DirOrFileEntry>, PackError> {
     let mut result = HashMap::new();
@@ -184,7 +184,7 @@ fn add_rock_entries(
 fn add_rock_entry(
     zip: &mut ZipWriter<File>,
     file: PathBuf,
-    source_dir: &PathBuf,
+    source_dir: &Path,
     zip_dir: &Path,
 ) -> Result<(PathBuf, String), PackError> {
     let relative_path: PathBuf = pathdiff::diff_paths(source_dir.join(file.clone()), source_dir)

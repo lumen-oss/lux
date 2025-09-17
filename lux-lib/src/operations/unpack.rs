@@ -212,8 +212,8 @@ fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)
 #[cfg(test)]
 mod tests {
     use crate::{config::ConfigBuilder, progress::MultiProgress};
+    use assert_fs::TempDir;
     use std::fs::File;
-    use tempdir::TempDir;
 
     use super::*;
 
@@ -224,10 +224,12 @@ mod tests {
             .join("test")
             .join("luatest-0.2-1.src.rock");
         let file = File::open(&test_rock_path).unwrap();
-        let dest = TempDir::new("lux-test").unwrap();
+        let dest = TempDir::new().unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let progress = MultiProgress::new(&config);
         let bar = progress.map(MultiProgress::new_bar);
-        unpack_src_rock(file, dest.into_path(), &bar).await.unwrap();
+        unpack_src_rock(file, dest.to_path_buf(), &bar)
+            .await
+            .unwrap();
     }
 }

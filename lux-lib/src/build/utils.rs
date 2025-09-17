@@ -134,7 +134,7 @@ pub(crate) async fn compile_c_files(
     // See https://github.com/rust-lang/cc-rs/issues/594#issuecomment-2110551057
 
     let mut build = cc::Build::new();
-    let intermediate_dir = tempdir::TempDir::new(target_module.as_str())?;
+    let intermediate_dir = tempfile::tempdir()?;
     let build = build
         .cargo_output(config.verbose())
         .cargo_metadata(config.verbose())
@@ -170,8 +170,8 @@ pub(crate) async fn compile_c_files(
     let output_path = parent.join(&file);
 
     let output = if compiler.is_like_msvc() {
-        let def_temp_dir = tempdir::TempDir::new("msvc-def")?.into_path().to_path_buf();
-        let def_file = mk_def_file(def_temp_dir, &file, target_module)?;
+        let def_temp_dir = tempfile::tempdir()?;
+        let def_file = mk_def_file(def_temp_dir.path(), &file, target_module)?;
         let cmd = compiler.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
         cmd.arg("/NOLOGO")
@@ -226,7 +226,7 @@ pub(crate) async fn compile_c_files(
 
 /// On MSVC, we need to create Lua definitions manually
 fn mk_def_file(
-    dir: PathBuf,
+    dir: &Path,
     output_file_name: &str,
     target_module: &LuaModule,
 ) -> io::Result<PathBuf> {
@@ -343,7 +343,7 @@ pub(crate) async fn compile_c_modules(
         )
         .collect_vec();
 
-    let intermediate_dir = tempdir::TempDir::new(target_module.as_str())?;
+    let intermediate_dir = tempfile::tempdir()?;
     let build = build
         .cargo_output(config.verbose())
         .cargo_metadata(config.verbose())
@@ -408,8 +408,8 @@ pub(crate) async fn compile_c_modules(
 
     let output_path = parent.join(&file);
     let output = if is_msvc {
-        let def_temp_dir = tempdir::TempDir::new("msvc-def")?.into_path().to_path_buf();
-        let def_file = mk_def_file(def_temp_dir, &file, target_module)?;
+        let def_temp_dir = tempfile::tempdir()?;
+        let def_file = mk_def_file(def_temp_dir.path(), &file, target_module)?;
         let cmd = build.try_get_compiler()?.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
         cmd.arg("/NOLOGO")
