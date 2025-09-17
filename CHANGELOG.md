@@ -109,6 +109,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.0](https://github.com/lumen-oss/lux/compare/v0.17.1...v0.18.0) - 2025-09-17
+
+### Added
+- [**breaking**] don't expose `git-url-parse` types ([#1073](https://github.com/lumen-oss/lux/pull/1073))
+
+### Other
+- *(deps)* replace unmaintained `tempdir` with `tempfile` ([#1074](https://github.com/lumen-oss/lux/pull/1074))
+- *(deps)* bump inquire from 0.8.0 to 0.9.1 ([#1069](https://github.com/lumen-oss/lux/pull/1069))
+
+## `lux-lib` - [0.25.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.24.1...lux-lib-v0.25.0) - 2025-09-17
+
+### Added
+- [**breaking**] don't expose `git-url-parse` types ([#1073](https://github.com/lumen-oss/lux/pull/1073))
+
+### Other
+- *(deps)* replace unmaintained `tempdir` with `tempfile` ([#1074](https://github.com/lumen-oss/lux/pull/1074))
+
 ## `lux-cli` - [0.17.1](https://github.com/lumen-oss/lux/compare/v0.17.0...v0.17.1) - 2025-09-15
 
 ### Other
