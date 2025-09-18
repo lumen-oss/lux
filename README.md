@@ -155,11 +155,14 @@ If building with the `vendored` feature:
 - `perl` and `perl-core`
 - `make`
 
+To link `gpgme` statically on Linux and macOS, set the environment variable
+`SYSTEM_DEPS_LINK=static`.
+
 We usually recommend building with the `vendored` feature enabled,
 to statically link `lua`, `libgit2` and `openssl`:
 
 ```bash
-cargo build --locked --profile release --features vendored
+SYSTEM_DEPS_LINK="static" cargo build --locked --profile release --features vendored
 ```
 
 Or, to build with dynamically linked libraries:
