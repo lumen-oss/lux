@@ -13,7 +13,7 @@ mlua = { workspace = true }
 path-absolutize = { workspace = true }
 
 [dependencies.lux-lib]
-version = "0.25.0"
+version = "0.25.1"
 path = "../lux-lib"
 default-features = false
 
