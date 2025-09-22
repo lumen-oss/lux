@@ -3102,7 +3102,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-util",
- "toml 0.8.23",
+ "toml 0.9.6",
  "toml_datetime 0.7.1",
  "toml_edit 0.22.27",
  "toml_parser",
