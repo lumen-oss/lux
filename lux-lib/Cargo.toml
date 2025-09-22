@@ -86,7 +86,7 @@ gpgme = { version = "0.11", optional = true }
 [dev-dependencies]
 httptest = { version = "0.16" }
 serial_test = { version = "3.2" }
-proptest = "1.7"
+proptest = "1.8"
 dir-diff = "0.3"
 insta = { version = "1.43", features = ["redactions", "yaml", "json"] }
 assert_fs = "1.1"
