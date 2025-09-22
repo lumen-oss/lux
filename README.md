@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <a href="https://lumen-oss.github.io/tutorial/getting-started"><img src="./lux-logo.svg" alt="Lux" width="200"></a>
+  <a href="https://lux.lumen-labs.org/tutorial/getting-started"><img src="./lux-logo.svg" alt="Lux" width="200"></a>
   <br>
   <br>
   <span>Lux</span>
@@ -58,7 +58,7 @@
 
 ## :gear: How To Use
 
-Feel free to consult the [documentation](https://lumen-oss.github.io/tutorial/getting-started) on how to get started with Lux!
+Feel free to consult the [documentation](https://lux.lumen-labs.org/tutorial/getting-started) on how to get started with Lux!
 
 It features a tutorial and several guides to make you good at managing Lua projects.
 

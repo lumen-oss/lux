@@ -313,7 +313,7 @@ fn dist_package() -> Result<(), DynError> {
         .binaries(vec![Binary::new(lx_bin_path).main(true)])
         .resources(resources)
         .description("A luxurious package manager for Lua")
-        .homepage("https://lumen-oss.github.io/")
+        .homepage("https://lux.lumen-labs.org")
         .authors(vec!["mrcjkb", "vhyrro"])
         .publisher("lumen-oss")
         .identifier("org.neorocks.lux")
@@ -322,7 +322,7 @@ fn dist_package() -> Result<(), DynError> {
         .appimage(AppImageConfig::new().files(file_mappings))
         .pacman(
             PacmanConfig::new()
-                .conflicts(["lux-cli-git"])
+                .conflicts(["lux-cli-git", "lux-cli"])
                 .depends(["glibc", "gcc-libs", "bzip2", "xz"])
                 .provides(["lx"])
                 .files(file_mappings),
