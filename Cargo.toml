@@ -14,7 +14,7 @@ resolver = "2"
 version = "0.18.0"
 
 [workspace.dependencies]
-git-url-parse = "0.5"
+git-url-parse = "0.6"
 git2 = "0.20"
 ignore = "0.4"
 indicatif = "0.18"
