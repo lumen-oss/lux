@@ -189,7 +189,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .arg("install")
-        .arg(format!("PREFIX={}", install_dir.display()))
+        .arg(format!(r#"PREFIX="{}""#, install_dir.display()))
         .output()
         .await
     {
@@ -380,7 +380,7 @@ async fn do_build_lua_unix(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .arg("install")
-        .arg(format!("INSTALL_TOP={}", install_dir.display()))
+        .arg(format!(r#"INSTALL_TOP="{}""#, install_dir.display()))
         .output()
         .await
     {
