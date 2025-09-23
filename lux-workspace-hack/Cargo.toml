@@ -38,7 +38,7 @@ hashbrown = { version = "0.15" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
-indexmap = { version = "1", default-features = false, features = ["std"] }
+indexmap = { version = "2", default-features = false, features = ["std"] }
 libgit2-sys = { version = "0.18", default-features = false, features = ["https", "ssh", "vendored"] }
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -79,7 +79,7 @@ cc = { version = "1", default-features = false, features = ["parallel"] }
 crossbeam-utils = { version = "0.8" }
 either = { version = "1", features = ["use_std"] }
 hashbrown = { version = "0.15" }
-indexmap = { version = "1", default-features = false, features = ["std"] }
+indexmap = { version = "2", default-features = false, features = ["std"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
