@@ -96,6 +96,14 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
     {
         let args = self._update();
 
+        if args
+            .packages
+            .as_ref()
+            .is_some_and(|packages| packages.is_empty())
+        {
+            return Ok(Vec::default());
+        }
+
         let progress = args
             .progress
             .clone()
