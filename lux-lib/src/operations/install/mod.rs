@@ -95,6 +95,9 @@ where
     /// Install the packages.
     pub async fn install(self) -> Result<Vec<LocalPackage>, InstallError> {
         let install_built = self._build();
+        if install_built.packages.is_empty() {
+            return Ok(Vec::default());
+        }
         let progress = match install_built.progress {
             Some(p) => p,
             None => MultiProgress::new_arc(install_built.config),
