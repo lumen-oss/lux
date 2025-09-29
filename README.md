@@ -95,7 +95,7 @@ The following table provides a brief comparison:
 | versioning                                                            | SemVer[^3]                   | arbitrary          |
 | rockspecs with CVS/Mercurial/SVN/SSCM sources                         | :x: (YAGNI[^2])              | :white_check_mark: |
 | static type checking                                                  | :white_check_mark:           | :x:                |
-| generate a `.luarc` file with dependencies                            | :x: (planned)                | :x:                |
+| generate a `.luarc` file with dependencies                            | :white_check_mark:           | :x:                |
 | git dependencies in local projects                                    | :white_check_mark:           | :x:                |
 
 [^1]: Supported via a compatibility layer that uses luarocks as a backend.
