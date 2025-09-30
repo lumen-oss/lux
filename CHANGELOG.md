@@ -109,6 +109,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.2](https://github.com/lumen-oss/lux/compare/v0.18.1...v0.18.2) - 2025-09-30
+
+### Other
+- *(deps)* bump octocrab from 0.45.0 to 0.46.0 ([#1096](https://github.com/lumen-oss/lux/pull/1096))
+- update README to reflect .luarc generation
+
+## `lux-lib` - [0.25.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.25.1...lux-lib-v0.25.2) - 2025-09-30
+
+### Other
+- update README to reflect .luarc generation
+
 ## `lux-cli` - [0.18.1](https://github.com/lumen-oss/lux/compare/v0.18.0...v0.18.1) - 2025-09-24
 
 ### Other
