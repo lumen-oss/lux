@@ -39,6 +39,7 @@ pub struct FetchSrc<'a, R: Rockspec> {
     config: &'a Config,
     #[builder(start_fn)]
     progress: &'a Progress<ProgressBar>,
+    #[builder(setters(vis = "pub(crate)"))]
     source_url: Option<RemotePackageSourceUrl>,
 }
 

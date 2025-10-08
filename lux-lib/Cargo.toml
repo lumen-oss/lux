@@ -17,7 +17,7 @@ edition = "2021"
 
 [dependencies]
 async-recursion = "1.1"
-bon = { version = "3.7", features = ["implied-bounds"] }
+bon = { version = "3.8", features = ["implied-bounds"] }
 bytes = "1.10"
 cc = { version = "1.2", features = ["parallel"] }
 chumsky = "0.11"

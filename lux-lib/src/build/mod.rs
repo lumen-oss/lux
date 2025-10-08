@@ -81,6 +81,7 @@ pub struct Build<'a, R: Rockspec + HasIntegrity> {
     source_spec: Option<RemotePackageSourceSpec>,
 
     // TODO(vhyrro): Remove this and enforce that this is provided at a type level.
+    #[builder(setters(vis = "pub(crate)"))]
     source: Option<RemotePackageSource>,
 }
 
