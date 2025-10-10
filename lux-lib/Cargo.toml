@@ -58,7 +58,7 @@ tree-sitter-generate = "0.25"
 tree-sitter-loader = "0.25"
 url = "2.5"
 vfs = "0.12"
-zip = "5.1"
+zip = "6.0"
 
 git-url-parse = { workspace = true }
 git2 = { workspace = true }
