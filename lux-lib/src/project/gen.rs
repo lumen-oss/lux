@@ -219,8 +219,7 @@ fn version_from_semver_tag(
         .ok_or_else(|| git2::Error::from_str("No HEAD target"))?;
     let mut result = None;
     repo.tag_foreach(|oid, _| {
-        if let Ok(obj) = repo.find_object(oid, None) {
-            let tag = obj.into_tag().expect("not a tag");
+        if let Ok(tag) = repo.find_tag(oid) {
             if tag.target_id() == current_rev {
                 if let Some(tag_name) = tag.name() {
                     let version_str = format!("{}-{specrev}", tag_name.trim_start_matches("v"));
@@ -249,8 +248,7 @@ fn current_tag_or_revision(repo: &Repository) -> Result<String, git2::Error> {
     let mut semver_tag = None;
     let mut fallback_tag = None;
     repo.tag_foreach(|oid, _| {
-        if let Ok(obj) = repo.find_object(oid, None) {
-            let tag = obj.into_tag().expect("not a tag");
+        if let Ok(tag) = repo.find_tag(oid) {
             if tag.target_id() == current_rev {
                 if let Some(tag_name) = tag.name() {
                     if PackageVersion::parse(tag_name.trim_start_matches("v"))
