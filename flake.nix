@@ -111,6 +111,15 @@
           workspace-hack = pkgs.lux-workspace-hack;
           taplo = pkgs.lux-taplo;
         };
+
+        formatter = let
+          config = self.checks.${system}.git-hooks-check.config;
+          inherit (config) package configFile;
+          script = ''
+            ${pkgs.lib.getExe package} run --all-files --config ${configFile}
+          '';
+        in
+          pkgs.writeShellScriptBin "pre-commit-run" script;
       };
       flake = {
         overlays.default = with inputs; import ./nix/overlay.nix {inherit self crane;};

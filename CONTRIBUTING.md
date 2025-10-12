@@ -74,10 +74,10 @@ To enter a development shell:
 nix develop
 ```
 
-To apply formatting and run linters, while in a devShell, run
+To apply formatting and run linters, run
 
 ```console
-pre-commit run --all
+nix fmt
 ```
 
 Optionally, you can use [`direnv`](https://direnv.net/) to auto-load
