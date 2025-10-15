@@ -186,20 +186,16 @@ async fn do_fetch_src<R: Rockspec>(
             progress.map(|p| p.set_message(format!("🦠 Cloning {url}")));
 
             let mut fetch_options = FetchOptions::new();
-            fetch_options.update_fetchhead(false);
-            if git.checkout_ref.is_none() {
-                fetch_options.depth(1);
-            };
+            fetch_options.update_fetchhead(false).depth(1);
             let mut repo_builder = RepoBuilder::new();
             repo_builder.fetch_options(fetch_options);
+            if let Some(checkout_ref) = &git.checkout_ref {
+                repo_builder.branch(checkout_ref);
+            }
             let repo = repo_builder.clone(&url, dest_dir)?;
 
             let checkout_ref = match &git.checkout_ref {
-                Some(checkout_ref) => {
-                    let (object, _) = repo.revparse_ext(checkout_ref)?;
-                    repo.checkout_tree(&object, None)?;
-                    checkout_ref.clone()
-                }
+                Some(checkout_ref) => checkout_ref.clone(),
                 None => {
                     let head = repo.head()?;
                     let commit = head.peel_to_commit()?;
