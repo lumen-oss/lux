@@ -151,7 +151,7 @@ async fn cleanup(output_paths: &RockLayout, progress: &Progress<ProgressBar>) ->
 
     progress.map(|p| p.set_message(format!("🗑️ Cleaning up {}", root_dir.display())));
 
-    match std::fs::remove_dir_all(root_dir) {
+    match tokio::fs::remove_dir_all(root_dir).await {
         Ok(_) => (),
         Err(err) => {
             progress

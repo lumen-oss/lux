@@ -1,6 +1,7 @@
 use bon::Builder;
 use git2::build::RepoBuilder;
 use git2::FetchOptions;
+use remove_dir_all::remove_dir_all;
 use ssri::Integrity;
 use std::fs::File;
 use std::io;
@@ -207,7 +208,7 @@ async fn do_fetch_src<R: Rockspec>(
                 }
             };
             // The .git directory is not deterministic
-            std::fs::remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
+            remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
             let hash = fetch.dest_dir.hash().map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
