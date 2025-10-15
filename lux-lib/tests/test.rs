@@ -7,6 +7,7 @@ use lux_lib::{
     operations::Test,
     project::Project,
 };
+use tokio::fs::remove_dir_all;
 
 #[tokio::test]
 async fn run_busted_test() {
@@ -17,7 +18,7 @@ async fn run_busted_test() {
     let project_root = temp_dir.path();
     let project: Project = Project::from(project_root).unwrap().unwrap();
     let tree_root = project.root().to_path_buf().join(".lux");
-    let _ = std::fs::remove_dir_all(&tree_root);
+    let _ = remove_dir_all(&tree_root).await;
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -40,7 +41,7 @@ async fn run_busted_test_no_lock() {
     let project_root = temp_dir.path();
     let project: Project = Project::from(project_root).unwrap().unwrap();
     let tree_root = project.root().to_path_buf().join(".lux");
-    let _ = std::fs::remove_dir_all(&tree_root);
+    let _ = remove_dir_all(&tree_root).await;
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -63,7 +64,7 @@ async fn run_busted_test_no_lock() {
 async fn non_regression_lockfile_corruption() {
     let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/busted-with-lockfile/");
-    let _ = tokio::fs::remove_dir_all(sample_project_dir.join(".lux")).await;
+    let _ = remove_dir_all(sample_project_dir.join(".lux")).await;
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
     let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
@@ -108,7 +109,7 @@ async fn run_busted_nlua_test_impl(no_lock: bool) {
     let project_root = temp_dir.path();
     let project: Project = Project::from(project_root).unwrap().unwrap();
     let tree_root = project.root().to_path_buf().join(".lux");
-    let _ = std::fs::remove_dir_all(&tree_root);
+    let _ = remove_dir_all(&tree_root).await;
 
     let config = ConfigBuilder::new()
         .unwrap()

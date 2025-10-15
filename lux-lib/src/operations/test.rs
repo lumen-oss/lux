@@ -170,7 +170,7 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
         // by initialising empty HOME and XDG base directory paths
         let home = test_tree.root().join("home");
         let xdg = home.join("xdg");
-        let _ = std::fs::remove_dir_all(&home);
+        let _ = tokio::fs::remove_dir_all(&home).await;
         let xdg_config_home = xdg.join("config");
         std::fs::create_dir_all(&xdg_config_home)?;
         let xdg_state_home = xdg.join("local").join("state");
@@ -308,7 +308,7 @@ mod tests {
         let project_root = temp_dir.path();
         let project: Project = Project::from(project_root).unwrap().unwrap();
         let tree_root = project.root().to_path_buf().join(".lux");
-        let _ = std::fs::remove_dir_all(&tree_root);
+        let _ = tokio::fs::remove_dir_all(&tree_root).await;
 
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 

@@ -24,7 +24,7 @@ pub async fn purge(config: Config) -> Result<()> {
                 root_dir.display()
             )))
         });
-        std::fs::remove_dir_all(tree.root())?;
+        tokio::fs::remove_dir_all(tree.root()).await?;
     }
 
     Ok(())
