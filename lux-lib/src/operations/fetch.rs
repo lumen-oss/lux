@@ -82,9 +82,12 @@ where
                             &package, err
                         ))
                     });
-                    fetch
-                        .progress
-                        .map(|p| p.println("⚠️ Falling back to .src.rock archive"));
+                    fetch.progress.map(|p| {
+                        p.println(format!(
+                            "⚠️ Falling back to searching for a .src.rock archive on {}",
+                            fetch.config.server()
+                        ))
+                    });
                     let metadata =
                         FetchSrcRock::new(&package, fetch.dest_dir, fetch.config, fetch.progress)
                             .fetch()
@@ -100,18 +103,30 @@ where
 
 #[derive(Error, Debug)]
 pub enum FetchSrcError {
-    #[error("failed to clone rock source: {0}")]
+    #[error("failed to clone rock source:\n{0}")]
     GitClone(#[from] git2::Error),
-    #[error("failed to parse git URL: {0}")]
+    #[error("failed to parse git URL:\n{0}")]
     GitUrlParse(#[from] RemoteGitUrlParseError),
-    #[error(transparent)]
-    Io(#[from] io::Error),
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
     Unpack(#[from] UnpackError),
     #[error(transparent)]
     FetchSrcRock(#[from] FetchSrcRockError),
+    #[error("unable to remove the '.git' directory:\n{0}")]
+    CleanGitDir(io::Error),
+    #[error("unable to compute hash:\n{0}")]
+    Hash(io::Error),
+    #[error("unable to copy {src} to {dest}:\n{err}")]
+    CopyDir {
+        src: PathBuf,
+        dest: PathBuf,
+        err: io::Error,
+    },
+    #[error("unable to open {file}:\n{err}")]
+    FileOpen { file: PathBuf, err: io::Error },
+    #[error("unable to read {file}:\n{err}")]
+    FileRead { file: PathBuf, err: io::Error },
 }
 
 /// A rocks package source fetcher, providing fine-grained control
@@ -192,8 +207,8 @@ async fn do_fetch_src<R: Rockspec>(
                 }
             };
             // The .git directory is not deterministic
-            std::fs::remove_dir_all(dest_dir.join(".git"))?;
-            let hash = fetch.dest_dir.hash()?;
+            std::fs::remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
+            let hash = fetch.dest_dir.hash().map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
                 source_url: RemotePackageSourceUrl::Git { url, checkout_ref },
@@ -209,7 +224,7 @@ async fn do_fetch_src<R: Rockspec>(
                 .error_for_status()?
                 .bytes()
                 .await?;
-            let hash = response.hash()?;
+            let hash = response.hash().map_err(FetchSrcError::Hash)?;
             let file_name = url
                 .path_segments()
                 .and_then(|mut segments| segments.next_back())
@@ -240,13 +255,26 @@ async fn do_fetch_src<R: Rockspec>(
         RockSourceSpec::File(path) => {
             let hash = if path.is_dir() {
                 progress.map(|p| p.set_message(format!("📋 Copying {}", path.display())));
-                recursive_copy_dir(&path.to_path_buf(), dest_dir).await?;
+                recursive_copy_dir(&path.to_path_buf(), dest_dir)
+                    .await
+                    .map_err(|err| FetchSrcError::CopyDir {
+                        src: path.to_path_buf(),
+                        dest: dest_dir.to_path_buf(),
+                        err,
+                    })?;
                 progress.map(|p| p.finish_and_clear());
-                dest_dir.hash()?
+                dest_dir.hash().map_err(FetchSrcError::Hash)?
             } else {
-                let mut file = File::open(path)?;
+                let mut file = File::open(path).map_err(|err| FetchSrcError::FileOpen {
+                    file: path.clone(),
+                    err,
+                })?;
                 let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)?;
+                file.read_to_end(&mut buffer)
+                    .map_err(|err| FetchSrcError::FileRead {
+                        file: path.clone(),
+                        err,
+                    })?;
                 let mime_type = infer::get(&buffer).map(|file_type| file_type.mime_type());
                 let file_name = path
                     .file_name()
@@ -262,7 +290,7 @@ async fn do_fetch_src<R: Rockspec>(
                     progress,
                 )
                 .await?;
-                path.hash()?
+                path.hash().map_err(FetchSrcError::Hash)?
             };
             RemotePackageSourceMetadata {
                 hash,
