@@ -109,6 +109,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.3](https://github.com/lumen-oss/lux/compare/v0.18.2...v0.18.3) - 2025-10-15
+
+### Other
+- *(deps)* bump emmylua_check from 0.14.0 to 0.15.0 ([#1117](https://github.com/lumen-oss/lux/pull/1117))
+
+## `lux-lib` - [0.26.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.25.2...lux-lib-v0.26.0) - 2025-10-15
+
+### Added
+- [**breaking**] more detailed error messages when failing to fetch sources ([#1121](https://github.com/lumen-oss/lux/pull/1121))
+
 ## `lux-cli` - [0.18.2](https://github.com/lumen-oss/lux/compare/v0.18.1...v0.18.2) - 2025-10-12
 
 ### Other
