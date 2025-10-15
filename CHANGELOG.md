@@ -109,6 +109,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.4](https://github.com/lumen-oss/lux/compare/v0.18.3...v0.18.4) - 2025-10-15
+
+### Fixed
+- *(windows)* unset readonly attribute before cleaning .git directory ([#1124](https://github.com/lumen-oss/lux/pull/1124))
+
+## `lux-lib` - [0.26.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.26.0...lux-lib-v0.26.1) - 2025-10-15
+
+### Fixed
+- *(windows)* unset readonly attribute before cleaning .git directory ([#1124](https://github.com/lumen-oss/lux/pull/1124))
+
 ## `lux-cli` - [0.18.3](https://github.com/lumen-oss/lux/compare/v0.18.2...v0.18.3) - 2025-10-15
 
 ### Other
