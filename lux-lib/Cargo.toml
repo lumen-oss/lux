@@ -1,7 +1,7 @@
 [package]
 
 name = "lux-lib"
-version = "0.26.1"
+version = "0.26.2"
 description = "Library for the lux package manager for Lua"
 authors = ["vhyrro <vhyrro@gmail.com>", "mrcjkb <marc@jakobi.dev>"]
 repository = "https://github.com/lumen-oss/lux"
