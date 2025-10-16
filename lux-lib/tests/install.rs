@@ -1,4 +1,5 @@
 use assert_fs::TempDir;
+use itertools::Itertools;
 use lux_lib::{
     config::{ConfigBuilder, LuaVersion},
     git::GitSource,
@@ -7,6 +8,8 @@ use lux_lib::{
     operations::{Install, PackageInstallSpec},
     tree::EntryType,
 };
+use std::path::PathBuf;
+use walkdir::WalkDir;
 
 #[tokio::test]
 async fn install_git_package() {
@@ -29,6 +32,27 @@ async fn install_http_package() {
     let install_spec =
         PackageInstallSpec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint).build();
     test_install(install_spec).await
+}
+
+// See https://github.com/lumen-oss/lux/issues/1106
+#[tokio::test]
+async fn no_build_artifacts_in_cwd() {
+    let cwd = std::env::current_dir().unwrap();
+    let cwd_content_before_install = WalkDir::new(&cwd)
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|entry| entry.into_path())
+        .collect_vec();
+    let install_spec =
+        PackageInstallSpec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint).build();
+    test_install(install_spec).await;
+    let build_artifacts = WalkDir::new(&cwd)
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|entry| entry.into_path())
+        .filter(|file| !cwd_content_before_install.contains(file))
+        .collect_vec();
+    assert_eq!(build_artifacts, vec![] as Vec<PathBuf>)
 }
 
 async fn test_install(install_spec: PackageInstallSpec) {
