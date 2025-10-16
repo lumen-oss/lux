@@ -95,16 +95,14 @@ fn validate_output(output: &Output) -> Result<(), OutputValidationError> {
 
 #[derive(Error, Debug)]
 pub enum CompileCFilesError {
-    #[error("IO operation while compiling C files: {0}")]
+    #[error("IO operation while compiling C files:\n{0}")]
     Io(#[from] io::Error),
-    #[error("failed to compile intermediates from C files: {0}")]
+    #[error("failed to compile intermediates from C files:\n{0}")]
     CompileIntermediates(cc::Error),
-    #[error("error compiling C files (compilation failed): {0}")]
+    #[error("error compiling C files (compilation failed):\n{0}")]
     Compilation(#[from] cc::Error),
-    #[error("error compiling C files (output validation failed): {0}")]
-    OutputValidation(#[from] OutputValidationError),
-    #[error("compiling C files succeeded, but the expected library {0} was not created")]
-    LibOutputNotCreated(String),
+    #[error("error compiling C files (linking failed):\n{0}")]
+    Link(#[from] LinkCModulesError),
 }
 
 /// Compiles a set of C files into a single dynamic library and places them under `{target_dir}/{target_file}`.
@@ -120,14 +118,14 @@ pub(crate) async fn compile_c_files(
 ) -> Result<(), CompileCFilesError> {
     let target = target_dir.join(target_module.to_lib_path());
 
-    let parent = target.parent().expect("Couldn't determine parent");
-    let file = target
+    let target_parent_dir = target.parent().expect("Couldn't determine parent");
+    let target_file_name = target
         .file_name()
         .expect("Couldn't determine filename")
         .to_string_lossy()
         .to_string();
 
-    std::fs::create_dir_all(parent)?;
+    std::fs::create_dir_all(target_parent_dir)?;
 
     let host = Triple::host();
 
@@ -167,70 +165,20 @@ pub(crate) async fn compile_c_files(
         .try_compile_intermediates()
         .map_err(CompileCFilesError::CompileIntermediates)?;
 
-    let output_path = parent.join(&file);
-
-    // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
-    // the current working directory.
-    // See https://github.com/lumen-oss/lux/issues/1106
-    let temp_work_dir = tempfile::tempdir().map_err(|err| {
-        io::Error::other(format!(
-            "failed to create temporary directory for linking:\n{err}"
-        ))
-    })?;
-    let output = if compiler.is_like_msvc() {
-        let def_file = mk_def_file(temp_work_dir.path(), &file, target_module)?;
-        let cmd = compiler.to_command();
-        let mut cmd: tokio::process::Command = cmd.into();
-        cmd.current_dir(temp_work_dir.path())
-            .arg("/NOLOGO")
-            .args(&objects)
-            .arg("/LD")
-            .arg("/link")
-            .arg(format!("/DEF:{}", def_file.display()))
-            .arg(format!("/OUT:{}", output_path.display()))
-            .args(lua.lib_link_args(&compiler))
-            .args(
-                external_dependencies
-                    .iter()
-                    .flat_map(|(_, dep)| dep.lib_link_args(&compiler)),
-            )
-            .output()
-            .await?
-    } else {
-        let cmd = build.shared_flag(true).try_get_compiler()?.to_command();
-        let mut cmd: tokio::process::Command = cmd.into();
-        cmd.current_dir(temp_work_dir.path())
-            .args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
-            .args(lua.lib_link_args(&compiler))
-            .args(
-                external_dependencies
-                    .iter()
-                    .flat_map(|(_, dep)| dep.lib_link_args(&compiler)),
-            )
-            .args(&objects)
-            .output()
-            .await?
-    };
-
-    if config.verbose() {
-        if !&output.stdout.is_empty() {
-            println!("{}", String::from_utf8_lossy(&output.stdout));
-        }
-        if !&output.stderr.is_empty() {
-            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-        }
-    }
-
-    validate_output(&output)?;
-    log_command_output(&output, config);
-
-    if output_path.exists() {
-        Ok(())
-    } else {
-        Err(CompileCFilesError::LibOutputNotCreated(
-            output_path.to_slash_lossy().to_string(),
-        ))
-    }
+    link_c_artifacts(
+        build,
+        lua,
+        external_dependencies,
+        &target_file_name,
+        Vec::new(),
+        Vec::new(),
+        target_module,
+        target_parent_dir,
+        objects,
+        config,
+    )
+    .await?;
+    Ok(())
 }
 
 /// On MSVC, we need to create Lua definitions manually
@@ -304,12 +252,22 @@ pub(crate) fn default_libflag() -> &'static str {
 
 #[derive(Error, Debug)]
 pub enum CompileCModulesError {
-    #[error("IO operation while compiling C modules: {0}")]
+    #[error("IO operation failed while compiling C modules:\n{0}")]
     Io(#[from] io::Error),
     #[error("failed to compile intermediates from C modules: {0}")]
     CompileIntermediates(cc::Error),
-    #[error("error compiling C modules (compilation failed): {0}")]
+    #[error("error compiling C modules (compilation failed):\n{0}")]
     Compilation(#[from] cc::Error),
+    #[error("error compiling C modules (linking failed):\n{0}")]
+    Link(#[from] LinkCModulesError),
+}
+
+#[derive(Error, Debug)]
+pub enum LinkCModulesError {
+    #[error("IO operation failed while linking C modules:\n{0}")]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    CC(#[from] cc::Error),
     #[error("error compiling C modules (output validation failed): {0}")]
     OutputValidation(#[from] OutputValidationError),
     #[error("compiling C modules succeeded, but the expected library {0} was not created")]
@@ -330,8 +288,8 @@ pub(crate) async fn compile_c_modules(
 ) -> Result<(), CompileCModulesError> {
     let target = target_dir.join(target_module.to_lib_path());
 
-    let parent = target.parent().expect("Couldn't determine parent");
-    std::fs::create_dir_all(parent)?;
+    let target_parent_dir = target.parent().expect("Couldn't determine parent");
+    std::fs::create_dir_all(target_parent_dir)?;
 
     let host = Triple::host();
 
@@ -389,7 +347,7 @@ pub(crate) async fn compile_c_modules(
         build.define(name, value.as_deref());
     }
 
-    let file = target
+    let target_file_name = target
         .file_name()
         .expect("Couldn't determine filename")
         .to_string_lossy()
@@ -399,22 +357,61 @@ pub(crate) async fn compile_c_modules(
         .try_compile_intermediates()
         .map_err(CompileCModulesError::CompileIntermediates)?;
 
-    let libdir_args = data.libdirs.iter().map(|libdir| {
-        if is_msvc {
-            format!("/LIBPATH:{}", source_dir.join(libdir).display())
-        } else {
-            format!("-L{}", source_dir.join(libdir).display())
-        }
-    });
+    let libdir_args = data
+        .libdirs
+        .iter()
+        .map(|libdir| {
+            if is_msvc {
+                format!("/LIBPATH:{}", source_dir.join(libdir).display())
+            } else {
+                format!("-L{}", source_dir.join(libdir).display())
+            }
+        })
+        .collect_vec();
 
-    let library_args = data.libraries.iter().map(|library| {
-        if is_msvc {
-            format!("{}.lib", library.to_str().unwrap())
-        } else {
-            format!("-l{}", library.to_str().unwrap())
-        }
-    });
+    let library_args = data
+        .libraries
+        .iter()
+        .map(|library| {
+            if is_msvc {
+                format!("{}.lib", library.to_str().unwrap())
+            } else {
+                format!("-l{}", library.to_str().unwrap())
+            }
+        })
+        .collect_vec();
 
+    link_c_artifacts(
+        build,
+        lua,
+        external_dependencies,
+        &target_file_name,
+        libdir_args,
+        library_args,
+        target_module,
+        target_parent_dir,
+        objects,
+        config,
+    )
+    .await?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn link_c_artifacts(
+    build: &mut cc::Build,
+    lua: &LuaInstallation,
+    external_dependencies: &HashMap<String, ExternalDependencyInfo>,
+    target_file_name: &str,
+    libdir_args: Vec<String>,
+    library_args: Vec<String>,
+    target_module: &LuaModule,
+    target_parent_dir: &Path,
+    objects: Vec<PathBuf>,
+    config: &Config,
+) -> Result<(), LinkCModulesError> {
+    let output_path = target_parent_dir.join(target_file_name);
+    let compiler = build.try_get_compiler()?;
     // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
     // the current working directory.
     // See https://github.com/lumen-oss/lux/issues/1106
@@ -423,9 +420,9 @@ pub(crate) async fn compile_c_modules(
             "failed to create temporary directory for linking:\n{err}"
         ))
     })?;
-    let output_path = parent.join(&file);
+    let is_msvc = compiler.is_like_msvc();
     let output = if is_msvc {
-        let def_file = mk_def_file(temp_work_dir.path(), &file, target_module)?;
+        let def_file = mk_def_file(temp_work_dir.path(), target_file_name, target_module)?;
         let cmd = build.try_get_compiler()?.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
         cmd.current_dir(temp_work_dir.path())
@@ -435,7 +432,7 @@ pub(crate) async fn compile_c_modules(
             .arg("/link")
             .arg(format!("/DEF:{}", def_file.display()))
             .arg(format!("/OUT:{}", output_path.display()))
-            .args(lua.lib_link_args(&build.try_get_compiler()?))
+            .args(lua.lib_link_args(&compiler))
             .args(
                 external_dependencies
                     .iter()
@@ -462,7 +459,6 @@ pub(crate) async fn compile_c_modules(
             .output()
             .await?
     };
-
     if config.verbose() {
         if !&output.stdout.is_empty() {
             println!("{}", String::from_utf8_lossy(&output.stdout));
@@ -478,7 +474,7 @@ pub(crate) async fn compile_c_modules(
     if output_path.exists() {
         Ok(())
     } else {
-        Err(CompileCModulesError::LibOutputNotCreated(
+        Err(LinkCModulesError::LibOutputNotCreated(
             output_path.to_slash_lossy().to_string(),
         ))
     }
