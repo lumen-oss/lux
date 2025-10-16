@@ -427,6 +427,8 @@ async fn link_c_artifacts(
         let mut cmd: tokio::process::Command = cmd.into();
         cmd.current_dir(temp_work_dir.path())
             .arg("/NOLOGO")
+            .arg("/NOIMPLIB")
+            .arg("/NOEXP")
             .args(&objects)
             .arg("/LD")
             .arg("/link")
