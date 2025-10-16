@@ -169,12 +169,20 @@ pub(crate) async fn compile_c_files(
 
     let output_path = parent.join(&file);
 
+    // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
+    // the current working directory.
+    // See https://github.com/lumen-oss/lux/issues/1106
+    let temp_work_dir = tempfile::tempdir().map_err(|err| {
+        io::Error::other(format!(
+            "failed to create temporary directory for linking:\n{err}"
+        ))
+    })?;
     let output = if compiler.is_like_msvc() {
-        let def_temp_dir = tempfile::tempdir()?;
-        let def_file = mk_def_file(def_temp_dir.path(), &file, target_module)?;
+        let def_file = mk_def_file(temp_work_dir.path(), &file, target_module)?;
         let cmd = compiler.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
-        cmd.arg("/NOLOGO")
+        cmd.current_dir(temp_work_dir.path())
+            .arg("/NOLOGO")
             .args(&objects)
             .arg("/LD")
             .arg("/link")
@@ -191,7 +199,8 @@ pub(crate) async fn compile_c_files(
     } else {
         let cmd = build.shared_flag(true).try_get_compiler()?.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
-        cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
+        cmd.current_dir(temp_work_dir.path())
+            .args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
             .args(lua.lib_link_args(&compiler))
             .args(
                 external_dependencies
@@ -406,13 +415,21 @@ pub(crate) async fn compile_c_modules(
         }
     });
 
+    // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
+    // the current working directory.
+    // See https://github.com/lumen-oss/lux/issues/1106
+    let temp_work_dir = tempfile::tempdir().map_err(|err| {
+        io::Error::other(format!(
+            "failed to create temporary directory for linking:\n{err}"
+        ))
+    })?;
     let output_path = parent.join(&file);
     let output = if is_msvc {
-        let def_temp_dir = tempfile::tempdir()?;
-        let def_file = mk_def_file(def_temp_dir.path(), &file, target_module)?;
+        let def_file = mk_def_file(temp_work_dir.path(), &file, target_module)?;
         let cmd = build.try_get_compiler()?.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
-        cmd.arg("/NOLOGO")
+        cmd.current_dir(temp_work_dir.path())
+            .arg("/NOLOGO")
             .args(&objects)
             .arg("/LD")
             .arg("/link")
@@ -431,7 +448,8 @@ pub(crate) async fn compile_c_modules(
     } else {
         let cmd = build.shared_flag(true).try_get_compiler()?.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
-        cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
+        cmd.current_dir(temp_work_dir.path())
+            .args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
             .args(lua.lib_link_args(&build.try_get_compiler()?))
             .args(
                 external_dependencies
