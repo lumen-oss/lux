@@ -109,6 +109,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.6](https://github.com/lumen-oss/lux/compare/v0.18.5...v0.18.6) - 2025-10-19
+
+### Fixed
+- *(lint)* always disable lux loader ([#1136](https://github.com/lumen-oss/lux/pull/1136))
+
 ## `lux-cli` - [0.18.5](https://github.com/lumen-oss/lux/compare/v0.18.4...v0.18.5) - 2025-10-16
 
 ### Other
