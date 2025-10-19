@@ -53,6 +53,7 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
     Exec::new("luacheck", Some(&project), &config)
         .arg(project.root().to_slash_lossy())
         .args(check_args)
+        .disable_loader(true)
         .exec()
         .await?;
 
