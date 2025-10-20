@@ -4,11 +4,15 @@
 
 use bon::Builder;
 
-use crate::config::Config;
+use crate::{
+    config::Config,
+    path::{BinPath, PackagePath},
+};
 
 use std::{
     io,
     path::{Path, PathBuf},
+    process::Stdio,
 };
 
 use thiserror::Error;
@@ -84,9 +88,11 @@ where
 
         let lua_cmd: PathBuf = args.lua_cmd.try_into()?;
 
+        let is_lux_lua_available = detect_lux_lua(&lua_cmd, &paths).await;
+
         let loader_init = if args.disable_loader.unwrap_or(false) {
             "".to_string()
-        } else if args.tree.version().lux_lib_dir().is_none() {
+        } else if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
             eprintln!(
                 "⚠️ WARNING: lux-lua library not found.
 Cannot use the `lux.loader`.
@@ -131,5 +137,84 @@ To suppress this warning, set the `--no-loader` option.
                 exit_code: status.code(),
             })
         }
+    }
+}
+
+/// Attempts to detect lux-lua by invoking a Lua command
+/// in case it's a Lua wrapper, like the one created
+/// in nixpkgs using `lua.withPackages (ps: [ps.lux-lua])`.
+/// If the command fails for any reason (including not being able to find the 'lux' module),
+/// this function evaluates to `false`.
+async fn detect_lux_lua(lua_cmd: &Path, paths: &Paths) -> bool {
+    detect_lua_module(
+        lua_cmd,
+        &paths.package_path_prepended(),
+        &paths.package_cpath_prepended(),
+        &paths.path_prepended(),
+        "lux",
+    )
+    .await
+}
+
+async fn detect_lua_module(
+    lua_cmd: &Path,
+    lua_path: &PackagePath,
+    lua_cpath: &PackagePath,
+    path: &BinPath,
+    module: &str,
+) -> bool {
+    Command::new(lua_cmd)
+        .arg("-e")
+        .arg(format!(
+            "if pcall(require, '{}') then os.exit(0) else os.exit(1) end",
+            module
+        ))
+        .stderr(Stdio::null())
+        .stdout(Stdio::null())
+        .env("LUA_PATH", lua_path.joined())
+        .env("LUA_CPATH", lua_cpath.joined())
+        .env("PATH", path.joined())
+        .status()
+        .await
+        .is_ok_and(|status| status.success())
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use super::*;
+    use assert_fs::prelude::{PathChild, PathCreateDir};
+    use assert_fs::TempDir;
+    use path_slash::PathBufExt;
+    use which::which;
+
+    #[tokio::test]
+    async fn test_detect_lua_module() {
+        let temp_dir = TempDir::new().unwrap();
+        let lua_dir = temp_dir.child("lua");
+        lua_dir.create_dir_all().unwrap();
+        let lux_file = lua_dir.child("lux.lua").to_path_buf();
+        let lux_path_expr = lua_dir.child("?.lua").to_path_buf();
+        tokio::fs::write(&lux_file, "return true").await.unwrap();
+        let package_path =
+            PackagePath::from_str(lux_path_expr.to_slash_lossy().to_string().as_str()).unwrap();
+        let package_cpath = PackagePath::default();
+        let path = BinPath::default();
+        let lua_cmd = which("lua")
+            .ok()
+            .or(which("luajit").ok())
+            .expect("lua not found");
+        let result = detect_lua_module(&lua_cmd, &package_path, &package_cpath, &path, "lux").await;
+        assert!(result, "detects module on the LUA_PATH");
+        let result = detect_lua_module(
+            &lua_cmd,
+            &package_path,
+            &package_cpath,
+            &path,
+            "lhflasdlkas",
+        )
+        .await;
+        assert!(!result, "does not detect non-existing module");
     }
 }
