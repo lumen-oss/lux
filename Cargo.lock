@@ -1327,18 +1327,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
-name = "emmylua_check"
-version = "0.15.0"
+name = "emmy_lsp_types"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aca6fe6a5340db8f27e583ee683f822047e5d171d54224d94a13c2125f00ec9c"
+checksum = "26665b92804455ec49a563cf85f2f631c1d7a9e1aa6bc5791529762448fd7f40"
+dependencies = [
+ "bitflags 2.10.0",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "url",
+]
+
+[[package]]
+name = "emmylua_check"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d81bb93f1369b71c65649c71a238427137d5325865762fb3b8223e39367ab71"
 dependencies = [
  "ansi_term",
  "clap 4.5.47",
+ "emmy_lsp_types",
  "emmylua_code_analysis",
  "emmylua_parser",
  "fern",
  "log",
- "lsp-types",
  "mimalloc",
  "rowan",
  "serde",
@@ -1350,11 +1364,12 @@ dependencies = [
 
 [[package]]
 name = "emmylua_code_analysis"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b0f92be8daca9760cf4b3c81dee4a2237ad187e87a41b8027a3f5a400a550e9"
+checksum = "9d0cd7dd763a2b4f3410682534ca41ac3f748e7b6e17a6f9485050f6b47d5cf0"
 dependencies = [
  "dirs 6.0.0",
+ "emmy_lsp_types",
  "emmylua_codestyle",
  "emmylua_diagnostic_macro",
  "emmylua_parser",
@@ -1364,7 +1379,6 @@ dependencies = [
  "internment",
  "itertools 0.14.0",
  "log",
- "lsp-types",
  "percent-encoding",
  "regex",
  "rowan",
@@ -1404,9 +1418,9 @@ dependencies = [
 
 [[package]]
 name = "emmylua_parser"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf596a23955bd76a79a1cf930e8552e6556c7044e548fa5feabb76bacd33bb8c"
+checksum = "f389f3aa7f70327aa90bf989f12c29eaf2d294dd66f2e96c16d1f45ac67d6675"
 dependencies = [
  "rowan",
  "rust-i18n",
@@ -4736,9 +4750,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.224"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aaeb1e94f53b16384af593c71e20b095e958dab1d26939c1b70645c5cfbcc0b"
+checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
@@ -4786,18 +4800,18 @@ dependencies = [
 
 [[package]]
 name = "serde_core"
-version = "1.0.224"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f39390fa6346e24defbcdd3d9544ba8a19985d0af74df8501fbfe9a64341ab"
+checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.224"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ff78ab5e8561c9a675bfc1785cb07ae721f0ee53329a595cefd8c04c2ac4e0"
+checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
