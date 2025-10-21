@@ -2893,7 +2893,7 @@ dependencies = [
 
 [[package]]
 name = "lux-cli"
-version = "0.18.6"
+version = "0.18.7"
 dependencies = [
  "assert_fs",
  "clap 4.5.47",
@@ -2937,7 +2937,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lib"
-version = "0.26.2"
+version = "0.26.3"
 dependencies = [
  "assert_fs",
  "async-recursion",
@@ -3013,7 +3013,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lua"
-version = "0.18.6"
+version = "0.18.7"
 dependencies = [
  "assert_fs",
  "lux-lib",
