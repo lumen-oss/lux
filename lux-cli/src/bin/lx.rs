@@ -12,7 +12,7 @@ use lux_cli::{
     which, Cli, Commands,
 };
 use lux_lib::{
-    config::{tree::RockLayoutConfig, ConfigBuilder},
+    config::{tree::RockLayoutConfig, ConfigBuilder, LuaVersion},
     lockfile::PinnedState::{Pinned, Unpinned},
 };
 
@@ -20,13 +20,21 @@ use lux_lib::{
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let lua_version = cli.lua_version.or({
+        if cli.nvim {
+            Some(LuaVersion::Lua51)
+        } else {
+            None
+        }
+    });
+
     let mut config_builder = ConfigBuilder::new()
         .unwrap()
         .dev(Some(cli.dev))
         .extra_servers(cli.extra_servers)
         .generate_luarc(Some(!cli.no_luarc))
         .lua_dir(cli.lua_dir)
-        .lua_version(cli.lua_version)
+        .lua_version(lua_version)
         .namespace(cli.namespace)
         .only_sources(cli.only_sources)
         .server(cli.server)
