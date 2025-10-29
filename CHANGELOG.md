@@ -109,6 +109,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.8](https://github.com/lumen-oss/lux/compare/v0.18.7...v0.18.8) - 2025-10-29
+
+### Added
+- *(cli)* infer --lua-version 5.1 from --nvim ([#1151](https://github.com/lumen-oss/lux/pull/1151))
+
+## `lux-lib` - [0.26.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.26.3...lux-lib-v0.26.4) - 2025-10-29
+
+### Other
+- *(deps)* bump proptest from 1.8.0 to 1.9.0 ([#1146](https://github.com/lumen-oss/lux/pull/1146))
+
 ## `lux-cli` - [0.18.7](https://github.com/lumen-oss/lux/compare/v0.18.6...v0.18.7) - 2025-10-21
 
 ### Other
