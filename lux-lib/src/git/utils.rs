@@ -112,7 +112,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_latest_semver_tag() {
+    async fn test_latest_semver_tag_http() {
         if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
             println!("Skipping impure test");
             return;
@@ -122,12 +122,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_latest_commit_sha() {
+    async fn test_latest_semver_tag_ssh_user() {
+        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
+            println!("Skipping impure test");
+            return;
+        }
+        let url = "git@github.com:lumen-oss/lux.git".parse().unwrap();
+        assert!(latest_semver_tag(&url).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_latest_commit_sha_http() {
         if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
             println!("Skipping impure test");
             return;
         }
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
+        assert!(latest_commit_sha(&url).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_latest_commit_sha_ssh_user() {
+        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
+            println!("Skipping impure test");
+            return;
+        }
+        let url = "git@github.com:lumen-oss/lux.git".parse().unwrap();
         assert!(latest_commit_sha(&url).unwrap().is_some());
     }
 }
