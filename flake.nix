@@ -63,6 +63,7 @@
               buildInputs =
                 extra_pkgs
                 ++ (with pkgs; [
+                  lua5_4 # Needed for compilation
                   rust-analyzer
                   ra-multiplex
                   cargo-nextest
