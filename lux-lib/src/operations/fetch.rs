@@ -1,6 +1,6 @@
 use bon::Builder;
 use git2::build::RepoBuilder;
-use git2::FetchOptions;
+use git2::{Cred, FetchOptions, RemoteCallbacks};
 use remove_dir_all::remove_dir_all;
 use ssri::Integrity;
 use std::fs::File;
@@ -186,8 +186,13 @@ async fn do_fetch_src<R: Rockspec>(
             let url = git.url.to_string();
             progress.map(|p| p.set_message(format!("🦠 Cloning {url}")));
 
+            let mut callbacks = RemoteCallbacks::new();
+            callbacks.credentials(|_url, username_from_url, _allowed_types| {
+                Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+            });
             let mut fetch_options = FetchOptions::new();
             fetch_options.update_fetchhead(false);
+            fetch_options.remote_callbacks(callbacks);
             if git.checkout_ref.is_none() {
                 fetch_options.depth(1);
             };
