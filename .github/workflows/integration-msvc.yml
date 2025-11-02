@@ -18,11 +18,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Install C/C++ Compiler
-        uses: rlalik/setup-cpp-compiler@master
-        with:
-          compiler: clang-latest
-
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1
       - name: Install Rust Toolchain

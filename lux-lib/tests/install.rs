@@ -34,6 +34,13 @@ async fn install_http_package() {
     test_install(install_spec).await
 }
 
+#[tokio::test]
+async fn install_compat53_package() {
+    let install_spec =
+        PackageInstallSpec::new("compat53@0.14.4".parse().unwrap(), EntryType::Entrypoint).build();
+    test_install(install_spec).await
+}
+
 // See https://github.com/lumen-oss/lux/issues/1106
 #[tokio::test]
 async fn no_build_artifacts_in_cwd() {
