@@ -243,7 +243,7 @@ pub struct Config {
 
 impl Config {
     pub fn get_project_dirs() -> Result<ProjectDirs, NoValidHomeDirectory> {
-        directories::ProjectDirs::from("org", "neorocks", "lux").ok_or(NoValidHomeDirectory)
+        directories::ProjectDirs::from("org", "lumenlabs", "lux").ok_or(NoValidHomeDirectory)
     }
 
     pub fn get_default_cache_path() -> Result<PathBuf, NoValidHomeDirectory> {
@@ -437,8 +437,8 @@ impl ConfigBuilder {
 
     /// Get the path to the lux config file.
     pub fn config_file() -> Result<PathBuf, NoValidHomeDirectory> {
-        let project_dirs =
-            directories::ProjectDirs::from("org", "neorocks", "lux").ok_or(NoValidHomeDirectory)?;
+        let project_dirs = directories::ProjectDirs::from("org", "lumenlabs", "lux")
+            .ok_or(NoValidHomeDirectory)?;
         Ok(project_dirs.config_dir().join("config.toml").to_path_buf())
     }
 

@@ -3,7 +3,7 @@ lua = ">=5.1"
 
 [description]
 summary = "The Lua API for the lux package manager"
-maintainer = "neorocks"
+maintainer = "Lumen Labs"
 homepage = "https://lux.lumen-labs.org"
 issues_url = "https://github.com/lumen-oss/lux/issues"
 labels = ["luarocks", "lux", "package-manager", "packagemanager", "build"]
