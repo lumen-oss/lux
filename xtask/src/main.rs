@@ -316,7 +316,7 @@ fn dist_package() -> Result<(), DynError> {
         .homepage("https://lux.lumen-labs.org")
         .authors(vec!["mrcjkb", "vhyrro"])
         .publisher("lumen-oss")
-        .identifier("org.neorocks.lux")
+        .identifier("org.lumenlabs.lux")
         .license_file(project_root.join("LICENSE"))
         .icons(icons)
         .appimage(AppImageConfig::new().files(file_mappings))

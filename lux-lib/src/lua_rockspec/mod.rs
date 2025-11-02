@@ -743,7 +743,7 @@ mod tests {
             license = 'MIT',
             homepage = 'https://github.com/lumen-oss/rocks.nvim',
             issues_url = 'https://github.com/lumen-oss/rocks.nvim/issues',
-            maintainer = 'neorocks',
+            maintainer = 'Lumen Labs',
         }\n
         source = {\n
             url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
@@ -760,7 +760,7 @@ mod tests {
             license: Some("MIT".into()),
             homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
             issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
-            maintainer: Some("neorocks".into()),
+            maintainer: Some("Lumen Labs".into()),
             labels: Vec::new(),
         };
         assert_eq!(rockspec.local.description, expected_description);
@@ -774,7 +774,7 @@ mod tests {
             license = 'MIT',
             homepage = 'https://github.com/lumen-oss/rocks.nvim',
             issues_url = 'https://github.com/lumen-oss/rocks.nvim/issues',
-            maintainer = 'neorocks',
+            maintainer = 'Lumen Labs',
             labels = {},
         }\n
         external_dependencies = { FOO = { library = 'foo' } }\n
@@ -793,7 +793,7 @@ mod tests {
             license: Some("MIT".into()),
             homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
             issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
-            maintainer: Some("neorocks".into()),
+            maintainer: Some("Lumen Labs".into()),
             labels: Vec::new(),
         };
         assert_eq!(rockspec.local.description, expected_description);
@@ -819,7 +819,7 @@ mod tests {
             license = 'MIT',
             homepage = 'https://github.com/lumen-oss/rocks.nvim',
             issues_url = 'https://github.com/lumen-oss/rocks.nvim/issues',
-            maintainer = 'neorocks',
+            maintainer = 'Lumen Labs',
             labels = { 'package management', },
         }\n
         supported_platforms = { 'unix', '!windows' }\n
@@ -843,7 +843,7 @@ mod tests {
             license: Some("MIT".into()),
             homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
             issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
-            maintainer: Some("neorocks".into()),
+            maintainer: Some("Lumen Labs".into()),
             labels: vec!["package management".into()],
         };
         assert_eq!(rockspec.local.description, expected_description);
