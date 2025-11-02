@@ -1,6 +1,8 @@
 use clap::Args;
 use eyre::{eyre, Result, WrapErr};
-use lux_lib::{config::Config, path::Paths};
+use lux_lib::{
+    config::Config, lua_installation::LuaInstallation, path::Paths, progress::MultiProgress,
+};
 use which::which;
 
 use std::{env, path::PathBuf};
@@ -79,8 +81,20 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
         Some(path.init())
     };
 
+    let lua_version = tree.version();
+
+    let mut bin_path = path.path_prepended();
+
+    let progress = MultiProgress::new_arc(&config);
+    let bar = progress.map(|progress| progress.new_bar());
+    let lua = LuaInstallation::new(lua_version, &config, &bar).await?;
+    bar.map(|bar| bar.finish_and_clear());
+    if let Some(lua_bin_path) = lua.bin().as_ref().and_then(|lua_bin| lua_bin.parent()) {
+        bin_path.add_path(lua_bin_path.to_path_buf());
+    }
+
     let _ = Command::new(&shell)
-        .env("PATH", path.path_prepended().joined())
+        .env("PATH", bin_path.joined())
         .env("LUA_PATH", lua_path.joined())
         .env("LUA_CPATH", lua_cpath.joined())
         .env("LUA_INIT", lua_init.unwrap_or_default())
