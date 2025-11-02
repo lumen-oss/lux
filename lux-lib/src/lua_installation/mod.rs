@@ -215,6 +215,10 @@ impl LuaInstallation {
         self.dependency_info.include_dir.iter().collect_vec()
     }
 
+    pub fn bin(&self) -> &Option<PathBuf> {
+        &self.bin
+    }
+
     fn root_dir(version: &LuaVersion, config: &Config) -> PathBuf {
         if let Some(lua_dir) = config.lua_dir() {
             return lua_dir.clone();
