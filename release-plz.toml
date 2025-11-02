@@ -1,6 +1,4 @@
 [workspace]
-# set the path of all the crates to the changelog to the root of the repository
-changelog_path = "./CHANGELOG.md"
 
 [changelog]
 header = """# Changelog
@@ -28,6 +26,14 @@ body = """
 name = "lux-cli"
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
+semver_check = false
+changelog_path = "./CHANGELOG.md"
+protect_breaking_commits = false # don't skip any commits with breaking changes
+
+[[package]]
+name = "lux-lib"
+semver_check = true
+changelog_path = "./CHANGELOG.md"
 
 [[package]]
 name = "lux-workspace-hack"
