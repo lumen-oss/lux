@@ -109,6 +109,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.18.10](https://github.com/lumen-oss/lux/compare/v0.18.9...v0.18.10) - 2025-11-02
+
+### Fixed
+- *(cli/shell)* install Lua version if missing
+- *(cli/lua)* install Lua version if missing
+
+## `lux-lib` - [0.27.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.26.5...lux-lib-v0.27.0) - 2025-11-02
+
+### Added
+- [**breaking**] use `org.lumenlabs.lux` as identifier ([#1163](https://github.com/lumen-oss/lux/pull/1163))
+
+### Fixed
+- *(cli/shell)* install Lua version if missing
+- *(cli/lua)* install Lua version if missing
+
 ## `lux-cli` - [0.18.9](https://github.com/lumen-oss/lux/compare/v0.18.8...v0.18.9) - 2025-11-02
 
 ### Other
