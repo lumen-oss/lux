@@ -36,6 +36,12 @@ fn load_file(lua: &Lua, module: String, path: PathBuf) -> mlua::Result<mlua::Fun
 
         let module_path = module.replace('.', std::path::MAIN_SEPARATOR_STR);
 
+        #[cfg(not(target_env = "msvc"))]
+        let c_dylib_extension = "so";
+
+        #[cfg(target_env = "msvc")]
+        let c_dylib_extension = "dll";
+
         if path
             .join("src")
             .join(format!("{}.lua", module_path))
@@ -53,11 +59,13 @@ fn load_file(lua: &Lua, module: String, path: PathBuf) -> mlua::Result<mlua::Fun
                 .call::<()>(path.join("src").join(&module_path).join("init.lua"))
         } else if path
             .join("lib")
-            .join(format!("{}.so", module_path))
+            .join(format!("{}.{}", module_path, c_dylib_extension))
             .exists()
         {
-            lua.load("dofile")
-                .call::<()>(path.join("lib").join(format!("{}.so", module_path)))
+            lua.load("dofile").call::<()>(
+                path.join("lib")
+                    .join(format!("{}.{}", module_path, c_dylib_extension)),
+            )
         } else {
             Err(mlua::Error::RuntimeError(format!(
                 "module not found: {}",

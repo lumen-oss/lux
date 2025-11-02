@@ -68,7 +68,7 @@ impl Paths {
                 version: tree.version().clone(),
                 src: <_>::default(),
                 bin: <_>::default(),
-                lib: PackagePath(vec![lib_path.join("?.so")]),
+                lib: PackagePath(vec![lib_path.join(format!("?.{}", c_dylib_extension()))]),
             });
         }
 
