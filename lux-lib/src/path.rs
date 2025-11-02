@@ -179,6 +179,12 @@ impl BinPath {
         new_vec.append(&mut self.0);
         self.0 = new_vec;
     }
+    pub fn add_path(&mut self, path: PathBuf) {
+        let mut new_vec = Vec::new();
+        new_vec.push(path);
+        new_vec.append(&mut self.0);
+        self.0 = new_vec;
+    }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
