@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use path_slash::PathExt;
 use tokio::process::Command;
 
 use clap::Args;
@@ -7,8 +8,9 @@ use eyre::{eyre, Result};
 use itertools::Itertools;
 use lux_lib::{
     config::{Config, LuaVersion},
-    lua_installation::LuaBinary,
+    lua_installation::{LuaBinary, LuaInstallation},
     operations,
+    progress::MultiProgress,
     project::Project,
     rockspec::LuaVersionCompatibility,
 };
@@ -78,10 +80,21 @@ To exit type 'exit()' or <C-d>.
 "#,
     );
 
-    let lua_cmd = run_lua
-        .lua
-        .map(LuaBinary::Custom)
-        .unwrap_or(LuaBinary::new(lua_version, &config));
+    let lua_cmd = match run_lua.lua.map(LuaBinary::Custom) {
+        Some(lua_cmd) => lua_cmd,
+        None => {
+            let progress = MultiProgress::new_arc(&config);
+            let bar = progress.map(|progress| progress.new_bar());
+            let lua_cmd = LuaInstallation::new(&lua_version, &config, &bar)
+                .await?
+                .bin()
+                .as_ref()
+                .map(|lua_bin| LuaBinary::Custom(lua_bin.to_slash_lossy().to_string()))
+                .unwrap_or_else(|| LuaBinary::new(lua_version, &config));
+            bar.map(|bar| bar.finish_and_clear());
+            lua_cmd
+        }
+    };
 
     if run_lua.help {
         return print_lua_help(&lua_cmd).await;
