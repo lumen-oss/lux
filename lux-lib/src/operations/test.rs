@@ -16,6 +16,7 @@ use crate::{
 };
 use bon::Builder;
 use itertools::Itertools;
+use path_slash::PathBufExt;
 use thiserror::Error;
 
 use super::{
@@ -147,17 +148,18 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
     let test_tree_paths = Paths::new(&test_tree)?;
     paths.prepend(&test_tree_paths);
 
-    let mut command = match &test_spec {
-        ValidatedTestSpec::Busted(_) => Command::new(BUSTED_EXE),
-        ValidatedTestSpec::BustedNlua(_) => Command::new(BUSTED_EXE),
-        ValidatedTestSpec::Command(spec) => Command::new(spec.command.clone()),
+    let test_executable = match &test_spec {
+        ValidatedTestSpec::Busted(_) => BUSTED_EXE.to_string(),
+        ValidatedTestSpec::BustedNlua(_) => BUSTED_EXE.to_string(),
+        ValidatedTestSpec::Command(spec) => spec.command.to_string(),
         ValidatedTestSpec::LuaScript(_) => {
             let lua_version = test.project.lua_version(&config)?;
             let lua_binary = LuaBinary::new(lua_version, &config);
             let lua_bin_path: PathBuf = lua_binary.try_into()?;
-            Command::new(lua_bin_path)
+            lua_bin_path.to_slash_lossy().to_string()
         }
     };
+    let mut command = Command::new(&test_executable);
     let mut command = command
         .current_dir(test.project.root().deref())
         .args(test_spec.args())
@@ -185,7 +187,7 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
     }
     let status = match command.status() {
         Ok(status) => Ok(status),
-        Err(err) => Err(RunTestsError::RunCommandFailure("busted".into(), err)),
+        Err(err) => Err(RunTestsError::RunCommandFailure(test_executable, err)),
     }?;
     if status.success() {
         Ok(())

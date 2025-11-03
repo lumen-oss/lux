@@ -21,8 +21,7 @@ pub struct Test {
 }
 
 pub async fn test(test: Test, config: Config) -> Result<()> {
-    let project =
-        Project::current()?.ok_or_eyre("'lx test' must be run in a Lux project root.")?;
+    let project = Project::current()?.ok_or_eyre("'lx test' must be run in a Lux project root.")?;
     let test_args = test.test_args.unwrap_or_default();
     let test_env = if test.impure {
         TestEnv::Impure
