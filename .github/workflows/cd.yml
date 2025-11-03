@@ -80,12 +80,6 @@ jobs:
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C link-arg=-undefined -C link-arg=dynamic_lookup" >> "${GITHUB_ENV}"
         if: startsWith(matrix.target, 'aarch64-apple-darwin')
 
-      - name: Install C/C++ Compiler
-        uses: rlalik/setup-cpp-compiler@master
-        with:
-          compiler: clang-latest
-        if: "startsWith(matrix.os, 'windows')"
-
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1
         if: "startsWith(matrix.os, 'windows')"

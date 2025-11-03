@@ -77,12 +77,6 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         if: endsWith(matrix.target, 'windows-msvc')
 
-      - name: Install C/C++ Compiler
-        uses: rlalik/setup-cpp-compiler@master
-        with:
-          compiler: clang-latest
-        if: endsWith(matrix.target, 'windows-msvc')
-
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1
         if: endsWith(matrix.target, 'windows-msvc')
