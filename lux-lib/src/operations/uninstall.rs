@@ -25,6 +25,7 @@ pub struct Uninstall<'a> {
     config: &'a Config,
     packages: Vec<LocalPackageId>,
     progress: Option<Arc<Progress<MultiProgress>>>,
+    tree: Option<Tree>,
 }
 
 /// A rocks package remover.
@@ -36,6 +37,7 @@ impl<'a> Uninstall<'a> {
             config,
             packages: Vec::new(),
             progress: None,
+            tree: None,
         }
     }
 
@@ -64,15 +66,23 @@ impl<'a> Uninstall<'a> {
         }
     }
 
+    pub fn tree(self, tree: Tree) -> Self {
+        Self {
+            tree: Some(tree),
+            ..self
+        }
+    }
+
     /// Remove the packages.
     pub async fn remove(self) -> Result<(), RemoveError> {
         let progress = match self.progress {
             Some(p) => p,
             None => MultiProgress::new_arc(self.config),
         };
-        let tree = self
-            .config
-            .user_tree(LuaVersion::from(self.config)?.clone())?;
+        let tree = self.tree.unwrap_or(
+            self.config
+                .user_tree(LuaVersion::from(self.config)?.clone())?,
+        );
         remove(self.packages, tree, self.config, &Arc::clone(&progress)).await
     }
 }
