@@ -167,6 +167,9 @@ impl FromPlatformOverridable<TestSpecInternal, Self> for TestSpec {
             Some(TestType::Busted) => Ok(Self::Busted(BustedTestSpec {
                 flags: internal.flags.unwrap_or_default(),
             })),
+            Some(TestType::BustedNlua) => Ok(Self::BustedNlua(BustedTestSpec {
+                flags: internal.flags.unwrap_or_default(),
+            })),
             Some(TestType::Command) => match (internal.command, internal.lua_script) {
                 (None, None) => Err(TestSpecDecodeError::NoCommandOrScript),
                 (None, Some(script)) => Ok(Self::Script(LuaScriptTestSpec {
@@ -245,9 +248,10 @@ impl UserData for LuaScriptTestSpec {
 }
 
 #[derive(Debug, Deserialize, Serialize_enum_str, PartialEq, Clone)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum TestType {
     Busted,
+    BustedNlua,
     Command,
 }
 
@@ -514,6 +518,18 @@ mod tests {
             TestSpec::Busted(BustedTestSpec {
                 flags: vec!["foo".into(), "bar".into(), "baz".into()],
             })
+        );
+        let lua_content = "
+        test = {\n
+            type = 'busted-nlua',\n
+        }";
+        let lua = Lua::new();
+        lua.load(lua_content).exec().unwrap();
+        let test_spec: PerPlatform<TestSpec> =
+            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        assert_eq!(
+            test_spec.default,
+            TestSpec::BustedNlua(BustedTestSpec { flags: Vec::new() })
         );
     }
 }
