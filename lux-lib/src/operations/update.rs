@@ -277,7 +277,8 @@ async fn update(
     if updatable.is_empty() {
         Ok(Vec::new())
     } else {
-        Uninstall::new(config)
+        Uninstall::new()
+            .config(config)
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .progress(progress.clone())
             .remove()

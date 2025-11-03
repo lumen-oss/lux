@@ -379,7 +379,8 @@ mod test {
         );
 
         // let's make sure our own pack/unpack implementation roundtrips correctly
-        Uninstall::new(&config)
+        Uninstall::new()
+            .config(&config)
             .package(local_package.id())
             .remove()
             .await

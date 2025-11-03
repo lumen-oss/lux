@@ -248,7 +248,8 @@ async fn do_sync(
         .map(|pkg| pkg.id())
         .collect_vec();
 
-    Uninstall::new(args.config)
+    Uninstall::new()
+        .config(args.config)
         .packages(packages_to_remove)
         .progress(progress.clone())
         .tree(tree.clone())

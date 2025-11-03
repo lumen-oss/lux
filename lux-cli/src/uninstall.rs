@@ -91,7 +91,8 @@ Cannot uninstall dependencies:
     let progress = MultiProgress::new_arc(&config);
 
     if dependencies.is_empty() {
-        operations::Uninstall::new(&config)
+        operations::Uninstall::new()
+            .config(&config)
             .packages(entrypoints)
             .remove()
             .await?;
@@ -124,7 +125,8 @@ Reinstall?
             .prompt()
             .expect("Error prompting for reinstall")
         {
-            operations::Uninstall::new(&config)
+            operations::Uninstall::new()
+                .config(&config)
                 .packages(entrypoints)
                 .progress(progress.clone())
                 .remove()
@@ -145,7 +147,8 @@ Reinstall?
                     .build()
                 })
                 .collect_vec();
-            operations::Uninstall::new(&config)
+            operations::Uninstall::new()
+                .config(&config)
                 .packages(dependencies)
                 .progress(progress.clone())
                 .remove()
@@ -180,7 +183,8 @@ Reinstall?
         if dangling_rocks.is_empty() {
             has_dangling_rocks = false
         } else {
-            operations::Uninstall::new(&config)
+            operations::Uninstall::new()
+                .config(&config)
                 .packages(dangling_rocks)
                 .progress(progress.clone())
                 .remove()
