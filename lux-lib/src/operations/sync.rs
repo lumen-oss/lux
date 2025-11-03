@@ -251,6 +251,7 @@ async fn do_sync(
     Uninstall::new(args.config)
         .packages(packages_to_remove)
         .progress(progress.clone())
+        .tree(tree.clone())
         .remove()
         .await?;
 
