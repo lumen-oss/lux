@@ -111,6 +111,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## `lux-cli` - [0.18.11](https://github.com/lumen-oss/lux/compare/v0.18.10...v0.18.11) - 2025-11-03
 
+### Fixed
+- *(test)* correct test executable in error message
+- *(test)* outdated non-project root error message
+
+### Other
+- release ([#1171](https://github.com/lumen-oss/lux/pull/1171))
+
+## `lux-lib` - [0.27.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.27.1...lux-lib-v0.27.2) - 2025-11-03
+
+### Fixed
+- *(test)* correct test executable in error message
+
+## `lux-cli` - [0.18.11](https://github.com/lumen-oss/lux/compare/v0.18.10...v0.18.11) - 2025-11-03
+
 ### Other
 - updated the following local packages: lux-lib
 
