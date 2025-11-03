@@ -15,8 +15,7 @@ use crate::{
 };
 
 use super::{
-    DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, FromPlatformOverridable, PartialOverride,
-    PerPlatform, PerPlatformWrapper, PlatformOverridable,
+    FromPlatformOverridable, PartialOverride, PerPlatform, PerPlatformWrapper, PlatformOverridable,
 };
 
 #[cfg(target_family = "unix")]
@@ -311,47 +310,6 @@ fn override_opt<T: Clone>(override_opt: &Option<T>, base: &Option<T>) -> Option<
     match override_opt.clone() {
         override_val @ Some(_) => override_val,
         None => base.clone(),
-    }
-}
-
-impl DisplayAsLuaKV for TestSpecInternal {
-    fn display_lua(&self) -> DisplayLuaKV {
-        let mut result = Vec::new();
-
-        if let Some(test_type) = &self.test_type {
-            result.push(DisplayLuaKV {
-                key: "type".to_string(),
-                value: DisplayLuaValue::String(test_type.to_string()),
-            });
-        }
-        if let Some(flags) = &self.flags {
-            result.push(DisplayLuaKV {
-                key: "flags".to_string(),
-                value: DisplayLuaValue::List(
-                    flags
-                        .iter()
-                        .map(|flag| DisplayLuaValue::String(flag.clone()))
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(command) = &self.command {
-            result.push(DisplayLuaKV {
-                key: "command".to_string(),
-                value: DisplayLuaValue::String(command.clone()),
-            });
-        }
-        if let Some(script) = &self.lua_script {
-            result.push(DisplayLuaKV {
-                key: "script".to_string(),
-                value: DisplayLuaValue::String(script.to_string_lossy().to_string()),
-            });
-        }
-
-        DisplayLuaKV {
-            key: "test".to_string(),
-            value: DisplayLuaValue::Table(result),
-        }
     }
 }
 

@@ -297,7 +297,6 @@ impl mlua::UserData for PackageReq {
 /// Wrapper structs for proper serialization of various dependency types.
 pub(crate) struct Dependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
 pub(crate) struct BuildDependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
-pub(crate) struct TestDependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
 
 impl DisplayAsLuaKV for Dependencies<'_> {
     fn display_lua(&self) -> DisplayLuaKV {
@@ -317,20 +316,6 @@ impl DisplayAsLuaKV for BuildDependencies<'_> {
     fn display_lua(&self) -> DisplayLuaKV {
         DisplayLuaKV {
             key: "build_dependencies".to_string(),
-            value: DisplayLuaValue::List(
-                self.0
-                    .iter()
-                    .map(|req| DisplayLuaValue::String(req.to_string()))
-                    .collect(),
-            ),
-        }
-    }
-}
-
-impl DisplayAsLuaKV for TestDependencies<'_> {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
-            key: "test_dependencies".to_string(),
             value: DisplayLuaValue::List(
                 self.0
                     .iter()
