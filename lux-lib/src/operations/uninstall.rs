@@ -6,6 +6,7 @@ use crate::lockfile::{FlushLockfileError, LocalPackage, LocalPackageId};
 use crate::progress::{MultiProgress, Progress, ProgressBar};
 use crate::tree::TreeError;
 use crate::{config::Config, tree::Tree};
+use bon::Builder;
 use futures::StreamExt;
 use itertools::Itertools;
 use thiserror::Error;
@@ -21,26 +22,20 @@ pub enum RemoveError {
     FlushLockfile(#[from] FlushLockfileError),
 }
 
+#[derive(Builder)]
+#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Uninstall<'a> {
-    config: &'a Config,
+    #[builder(field)]
     packages: Vec<LocalPackageId>,
+    config: &'a Config,
     progress: Option<Arc<Progress<MultiProgress>>>,
     tree: Option<Tree>,
 }
 
-/// A rocks package remover.
-/// Can remove multiple packages in parallel.
-impl<'a> Uninstall<'a> {
-    /// Construct a new rocks package remover.
-    pub fn new(config: &'a Config) -> Self {
-        Self {
-            config,
-            packages: Vec::new(),
-            progress: None,
-            tree: None,
-        }
-    }
-
+impl<'a, State> UninstallBuilder<'a, State>
+where
+    State: uninstall_builder::State,
+{
     /// Add packages to remove.
     pub fn packages<I>(self, packages: I) -> Self
     where
@@ -56,34 +51,24 @@ impl<'a> Uninstall<'a> {
     pub fn package(self, package: LocalPackageId) -> Self {
         self.packages(std::iter::once(package))
     }
+}
 
-    /// Pass a `MultiProgress` to this installer.
-    /// By default, a new one will be created.
-    pub fn progress(self, progress: Arc<Progress<MultiProgress>>) -> Self {
-        Self {
-            progress: Some(progress),
-            ..self
-        }
-    }
-
-    pub fn tree(self, tree: Tree) -> Self {
-        Self {
-            tree: Some(tree),
-            ..self
-        }
-    }
-
+impl<'a, State> UninstallBuilder<'a, State>
+where
+    State: uninstall_builder::State + uninstall_builder::IsComplete,
+{
     /// Remove the packages.
     pub async fn remove(self) -> Result<(), RemoveError> {
-        let progress = match self.progress {
+        let args = self._build();
+        let progress = match args.progress {
             Some(p) => p,
-            None => MultiProgress::new_arc(self.config),
+            None => MultiProgress::new_arc(args.config),
         };
-        let tree = self.tree.unwrap_or(
-            self.config
-                .user_tree(LuaVersion::from(self.config)?.clone())?,
+        let tree = args.tree.unwrap_or(
+            args.config
+                .user_tree(LuaVersion::from(args.config)?.clone())?,
         );
-        remove(self.packages, tree, self.config, &Arc::clone(&progress)).await
+        remove(args.packages, tree, args.config, &Arc::clone(&progress)).await
     }
 }
 
