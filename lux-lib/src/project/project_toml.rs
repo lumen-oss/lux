@@ -37,8 +37,7 @@ use crate::{
         TestSpecDecodeError, TestSpecInternal,
     },
     package::{
-        BuildDependencies, Dependencies, PackageName, PackageReq, PackageVersion,
-        PackageVersionReq, TestDependencies,
+        BuildDependencies, Dependencies, PackageName, PackageReq, PackageVersion, PackageVersionReq,
     },
     rockspec::{LuaVersionCompatibility, Rockspec},
 };
@@ -743,22 +742,11 @@ version = "{}""#,
             _ => {}
         }
 
-        match self.internal.test_dependencies {
-            Some(ref test_dependencies) if !test_dependencies.is_empty() => {
-                template.push(TestDependencies(test_dependencies).display_lua());
-            }
-            _ => {}
-        }
-
         let source =
             self.internal
                 .source_template
                 .try_generate(project_root, &self.package, &version)?;
         template.push(source.display_lua());
-
-        if let Some(ref test) = self.internal.test {
-            template.push(test.display_lua());
-        }
 
         template.push(self.internal.build.display_lua());
 
@@ -947,23 +935,12 @@ version = "{}""#,
             _ => {}
         }
 
-        match self.local.internal.test_dependencies {
-            Some(ref test_dependencies) if !test_dependencies.is_empty() => {
-                template.push(TestDependencies(test_dependencies).display_lua());
-            }
-            _ => {}
-        }
-
         let source = self.local.internal.source_template.try_generate(
             project_root,
             &self.local.internal.package,
             self.version(),
         )?;
         template.push(source.display_lua());
-
-        if let Some(ref test) = self.local.internal.test {
-            template.push(test.display_lua());
-        }
 
         if let Some(ref deploy) = self.local.internal.deploy {
             template.push(deploy.display_lua());
@@ -1278,10 +1255,6 @@ mod tests {
                 bar = { library = "libbar.so" },
             }
 
-            test_dependencies = {
-                "busted ==1.0",
-            }
-
             source = {
                 url = "https://example.com",
                 hash = "sha256-di00mD8txN7rjaVpvxzNbnQsAh6H16zUtJZapH7U4HU=",
@@ -1352,12 +1325,7 @@ mod tests {
             rockspec.external_dependencies(),
             expected_rockspec.external_dependencies()
         );
-        assert_eq!(
-            sorted_package_reqs(rockspec.test_dependencies()),
-            sorted_package_reqs(expected_rockspec.test_dependencies())
-        );
         assert_eq!(rockspec.source(), expected_rockspec.source());
-        assert_eq!(rockspec.test(), expected_rockspec.test());
         assert_eq!(rockspec.build(), expected_rockspec.build());
         assert_eq!(rockspec.format(), expected_rockspec.format());
     }
@@ -1452,10 +1420,6 @@ mod tests {
                 bar = { library = "overwritten.so" },
             }
 
-            test_dependencies = {
-                "busted >1.0",
-            }
-
             test = {
                 type = "command",
                 script = "overwritten.lua",
@@ -1513,12 +1477,7 @@ mod tests {
             merged.external_dependencies(),
             expected_rockspec.external_dependencies()
         );
-        assert_eq!(
-            sorted_package_reqs(merged.test_dependencies()),
-            sorted_package_reqs(expected_rockspec.test_dependencies())
-        );
         assert_eq!(merged.source(), expected_rockspec.source());
-        assert_eq!(merged.test(), expected_rockspec.test());
         assert_eq!(merged.build(), expected_rockspec.build());
         assert_eq!(merged.format(), expected_rockspec.format());
         // Ensure that the run command is retained after merge.
