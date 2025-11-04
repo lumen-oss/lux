@@ -29,3 +29,4 @@ luajit = ["mlua/module", "mlua/luajit", "lux-lib/luajit"]
 vendored = ["lux-lib/vendored-openssl", "lux-lib/vendored-libgit2"]
 # Run tests without module mode so we can link against Lua and run the tests.
 test = ["mlua/vendored", "lux-lib/lua51"]
+ssh-tests = ["lux-lib/ssh-tests"]

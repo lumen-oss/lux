@@ -122,12 +122,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "ssh-tests")]
     async fn test_latest_semver_tag_ssh_user() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let url = "git@github.com:lumen-oss/lux.git".parse().unwrap();
+        assert!(latest_semver_tag(&url).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "ssh-tests")]
+    async fn test_latest_semver_tag_ssh_schema() {
+        println!("Skipping test until upstream git_url_parse is updated from 0.6.0");
+        return;
+        let url = "ssh://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_semver_tag(&url).unwrap().is_some());
     }
 
@@ -142,12 +148,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "ssh-tests")]
     async fn test_latest_commit_sha_ssh_user() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let url = "git@github.com:lumen-oss/lux.git".parse().unwrap();
+        assert!(latest_commit_sha(&url).unwrap().is_some());
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "ssh-tests")]
+    async fn test_latest_commit_sha_ssh_schema() {
+        println!("Skipping test until upstream git_url_parse is updated from 0.6.0");
+        return;
+        let url = "ssh://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_commit_sha(&url).unwrap().is_some());
     }
 }
