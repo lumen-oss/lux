@@ -13,6 +13,7 @@ pub struct Fmt {
     workspace_or_file: Option<PathBuf>,
 
     #[clap(default_value = "stylua")]
+    #[arg(long)]
     backend: FmtBackend,
 }
 
