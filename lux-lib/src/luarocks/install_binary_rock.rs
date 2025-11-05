@@ -246,7 +246,7 @@ mod test {
 
     use crate::{
         config::ConfigBuilder,
-        operations::{unpack_rockspec, DownloadedPackedRockBytes, Pack, Uninstall},
+        operations::{unpack_rockspec, DownloadedPackedRockBytes},
         progress::MultiProgress,
     };
 
@@ -309,8 +309,11 @@ mod test {
     /// - Install the package from our packed rock.
     /// - Verify that the contents of the install directories when installing from both packed rocks
     ///   are the same.
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     #[tokio::test]
     async fn install_binary_rock_roundtrip() {
+        use crate::operations::{Pack, Uninstall};
+
         if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
             println!("Skipping impure test");
             return;
