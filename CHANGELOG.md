@@ -109,6 +109,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.20.0](https://github.com/lumen-oss/lux/compare/v0.19.0...v0.20.0) - 2025-11-05
+
+### Added
+- *(git)* add ssh auth callback ([#1152](https://github.com/lumen-oss/lux/pull/1152))
+
+### Fixed
+- *(cli/fmt)* [**breaking**] `--backend <BACKEND>` flag instead of arg ([#1182](https://github.com/lumen-oss/lux/pull/1182))
+
+## `lux-lib` - [0.28.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.28.0...lux-lib-v0.28.1) - 2025-11-05
+
+### Added
+- *(git)* add ssh auth callback ([#1152](https://github.com/lumen-oss/lux/pull/1152))
+
+### Fixed
+- *(install-lua)* confusing error message when dependency is missing ([#1187](https://github.com/lumen-oss/lux/pull/1187))
+
 ## `lux-cli` - [0.19.0](https://github.com/lumen-oss/lux/compare/v0.18.11...v0.19.0) - 2025-11-04
 
 ### Other
