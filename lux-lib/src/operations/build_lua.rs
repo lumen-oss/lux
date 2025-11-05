@@ -179,7 +179,13 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
                 stderr: String::from_utf8_lossy(&output.stderr).into(),
             });
         }
-        Err(err) => return Err(BuildLuaError::Io(err)),
+        Err(err) => {
+            return Err(BuildLuaError::Io(io::Error::other(format!(
+                "Failed to run `{} build`:\n{}",
+                config.make_cmd(),
+                err,
+            ))));
+        }
     };
 
     progress.map(|p| p.set_message(format!("💻 Installing Luajit {LUAJIT_MM_VERSION}")));
@@ -202,7 +208,13 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
                 stderr: String::from_utf8_lossy(&output.stderr).into(),
             });
         }
-        Err(err) => return Err(BuildLuaError::Io(err)),
+        Err(err) => {
+            return Err(BuildLuaError::Io(io::Error::other(format!(
+                "Failed to run `{} install`:\n{}",
+                config.make_cmd(),
+                err,
+            ))));
+        }
     };
     move_luajit_includes(install_dir).await?;
     Ok(())
@@ -216,14 +228,33 @@ async fn move_luajit_includes(install_dir: &Path) -> io::Result<()> {
     if !include_subdir.is_dir() {
         return Ok(());
     }
-    let mut dir = fs::read_dir(&include_subdir).await?;
+    let mut dir = fs::read_dir(&include_subdir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to read {}:\n{}",
+            include_subdir.display(),
+            err
+        ))
+    })?;
     while let Some(entry) = dir.next_entry().await? {
         let file_name = entry.file_name();
         let src_path = entry.path();
         let dest_path = include_dir.join(&file_name);
-        fs::copy(&src_path, &dest_path).await?;
+        fs::copy(&src_path, &dest_path).await.map_err(|err| {
+            io::Error::other(format!(
+                "error copying {} to {}:\n{}",
+                src_path.display(),
+                dest_path.display(),
+                err
+            ))
+        })?;
     }
-    fs::remove_dir_all(&include_subdir).await?;
+    fs::remove_dir_all(&include_subdir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to remove {}:\n{}",
+            include_subdir.display(),
+            err
+        ))
+    })?;
     Ok(())
 }
 
@@ -232,11 +263,29 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     let config = args.config;
     let install_dir = args.install_dir;
     let lib_dir = install_dir.join("lib");
-    fs::create_dir_all(&lib_dir).await?;
+    fs::create_dir_all(&lib_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            lib_dir.display(),
+            err
+        ))
+    })?;
     let include_dir = install_dir.join("include");
-    fs::create_dir_all(&include_dir).await?;
+    fs::create_dir_all(&include_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            include_dir.display(),
+            err
+        ))
+    })?;
     let bin_dir = install_dir.join("bin");
-    fs::create_dir_all(&bin_dir).await?;
+    fs::create_dir_all(&bin_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            bin_dir.display(),
+            err
+        ))
+    })?;
 
     let progress = args.progress;
 
@@ -255,7 +304,13 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     for (k, v) in cl.env() {
         msvcbuild.env(k, v);
     }
-    fs::create_dir_all(&install_dir).await?;
+    fs::create_dir_all(&install_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            install_dir.display(),
+            err
+        ))
+    })?;
     match msvcbuild.output().await {
         Ok(output) if output.status.success() => utils::log_command_output(&output, config),
         Ok(output) => {
@@ -266,13 +321,33 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
                 stderr: String::from_utf8_lossy(&output.stderr).into(),
             });
         }
-        Err(err) => return Err(BuildLuaError::Io(err)),
+        Err(err) => {
+            return Err(BuildLuaError::Io(io::Error::other(format!(
+                "Failed to run msvcbuild.bat:\n{}",
+                err,
+            ))))
+        }
     };
 
     progress.map(|p| p.set_message(format!("💻 Installing Luajit {LUAJIT_MM_VERSION}")));
     copy_includes(&src_dir, &include_dir).await?;
-    fs::copy(src_dir.join("lua51.lib"), lib_dir.join("luajit.lib")).await?;
-    fs::copy(src_dir.join("luajit.exe"), bin_dir.join("luajit.exe")).await?;
+    fs::copy(src_dir.join("lua51.lib"), lib_dir.join("luajit.lib"))
+        .await
+        .map_err(|err| {
+            io::Error::other(format!(
+                "Failed to rename lua51.lib to luajit.lib:\n{}",
+                err
+            ))
+        })?;
+    fs::copy(src_dir.join("luajit.exe"), bin_dir.join("luajit.exe"))
+        .await
+        .map_err(|err| {
+            io::Error::other(format!(
+                "Failed to install luajit.exe to {}:\n{}",
+                bin_dir.display(),
+                err
+            ))
+        })?;
     Ok(())
 }
 
@@ -280,7 +355,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
     let progress = args.progress;
 
-    let build_dir = tempdir().expect("failed to create lua_installation temp directory");
+    let build_dir = tempdir().expect("Failed to create lua_installation temp directory");
 
     let (source_integrity, pkg_version): (Integrity, &str) = match lua_version {
         LuaVersion::Lua51 => (LUA51_HASH.parse().unwrap(), LUA51_VERSION),
@@ -370,7 +445,13 @@ async fn do_build_lua_unix(
                 stderr: String::from_utf8_lossy(&output.stderr).into(),
             });
         }
-        Err(err) => return Err(BuildLuaError::Io(err)),
+        Err(err) => {
+            return Err(BuildLuaError::Io(io::Error::other(format!(
+                "Failed to run `{} build`:\n{}",
+                config.make_cmd(),
+                err,
+            ))))
+        }
     };
 
     progress.map(|p| p.set_message(format!("💻 Installing Lua {}", &pkg_version)));
@@ -393,7 +474,13 @@ async fn do_build_lua_unix(
                 stderr: String::from_utf8_lossy(&output.stderr).into(),
             });
         }
-        Err(err) => return Err(BuildLuaError::Io(err)),
+        Err(err) => {
+            return Err(BuildLuaError::Io(io::Error::other(format!(
+                "Failed to run `{} install`:\n{}",
+                config.make_cmd(),
+                err,
+            ))))
+        }
     };
 
     Ok(())
@@ -412,11 +499,29 @@ async fn do_build_lua_msvc(
     progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", &pkg_version)));
 
     let lib_dir = install_dir.join("lib");
-    fs::create_dir_all(&lib_dir).await?;
+    fs::create_dir_all(&lib_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            lib_dir.display(),
+            err
+        ))
+    })?;
     let include_dir = install_dir.join("include");
-    fs::create_dir_all(&include_dir).await?;
+    fs::create_dir_all(&include_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            include_dir.display(),
+            err
+        ))
+    })?;
     let bin_dir = install_dir.join("bin");
-    fs::create_dir_all(&bin_dir).await?;
+    fs::create_dir_all(&bin_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to create directory {}:\n{}",
+            bin_dir.display(),
+            err
+        ))
+    })?;
 
     let src_dir = build_dir.join("src");
 
@@ -440,7 +545,13 @@ async fn do_build_lua_msvc(
     cc.define("LUA_USE_WINDOWS", None);
 
     let mut lib_c_files = Vec::new();
-    let mut read_dir = fs::read_dir(&src_dir).await?;
+    let mut read_dir = fs::read_dir(&src_dir).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to read directory {}:\n{}",
+            src_dir.display(),
+            err
+        ))
+    })?;
     while let Some(entry) = read_dir.next_entry().await? {
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "c")
@@ -516,7 +627,16 @@ async fn copy_includes(src_dir: &Path, include_dir: &Path) -> Result<(), io::Err
     ] {
         let src_file = src_dir.join(f);
         if src_file.is_file() {
-            fs::copy(src_file, include_dir.join(f)).await?;
+            fs::copy(&src_file, include_dir.join(f))
+                .await
+                .map_err(|err| {
+                    io::Error::other(format!(
+                        "Failed to copy {} to {}:\n{}",
+                        src_file.display(),
+                        include_dir.display(),
+                        err
+                    ))
+                })?;
         }
     }
     Ok(())
