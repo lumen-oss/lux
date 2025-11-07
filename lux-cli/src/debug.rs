@@ -2,7 +2,20 @@ use crate::{
     project::DebugProject,
     unpack::{Unpack, UnpackRemote},
 };
-use clap::Subcommand;
+use clap::{Args, Subcommand};
+
+#[derive(Args)]
+pub struct Dependencies {
+    /// Output format: human-readable or json
+    #[arg(long, default_value = "human")]
+    pub format: OutputFormat,
+}
+
+#[derive(Clone, clap::ValueEnum)]
+pub enum OutputFormat {
+    Human,
+    Json,
+}
 
 #[derive(Subcommand)]
 pub enum Debug {
@@ -14,4 +27,6 @@ pub enum Debug {
     UnpackRemote(UnpackRemote),
     /// View information about the current project.
     Project(DebugProject),
+    /// Check for required dependencies (C compiler, make, cmake, cargo, pkg-config).
+    Dependencies(Dependencies),
 }
