@@ -76,14 +76,23 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .await
         .unwrap_or_else(|_| "{}".into());
 
+    // Read any optional overrides from lux.toml to allow non-src library dirs for LuaLS
+    let luarc_overrides = read_luarc_dependency_overrides(project);
+
     let dependency_tree = project.tree(config)?;
     let dependency_dirs = lockfile
         .local_pkg_lock(&LocalPackageLockType::Regular)
         .rocks()
         .values()
-        .map(|dependency| dependency_tree.installed_rock_layout(dependency))
-        .filter_map(Result::ok)
-        .map(|rock_layout| rock_layout.src)
+        .flat_map(|dependency| {
+            let name = dependency.name().to_string();
+            let override_dirs = luarc_overrides.get(&name).cloned();
+            dependency_tree
+                .installed_rock_layout(dependency)
+                .ok()
+                .into_iter()
+                .flat_map(move |rock_layout| library_dirs_for(&rock_layout, override_dirs.as_ref()))
+        })
         .filter(|dir| dir.is_dir())
         .map(|dependency_dir| {
             diff_paths(dependency_dir, project.root())
@@ -95,9 +104,15 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LocalPackageLockType::Test)
         .rocks()
         .values()
-        .map(|dependency| test_dependency_tree.installed_rock_layout(dependency))
-        .filter_map(Result::ok)
-        .map(|rock_layout| rock_layout.src)
+        .flat_map(|dependency| {
+            let name = dependency.name().to_string();
+            let override_dirs = luarc_overrides.get(&name).cloned();
+            test_dependency_tree
+                .installed_rock_layout(dependency)
+                .ok()
+                .into_iter()
+                .flat_map(move |rock_layout| library_dirs_for(&rock_layout, override_dirs.as_ref()))
+        })
         .filter(|dir| dir.is_dir())
         .map(|test_dependency_dir| {
             diff_paths(test_dependency_dir, project.root())
@@ -136,6 +151,71 @@ fn update_luarc_content(
         .for_each(|path_str| luarc.workspace.library.push(path_str));
 
     Ok(serde_json::to_string_pretty(&luarc)?)
+}
+
+/// Read optional per-dependency overrides from `lux.toml` that instruct `.luarc.json`
+/// generation to include non-default library directories (e.g. `etc`).
+fn read_luarc_dependency_overrides(
+    project: &Project,
+) -> std::collections::HashMap<String, Vec<String>> {
+    let mut map = std::collections::HashMap::<String, Vec<String>>::new();
+    let toml = project.toml();
+    let mut collect = |deps: &Option<Vec<crate::rockspec::lua_dependency::LuaDependencySpec>>| {
+        if let Some(deps) = deps {
+            for dep in deps {
+                if let Some(luarc) = dep.luarc() {
+                    if !luarc.is_empty() {
+                        map.insert(dep.name().to_string(), luarc.clone());
+                    }
+                }
+            }
+        }
+    };
+    collect(&toml.dependencies);
+    collect(&toml.test_dependencies);
+    collect(&toml.build_dependencies);
+    map
+}
+
+/// Given a rock layout and optional override directory keys, return library directories
+/// to add to `.luarc.json`. Defaults to `src` when no override is present.
+fn library_dirs_for(
+    rock_layout: &crate::tree::RockLayout,
+    override_dirs: Option<&Vec<String>>,
+) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    match override_dirs {
+        Some(keys) if !keys.is_empty() => {
+            for key in keys {
+                if key == "src" {
+                    dirs.push(rock_layout.src.clone());
+                } else if let Some(rest) = key.strip_prefix("src/") {
+                    dirs.push(rock_layout.src.join(rest));
+                } else if key == "etc" {
+                    dirs.push(rock_layout.etc.clone());
+                } else if let Some(rest) = key.strip_prefix("etc/") {
+                    dirs.push(rock_layout.etc.join(rest));
+                } else if key == "lib" {
+                    dirs.push(rock_layout.lib.clone());
+                } else if let Some(rest) = key.strip_prefix("lib/") {
+                    dirs.push(rock_layout.lib.join(rest));
+                } else if key == "doc" {
+                    dirs.push(rock_layout.doc.clone());
+                } else if let Some(rest) = key.strip_prefix("doc/") {
+                    dirs.push(rock_layout.doc.join(rest));
+                } else if key == "conf" {
+                    dirs.push(rock_layout.conf.clone());
+                } else if let Some(rest) = key.strip_prefix("conf/") {
+                    dirs.push(rock_layout.conf.join(rest));
+                } else {
+                    // Default to a path under src
+                    dirs.push(rock_layout.src.join(key));
+                }
+            }
+        }
+        _ => dirs.push(rock_layout.src.clone()),
+    }
+    dirs
 }
 
 #[cfg(test)]

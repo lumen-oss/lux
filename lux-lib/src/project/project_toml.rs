@@ -69,7 +69,18 @@ struct DependencyTableEntry {
     git: Option<RemoteGitUrlShorthand>,
     #[serde(default)]
     rev: Option<String>,
+    #[serde(default)]
+    luarc: Option<StringOrVec>,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum StringOrVec {
+    Str(String),
+    Vec(Vec<String>),
+}
+
+// Note: keep luarc simple: string or array of strings
 
 fn parse_map_to_dependency_vec_opt<'de, D>(
     deserializer: D,
@@ -112,6 +123,11 @@ where
                                 ),
                             }))),
                         }?;
+                        let luarc: Option<Vec<String>> = match entry.luarc {
+                            None => None,
+                            Some(StringOrVec::Str(s)) => Some(vec![s]),
+                            Some(StringOrVec::Vec(v)) => Some(v),
+                        };
                         Ok(LuaDependencySpec {
                             package_req: PackageReq {
                                 name,
@@ -120,6 +136,7 @@ where
                             opt: OptState::from(entry.opt.unwrap_or(false)),
                             pin: PinnedState::from(entry.pin.unwrap_or(false)),
                             source,
+                            luarc,
                         })
                     }
                 })

@@ -24,6 +24,8 @@ pub struct LuaDependencySpec {
     pub(crate) pin: PinnedState,
     pub(crate) opt: OptState,
     pub(crate) source: Option<RockSourceSpec>,
+    /// Optional LuaLS library overrides to include in .luarc.json
+    pub(crate) luarc: Option<Vec<String>>, 
 }
 
 impl LuaDependencySpec {
@@ -38,6 +40,9 @@ impl LuaDependencySpec {
     }
     pub fn source(&self) -> &Option<RockSourceSpec> {
         &self.source
+    }
+    pub fn luarc(&self) -> &Option<Vec<String>> {
+        &self.luarc
     }
     pub fn into_package_req(self) -> PackageReq {
         self.package_req
@@ -60,6 +65,7 @@ impl From<PackageName> for LuaDependencySpec {
             pin: PinnedState::default(),
             opt: OptState::default(),
             source: None,
+            luarc: None,
         }
     }
 }
@@ -71,6 +77,7 @@ impl From<PackageReq> for LuaDependencySpec {
             pin: PinnedState::default(),
             opt: OptState::default(),
             source: None,
+            luarc: None,
         }
     }
 }
@@ -85,6 +92,7 @@ impl FromStr for LuaDependencySpec {
             pin: PinnedState::default(),
             opt: OptState::default(),
             source: None,
+            luarc: None,
         })
     }
 }
@@ -140,6 +148,7 @@ impl FromLua for LuaDependencySpec {
             pin: PinnedState::default(),
             opt: OptState::default(),
             source: None,
+            luarc: None,
         })
     }
 }
@@ -155,6 +164,7 @@ impl<'de> Deserialize<'de> for LuaDependencySpec {
             pin: PinnedState::default(),
             opt: OptState::default(),
             source: None,
+            luarc: None,
         })
     }
 }
