@@ -277,20 +277,73 @@ async fn patch_luarc_with_settings(
         Value::Object(Default::default())
     };
 
-    // Drop the old aggregate addon path if it exists
+    // Drop legacy .lux entries and aggregate addon paths
     let arr = get_or_create_array(&mut root, &["workspace", "library"]);
-    arr.retain(|v| {
-        if let Some(s) = v.as_str() {
-            !s.contains("/lls_addons/share/lua/")
-        } else {
-            true
+    let existing = std::mem::take(arr);
+    let mut cleaned = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+
+    for value in existing.into_iter() {
+        match value {
+            Value::String(s) => {
+                if s.contains("/lls_addons/share/lua/") || s.contains("\\lls_addons\\share\\lua\\")
+                {
+                    continue;
+                }
+                let candidate_abs = if std::path::Path::new(&s).is_relative() {
+                    project.root().join(&s)
+                } else {
+                    std::path::PathBuf::from(&s)
+                };
+                let normalized_path = candidate_abs
+                    .strip_prefix(project.root())
+                    .map(|rel| rel.to_path_buf())
+                    .unwrap_or(candidate_abs.clone());
+                let normalized = path_to_slash_string(&normalized_path);
+                if seen.insert(normalized.clone()) {
+                    cleaned.push(Value::String(normalized));
+                }
+            }
+            other => cleaned.push(other),
         }
-    });
+    }
+
+    *arr = cleaned;
+
+    // Normalize Lua.workspace.userThirdParty entries
+    let arr = get_or_create_array(&mut root, &["Lua", "workspace", "userThirdParty"]);
+    let existing = std::mem::take(arr);
+    let mut cleaned = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+
+    for value in existing.into_iter() {
+        match value {
+            Value::String(s) => {
+                let candidate_abs = if std::path::Path::new(&s).is_relative() {
+                    project.root().join(&s)
+                } else {
+                    std::path::PathBuf::from(&s)
+                };
+                let normalized_path = candidate_abs
+                    .strip_prefix(project.root())
+                    .map(|rel| rel.to_path_buf())
+                    .unwrap_or(candidate_abs.clone());
+                let normalized = path_to_slash_string(&normalized_path);
+                if seen.insert(normalized.clone()) {
+                    cleaned.push(Value::String(normalized));
+                }
+            }
+            other => cleaned.push(other),
+        }
+    }
+
+    *arr = cleaned;
 
     // Ensure workspace.library contains library_dir
-    push_unique_string(&mut root, &["workspace", "library"], library_dir);
+    push_unique_string(project, &mut root, &["workspace", "library"], library_dir);
     // Ensure Lua.workspace.userThirdParty contains the addons base dir
     push_unique_string(
+        project,
         &mut root,
         &["Lua", "workspace", "userThirdParty"],
         user_third_party_dir,
@@ -308,12 +361,34 @@ async fn patch_luarc_with_settings(
     Ok(())
 }
 
-fn push_unique_string(root: &mut Value, path: &[&str], to_add: &Path) {
+fn push_unique_string(project: &Project, root: &mut Value, path: &[&str], to_add: &Path) {
     let arr = get_or_create_array(root, path);
-    let val = serde_json::Value::String(to_add.to_string_lossy().to_string());
+    let entry = format_luarc_path(project, to_add);
+    let val = Value::String(entry);
     if !arr.iter().any(|v| v == &val) {
         arr.push(val);
     }
+}
+
+fn format_luarc_path(project: &Project, path: &Path) -> String {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project.root().join(path)
+    };
+    let normalized = match absolute.strip_prefix(project.root()) {
+        Ok(rel) => rel.to_path_buf(),
+        Err(_) => absolute,
+    };
+    path_to_slash_string(&normalized)
+}
+
+fn path_to_slash_string(path: &Path) -> String {
+    let mut s = path.to_string_lossy().into_owned();
+    if cfg!(windows) {
+        s = s.replace('\\', "/");
+    }
+    s
 }
 
 fn get_or_create_array<'a>(root: &'a mut Value, path: &[&str]) -> &'a mut Vec<Value> {
