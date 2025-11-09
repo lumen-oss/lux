@@ -277,7 +277,6 @@ async fn patch_luarc_with_settings(
         Value::Object(Default::default())
     };
 
-    // Drop legacy .lux entries and aggregate addon paths
     let arr = get_or_create_array(&mut root, &["workspace", "library"]);
     let existing = std::mem::take(arr);
     let mut cleaned = Vec::new();

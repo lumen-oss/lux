@@ -226,8 +226,6 @@ pub struct PartialProjectToml {
     pub(crate) project_root: ProjectRoot,
 }
 
-// removed: legacy [addons] table
-
 impl UserData for PartialProjectToml {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("package", |_, this, _: ()| Ok(this.package().clone()));
