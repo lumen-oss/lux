@@ -208,10 +208,25 @@ pub struct PartialProjectToml {
     #[serde(default)]
     pub(crate) deploy: Option<DeploySpec>,
 
+    /// Whether to resolve and install implicit language server addons from dependencies
+    /// Defaults to true
+    #[serde(default)]
+    pub(crate) check_dependencies: Option<bool>,
+
+    /// Explicit addon names per tier (extracted from dependency tables)
+    #[serde(skip, default)]
+    pub(crate) dependencies_addons: Option<Vec<String>>,
+    #[serde(skip, default)]
+    pub(crate) test_dependencies_addons: Option<Vec<String>>,
+    #[serde(skip, default)]
+    pub(crate) build_dependencies_addons: Option<Vec<String>>,
+
     /// Used to bind the project TOML to a project root
     #[serde(skip, default = "ProjectRoot::new")]
     pub(crate) project_root: ProjectRoot,
 }
+
+// removed: legacy [addons] table
 
 impl UserData for PartialProjectToml {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
@@ -239,10 +254,45 @@ impl HasIntegrity for PartialProjectToml {
 
 impl PartialProjectToml {
     pub(crate) fn new(str: &str, project_root: ProjectRoot) -> Result<Self, toml::de::Error> {
-        Ok(Self {
-            project_root,
-            ..toml::from_str(str)?
-        })
+        // Preprocess to extract addons arrays out of dependency tables
+        let mut doc: toml_edit::DocumentMut = match str.parse() {
+            Ok(d) => d,
+            Err(_) => {
+                // Fallback: no preprocessing, parse directly
+                let mut parsed: PartialProjectToml = toml::from_str(str)?;
+                parsed.project_root = project_root;
+                return Ok(parsed);
+            }
+        };
+        let deps_addons: Option<Vec<String>>;
+        let test_addons: Option<Vec<String>>;
+        let build_addons: Option<Vec<String>>;
+
+        let mut extract = |table_key: &str| -> Option<Vec<String>> {
+            if let Some(tbl) = doc.get_mut(table_key).and_then(|i| i.as_table_mut()) {
+                if let Some(item) = tbl.get("addons") {
+                    if let Some(arr) = item.as_array() {
+                        let vals = arr
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect::<Vec<_>>();
+                        tbl.remove("addons");
+                        return Some(vals);
+                    }
+                }
+            }
+            None
+        };
+        deps_addons = extract("dependencies");
+        test_addons = extract("test_dependencies");
+        build_addons = extract("build_dependencies");
+
+        let mut parsed: PartialProjectToml = toml::from_str(&doc.to_string())?;
+        parsed.project_root = project_root;
+        parsed.dependencies_addons = deps_addons;
+        parsed.test_dependencies_addons = test_addons;
+        parsed.build_dependencies_addons = build_addons;
+        Ok(parsed)
     }
 
     /// Convert the `PartialProjectToml` struct into a `LocalProjectToml` struct, making
@@ -331,6 +381,16 @@ impl PartialProjectToml {
             )?),
             build: PerPlatform::new(BuildSpec::from_internal_spec(project_toml.build.clone())?),
             deploy: PerPlatform::new(project_toml.deploy.clone().unwrap_or_default()),
+            check_dependencies: project_toml.check_dependencies.unwrap_or(true),
+            dependencies_addons: project_toml.dependencies_addons.clone().unwrap_or_default(),
+            test_dependencies_addons: project_toml
+                .test_dependencies_addons
+                .clone()
+                .unwrap_or_default(),
+            build_dependencies_addons: project_toml
+                .build_dependencies_addons
+                .clone()
+                .unwrap_or_default(),
             rockspec_format: project_toml.rockspec_format.clone(),
 
             source: PerPlatform::new(RemoteRockSource {
@@ -448,6 +508,10 @@ impl PartialProjectToml {
             test: other.test.or(self.test),
             deploy: other.deploy.or(self.deploy),
             rockspec_format: other.rockspec_format.or(self.rockspec_format),
+            check_dependencies: self.check_dependencies,
+            dependencies_addons: self.dependencies_addons,
+            test_dependencies_addons: self.test_dependencies_addons,
+            build_dependencies_addons: self.build_dependencies_addons,
 
             // Keep the project root the same, as it is not part of the lua rockspec
             project_root: self.project_root,
@@ -547,6 +611,14 @@ pub struct LocalProjectToml {
     build: PerPlatform<BuildSpec>,
     deploy: PerPlatform<DeploySpec>,
 
+    /// Whether to resolve and install implicit language server addons from dependencies
+    check_dependencies: bool,
+
+    /// Explicit addon names per tier
+    dependencies_addons: Vec<String>,
+    test_dependencies_addons: Vec<String>,
+    build_dependencies_addons: Vec<String>,
+
     // Used for simpler serialization
     internal: PartialProjectToml,
 
@@ -557,6 +629,18 @@ pub struct LocalProjectToml {
 impl LocalProjectToml {
     pub fn run(&self) -> Option<&PerPlatform<RunSpec>> {
         self.run.as_ref()
+    }
+    pub fn check_dependencies(&self) -> bool {
+        self.check_dependencies
+    }
+    pub fn dependencies_addons(&self) -> &[String] {
+        &self.dependencies_addons
+    }
+    pub fn test_dependencies_addons(&self) -> &[String] {
+        &self.test_dependencies_addons
+    }
+    pub fn build_dependencies_addons(&self) -> &[String] {
+        &self.build_dependencies_addons
     }
 
     /// Convert this project TOML to a Lua rockspec.

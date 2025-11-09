@@ -54,12 +54,9 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
     let workspace = vec![
         project_root.join("src"),
         project_root.join("lua"),
-        // For now, we don't include tests
-        // because they require LLS_Addons definitions for busted
-
-        // project_root.join("test"),
-        // project_root.join("tests"),
-        // project_root.join("spec"),
+        project_root.join("test"),
+        project_root.join("tests"),
+        project_root.join("spec"),
     ]
     .into_iter()
     .filter(|dir| dir.is_dir())

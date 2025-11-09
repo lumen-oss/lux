@@ -1,3 +1,6 @@
+use crate::utils::addons::{
+    derive_implicit_addons, install_lls_addons_for_project, AddonInstallReport,
+};
 use clap::Args;
 use eyre::{eyre, Context, OptionExt, Result};
 use itertools::Itertools;
@@ -81,11 +84,81 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
         .await
         .wrap_err("update failed.")?;
 
+    // After syncing/updating, install LuaLS addons if configured
+    if let Some(project) = Project::current()? {
+        if let Ok(local) = project.toml().into_local() {
+            install_addons_for_project(&project, &config, &local).await?;
+        }
+    }
+
     if updated_packages.is_empty() {
         println!("Nothing to update.");
         return Ok(());
     }
 
+    Ok(())
+}
+
+async fn install_addons_for_project(
+    project: &Project,
+    config: &Config,
+    local: &lux_lib::project::project_toml::LocalProjectToml,
+) -> Result<()> {
+    // Explicit addons (strict): union across tiers
+    let mut explicit: Vec<String> = Vec::new();
+    explicit.extend(local.dependencies_addons().iter().cloned());
+    explicit.extend(local.test_dependencies_addons().iter().cloned());
+    explicit.extend(local.build_dependencies_addons().iter().cloned());
+    explicit.sort();
+    explicit.dedup();
+    // Implicit addons (best-effort)
+    let implicit: Vec<String> = derive_implicit_addons(local, project);
+
+    let mut all_entries = Vec::new();
+    if !explicit.is_empty() {
+        let report = install_lls_addons_for_project(project, config, &explicit, true).await?;
+        let has_failures = report.entries.iter().any(|e| !e.ok);
+        if config.verbose() || has_failures {
+            print_addons_report("Explicit addons", &report, config.verbose());
+        }
+        all_entries.extend(report.entries);
+    }
+    if local.check_dependencies() {
+        // Install implicit ones, but do not fail the update if they are missing
+        let implicit_filtered: Vec<String> = implicit
+            .into_iter()
+            .filter(|a| !explicit.iter().any(|e| e == a))
+            .collect();
+        if !implicit_filtered.is_empty() {
+            if let Ok(report) =
+                install_lls_addons_for_project(project, config, &implicit_filtered, false).await
+            {
+                // Only show implicit report in verbose mode (even on failures)
+                if config.verbose() {
+                    print_addons_report("Implicit addons", &report, config.verbose());
+                }
+                all_entries.extend(report.entries);
+            }
+        }
+    }
+    // Persist resolved addons snapshot to lux.lock
+    if !all_entries.is_empty() {
+        let lockfile = project.lockfile()?;
+        let mut guard = lockfile.write_guard();
+        let resolved = all_entries
+            .iter()
+            .filter(|e| e.ok)
+            .map(|e| lux_lib::lockfile::ResolvedAddon {
+                name: e.name.clone(),
+                source: e.source.clone(),
+                implicit: !e.required,
+                library_paths: e.library_paths.clone(),
+                version: e.version.clone(),
+                commit: e.commit.clone(),
+            })
+            .collect::<Vec<_>>();
+        guard.set_addons(resolved);
+    }
     Ok(())
 }
 
@@ -98,4 +171,34 @@ fn to_package_names(packages: Option<&Vec<PackageReq>>) -> Result<Option<Vec<Pac
     Ok(packages
         .as_ref()
         .map(|pkgs| pkgs.iter().map(|pkg| pkg.name()).cloned().collect_vec()))
+}
+
+fn print_addons_report(title: &str, report: &AddonInstallReport, verbose: bool) {
+    if report.entries.is_empty() {
+        return;
+    }
+    println!("{title}:");
+    for e in &report.entries {
+        let status = if e.ok { "ok" } else { "failed" };
+        let required = if e.required { "required" } else { "optional" };
+        if verbose {
+            let msg = e.message.as_deref().unwrap_or("");
+            if msg.is_empty() {
+                println!(
+                    "  - {} [{} | {} via {}]",
+                    e.name, required, status, e.source
+                );
+            } else {
+                println!(
+                    "  - {} [{} | {} via {}] {}",
+                    e.name, required, status, e.source, msg
+                );
+            }
+        } else {
+            println!(
+                "  - {} [{} | {} via {}]",
+                e.name, required, status, e.source
+            );
+        }
+    }
 }

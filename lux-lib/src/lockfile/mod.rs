@@ -839,6 +839,22 @@ pub struct ProjectLockfile<P: LockfilePermissions> {
     test_dependencies: LocalPackageLock,
     #[serde(default, skip_serializing_if = "LocalPackageLock::is_empty")]
     build_dependencies: LocalPackageLock,
+    #[serde(default)]
+    addons: Vec<ResolvedAddon>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResolvedAddon {
+    pub name: String,
+    pub source: String, // "luarocks" | "lls_addons+https://github.com/LuaLS/LLS-Addons" | "none"
+    #[serde(default)]
+    pub implicit: bool,
+    #[serde(default)]
+    pub library_paths: Vec<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub commit: Option<String>,
 }
 
 #[derive(Error, Debug)]
@@ -1195,6 +1211,7 @@ impl ProjectLockfile<ReadOnly> {
                     dependencies: LocalPackageLock::default(),
                     test_dependencies: LocalPackageLock::default(),
                     build_dependencies: LocalPackageLock::default(),
+                    addons: Vec::new(),
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
@@ -1227,6 +1244,7 @@ impl ProjectLockfile<ReadOnly> {
             dependencies: self.dependencies,
             test_dependencies: self.test_dependencies,
             build_dependencies: self.build_dependencies,
+            addons: self.addons,
         }
     }
 
@@ -1234,6 +1252,10 @@ impl ProjectLockfile<ReadOnly> {
     /// once the guard goes out of scope.
     pub fn write_guard(self) -> ProjectLockfileGuard {
         ProjectLockfileGuard(self.into_temporary())
+    }
+
+    pub fn addons(&self) -> &[ResolvedAddon] {
+        &self.addons
     }
 }
 
@@ -1313,6 +1335,10 @@ impl ProjectLockfile<ReadWrite> {
                 self.build_dependencies = lock.clone();
             }
         }
+    }
+
+    pub fn set_addons(&mut self, addons: Vec<ResolvedAddon>) {
+        self.addons = addons;
     }
 }
 

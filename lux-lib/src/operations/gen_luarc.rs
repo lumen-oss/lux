@@ -104,8 +104,18 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
                 .expect("test tree root should be a subpath of the project root")
         });
 
+    let addon_dirs = lockfile
+        .addons()
+        .iter()
+        .flat_map(|addon| addon.library_paths.iter())
+        .filter_map(|library_path| {
+            let path = PathBuf::from(library_path);
+            diff_paths(path, project.root())
+        });
+
     let library_dirs = dependency_dirs
         .chain(test_dependency_dirs)
+        .chain(addon_dirs)
         .sorted()
         .collect_vec();
 
