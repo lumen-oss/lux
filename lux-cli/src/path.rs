@@ -94,7 +94,7 @@ pub async fn path(path_data: Path, config: Config) -> Result<()> {
                     eprintln!(
                         "⚠️ WARNING: lux-lua library not found.
 Cannot use the `lux.loader`.
-To suppress this warning, set the `--no-loader` option.
+To suppress this warning, run `lx path full --no-loader`.
                 "
                     );
                     true
