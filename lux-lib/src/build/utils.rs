@@ -565,7 +565,7 @@ async fn install_wrapped_binary(
     let content = format!(
         r#"#!/bin/sh
 
-exec {0} "{1}" "$@"
+exec "{0}" "{1}" "$@"
 "#,
         lua_bin,
         unwrapped_bin.display(),
