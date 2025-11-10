@@ -11,18 +11,24 @@ If that's not the case, we recommend learning about it first [here](https://docs
 ## AI Policy
 
 We don't mind if you use AI to assist your development.
-But we expect you to understand everything that is generated and
-to validate and clean up the generated code.
+But we expect you to understand, validate and clean up
+any AI-generated code.
 
 Reviewing AI generated code that has not been validated or cleaned up
 takes up more time for us than just writing the code ourselves.
 
 We will close your pull request without further consideration if:
 
-- We ask you a question about your code and you cannot explain it.
-- Change requests are repeatedly ignored by your AI agent.
-- We find that you have not cleaned up the generated code
-  (e.g., if there are lots of useless comments).
+- We ask you a question about your code and you cannot explain the intent,
+  tradeoffs, or mechanics of the code you submitted.
+- Change requests are repeatedly ignored by your AI agent
+  (i.e., you fail to make requested modifications or provide
+  responses that show you haven't understood the feedback).
+- The PR contains clearly uncleaned AI output
+  (e.g., many useless comments, placeholder text,
+  obviously unreviewed code).
+- The PR is too large to review in a reasonable time and
+  lacks sufficient tests or documentation.
 
 ## Creating pull requests
 
