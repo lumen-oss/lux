@@ -109,6 +109,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.20.1](https://github.com/lumen-oss/lux/compare/v0.20.0...v0.20.1) - 2025-11-10
+
+### Added
+- improve lux loader warning for `lx path` ([#1195](https://github.com/lumen-oss/lux/pull/1195))
+
+## `lux-lib` - [0.28.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.28.1...lux-lib-v0.28.2) - 2025-11-10
+
+### Fixed
+- *(install)* quote Lua executable path in bin wrappers ([#1194](https://github.com/lumen-oss/lux/pull/1194))
+
 ## `lux-cli` - [0.20.0](https://github.com/lumen-oss/lux/compare/v0.19.0...v0.20.0) - 2025-11-05
 
 ### Added
