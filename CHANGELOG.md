@@ -109,6 +109,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.20.2](https://github.com/lumen-oss/lux/compare/v0.20.1...v0.20.2) - 2025-11-12
+
+### Other
+- update Cargo.lock dependencies
+
 ## `lux-cli` - [0.20.1](https://github.com/lumen-oss/lux/compare/v0.20.0...v0.20.1) - 2025-11-10
 
 ### Added
