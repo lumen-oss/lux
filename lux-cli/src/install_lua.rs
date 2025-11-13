@@ -6,7 +6,7 @@ use lux_lib::{
 };
 
 pub async fn install_lua(config: Config) -> Result<()> {
-    let version_stringified = &LuaVersion::from(&config)?;
+    let version_stringified = &LuaVersion::from_current_project_or_config(&config)?;
 
     let progress = MultiProgress::new(&config);
 
