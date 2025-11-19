@@ -53,8 +53,8 @@ where
 }
 
 #[derive(Error, Debug)]
-#[error("expected list of strings")]
-pub(crate) struct ExpectedListOfStrings;
+#[error("expected list of strings, but got: {0}")]
+pub(crate) struct ExpectedListOfStrings(serde_json::Value);
 
 /// Convert a json value into a Vec<T>, treating empty json objects as empty lists
 /// This is needed to be able to deserialise Lua tables.
@@ -73,13 +73,14 @@ where
     }
     values
         .as_array()
-        .ok_or(ExpectedListOfStrings)?
+        .ok_or_else(|| ExpectedListOfStrings(values.clone()))?
         .iter()
+        .filter(|val| !val.is_null())
         .map(|val| {
             let str: String = val
                 .as_str()
                 .map(|s| s.into())
-                .ok_or(ExpectedListOfStrings)?;
+                .ok_or_else(|| ExpectedListOfStrings(values.clone()))?;
             Ok(str.into())
         })
         .try_collect()
