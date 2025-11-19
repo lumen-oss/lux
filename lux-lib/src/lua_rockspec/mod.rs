@@ -38,12 +38,21 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum LuaRockspecError {
-    #[error("could not parse rockspec: {0}")]
-    MLua(#[from] mlua::Error),
+    #[error("could not parse rockspec ({cause}):\n\n{content}")]
+    MLua { content: String, cause: mlua::Error },
+    #[error("could not parse rockspec field '{field}' ({cause}):\n\n{content}")]
+    MLuaGetKey {
+        field: String,
+        content: String,
+        cause: mlua::Error,
+    },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error("could not parse rockspec: {0}")]
-    LuaTable(#[from] LuaTableError),
+    #[error("could not parse rockspec ({cause})\n\n{content}")]
+    LuaTable {
+        content: String,
+        cause: LuaTableError,
+    },
     #[error("cannot create Lua rockspec with off-spec dependency: {0}")]
     OffSpecDependency(PackageName),
     #[error("cannot create Lua rockspec with off-spec build dependency: {0}")]
@@ -112,17 +121,45 @@ impl UserData for LocalLuaRockspec {
     }
 }
 
+trait HasRockspecKey {
+    fn get_rockspec_key<V: FromLua>(
+        &self,
+        key: &str,
+        rockspec_content: &str,
+    ) -> Result<V, LuaRockspecError>;
+}
+
+impl HasRockspecKey for mlua::Table {
+    fn get_rockspec_key<V: FromLua>(
+        &self,
+        key: &str,
+        rockspec_content: &str,
+    ) -> Result<V, LuaRockspecError> {
+        self.get(key).map_err(|cause| LuaRockspecError::MLuaGetKey {
+            field: key.to_string(),
+            content: rockspec_content.to_string(),
+            cause,
+        })
+    }
+}
+
 impl LocalLuaRockspec {
     pub fn new(
         rockspec_content: &str,
         project_root: ProjectRoot,
     ) -> Result<Self, LuaRockspecError> {
         let lua = Lua::new();
-        lua.load(rockspec_content).exec()?;
+        lua.load(rockspec_content)
+            .exec()
+            .map_err(|cause| LuaRockspecError::MLua {
+                content: rockspec_content.to_string(),
+                cause,
+            })?;
 
         let globals = lua.globals();
 
-        let dependencies: PerPlatform<Vec<LuaDependencySpec>> = globals.get("dependencies")?;
+        let dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+            globals.get_rockspec_key("dependencies", rockspec_content)?;
 
         let lua_version_req = dependencies
             .current_platform()
@@ -144,29 +181,45 @@ impl LocalLuaRockspec {
         }
 
         let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get("build_dependencies")?;
+            globals.get_rockspec_key("build_dependencies", rockspec_content)?;
 
         let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get("test_dependencies")?;
+            globals.get_rockspec_key("test_dependencies", rockspec_content)?;
 
         let rockspec = LocalLuaRockspec {
-            rockspec_format: globals.get("rockspec_format")?,
-            package: globals.get("package")?,
-            version: globals.get("version")?,
-            description: parse_lua_tbl_or_default(&lua, "description")?,
-            supported_platforms: parse_lua_tbl_or_default(&lua, "supported_platforms")?,
+            rockspec_format: globals.get_rockspec_key("rockspec_format", rockspec_content)?,
+            package: globals.get_rockspec_key("package", rockspec_content)?,
+            version: globals.get_rockspec_key("version", rockspec_content)?,
+            description: parse_lua_tbl_or_default(&lua, "description").map_err(|cause| {
+                LuaRockspecError::LuaTable {
+                    content: rockspec_content.to_string(),
+                    cause,
+                }
+            })?,
+            supported_platforms: parse_lua_tbl_or_default(&lua, "supported_platforms").map_err(
+                |cause| LuaRockspecError::LuaTable {
+                    content: rockspec_content.to_string(),
+                    cause,
+                },
+            )?,
             lua: lua_version_req,
             dependencies: strip_lua(dependencies),
             build_dependencies: strip_lua(build_dependencies),
             test_dependencies: strip_lua(test_dependencies),
-            external_dependencies: globals.get("external_dependencies")?,
-            build: globals.get("build")?,
-            test: globals.get("test")?,
-            deploy: globals.get("deploy")?,
+            external_dependencies: globals
+                .get_rockspec_key("external_dependencies", rockspec_content)?,
+            build: globals.get_rockspec_key("build", rockspec_content)?,
+            test: globals.get_rockspec_key("test", rockspec_content)?,
+            deploy: globals.get_rockspec_key("deploy", rockspec_content)?,
             raw_content: rockspec_content.into(),
 
             source: globals
-                .get::<Option<PerPlatform<RemoteRockSource>>>("source")?
+                .get::<Option<PerPlatform<RemoteRockSource>>>("source")
+                .map_err(|cause| LuaRockspecError::MLuaGetKey {
+                    field: "source".to_string(),
+                    content: rockspec_content.to_string(),
+                    cause,
+                })?
                 .unwrap_or_else(|| {
                     PerPlatform::new(RockSourceSpec::File(project_root.to_path_buf()).into())
                 }),
@@ -329,10 +382,15 @@ impl UserData for RemoteLuaRockspec {
 impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
         let lua = Lua::new();
-        lua.load(rockspec_content).exec()?;
+        lua.load(rockspec_content)
+            .exec()
+            .map_err(|cause| LuaRockspecError::MLua {
+                content: rockspec_content.to_string(),
+                cause,
+            })?;
 
         let globals = lua.globals();
-        let source = globals.get("source")?;
+        let source = globals.get_rockspec_key("source", rockspec_content)?;
 
         let rockspec = RemoteLuaRockspec {
             local: LocalLuaRockspec::new(rockspec_content, ProjectRoot::new())?,
@@ -661,7 +719,7 @@ impl Display for RockspecFormat {
 
 #[derive(Error, Debug)]
 pub enum LuaTableError {
-    #[error("could not parse {variable}. Expected list, but got {invalid_type}")]
+    #[error("could not parse '{variable}'. Expected list, but got {invalid_type}")]
     ParseError {
         variable: String,
         invalid_type: String,
