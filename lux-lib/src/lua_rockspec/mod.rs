@@ -38,8 +38,14 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum LuaRockspecError {
-    #[error("could not parse rockspec: {0}")]
-    MLua(#[from] mlua::Error),
+    #[error("could not parse rockspec ({cause}):\n\n{content}")]
+    MLua { content: String, cause: mlua::Error },
+    #[error("could not parse rockspec field {field} ({cause}):\n\n{content}")]
+    MLuaGetKey {
+        field: String,
+        content: String,
+        cause: mlua::Error,
+    },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
     #[error("could not parse rockspec: {0}")]
@@ -118,11 +124,26 @@ impl LocalLuaRockspec {
         project_root: ProjectRoot,
     ) -> Result<Self, LuaRockspecError> {
         let lua = Lua::new();
-        lua.load(rockspec_content).exec()?;
+        lua.load(rockspec_content)
+            .exec()
+            .map_err(|cause| LuaRockspecError::MLua {
+                content: rockspec_content.to_string(),
+                cause,
+            })?;
 
         let globals = lua.globals();
 
-        let dependencies: PerPlatform<Vec<LuaDependencySpec>> = globals.get("dependencies")?;
+        let get_key = |key: String| {
+            globals
+                .get(key)
+                .map_err(|cause| LuaRockspecError::MLuaGetKey {
+                    field: key,
+                    content: rockspec_content.to_string(),
+                    cause,
+                })?
+        };
+
+        let dependencies: PerPlatform<Vec<LuaDependencySpec>> = get_key("dependencies".into())?;
 
         let lua_version_req = dependencies
             .current_platform()
@@ -143,11 +164,21 @@ impl LocalLuaRockspec {
             })
         }
 
-        let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get("build_dependencies")?;
+        let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> = globals
+            .get("build_dependencies")
+            .map_err(|cause| LuaRockspecError::MLuaGetKey {
+                field: "build_dependencies".to_string(),
+                content: rockspec_content.to_string(),
+                cause,
+            })?;
 
-        let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get("test_dependencies")?;
+        let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> = globals
+            .get("test_dependencies")
+            .map_err(|cause| LuaRockspecError::MLuaGetKey {
+                field: "test_dependencies".to_string(),
+                content: rockspec_content.to_string(),
+                cause,
+            })?;
 
         let rockspec = LocalLuaRockspec {
             rockspec_format: globals.get("rockspec_format")?,
