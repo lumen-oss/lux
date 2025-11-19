@@ -455,9 +455,10 @@ async fn link_c_artifacts(
             .output()
             .await?
     } else {
-        let cmd = build.shared_flag(true).try_get_compiler()?.to_command();
+        let cmd = build.try_get_compiler()?.to_command();
         let mut cmd: tokio::process::Command = cmd.into();
         cmd.current_dir(temp_work_dir.path())
+            .arg("-shared")
             .args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
             .args(lua.lib_link_args(&build.try_get_compiler()?))
             .args(
