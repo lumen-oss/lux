@@ -27,7 +27,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install neovim
         uses: rhysd/action-setup-vim@v1 # Used by the 'run' integration test
         with:
