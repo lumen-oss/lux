@@ -16,7 +16,7 @@ jobs:
     runs-on: windows-2025
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1

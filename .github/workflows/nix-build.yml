@@ -20,7 +20,7 @@ jobs:
           - { os: ubuntu-24.04, target: x86_64-linux }
           - { os: macos-14, target: aarch64-darwin }
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - uses: DeterminateSystems/nix-installer-action@main
     - uses: cachix/cachix-action@v16
       with:
