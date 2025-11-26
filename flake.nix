@@ -65,7 +65,7 @@
                 ++ (with pkgs; [
                   lua5_4 # Needed for compilation
                   rust-analyzer
-                  ra-multiplex
+                  lspmux
                   cargo-nextest
                   cargo-hakari
                   cargo-insta
