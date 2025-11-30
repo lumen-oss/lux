@@ -401,7 +401,7 @@ mod helpers {
         Err(UploadError::MaxSpecRevsExceeded)
     }
 
-    pub(crate) async fn rock_exists(
+    async fn rock_exists(
         client: &Client,
         api_key: &ApiKey,
         name: &PackageName,
