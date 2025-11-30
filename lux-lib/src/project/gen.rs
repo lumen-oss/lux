@@ -220,11 +220,10 @@ fn version_from_semver_tag(
     let mut result = None;
     repo.tag_foreach(|oid, name| {
         let name = std::str::from_utf8(name).ok().map(|x| x.to_string());
-        let tag = repo.find_tag(oid).ok();
-        if let (Some(tag_name), Some(tag)) = (name, tag) {
+        let target = find_commit_id(repo, oid);
+        if let (Some(tag_name), Some(target_rev)) = (name, target) {
             let tag_name = tag_name.trim_start_matches("refs/tags/");
-            let target = tag.target_id();
-            if target == current_rev {
+            if target_rev == current_rev {
                 let tag_name = tag_name.trim_start_matches("v");
                 let version_str = format!("{}-{specrev}", tag_name);
                 if let Ok(version @ PackageVersion::SemVer(_)) = PackageVersion::parse(&version_str)
@@ -251,11 +250,10 @@ fn current_tag_or_revision(repo: &Repository) -> Result<String, git2::Error> {
     let mut fallback_tag = None;
     repo.tag_foreach(|oid, name| {
         let name = std::str::from_utf8(name).ok().map(|x| x.to_string());
-        let tag = repo.find_tag(oid).ok();
-        if let (Some(tag_name), Some(tag)) = (name, tag) {
+        let target = find_commit_id(repo, oid);
+        if let (Some(tag_name), Some(target_rev)) = (name, target) {
             let tag_name = tag_name.trim_start_matches("refs/tags/");
-            let target = tag.target_id();
-            if target == current_rev {
+            if target_rev == current_rev {
                 if PackageVersion::parse(tag_name.trim_start_matches("v"))
                     .is_ok_and(|version| version.is_semver())
                 {
@@ -270,4 +268,15 @@ fn current_tag_or_revision(repo: &Repository) -> Result<String, git2::Error> {
     Ok(semver_tag
         .or(fallback_tag)
         .unwrap_or(current_rev.to_string()))
+}
+
+fn find_commit_id(repo: &Repository, tag_or_commit_oid: git2::Oid) -> Option<git2::Oid> {
+    // HACK: The Oids passed to git2's tag_foreach callback apparently aren't always tag Oids
+    repo.find_tag(tag_or_commit_oid)
+        .map(|tag| tag.target_id())
+        .or_else(|_| {
+            repo.find_commit(tag_or_commit_oid)
+                .map(|_| tag_or_commit_oid)
+        })
+        .ok()
 }
