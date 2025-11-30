@@ -342,6 +342,8 @@ pub enum SearchAndDownloadError {
     MissingCheckoutRef(String),
     #[error("cannot download from a local rock source.")]
     LocalSource,
+    #[error("cannot download from a local rock or embedded rockspec source.")]
+    NonURLSource,
 }
 
 async fn search_and_download_src_rock(
@@ -355,12 +357,11 @@ async fn search_and_download_src_rock(
         src: true,
     });
     let remote_package = package_db.find(package_req, filter, progress)?;
-    Ok(download_src_rock(
-        &remote_package.package,
-        unsafe { &remote_package.source.url() },
-        progress,
-    )
-    .await?)
+    let source_url = remote_package
+        .source
+        .url()
+        .ok_or(SearchAndDownloadError::NonURLSource)?;
+    Ok(download_src_rock(&remote_package.package, &source_url, progress).await?)
 }
 
 #[derive(Error, Debug)]
@@ -498,7 +499,11 @@ pub(crate) async fn unpack_rockspec(
     let mut zip = zip::ZipArchive::new(cursor)
         .map_err(|err| SearchAndDownloadError::ZipRead(rock.file_name.clone(), err))?;
     let rockspec_index = (0..zip.len())
-        .find(|&i| zip.by_index(i).unwrap().name().eq(&rockspec_file_name))
+        .find(|&i| {
+            unsafe { zip.by_index(i).unwrap_unchecked() }
+                .name()
+                .eq(&rockspec_file_name)
+        })
         .ok_or(SearchAndDownloadError::RockspecNotFoundInPackedRock(
             rockspec_file_name,
         ))?;

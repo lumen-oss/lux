@@ -306,8 +306,7 @@ mod helpers {
         endpoint: &str,
     ) -> Result<Url, url::ParseError> {
         server_url
-            .join("api/1/")
-            .expect("error constructing 'api/1/' path")
+            .join("api/1/")?
             .join(&format!("{}/", api_key.get()))?
             .join(endpoint)
     }

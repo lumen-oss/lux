@@ -14,7 +14,7 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum PinError {
-    #[error("package with ID {0} not found in lockfile")]
+    #[error("package with ID {0} not found in the lockfile")]
     PackageNotFound(LocalPackageId),
     #[error("rock {rock} is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {

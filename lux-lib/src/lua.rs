@@ -1,15 +1,19 @@
 //! Special utilities for the Lua bridge.
 
-use std::sync::OnceLock;
-
 use tokio::runtime::{Builder, Runtime};
 
-pub fn lua_runtime() -> &'static Runtime {
-    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref LUA_RUNTIME: Runtime = {
+        #[allow(clippy::expect_used)]
         Builder::new_multi_thread()
             .enable_all()
             .build()
-            .expect("Failed to create a new runtime")
-    })
+            .expect("Failed to initialise Lua runtime")
+    };
+}
+
+pub fn lua_runtime() -> &'static Runtime {
+    &LUA_RUNTIME
 }

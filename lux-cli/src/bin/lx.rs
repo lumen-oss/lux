@@ -28,8 +28,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    let mut config_builder = ConfigBuilder::new()
-        .unwrap()
+    let mut config_builder = ConfigBuilder::new()?
         .dev(Some(cli.dev))
         .extra_servers(cli.extra_servers)
         .generate_luarc(Some(!cli.no_luarc))
@@ -100,9 +99,7 @@ async fn main() -> Result<()> {
         Commands::Config(config_cmd) => config::config(config_cmd, config)?,
         Commands::Doc(doc_args) => doc::doc(doc_args, config).await?,
         Commands::Pack(pack_args) => pack::pack(pack_args, config).await?,
-        Commands::Uninstall(uninstall_data) => {
-            uninstall::uninstall(uninstall_data, config).await.unwrap()
-        }
+        Commands::Uninstall(uninstall_data) => uninstall::uninstall(uninstall_data, config).await?,
         Commands::Which(which_args) => which::which(which_args, config)?,
         Commands::Run(run_args) => run::run(run_args, config).await?,
         Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data)?,

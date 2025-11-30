@@ -36,7 +36,9 @@ pub(crate) fn copy_lua_to_module_path(
 ) -> io::Result<()> {
     let target = target_dir.join(target_module.to_lua_path());
 
-    std::fs::create_dir_all(target.parent().unwrap())?;
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
 
     std::fs::copy(source, target)?;
 
@@ -60,8 +62,9 @@ pub(crate) fn project_files(src: &PathBuf) -> Vec<PathBuf> {
 pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), io::Error> {
     if src.exists() {
         for file in project_files(src) {
-            let relative_src_path: PathBuf =
-                pathdiff::diff_paths(src.join(&file), src).expect("failed to copy directories!");
+            let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src).ok_or(
+                io::Error::other("failed to diff directories [THIS IS A BUG!]"),
+            )?;
             let target = dest.join(relative_src_path);
             if let Some(parent) = target.parent() {
                 tokio::fs::create_dir_all(parent).await?;
@@ -118,10 +121,13 @@ pub(crate) async fn compile_c_files(
 ) -> Result<(), CompileCFilesError> {
     let target = target_dir.join(target_module.to_lib_path());
 
-    let target_parent_dir = target.parent().expect("Couldn't determine parent");
+    let target_parent_dir = target.parent().ok_or(io::Error::other(format!(
+        "couldn't determine build target parent directory:\n{}",
+        target.display()
+    )))?;
     let target_file_name = target
         .file_name()
-        .expect("Couldn't determine filename")
+        .unwrap_or_default()
         .to_string_lossy()
         .to_string();
 
@@ -288,7 +294,11 @@ pub(crate) async fn compile_c_modules(
 ) -> Result<(), CompileCModulesError> {
     let target = target_dir.join(target_module.to_lib_path());
 
-    let target_parent_dir = target.parent().expect("Couldn't determine parent");
+    let target_parent_dir = target.parent().ok_or(io::Error::other(format!(
+        "couldn't determine build target parent directory:\n{}",
+        target.display()
+    )))?;
+
     std::fs::create_dir_all(target_parent_dir)?;
 
     let host = Triple::host();
@@ -349,7 +359,7 @@ pub(crate) async fn compile_c_modules(
 
     let target_file_name = target
         .file_name()
-        .expect("Couldn't determine filename")
+        .unwrap_or_default()
         .to_string_lossy()
         .to_string();
     // See https://github.com/rust-lang/cc-rs/issues/594#issuecomment-2110551057
@@ -374,9 +384,9 @@ pub(crate) async fn compile_c_modules(
         .iter()
         .map(|library| {
             if is_msvc {
-                format!("{}.lib", library.to_str().unwrap())
+                format!("{}.lib", library.to_slash_lossy())
             } else {
-                format!("-l{}", library.to_str().unwrap())
+                format!("-l{}", library.to_slash_lossy())
             }
         })
         .collect_vec();

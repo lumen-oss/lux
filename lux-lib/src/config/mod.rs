@@ -64,13 +64,15 @@ pub enum LuaVersionError {
 
 impl LuaVersion {
     pub fn as_version(&self) -> PackageVersion {
-        match self {
-            LuaVersion::Lua51 => "5.1.0".parse().unwrap(),
-            LuaVersion::Lua52 => "5.2.0".parse().unwrap(),
-            LuaVersion::Lua53 => "5.3.0".parse().unwrap(),
-            LuaVersion::Lua54 => "5.4.0".parse().unwrap(),
-            LuaVersion::LuaJIT => "5.1.0".parse().unwrap(),
-            LuaVersion::LuaJIT52 => "5.2.0".parse().unwrap(),
+        unsafe {
+            match self {
+                LuaVersion::Lua51 => "5.1.0".parse().unwrap_unchecked(),
+                LuaVersion::Lua52 => "5.2.0".parse().unwrap_unchecked(),
+                LuaVersion::Lua53 => "5.3.0".parse().unwrap_unchecked(),
+                LuaVersion::Lua54 => "5.4.0".parse().unwrap_unchecked(),
+                LuaVersion::LuaJIT => "5.1.0".parse().unwrap_unchecked(),
+                LuaVersion::LuaJIT52 => "5.2.0".parse().unwrap_unchecked(),
+            }
         }
     }
     pub fn version_compatibility_str(&self) -> String {
@@ -82,15 +84,17 @@ impl LuaVersion {
         }
     }
     pub fn as_version_req(&self) -> PackageVersionReq {
-        format!("~> {}", self.version_compatibility_str())
-            .parse()
-            .unwrap()
+        unsafe {
+            format!("~> {}", self.version_compatibility_str())
+                .parse()
+                .unwrap_unchecked()
+        }
     }
 
     /// Get the LuaVersion from a version that has been parsed from the `lua -v` output
     pub fn from_version(version: PackageVersion) -> Result<LuaVersion, LuaVersionError> {
         // NOTE: Special case. luajit -v outputs 2.x.y as a version
-        let luajit_version_req: PackageVersionReq = "~> 2".parse().unwrap();
+        let luajit_version_req: PackageVersionReq = unsafe { "~> 2".parse().unwrap_unchecked() };
         if luajit_version_req.matches(&version) {
             Ok(LuaVersion::LuaJIT)
         } else if LuaVersion::Lua51.as_version_req().matches(&version) {
@@ -573,9 +577,9 @@ impl ConfigBuilder {
 
         Ok(Config {
             enable_development_packages: self.enable_development_packages.unwrap_or(false),
-            server: self
-                .server
-                .unwrap_or_else(|| Url::parse("https://luarocks.org/").unwrap()),
+            server: self.server.unwrap_or_else(|| unsafe {
+                Url::parse("https://luarocks.org/").unwrap_unchecked()
+            }),
             extra_servers: self.extra_servers.unwrap_or_default(),
             only_sources: self.only_sources,
             namespace: self.namespace,

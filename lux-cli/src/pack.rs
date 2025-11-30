@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 
 use crate::build;
 use clap::Args;
-use eyre::{eyre, Result};
+use eyre::{eyre, OptionExt, Result};
 use lux_lib::{
     build::{Build, BuildBehaviour},
     config::{Config, LuaVersion},
@@ -85,7 +85,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                         .progress(progress)
                         .install()
                         .await?;
-                    let package = packages.first().unwrap();
+                    let package = packages.first().ok_or_eyre("no packages installed")?;
                     let rock_path = operations::Pack::new(dest_dir, tree, package.clone())
                         .pack()
                         .await?;
@@ -93,16 +93,20 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 }
                 lux_lib::tree::RockMatches::Single(local_package_id) => {
                     let lockfile = user_tree.lockfile()?;
-                    let package = lockfile.get(&local_package_id).unwrap();
+                    let package = lockfile
+                        .get(&local_package_id)
+                        .ok_or_eyre("package is installed, but was not found in the lockfile")?;
                     let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
                         .pack()
                         .await?;
                     Ok(rock_path)
                 }
                 lux_lib::tree::RockMatches::Many(vec) => {
-                    let local_package_id = vec.first().unwrap();
+                    let local_package_id = vec.first();
                     let lockfile = user_tree.lockfile()?;
-                    let package = lockfile.get(local_package_id).unwrap();
+                    let package = lockfile.get(local_package_id).ok_or_eyre(
+                        "multiple package installations found, but not found in the lockfile",
+                    )?;
                     let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
                         .pack()
                         .await?;
@@ -157,7 +161,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .to_lua_remote_rockspec_string()?;
             let package = build::build(build::Build::default(), config.clone())
                 .await?
-                .expect("exptected a `LocalPackage`");
+                .ok_or_eyre("build did not produce a package")?;
             let tree = project.tree(&config)?;
             let rock_path = operations::Pack::new(dest_dir, tree, package)
                 .pack()

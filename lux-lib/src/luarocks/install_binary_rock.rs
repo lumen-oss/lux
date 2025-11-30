@@ -224,7 +224,9 @@ async fn install_manifest_entries<T>(
         if src_path.is_dir() {
             recursive_copy_dir(&src_path, &target).await?;
         } else if src_path.is_file() {
-            tokio::fs::create_dir_all(target.parent().unwrap()).await?;
+            if let Some(target_parent_dir) = target.parent() {
+                tokio::fs::create_dir_all(target_parent_dir).await?;
+            }
             tokio::fs::copy(src.join(relative_src_path), target).await?;
         } else {
             let metadata = tokio::fs::metadata(&src_path).await?;

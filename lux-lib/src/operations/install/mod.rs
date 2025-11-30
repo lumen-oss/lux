@@ -320,34 +320,41 @@ async fn install_impl(
     let write_dependency = |lockfile: &mut Lockfile<ReadWrite>,
                             id: &LocalPackageId,
                             pkg: &LocalPackage,
-                            entry_type: tree::EntryType| {
+                            entry_type: tree::EntryType|
+     -> io::Result<()> {
         if entry_type == tree::EntryType::Entrypoint {
             lockfile.add_entrypoint(pkg);
         }
 
-        all_packages
+        for dependency_id in all_packages
             .get(id)
             .map(|pkg| pkg.spec.dependencies())
             .unwrap_or_default()
             .into_iter()
-            .for_each(|dependency_id| {
-                lockfile.add_dependency(
-                    pkg,
-                    installed_packages
-                        .get(dependency_id)
-                        .map(|(pkg, _)| pkg)
-                        // NOTE: This can happen if an install thread panics
-                        .expect("required dependency not found [This is a bug!]"),
-                );
-            });
+        {
+            lockfile.add_dependency(
+                pkg,
+                installed_packages
+                    .get(dependency_id)
+                    .map(|(pkg, _)| pkg)
+                    .ok_or(io::Error::other(
+                        r#"
+error writing dependencies to the lockfile.
+A required dependency was not installed correctly.
+This is likely because an install thread panicked and was interrupted unexpectedly.
+
+[THIS IS A BUG!]
+"#,
+                    ))?,
+            );
+        }
+        Ok(())
     };
 
     lockfile.map_then_flush(|lockfile| {
-        installed_packages
-            .iter()
-            .for_each(|(id, (pkg, is_entrypoint))| {
-                write_dependency(lockfile, id, pkg, *is_entrypoint)
-            });
+        for (id, (pkg, is_entrypoint)) in installed_packages.iter() {
+            write_dependency(lockfile, id, pkg, *is_entrypoint)?;
+        }
         Ok::<_, io::Error>(())
     })?;
 

@@ -2,6 +2,7 @@
 
 use eyre::Result;
 use inquire::Confirm;
+use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     lockfile::{LocalPackageId, OptState, PinnedState},
@@ -20,14 +21,12 @@ pub fn apply_build_behaviour(
     Ok(package_reqs
         .into_iter()
         .filter_map(|req| {
-            let existing_packages: Vec<LocalPackageId> = match tree
-                .match_rocks_and(&req, |rock| pin == rock.pinned())
-                .expect("unable to get tree data")
-            {
-                RockMatches::Single(id) => vec![id],
-                RockMatches::Many(ids) => ids,
-                _ => Vec::new(),
-            };
+            let existing_packages: Vec<LocalPackageId> =
+                match tree.match_rocks_and(&req, |rock| pin == rock.pinned()) {
+                    Ok(RockMatches::Single(id)) => vec![id],
+                    Ok(RockMatches::Many(ids)) => ids.into_iter().collect_vec(),
+                    _ => Vec::new(),
+                };
             // NOTE: Because the rock layout may change, we must force a rebuild
             // if a package is installed, but it is not an entrypoint.
             let force = force
@@ -39,7 +38,7 @@ pub fn apply_build_behaviour(
             } else if Confirm::new(&format!("Package {req} already exists. Overwrite?"))
                 .with_default(false)
                 .prompt()
-                .expect("Error prompting for reinstall")
+                .is_ok_and(|is_overwrite_confirmed| is_overwrite_confirmed)
             {
                 Some(BuildBehaviour::Force)
             } else {

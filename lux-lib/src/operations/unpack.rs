@@ -1,6 +1,7 @@
 use async_recursion::async_recursion;
 use flate2::read::GzDecoder;
 use itertools::Itertools;
+use path_slash::PathExt;
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -92,7 +93,9 @@ where
                     let path: PathBuf = entry.path()?.components().skip(1).collect();
                     if path.components().count() > 0 {
                         let dest = dest_dir.join(path);
-                        std::fs::create_dir_all(dest.parent().unwrap())?;
+                        if let Some(dest_parent_dir) = dest.parent() {
+                            std::fs::create_dir_all(dest_parent_dir)?;
+                        }
                         entry.unpack(dest)?;
                     }
 
@@ -167,9 +170,8 @@ fn is_single_tar_directory<R: Read + Seek + Send>(reader: R) -> io::Result<bool>
 
         Ok(entries.into_iter().all(|entry| {
             entry.path().is_ok_and(|path| {
-                path.to_str()
-                    .unwrap()
-                    .starts_with(directory.to_str().unwrap())
+                path.to_slash_lossy()
+                    .starts_with(&directory.to_slash_lossy().to_string())
             })
         }))
     }
@@ -192,21 +194,22 @@ fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)
     if entries.len() != 1 {
         return Ok(None);
     }
-    let entry = entries.first().unwrap();
-    if !entry.is_file() {
-        return Ok(None);
-    }
-    if let mt @ Some(mime_type) =
-        infer::get_from_path(entry)?.map(|file_type| file_type.mime_type())
-    {
-        if matches!(
-            mime_type,
-            "application/zip" | "application/x-tar" | "application/gzip"
-        ) {
-            return Ok(Some((entry.clone(), mt)));
+    match entries.first() {
+        Some(entry) if entry.is_file() => {
+            if let mt @ Some(mime_type) =
+                infer::get_from_path(entry)?.map(|file_type| file_type.mime_type())
+            {
+                if matches!(
+                    mime_type,
+                    "application/zip" | "application/x-tar" | "application/gzip"
+                ) {
+                    return Ok(Some((entry.clone(), mt)));
+                }
+            }
+            Ok(None)
         }
+        _ => Ok(None),
     }
-    Ok(None)
 }
 
 #[cfg(test)]

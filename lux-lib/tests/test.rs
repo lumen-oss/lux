@@ -101,6 +101,7 @@ async fn run_busted_nlua_test_no_lock() {
 // On macOS, it appears that Neovim segfaults when `require`ing `lfs` (luafilesystem).
 // Investigation is needed on Windows.
 #[cfg(target_os = "linux")]
+#[cfg(test)]
 async fn run_busted_nlua_test_impl(no_lock: bool) {
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/busted-nlua/");

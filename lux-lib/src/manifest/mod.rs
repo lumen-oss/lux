@@ -187,7 +187,9 @@ async fn mk_manifest_cache(url: &Url, config: &Config) -> io::Result<PathBuf> {
             .trim_end_matches(".zip"),
     );
     // Ensure all intermediate directories for the cache file are created (e.g. `~/.cache/lux/manifest`)
-    fs::create_dir_all(cache.parent().unwrap()).await?;
+    if let Some(cache_parent_dir) = cache.parent() {
+        fs::create_dir_all(cache_parent_dir).await?;
+    }
     Ok(cache)
 }
 

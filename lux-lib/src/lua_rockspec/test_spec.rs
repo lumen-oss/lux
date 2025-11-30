@@ -128,11 +128,13 @@ impl ValidatedTestSpec {
 
     fn test_dependencies(&self) -> Vec<PackageReq> {
         match self {
-            Self::Busted(_) => vec![PackageReq::new("busted".into(), None).unwrap()],
-            Self::BustedNlua(_) => vec![
-                PackageReq::new("busted".into(), None).unwrap(),
-                PackageReq::new("nlua".into(), None).unwrap(),
-            ],
+            Self::Busted(_) => unsafe { vec![PackageReq::new_unchecked("busted".into(), None)] },
+            Self::BustedNlua(_) => unsafe {
+                vec![
+                    PackageReq::new_unchecked("busted".into(), None),
+                    PackageReq::new_unchecked("nlua".into(), None),
+                ]
+            },
             Self::Command(_) => Vec::new(),
             Self::LuaScript(_) => Vec::new(),
         }

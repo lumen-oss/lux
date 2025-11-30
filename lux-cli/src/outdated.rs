@@ -5,6 +5,8 @@ use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{
     config::{Config, LuaVersion},
+    lockfile::LocalPackage,
+    package::PackageVersion,
     progress::MultiProgress,
     project::Project,
     remote_package_db::RemotePackageDB,
@@ -48,12 +50,16 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let rock_list = tree.as_rock_list()?;
     let rock_list = rock_list
         .iter()
-        .filter_map(|rock| {
+        .map(|rock| {
             rock.to_package()
                 .has_update(&package_db)
-                .expect("TODO")
-                .map(|version| (rock, version))
+                .map(|mb_version| mb_version.map(|version| (rock, version)))
         })
+        .filter_map_ok(|mb_tuple| mb_tuple)
+        .try_collect::<_, Vec<(&LocalPackage, PackageVersion)>, _>()?;
+
+    let rock_list = rock_list
+        .iter()
         .sorted_by_key(|(rock, _)| rock.name().to_owned())
         .into_group_map_by(|(rock, _)| rock.name().to_owned());
 

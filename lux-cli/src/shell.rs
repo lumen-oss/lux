@@ -33,7 +33,7 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
         return Err(eyre!("Already in a Lux shell."));
     }
 
-    let tree = current_project_or_user_tree(&config).unwrap();
+    let tree = current_project_or_user_tree(&config)?;
 
     let path = if data.build {
         let build_tree_path = tree.build_tree(&config)?;

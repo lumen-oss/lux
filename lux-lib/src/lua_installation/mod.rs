@@ -175,9 +175,9 @@ impl LuaInstallation {
                 .as_ref()
                 .and_then(|lib_dir| get_lua_lib_name(lib_dir, version));
             info.lib_name = lua_lib_name;
-            Some(Self {
+            dependency_info.map(|dependency_info| Self {
                 version: version.clone(),
-                dependency_info: dependency_info.unwrap(),
+                dependency_info,
                 bin,
             })
         } else {

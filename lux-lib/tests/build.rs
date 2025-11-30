@@ -117,6 +117,7 @@ async fn command_build() {
     test_build_rockspec("resources/test/luaposix-35.1-1.rockspec".into()).await
 }
 
+#[cfg(test)]
 async fn test_build_rockspec(rockspec_path: PathBuf) {
     let dir = TempDir::new().unwrap();
 

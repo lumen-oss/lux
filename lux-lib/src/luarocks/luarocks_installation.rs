@@ -121,10 +121,10 @@ impl LuaRocksInstallation {
         let mut lockfile = self.tree.lockfile()?.write_guard();
 
         let luarocks_req =
-            PackageReq::new("luarocks".into(), Some(LUAROCKS_VERSION.into())).unwrap();
+            unsafe { PackageReq::new_unchecked("luarocks".into(), Some(LUAROCKS_VERSION.into())) };
 
         if !self.tree.match_rocks(&luarocks_req)?.is_found() {
-            let rockspec = RemoteLuaRockspec::new(LUAROCKS_ROCKSPEC).unwrap();
+            let rockspec = unsafe { RemoteLuaRockspec::new(LUAROCKS_ROCKSPEC).unwrap_unchecked() };
             let pkg = Build::new()
                 .rockspec(&rockspec)
                 .lua(lua)

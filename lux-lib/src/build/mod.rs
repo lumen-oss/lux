@@ -374,18 +374,22 @@ where
                         .clone()
                         .or(source_metadata.archive_name());
                     if dir_entries.len() == 1
-                        && archive_name.is_some_and(|archive_name| {
+                        && archive_name.is_some_and(|archive_name| unsafe {
                             archive_name.to_string_lossy().starts_with(
                                 &dir_entries
                                     .first()
-                                    .unwrap()
+                                    .unwrap_unchecked()
                                     .file_name()
                                     .to_string_lossy()
                                     .to_string(),
                             )
                         })
                     {
-                        temp_dir.path().join(dir_entries.first().unwrap().path())
+                        unsafe {
+                            temp_dir
+                                .path()
+                                .join(dir_entries.first().unwrap_unchecked().path())
+                        }
                     } else {
                         temp_dir.path().into()
                     }

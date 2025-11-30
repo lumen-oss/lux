@@ -91,8 +91,9 @@ where
                     )
                 })
             {
-                let luarocks =
-                    PackageReq::new("luarocks".into(), Some(LUAROCKS_VERSION.into())).unwrap();
+                let luarocks = unsafe {
+                    PackageReq::new_unchecked("luarocks".into(), Some(LUAROCKS_VERSION.into()))
+                };
                 self = self.add_package(luarocks);
             }
         }

@@ -128,12 +128,9 @@ impl BuildBackend for BuiltinBuildSpec {
                     utils::install_binary(&bin_script, &file_name, tree, lua, args.deploy, config)
                         .await
                         .map_err(|err| BuiltinBuildError::InstallBinary(file_name.clone(), err))?;
-                binaries.push(
-                    installed_bin_script
-                        .file_name()
-                        .expect("no file name")
-                        .into(),
-                );
+                if let Some(bin_script_file_name) = installed_bin_script.file_name() {
+                    binaries.push(bin_script_file_name.into());
+                }
             }
         }
 
@@ -175,9 +172,10 @@ fn autodetect_modules(
             })
         })
         .map(|file| {
-            let diff: PathBuf =
+            let diff: PathBuf = unsafe {
                 pathdiff::diff_paths(build_dir.join(file.clone().into_path()), build_dir)
-                    .expect("failed to autodetect modules");
+                    .unwrap_unchecked()
+            };
 
             // NOTE(vhyrro): You may ask why we convert all paths to Lua module paths
             // just to convert them back later in the `run()` stage.
@@ -191,7 +189,9 @@ fn autodetect_modules(
             // NOTE(mrcjkb): `LuaModule` does not parse as "<module>.init" from files named "init.lua"
             // To make sure we don't change the file structure when installing, we append it here.
             if file.file_name().to_string_lossy().as_bytes() == b"init.lua" {
-                lua_module = lua_module.join(&LuaModule::from_str("init").unwrap())
+                unsafe {
+                    lua_module = lua_module.join(&LuaModule::from_str("init").unwrap_unchecked())
+                }
             }
 
             (lua_module, ModuleSpec::SourcePath(diff))

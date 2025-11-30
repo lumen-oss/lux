@@ -74,3 +74,8 @@ gpgme = ["lux-lib/gpgme"]
 vendored = ["lux-lib/vendored"]
 vendored-lua = ["lux-lib/vendored-lua"]
 ssh-tests = ["lux-lib/ssh-tests"]
+
+[lints.clippy]
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
