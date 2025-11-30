@@ -25,9 +25,10 @@ use crate::rockspec::RockBinaries;
 
 const LOCKFILE_VERSION_STR: &str = "1.0.0";
 
-#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
 pub enum PinnedState {
     /// Unpinned packages can be updated
+    #[default]
     Unpinned,
     /// Pinned packages cannot be updated
     Pinned,
@@ -42,12 +43,6 @@ impl FromLua for PinnedState {
 impl IntoLua for PinnedState {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.as_bool().into_lua(lua)
-    }
-}
-
-impl Default for PinnedState {
-    fn default() -> Self {
-        Self::Unpinned
     }
 }
 
@@ -100,9 +95,10 @@ impl<'de> Deserialize<'de> for PinnedState {
     }
 }
 
-#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
 pub enum OptState {
     /// A required package
+    #[default]
     Required,
     /// An optional package
     Optional,
@@ -136,12 +132,6 @@ impl FromLua for OptState {
 impl IntoLua for OptState {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.as_bool().into_lua(lua)
-    }
-}
-
-impl Default for OptState {
-    fn default() -> Self {
-        Self::Required
     }
 }
 
@@ -565,8 +555,9 @@ impl mlua::UserData for LocalPackageHashes {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub enum LockConstraint {
+    #[default]
     Unconstrained,
     Constrained(PackageVersionReq),
 }
@@ -588,12 +579,6 @@ impl FromLua for LockConstraint {
             "*" => Ok(LockConstraint::Unconstrained),
             _ => Ok(LockConstraint::Constrained(str.parse().into_lua_err()?)),
         }
-    }
-}
-
-impl Default for LockConstraint {
-    fn default() -> Self {
-        Self::Unconstrained
     }
 }
 

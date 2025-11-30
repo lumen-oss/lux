@@ -69,16 +69,12 @@ struct FullArgs {
 
 #[derive(EnumString, VariantNames, Display, ValueEnum, PartialEq, Eq, Debug, Clone)]
 #[strum(serialize_all = "lowercase")]
+#[derive(Default)]
 enum Shell {
+    #[default]
     Posix,
     Fish,
     Nu,
-}
-
-impl Default for Shell {
-    fn default() -> Self {
-        Self::Posix
-    }
 }
 
 pub async fn path(path_data: Path, config: Config) -> Result<()> {
