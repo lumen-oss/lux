@@ -416,6 +416,7 @@ mod helpers {
             ))
             .send()
             .await?
+            .error_for_status()?
             .text()
             .await?
             != "{}")
