@@ -109,6 +109,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## `lux-cli` - [0.20.2](https://github.com/lumen-oss/lux/compare/v0.20.1...v0.20.2) - 2025-11-30
+
+### Other
+- fix clippy warnings
+
+## `lux-lib` - [0.28.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.28.2...lux-lib-v0.28.3) - 2025-11-30
+
+### Fixed
+- *(upload)* broken detection of existing package version
+- *(upload)* fail if luarocks.org retruns non-OK status on check
+- improve version detection when generating rockspec
+
+### Other
+- *(upload)* make `rock_exists` private
+- fix clippy warnings
+- *(deps)* bump insta from 1.43.2 to 1.44.0 ([#1203](https://github.com/lumen-oss/lux/pull/1203))
+- *(deps)* bump bytes from 1.10.1 to 1.11.0 ([#1199](https://github.com/lumen-oss/lux/pull/1199))
+
 ## `lux-cli` - [0.20.1](https://github.com/lumen-oss/lux/compare/v0.20.0...v0.20.1) - 2025-11-10
 
 ### Added
