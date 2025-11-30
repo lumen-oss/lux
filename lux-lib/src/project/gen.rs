@@ -220,10 +220,13 @@ fn version_from_semver_tag(
     let mut result = None;
     repo.tag_foreach(|oid, name| {
         let name = std::str::from_utf8(name).ok().map(|x| x.to_string());
-        if let Some(tag_name) = name {
-            if oid == current_rev {
-                let version_str =
-                    format!("{}-{specrev}", tag_name.trim_start_matches("refs/tags/v"));
+        let tag = repo.find_tag(oid).ok();
+        if let (Some(tag_name), Some(tag)) = (name, tag) {
+            let tag_name = tag_name.trim_start_matches("refs/tags/");
+            let target = tag.target_id();
+            if target == current_rev {
+                let tag_name = tag_name.trim_start_matches("v");
+                let version_str = format!("{}-{specrev}", tag_name);
                 if let Ok(version @ PackageVersion::SemVer(_)) = PackageVersion::parse(&version_str)
                 {
                     result = Some(version);
@@ -248,9 +251,12 @@ fn current_tag_or_revision(repo: &Repository) -> Result<String, git2::Error> {
     let mut fallback_tag = None;
     repo.tag_foreach(|oid, name| {
         let name = std::str::from_utf8(name).ok().map(|x| x.to_string());
-        if oid == current_rev {
-            if let Some(tag_name) = name {
-                if PackageVersion::parse(tag_name.trim_start_matches("refs/tags/v"))
+        let tag = repo.find_tag(oid).ok();
+        if let (Some(tag_name), Some(tag)) = (name, tag) {
+            let tag_name = tag_name.trim_start_matches("refs/tags/");
+            let target = tag.target_id();
+            if target == current_rev {
+                if PackageVersion::parse(tag_name.trim_start_matches("v"))
                     .is_ok_and(|version| version.is_semver())
                 {
                     semver_tag = Some(tag_name.to_string());

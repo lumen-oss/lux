@@ -970,8 +970,10 @@ impl DisplayAsLuaKV for BuildSpecInternal {
 /// Maps `build.type` to an enum.
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "lowercase", remote = "BuildType")]
+#[derive(Default)]
 pub(crate) enum BuildType {
     /// "builtin" or "module"
+    #[default]
     Builtin,
     /// "make"
     Make,
@@ -1045,12 +1047,6 @@ impl Display for BuildType {
             BuildType::TreesitterParser => write!(f, "treesitter-parser"),
             BuildType::Source => write!(f, "source"),
         }
-    }
-}
-
-impl Default for BuildType {
-    fn default() -> Self {
-        Self::Builtin
     }
 }
 

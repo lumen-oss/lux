@@ -166,38 +166,30 @@ impl ApiKey {
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 #[cfg_attr(feature = "clap", clap(rename_all = "lowercase"))]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
+#[cfg(not(feature = "gpgme"))]
+pub enum SignatureProtocol {
+    #[default]
+    None,
+}
+
+#[derive(Serialize_enum_str, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "clap", clap(rename_all = "lowercase"))]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+#[cfg(feature = "gpgme")]
 pub enum SignatureProtocol {
     None,
-    #[cfg(feature = "gpgme")]
     Assuan,
-    #[cfg(feature = "gpgme")]
     CMS,
-    #[cfg(feature = "gpgme")]
+    #[default]
     Default,
-    #[cfg(feature = "gpgme")]
     G13,
-    #[cfg(feature = "gpgme")]
     GPGConf,
-    #[cfg(feature = "gpgme")]
     OpenPGP,
-    #[cfg(feature = "gpgme")]
     Spawn,
-    #[cfg(feature = "gpgme")]
     UIServer,
-}
-
-#[cfg(feature = "gpgme")]
-impl Default for SignatureProtocol {
-    fn default() -> Self {
-        Self::Default
-    }
-}
-
-#[cfg(not(feature = "gpgme"))]
-impl Default for SignatureProtocol {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[cfg(feature = "gpgme")]

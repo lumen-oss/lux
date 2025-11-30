@@ -65,18 +65,14 @@ impl<State: test_builder::State> TestBuilder<'_, State> {
     }
 }
 
+#[derive(Default)]
 pub enum TestEnv {
     /// An environment that is isolated from `HOME` and `XDG` base directories (default).
+    #[default]
     Pure,
     /// An impure environment in which `HOME` and `XDG` base directories can influence
     /// the test results.
     Impure,
-}
-
-impl Default for TestEnv {
-    fn default() -> Self {
-        Self::Pure
-    }
 }
 
 #[derive(Error, Debug)]

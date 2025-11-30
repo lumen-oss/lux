@@ -39,8 +39,9 @@ pub enum TestSpecError {
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum TestSpec {
+    #[default]
     AutoDetect,
     Busted(BustedTestSpec),
     BustedNlua(BustedTestSpec),
@@ -135,12 +136,6 @@ impl ValidatedTestSpec {
             Self::Command(_) => Vec::new(),
             Self::LuaScript(_) => Vec::new(),
         }
-    }
-}
-
-impl Default for TestSpec {
-    fn default() -> Self {
-        Self::AutoDetect
     }
 }
 

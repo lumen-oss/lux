@@ -155,9 +155,10 @@ pub enum BuildError {
     LuaInstallation(#[from] LuaInstallationError),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum BuildBehaviour {
     /// Don't force a rebuild if the package is already installed
+    #[default]
     NoForce,
     /// Force a rebuild if the package is already installed
     Force,
@@ -166,12 +167,6 @@ pub enum BuildBehaviour {
 impl FromLua for BuildBehaviour {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
         Ok(bool::from_lua(value, lua)?.into())
-    }
-}
-
-impl Default for BuildBehaviour {
-    fn default() -> Self {
-        Self::NoForce
     }
 }
 
