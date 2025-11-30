@@ -283,6 +283,8 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
 }
 
 mod helpers {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::hash::HasIntegrity;
     use crate::operations::Download;
@@ -408,7 +410,7 @@ mod helpers {
         version: &PackageVersion,
         server: &Url,
     ) -> Result<bool, RockCheckError> {
-        Ok(client
+        let server_response_raw_json = client
             .get(unsafe { url_for_method(server, api_key, "check_rockspec")? })
             .query(&(
                 ("package", name.to_string()),
@@ -418,7 +420,11 @@ mod helpers {
             .await?
             .error_for_status()?
             .text()
-            .await?
-            != "{}")
+            .await?;
+        let response_map: Option<HashMap<String, serde_json::Value>> =
+            serde_json::from_str(&server_response_raw_json).ok();
+        Ok(response_map.is_some_and(|response_map| {
+            response_map.contains_key("module") && response_map.contains_key("version")
+        }))
     }
 }
