@@ -49,7 +49,18 @@ pub enum LuaBinaryError {
     #[error(transparent)]
     DetectLuaVersion(#[from] DetectLuaVersionError),
     #[error(
-        "{} -v (= {}) does not match expected Lua version {}",
+        r#"
+{} -v (= {}) does not match expected Lua version: {}.
+
+Try setting
+
+```toml
+[variables]
+LUA = "/path/to/lua_binary"
+```
+
+in your config, or use `-v LUA=/path/to/lua_binary`.
+    "#,
         lua_cmd,
         installed_version,
         lua_version
