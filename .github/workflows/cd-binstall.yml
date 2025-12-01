@@ -16,6 +16,7 @@ env:
   RUST_BACKTRACE: 1
   RUSTFLAGS: -D warnings
   RUSTUP_MAX_RETRIES: 10
+  SYSTEM_DEPS_LINK: static
 
 defaults:
   run:
