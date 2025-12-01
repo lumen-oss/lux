@@ -327,6 +327,7 @@ impl Config {
     pub fn max_jobs(&self) -> usize {
         self.max_jobs
     }
+
     pub fn make_cmd(&self) -> String {
         match self.variables.get("MAKE") {
             Some(make) => make.clone(),
@@ -615,7 +616,11 @@ impl From<Config> for ConfigBuilder {
             verbose: Some(value.verbose),
             no_progress: Some(value.no_progress),
             timeout: Some(value.timeout),
-            max_jobs: Some(value.max_jobs),
+            max_jobs: if value.max_jobs == usize::MAX {
+                None
+            } else {
+                Some(value.max_jobs)
+            },
             variables: Some(value.variables),
             cache_dir: Some(value.cache_dir),
             data_dir: Some(value.data_dir),
