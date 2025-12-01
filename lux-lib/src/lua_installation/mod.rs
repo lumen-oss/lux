@@ -108,7 +108,7 @@ impl LuaInstallation {
             let bin_dir = Some(output.join("bin")).filter(|bin_path| bin_path.is_dir());
             let bin = bin_dir
                 .as_ref()
-                .and_then(|bin_path| find_lua_executable(bin_path));
+                .and_then(|bin_path| find_lua_executable(bin_path, version));
             let lib_dir = output.join("lib");
             let lua_lib_name = get_lua_lib_name(&lib_dir, version);
             let include_dir = Some(output.join("include"));
@@ -157,7 +157,7 @@ impl LuaInstallation {
                     .parent()
                     .map(|parent| parent.join("bin"))
                     .filter(|dir| dir.is_dir())
-                    .and_then(|bin_path| find_lua_executable(&bin_path))
+                    .and_then(|bin_path| find_lua_executable(&bin_path, version))
             });
             let lua_lib_name = info
                 .lib_dir
@@ -196,7 +196,7 @@ impl LuaInstallation {
         let bin_dir = Some(target.join("bin")).filter(|bin_path| bin_path.is_dir());
         let bin = bin_dir
             .as_ref()
-            .and_then(|bin_path| find_lua_executable(bin_path));
+            .and_then(|bin_path| find_lua_executable(bin_path, version));
         let lua_lib_name = get_lua_lib_name(&lib_dir, version);
         Ok(LuaInstallation {
             version: version.clone(),
@@ -344,24 +344,9 @@ impl TryFrom<LuaBinary> for PathBuf {
                         return Ok(path);
                     }
                 }
-                match which("lua") {
-                    Ok(path) => {
-                        let installed_version = detect_installed_lua_version_from_path(&path)?;
-                        if lua_version
-                            .clone()
-                            .as_version_req()
-                            .matches(&installed_version)
-                        {
-                            Ok(path)
-                        } else {
-                            Err(Self::Error::LuaVersionMismatch {
-                                lua_cmd: path.to_slash_lossy().to_string(),
-                                installed_version,
-                                lua_version,
-                            })?
-                        }
-                    }
-                    Err(_) => Err(LuaBinaryError::LuaBinaryNotFound),
+                match which(format!("lua{}", lua_version)) {
+                    Ok(path) => Ok(path),
+                    Err(_) => detect_default_lua_bin(lua_version),
                 }
             }
             LuaBinary::Custom(bin) => match which(&bin) {
@@ -369,6 +354,28 @@ impl TryFrom<LuaBinary> for PathBuf {
                 Err(_) => Err(LuaBinaryError::CustomBinaryNotFound(bin)),
             },
         }
+    }
+}
+
+fn detect_default_lua_bin(lua_version: LuaVersion) -> Result<PathBuf, LuaBinaryError> {
+    match which("lua") {
+        Ok(path) => {
+            let installed_version = detect_installed_lua_version_from_path(&path)?;
+            if lua_version
+                .clone()
+                .as_version_req()
+                .matches(&installed_version)
+            {
+                Ok(path)
+            } else {
+                Err(LuaBinaryError::LuaVersionMismatch {
+                    lua_cmd: path.to_slash_lossy().to_string(),
+                    installed_version,
+                    lua_version,
+                })?
+            }
+        }
+        Err(_) => Err(LuaBinaryError::LuaBinaryNotFound),
     }
 }
 
@@ -383,23 +390,52 @@ pub fn detect_installed_lua_version() -> Option<LuaVersion> {
         })
 }
 
-fn find_lua_executable(bin_path: &Path) -> Option<PathBuf> {
+fn find_lua_executable(bin_path: &Path, version: &LuaVersion) -> Option<PathBuf> {
     std::fs::read_dir(bin_path).ok().and_then(|entries| {
-        entries
+        let bin_files = entries
             .filter_map(Result::ok)
             .map(|entry| entry.path().to_path_buf())
+            .collect_vec();
+
+        #[cfg(windows)]
+        let ext = ".exe";
+
+        #[cfg(not(windows))]
+        let ext = "";
+
+        // Prioritise Lua binaries with version suffix
+        // (see https://github.com/lumen-oss/lux/issues/1215)
+        let lua_version_bin = format!("lua{}{}", version, ext);
+        if let Some(lua_bin) = bin_files
+            .iter()
             .filter(|file| {
                 file.is_executable()
-                    && file.file_name().is_some_and(|name| {
-                        matches!(
-                            name.to_string_lossy().to_string().as_str(),
-                            "lua" | "luajit" | "lua.exe" | "luajit.exe"
-                        )
-                    })
+                    && file
+                        .file_name()
+                        .is_some_and(|name| name.to_string_lossy() == lua_version_bin)
             })
             .collect_vec()
             .first()
             .cloned()
+        {
+            Some(lua_bin.clone())
+        } else {
+            // Fall back to Lua binary without version suffix
+            bin_files
+                .into_iter()
+                .filter(|file| {
+                    file.is_executable()
+                        && file.file_name().is_some_and(|name| {
+                            matches!(
+                                name.to_string_lossy().to_string().as_str(),
+                                "lua" | "luajit" | "lua.exe" | "luajit.exe"
+                            )
+                        })
+                })
+                .collect_vec()
+                .first()
+                .cloned()
+        }
     })
 }
 
