@@ -39,10 +39,10 @@ async fn luarocks_make() {
     let build_dir = TempDir::new().unwrap();
     build_dir.copy_from(&project_root, &["**"]).unwrap();
     let dest_dir = TempDir::new().unwrap();
-    let lua_version = LuaVersion::from(&config).unwrap_or(&LuaVersion::Lua51);
+    let lua_version = LuaVersion::from_config(&config).unwrap_or(LuaVersion::Lua51);
     let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
-    let lua = LuaInstallation::new(lua_version, &config, &bar)
+    let bar = progress.map(|p| p.new_bar());
+    let lua = LuaInstallation::new(&lua_version, &config, &bar)
         .await
         .unwrap();
     luarocks

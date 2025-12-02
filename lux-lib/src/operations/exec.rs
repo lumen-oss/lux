@@ -88,7 +88,7 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         .project
         .map(|project| project.lua_version(run.config))
         .transpose()?
-        .unwrap_or(LuaVersion::from(run.config)?.clone());
+        .unwrap_or(LuaVersion::from_config(run.config)?.clone());
 
     let user_tree = run.config.user_tree(lua_version)?;
     let mut paths = Paths::new(&user_tree)?;
@@ -154,7 +154,7 @@ pub async fn install_command(command: &str, config: &Config) -> Result<(), Insta
         tree::EntryType::Entrypoint,
     )
     .build();
-    let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
+    let tree = config.user_tree(LuaVersion::from_config(config)?.clone())?;
     Install::new(config)
         .package(install_spec)
         .tree(tree)
