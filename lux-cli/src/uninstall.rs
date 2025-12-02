@@ -1,5 +1,5 @@
 use clap::Args;
-use eyre::{eyre, Result};
+use eyre::{eyre, Context, Result};
 use inquire::Confirm;
 use itertools::Itertools;
 use lux_lib::{
@@ -123,7 +123,7 @@ Reinstall?
         if Confirm::new(&prompt)
             .with_default(false)
             .prompt()
-            .expect("Error prompting for reinstall")
+            .wrap_err("Error prompting for reinstall")?
         {
             operations::Uninstall::new()
                 .config(&config)

@@ -55,6 +55,7 @@ async fn no_build_artifacts_in_cwd() {
     assert_eq!(build_artifacts, vec![] as Vec<PathBuf>)
 }
 
+#[cfg(test)]
 async fn test_install(install_spec: PackageInstallSpec) {
     let dir = TempDir::new().unwrap();
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));

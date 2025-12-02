@@ -506,10 +506,11 @@ impl LuaVersionCompatibility for PartialProjectToml {
             ("5.2.0", LuaVersion::Lua52),
             ("5.1.0", LuaVersion::Lua51),
         ] {
+            let possibility = unsafe { possibility.parse().unwrap_unchecked() };
             if self
                 .lua
                 .as_ref()
-                .is_none_or(|lua| lua.matches(&possibility.parse().unwrap()))
+                .is_none_or(|lua| lua.matches(&possibility))
             {
                 return Some(version);
             }
@@ -685,7 +686,9 @@ impl Rockspec for LocalProjectToml {
 rockspec_format = "{}"
 package = "{}"
 version = "{}""#,
-            self.rockspec_format.as_ref().unwrap_or(&"3.0".into()),
+            self.rockspec_format
+                .as_ref()
+                .unwrap_or(&RockspecFormat::default()),
             self.package,
             &version
         );
@@ -876,7 +879,10 @@ impl Rockspec for RemoteProjectToml {
 rockspec_format = "{}"
 package = "{}"
 version = "{}""#,
-            self.local.rockspec_format.as_ref().unwrap_or(&"3.0".into()),
+            self.local
+                .rockspec_format
+                .as_ref()
+                .unwrap_or(&RockspecFormat::default()),
             self.local.package,
             self.version()
         );
@@ -967,7 +973,12 @@ version = "{}""#,
 impl HasIntegrity for RemoteProjectToml {
     fn hash(&self) -> io::Result<Integrity> {
         self.to_lua_rockspec()
-            .expect("unable to convert remote project to rockspec")
+            .map_err(|err| {
+                io::Error::other(format!(
+                    "unable to convert remote project to Lua rockspec:\n{}",
+                    err
+                ))
+            })?
             .hash()
     }
 }

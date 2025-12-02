@@ -1,5 +1,5 @@
 use clap::Args;
-use eyre::{eyre, Result};
+use eyre::{eyre, Context, OptionExt, Result};
 use inquire::{Confirm, Select};
 use itertools::Itertools;
 use lux_lib::{
@@ -40,7 +40,7 @@ Please specify an exact package (<name>@<version>) or narrow the version require
     let lockfile = tree.lockfile()?;
     let pkg = lockfile
         .get(&package_id)
-        .expect("malformed lockfile")
+        .ok_or_eyre("package is installed, but not found in the lockfile")?
         .clone();
     if args.online {
         open_homepage(pkg, &tree).await
@@ -75,19 +75,29 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree) -> Result<()> {
         .filter_map_ok(|file| {
             let path = file.into_path();
             if path.is_file() {
-                Some(
-                    path.file_name()
-                        .expect("no file name")
-                        .to_string_lossy()
-                        .to_string(),
-                )
+                path.file_name()
+                    .map(|file_name| file_name.to_string_lossy().to_string())
             } else {
                 None
             }
         })
         .try_collect()?;
-    if files.is_empty() {
-        match get_homepage(&pkg, tree)? {
+    match files.first() {
+        Some(file) if files.len() == 1 => {
+            edit::edit_file(layout.doc.join(file))?;
+            Ok(())
+        }
+        Some(_) => {
+            let file = Select::new(
+                "Multiple documentation files found. Please select one to open.",
+                files,
+            )
+            .prompt()
+            .wrap_err("error selecting from multiple files")?;
+            edit::edit_file(layout.doc.join(file))?;
+            Ok(())
+        }
+        None => match get_homepage(&pkg, tree)? {
             None => Err(eyre!(
                 "No documentation found for package {}",
                 pkg.into_package_spec()
@@ -96,24 +106,12 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree) -> Result<()> {
                 if Confirm::new("No local documentation found. Open homepage?")
                     .with_default(false)
                     .prompt()
-                    .expect("Error prompting to open homepage")
+                    .wrap_err("error prompting to open homepage")?
                 {
                     open::that(homepage.to_string())?;
                 }
                 Ok(())
             }
-        }
-    } else if files.len() == 1 {
-        edit::edit_file(layout.doc.join(files.first().unwrap()))?;
-        Ok(())
-    } else {
-        let file = Select::new(
-            "Multiple documentation files found. Please select one to open.",
-            files,
-        )
-        .prompt()
-        .expect("error selecting from multiple files");
-        edit::edit_file(layout.doc.join(file))?;
-        Ok(())
+        },
     }
 }

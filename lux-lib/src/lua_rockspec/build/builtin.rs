@@ -239,7 +239,7 @@ impl PartialOverride for ModuleSpecInternal {
 }
 
 #[derive(Error, Debug)]
-#[error("could not resolve platform override for `build.modules`. This is a bug!")]
+#[error("could not resolve platform override for `build.modules`. THIS IS A BUG!")]
 pub struct BuildModulesPlatformOverride;
 
 impl PlatformOverridable for ModuleSpecInternal {

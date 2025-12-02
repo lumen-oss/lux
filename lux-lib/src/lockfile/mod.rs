@@ -267,14 +267,14 @@ impl LocalPackageSpec {
             self.opt,
             match &self.constraint {
                 None => LockConstraint::Unconstrained,
-                Some(constraint) => LockConstraint::Constrained(constraint.parse().unwrap()),
+                Some(_) => self.constraint(),
             },
         )
     }
 
     pub fn constraint(&self) -> LockConstraint {
         // Safe to unwrap as the data can only end up in the struct as a valid constraint
-        LockConstraint::try_from(&self.constraint).unwrap()
+        unsafe { LockConstraint::try_from(&self.constraint).unwrap_unchecked() }
     }
 
     pub fn name(&self) -> &PackageName {
@@ -565,7 +565,7 @@ pub enum LockConstraint {
 impl IntoLua for LockConstraint {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         match self {
-            LockConstraint::Unconstrained => Ok("*".into_lua(lua).unwrap()),
+            LockConstraint::Unconstrained => "*".into_lua(lua),
             LockConstraint::Constrained(req) => req.into_lua(lua),
         }
     }
@@ -738,10 +738,7 @@ impl LocalPackageLock {
         let entrypoints_to_keep: HashSet<LocalPackage> = self
             .entrypoints
             .iter()
-            .map(|id| {
-                self.get(id)
-                    .expect("entrypoint not found in malformed lockfile.")
-            })
+            .filter_map(|id| self.get(id))
             .filter(|local_pkg| {
                 packages.iter().any(|req| {
                     local_pkg
@@ -914,9 +911,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     ///
     /// Ensure that the package is present in the lockfile before calling this function.
     pub unsafe fn get_unchecked(&self, id: &LocalPackageId) -> &LocalPackage {
-        self.lock
-            .get(id)
-            .expect("error getting package from lockfile")
+        self.lock.get(id).unwrap_unchecked()
     }
 
     pub(crate) fn list(&self) -> HashMap<PackageName, Vec<LocalPackage>> {

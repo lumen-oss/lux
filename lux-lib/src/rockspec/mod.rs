@@ -124,7 +124,8 @@ impl<T: Rockspec> LuaVersionCompatibility for T {
             ("5.2.0", LuaVersion::Lua52),
             ("5.1.0", LuaVersion::Lua51),
         ] {
-            if self.lua().matches(&possibility.parse().unwrap()) {
+            let possibility = unsafe { possibility.parse().unwrap_unchecked() };
+            if self.lua().matches(&possibility) {
                 return Some(version);
             }
         }

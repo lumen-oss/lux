@@ -43,15 +43,14 @@ impl IntoLua for RemotePackageSource {
 }
 
 impl RemotePackageSource {
-    pub(crate) unsafe fn url(self) -> Url {
+    pub(crate) fn url(self) -> Option<Url> {
         match self {
             Self::LuarocksRockspec(url)
             | Self::LuarocksSrcRock(url)
-            | Self::LuarocksBinaryRock(url) => url,
-            Self::RockspecContent(_) => panic!("tried to get URL from RockspecContent"),
-            RemotePackageSource::Local => panic!("tried to get URL from Local"),
+            | Self::LuarocksBinaryRock(url) => Some(url),
+            Self::RockspecContent(_) | Self::Local => None,
             #[cfg(test)]
-            Self::Test => unimplemented!(),
+            Self::Test => None,
         }
     }
 }

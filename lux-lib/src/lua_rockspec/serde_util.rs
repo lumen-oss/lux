@@ -17,9 +17,13 @@ impl<'de> Deserialize<'de> for LuaTableKey {
     {
         let value = serde_json::Value::deserialize(deserializer)?;
         if value.is_u64() {
-            Ok(LuaTableKey::IntKey(value.as_u64().unwrap()))
+            unsafe { Ok(LuaTableKey::IntKey(value.as_u64().unwrap_unchecked())) }
         } else if value.is_string() {
-            Ok(LuaTableKey::StringKey(value.as_str().unwrap().into()))
+            unsafe {
+                Ok(LuaTableKey::StringKey(
+                    value.as_str().unwrap_unchecked().into(),
+                ))
+            }
         } else {
             Err(de::Error::custom(format!(
                 "Could not parse Lua table key. Expected an integer or string, but got {value}"
@@ -41,7 +45,7 @@ where
 {
     let values = serde_json::Value::deserialize(deserializer)?;
     if values.is_string() {
-        let value = T::from(values.as_str().unwrap().into());
+        let value = unsafe { T::from(values.as_str().unwrap_unchecked().into()) };
         Ok(vec![value])
     } else {
         mlua_json_value_to_vec(values).map_err(de::Error::custom)

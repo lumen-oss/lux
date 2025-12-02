@@ -1,4 +1,4 @@
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use lux_lib::{
     config::{Config, LuaVersion},
     lua_installation::LuaInstallation,
@@ -23,7 +23,7 @@ pub async fn install_lua(config: Config) -> Result<()> {
         .includes()
         .first()
         .and_then(|dir| dir.parent())
-        .expect("error getting parent directory");
+        .ok_or_eyre("error getting lua include parent directory")?;
 
     bar.map(|bar| {
         bar.finish_with_message(format!(

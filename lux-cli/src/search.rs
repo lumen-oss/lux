@@ -48,7 +48,7 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
                 tree.push(version.to_string());
             }
 
-            println!("{}", tree.to_string_with_format(&formatting).unwrap());
+            println!("{}", tree.to_string_with_format(&formatting)?);
         }
     }
 

@@ -323,9 +323,7 @@ impl LuaPathBufTable {
                     LuaTableKey::IntKey(_) => value
                         .with_extension("")
                         .file_name()
-                        .unwrap_or_else(|| {
-                            panic!("unable to determine base name of {0}", value.display())
-                        })
+                        .unwrap_or_default()
                         .to_string_lossy()
                         .to_string(),
                     LuaTableKey::StringKey(key) => key,
@@ -350,9 +348,7 @@ impl LibPathBufTable {
                 let key = match key {
                     LuaTableKey::IntKey(_) => value
                         .file_name()
-                        .unwrap_or_else(|| {
-                            panic!("unable to determine base name of {0}", value.display())
-                        })
+                        .unwrap_or_default()
                         .to_string_lossy()
                         .to_string(),
                     LuaTableKey::StringKey(key) => key,
@@ -1002,11 +998,13 @@ impl BuildType {
             | &BuildType::None
             | &BuildType::LuaRock(_)
             | &BuildType::Source => None,
-            &BuildType::RustMlua => Some(
-                PackageReq::parse("luarocks-build-rust-mlua >= 0.2.5")
-                    .expect("error parsing luarocks-build-rust-mlua package requirement [This is a bug!]")
-                    .into(),
-            ),
+            &BuildType::RustMlua => unsafe {
+                Some(
+                    PackageReq::parse("luarocks-build-rust-mlua >= 0.2.5")
+                        .unwrap_unchecked()
+                        .into(),
+                )
+            },
             &BuildType::TreesitterParser => {
                 Some(PackageName::new("luarocks-build-treesitter-parser".into()).into())
             } // IMPORTANT: If adding another luarocks build backend,

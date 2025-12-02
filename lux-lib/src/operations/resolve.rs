@@ -28,6 +28,8 @@ pub enum ResolveDependenciesError {
     SearchAndDownload(#[from] SearchAndDownloadError),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependency(DependencyCycle),
+    #[error("error processing resolved dependency:\n{0}")]
+    ChannelSend(String),
 }
 
 #[derive(Debug)]
@@ -277,7 +279,9 @@ where
                             entry_type,
                         };
 
-                        dependencies_tx.send(install_spec).unwrap();
+                        dependencies_tx.send(install_spec).map_err(|err| {
+                            ResolveDependenciesError::ChannelSend(err.to_string())
+                        })?;
 
                         Ok::<_, ResolveDependenciesError>(local_spec.id())
                     })

@@ -104,16 +104,13 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let root_entries = add_rock_entries(&mut zip, temp_dir.path(), "".into())?;
     let mut bin_entries = HashMap::new();
     for relative_binary_path in package.spec.binaries() {
-        let binary_path = tree.bin().join(
-            relative_binary_path
-                .clean()
-                .file_name()
-                .expect("malformed binary path"),
-        );
-        if binary_path.is_file() {
-            let (path, digest) =
-                add_rock_entry(&mut zip, binary_path, &layout.bin, &PathBuf::default())?;
-            bin_entries.insert(path, digest);
+        if let Some(binary_name) = relative_binary_path.clean().file_name() {
+            let binary_path = tree.bin().join(binary_name);
+            if binary_path.is_file() {
+                let (path, digest) =
+                    add_rock_entry(&mut zip, binary_path, &layout.bin, &PathBuf::default())?;
+                bin_entries.insert(path, digest);
+            }
         }
     }
     let rock_manifest = RockManifest {
@@ -187,8 +184,9 @@ fn add_rock_entry(
     source_dir: &Path,
     zip_dir: &Path,
 ) -> Result<(PathBuf, String), PackError> {
-    let relative_path: PathBuf = pathdiff::diff_paths(source_dir.join(file.clone()), source_dir)
-        .expect("failed get relative path!");
+    let relative_path: PathBuf = unsafe {
+        pathdiff::diff_paths(source_dir.join(file.clone()), source_dir).unwrap_unchecked()
+    };
     let mut f = File::open(file)?;
     let mut buffer = Vec::new();
     f.read_to_end(&mut buffer)?;
@@ -220,11 +218,12 @@ fn add_dir_or_file_entry(
         .collect::<VecDeque<_>>();
     match &components.len() {
         n if *n > 1 => {
-            let mut entries = HashMap::new();
-            let first_dir = components.pop_front().unwrap();
-            let remainder = components.iter().collect::<PathBuf>();
-            add_dir_or_file_entry(&mut entries, &remainder, digest);
-            dir_map.insert(first_dir, DirOrFileEntry::DirEntry(entries));
+            if let Some(first_dir) = components.pop_front() {
+                let mut entries = HashMap::new();
+                let remainder = components.iter().collect::<PathBuf>();
+                add_dir_or_file_entry(&mut entries, &remainder, digest);
+                dir_map.insert(first_dir, DirOrFileEntry::DirEntry(entries));
+            }
         }
         _ => {
             dir_map.insert(

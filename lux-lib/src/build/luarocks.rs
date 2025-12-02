@@ -1,5 +1,6 @@
 use crate::build::backend::BuildInfo;
 use crate::build::backend::RunBuildArgs;
+use crate::lua_rockspec::LuaVersionError;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
 use crate::tree::TreeError;
@@ -20,14 +21,16 @@ use super::utils::recursive_copy_dir;
 pub enum LuarocksBuildError {
     #[error(transparent)]
     Io(#[from] io::Error),
-    #[error("error instantiating luarocks compatibility layer: {0}")]
+    #[error("error instantiating luarocks compatibility layer:\n{0}")]
     LuaRocksError(#[from] LuaRocksError),
-    #[error("error running 'luarocks make': {0}")]
+    #[error("error running 'luarocks make':\n{0}")]
     ExecLuaRocksError(#[from] ExecLuaRocksError),
     #[error(transparent)]
     Tree(#[from] TreeError),
     #[error("{0}")] // We don't know the concrete error type
     Rockspec(String),
+    #[error("error installing luarocks compatibility layer:\n{0}")]
+    LuaVersion(#[from] LuaVersionError),
 }
 
 pub(crate) async fn build<R: Rockspec>(
@@ -74,9 +77,7 @@ async fn install<R: Rockspec>(
     output_paths: &RockLayout,
     config: &Config,
 ) -> Result<BuildInfo, LuarocksBuildError> {
-    let lua_version = rockspec
-        .lua_version_matches(config)
-        .expect("could not get lua version!");
+    let lua_version = rockspec.lua_version_matches(config)?;
     std::fs::create_dir_all(&output_paths.bin)?;
     let package_dir = luarocks_tree
         .join("lib")

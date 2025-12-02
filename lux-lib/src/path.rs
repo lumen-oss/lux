@@ -59,7 +59,7 @@ impl Paths {
                     .lib
                     .0
                     .push(package.lib.join(format!("?.{}", c_dylib_extension())));
-                paths.bin.0.push(package.bin);
+                paths.bin.add_path(package.bin);
                 Ok::<Paths, TreeError>(paths)
             })?;
 
@@ -179,18 +179,26 @@ impl BinPath {
         new_vec.append(&mut self.0);
         self.0 = new_vec;
     }
+    /// Adds a `PathBuf` to the path.
+    /// Drops it silently if the `PathBuf` is invalid and cannot be used to create a `PATH` variable
+    /// (e.g. if it contains `PATH` separator characters).
     pub fn add_path(&mut self, path: PathBuf) {
-        let mut new_vec = Vec::new();
-        new_vec.push(path);
-        new_vec.append(&mut self.0);
-        self.0 = new_vec;
+        if env::join_paths(vec![&path]).is_ok() {
+            let mut new_vec = Vec::new();
+            new_vec.push(path);
+            new_vec.append(&mut self.0);
+            self.0 = new_vec;
+        }
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    /// Joins the path to create a PATH expression.
+    /// If a path contains invalid characters (e.g. the PATH separator),
+    /// this returns an empty string.
     pub fn joined(&self) -> String {
         env::join_paths(self.0.iter().unique())
-            .expect("Failed to join bin paths.")
+            .unwrap_or_default()
             .to_string_lossy()
             .to_string()
     }

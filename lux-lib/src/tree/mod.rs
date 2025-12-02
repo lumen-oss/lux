@@ -9,6 +9,7 @@ use std::{io, path::PathBuf};
 
 use itertools::Itertools;
 use mlua::{ExternalResult, IntoLua};
+use nonempty::NonEmpty;
 use thiserror::Error;
 
 mod list;
@@ -198,11 +199,16 @@ impl Tree {
     }
 
     pub fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, TreeError> {
-        let mut found_packages = self.lockfile()?.find_rocks(req);
-        Ok(match found_packages.len() {
-            0 => RockMatches::NotFound(req.clone()),
-            1 => RockMatches::Single(found_packages.pop().unwrap()),
-            2.. => RockMatches::Many(found_packages),
+        let found_packages = self.lockfile()?.find_rocks(req);
+        Ok(match NonEmpty::try_from(found_packages) {
+            Ok(found_packages) => {
+                if found_packages.len() == 1 {
+                    RockMatches::Single(found_packages.last().clone())
+                } else {
+                    RockMatches::Many(found_packages)
+                }
+            }
+            Err(_) => RockMatches::NotFound(req.clone()),
         })
     }
 
@@ -212,7 +218,7 @@ impl Tree {
     {
         match self.list()?.get(req.name()) {
             Some(packages) => {
-                let mut found_packages = packages
+                let found_packages = packages
                     .iter()
                     .rev()
                     .filter(|package| {
@@ -221,10 +227,15 @@ impl Tree {
                     .map(|package| package.id())
                     .collect_vec();
 
-                Ok(match found_packages.len() {
-                    0 => RockMatches::NotFound(req.clone()),
-                    1 => RockMatches::Single(found_packages.pop().unwrap()),
-                    2.. => RockMatches::Many(found_packages),
+                Ok(match NonEmpty::try_from(found_packages) {
+                    Ok(found_packages) => {
+                        if found_packages.len() == 1 {
+                            RockMatches::Single(found_packages.last().clone())
+                        } else {
+                            RockMatches::Many(found_packages)
+                        }
+                    }
+                    Err(_) => RockMatches::NotFound(req.clone()),
                 })
             }
             None => Ok(RockMatches::NotFound(req.clone())),
@@ -388,7 +399,7 @@ impl EntryType {
 pub enum RockMatches {
     NotFound(PackageReq),
     Single(LocalPackageId),
-    Many(Vec<LocalPackageId>),
+    Many(NonEmpty<LocalPackageId>),
 }
 
 // Loosely mimic the Option<T> functions.
@@ -408,7 +419,9 @@ impl IntoLua for RockMatches {
         match self {
             RockMatches::NotFound(package_req) => table.set("not_found", package_req)?,
             RockMatches::Single(local_package_id) => table.set("single", local_package_id)?,
-            RockMatches::Many(local_package_ids) => table.set("many", local_package_ids)?,
+            RockMatches::Many(local_package_ids) => {
+                table.set("many", local_package_ids.into_iter().collect_vec())?
+            }
         }
 
         Ok(mlua::Value::Table(table))

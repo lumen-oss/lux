@@ -7,6 +7,7 @@ use std::{
 use html_escape::decode_html_entities;
 use itertools::Itertools;
 use mlua::{ExternalResult, FromLua, IntoLua};
+use nonempty::NonEmpty;
 use semver::{Comparator, Error, Op, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -89,36 +90,37 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
     fn try_from(req: PackageVersionReq) -> Result<Self, Self::Error> {
         match req {
             PackageVersionReq::SemVer(version_req) => {
-                if version_req.comparators.is_empty()
-                    || version_req
-                        .comparators
-                        .iter()
-                        .any(|comparator| comparator.op != semver::Op::Exact)
-                {
-                    Err(VersionReqToVersionError::NonExactVersionReq(
-                        version_req.clone(),
-                    ))
-                } else {
-                    let comparator = version_req.comparators.first().unwrap();
-                    let version = semver::Version {
-                        major: comparator.major,
-                        minor: comparator.minor.unwrap_or(0),
-                        patch: comparator.patch.unwrap_or(0),
-                        pre: comparator.pre.clone(),
-                        build: semver::BuildMetadata::EMPTY,
-                    };
-                    let component_count = if comparator.patch.is_some() {
-                        3
-                    } else if comparator.minor.is_some() {
-                        2
-                    } else {
-                        1
-                    };
-                    Ok(PackageVersion::SemVer(SemVer {
-                        version,
-                        component_count,
-                        specrev: 1.into(),
-                    }))
+                match NonEmpty::try_from(version_req.comparators.clone()) {
+                    Ok(comparators)
+                        if comparators
+                            .iter()
+                            .any(|comparator| comparator.op != semver::Op::Exact) =>
+                    {
+                        Err(VersionReqToVersionError::NonExactVersionReq(version_req))
+                    }
+                    Ok(comparators) => {
+                        let comparator = comparators.first();
+                        let version = semver::Version {
+                            major: comparator.major,
+                            minor: comparator.minor.unwrap_or(0),
+                            patch: comparator.patch.unwrap_or(0),
+                            pre: comparator.pre.clone(),
+                            build: semver::BuildMetadata::EMPTY,
+                        };
+                        let component_count = if comparator.patch.is_some() {
+                            3
+                        } else if comparator.minor.is_some() {
+                            2
+                        } else {
+                            1
+                        };
+                        Ok(PackageVersion::SemVer(SemVer {
+                            version,
+                            component_count,
+                            specrev: 1.into(),
+                        }))
+                    }
+                    Err(_) => Err(VersionReqToVersionError::NonExactVersionReq(version_req)),
                 }
             }
             PackageVersionReq::DevVer(modrev) => Ok(PackageVersion::DevVer(DevVer {

@@ -22,7 +22,9 @@ pub enum GenLuaRcError {
     #[error(transparent)]
     ProjectTree(#[from] ProjectTreeError),
     #[error("failed to serialize luarc content:\n{0}")]
-    Serialize(#[from] serde_json::Error),
+    Serialize(String),
+    #[error("failed to deserialize luarc content:\n{0}")]
+    Deserialize(String),
     #[error("failed to write {0}:\n{1}")]
     Write(PathBuf, io::Error),
 }
@@ -85,10 +87,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .filter_map(Result::ok)
         .map(|rock_layout| rock_layout.src)
         .filter(|dir| dir.is_dir())
-        .map(|dependency_dir| {
-            diff_paths(dependency_dir, project.root())
-                .expect("tree root should be a subpath of the project root")
-        });
+        .filter_map(|dependency_dir| diff_paths(dependency_dir, project.root()));
 
     let test_dependency_tree = project.test_tree(config)?;
     let test_dependency_dirs = lockfile
@@ -99,10 +98,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .filter_map(Result::ok)
         .map(|rock_layout| rock_layout.src)
         .filter(|dir| dir.is_dir())
-        .map(|test_dependency_dir| {
-            diff_paths(test_dependency_dir, project.root())
-                .expect("test tree root should be a subpath of the project root")
-        });
+        .filter_map(|test_dependency_dir| diff_paths(test_dependency_dir, project.root()));
 
     let library_dirs = dependency_dirs
         .chain(test_dependency_dirs)
@@ -122,7 +118,8 @@ fn update_luarc_content(
     prev_contents: &str,
     extra_paths: Vec<PathBuf>,
 ) -> Result<String, GenLuaRcError> {
-    let mut luarc: LuaRC = serde_json::from_str(prev_contents).unwrap();
+    let mut luarc: LuaRC = serde_json::from_str(prev_contents)
+        .map_err(|err| GenLuaRcError::Deserialize(err.to_string()))?;
 
     // remove any preexisting lux library paths
     luarc
@@ -135,7 +132,7 @@ fn update_luarc_content(
         .map(|path| path.to_slash_lossy().to_string())
         .for_each(|path_str| luarc.workspace.library.push(path_str));
 
-    Ok(serde_json::to_string_pretty(&luarc)?)
+    serde_json::to_string_pretty(&luarc).map_err(|err| GenLuaRcError::Serialize(err.to_string()))
 }
 
 #[cfg(test)]

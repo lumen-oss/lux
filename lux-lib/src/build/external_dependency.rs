@@ -353,7 +353,7 @@ fn format_linker_arg(arg: &str, compiler: &cc::Tool) -> String {
 }
 
 pub(crate) fn to_lib_name(file: &Path) -> String {
-    let file_name = file.file_name().unwrap();
+    let file_name = file.file_name().unwrap_or_default();
     if cfg!(target_family = "unix") {
         file_name
             .to_string_lossy()

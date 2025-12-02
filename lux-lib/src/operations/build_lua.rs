@@ -14,6 +14,7 @@ use crate::{
 };
 use bon::Builder;
 use git2::{build::RepoBuilder, FetchOptions};
+use path_slash::PathExt;
 use ssri::Integrity;
 use target_lexicon::Triple;
 use tempfile::tempdir;
@@ -88,7 +89,12 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
 async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let progress = args.progress;
 
-    let build_dir = tempdir().expect("failed to create lua_installation temp directory");
+    let build_dir = tempdir().map_err(|err| {
+        io::Error::other(format!(
+            "failed to create lua_installation temp directory:\n{}",
+            err
+        ))
+    })?;
     // XXX luajit.org responds with an invalid content-type, so we'll use the github mirror for now.
     // let luajit_url = "https://luajit.org/git/luajit.git";
     let luajit_url = "https://github.com/LuaJIT/LuaJIT.git";
@@ -128,7 +134,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         .host(&host.to_string())
         .target(&host.to_string());
     let compiler = cc.try_get_compiler()?;
-    let compiler_path = compiler.path().to_str().unwrap();
+    let compiler_path = compiler.path().to_slash_lossy().to_string();
     let mut make_cmd = Command::new(config.make_cmd());
     make_cmd.current_dir(build_dir.join("src"));
     make_cmd.arg("-e");
@@ -147,11 +153,11 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         }
         _ => {}
     }
-    let compiler_path =
-        which::which(compiler_path).unwrap_or_else(|_| panic!("cannot find {compiler_path}"));
-    let compiler_path = compiler_path.to_str().unwrap();
+    let compiler_path = which::which(&compiler_path)
+        .map_err(|err| io::Error::other(format!("cannot find {}:\n{}", &compiler_path, err)))?;
+    let compiler_path = compiler_path.to_slash_lossy().to_string();
     let compiler_args = compiler.cflags_env();
-    let compiler_args = compiler_args.to_str().unwrap();
+    let compiler_args = compiler_args.to_string_lossy();
     if env::var_os("STATIC_CC").is_none() {
         make_cmd.env("STATIC_CC", format!("{compiler_path} {compiler_args}"));
     }
@@ -355,21 +361,30 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
     let progress = args.progress;
 
-    let build_dir = tempdir().expect("Failed to create lua_installation temp directory");
+    let build_dir = tempdir().map_err(|err| {
+        io::Error::other(format!(
+            "failed to create lua_installation temp directory:\n{}",
+            err
+        ))
+    })?;
 
-    let (source_integrity, pkg_version): (Integrity, &str) = match lua_version {
-        LuaVersion::Lua51 => (LUA51_HASH.parse().unwrap(), LUA51_VERSION),
-        LuaVersion::Lua52 => (LUA52_HASH.parse().unwrap(), LUA52_VERSION),
-        LuaVersion::Lua53 => (LUA53_HASH.parse().unwrap(), LUA53_VERSION),
-        LuaVersion::Lua54 => (LUA54_HASH.parse().unwrap(), LUA54_VERSION),
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+    let (source_integrity, pkg_version): (Integrity, &str) = unsafe {
+        match lua_version {
+            LuaVersion::Lua51 => (LUA51_HASH.parse().unwrap_unchecked(), LUA51_VERSION),
+            LuaVersion::Lua52 => (LUA52_HASH.parse().unwrap_unchecked(), LUA52_VERSION),
+            LuaVersion::Lua53 => (LUA53_HASH.parse().unwrap_unchecked(), LUA53_VERSION),
+            LuaVersion::Lua54 => (LUA54_HASH.parse().unwrap_unchecked(), LUA54_VERSION),
+            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+        }
     };
 
     let file_name = format!("lua-{pkg_version}.tar.gz");
 
-    let source_url: Url = format!("https://www.lua.org/ftp/{file_name}")
-        .parse()
-        .unwrap();
+    let source_url: Url = unsafe {
+        format!("https://www.lua.org/ftp/{file_name}")
+            .parse()
+            .unwrap_unchecked()
+    };
 
     progress.map(|p| p.set_message(format!("📥 Downloading {}", &source_url)));
 

@@ -306,26 +306,31 @@ impl Project {
             },
         ) {
             Ok(Some(path)) => {
-                let toml_content = std::fs::read_to_string(&path).map_err(|err| {
-                    ProjectError::ReadProjectTOML(path.to_string_lossy().to_string(), err)
-                })?;
+                if let Some(root) = path.parent() {
+                    let toml_content = std::fs::read_to_string(&path).map_err(|err| {
+                        ProjectError::ReadProjectTOML(path.to_string_lossy().to_string(), err)
+                    })?;
 
-                let root = path.parent().unwrap();
+                    let mut project = Project {
+                        root: ProjectRoot(root.to_path_buf()),
+                        toml: PartialProjectToml::new(
+                            &toml_content,
+                            ProjectRoot(root.to_path_buf()),
+                        )?,
+                    };
 
-                let mut project = Project {
-                    root: ProjectRoot(root.to_path_buf()),
-                    toml: PartialProjectToml::new(&toml_content, ProjectRoot(root.to_path_buf()))?,
-                };
+                    if let Some(extra_rockspec) = project.extra_rockspec()? {
+                        project.toml = project.toml.merge(extra_rockspec);
+                    }
 
-                if let Some(extra_rockspec) = project.extra_rockspec()? {
-                    project.toml = project.toml.merge(extra_rockspec);
+                    std::fs::create_dir_all(root).map_err(|err| {
+                        ProjectError::CreateProjectRoot(root.to_string_lossy().to_string(), err)
+                    })?;
+
+                    Ok(Some(project))
+                } else {
+                    Ok(None)
                 }
-
-                std::fs::create_dir_all(root).map_err(|err| {
-                    ProjectError::CreateProjectRoot(root.to_string_lossy().to_string(), err)
-                })?;
-
-                Ok(Some(project))
             }
             // NOTE: If we hit a read error, it could be because we haven't found a PROJECT_TOML
             // and have started searching too far upwards.
@@ -464,13 +469,8 @@ impl Project {
                     let dep_version_str = if dep.version_req().is_any() {
                         package_db
                             .latest_version(dep.name())
-                            // This condition should never be reached, as the package should
-                            // have been found in the database or an error should have been
-                            // reported prior.
-                            // Still worth making an error message for this in the future,
-                            // though.
-                            .expect("unable to query latest version for package")
-                            .to_string()
+                            .map(|latest_version| latest_version.to_string())
+                            .unwrap_or_else(|| dep.version_req().to_string())
                     } else {
                         dep.version_req().to_string()
                     };
@@ -620,39 +620,41 @@ impl Project {
                             table[dep.to_string()] = toml_edit::value(dep_version_str);
                         }
                         Item::Table(tbl) => {
-                            if tbl.contains_key("git") {
-                                let git_value = tbl
-                                    .get("git")
-                                    .expect("expected 'git' field")
-                                    .clone()
-                                    .into_value()
-                                    .map_err(ProjectEditError::ExpectedValue)?;
-                                let git_url_str = git_value
-                                    .as_str()
-                                    .ok_or(ProjectEditError::ExpectedString(git_value.clone()))?;
-                                let shorthand: RemoteGitUrlShorthand = git_url_str.parse()?;
-                                match git::utils::latest_semver_tag_or_commit_sha(
-                                    &shorthand.into(),
-                                )? {
-                                    SemVerTagOrSha::SemVerTag(latest_tag) => {
-                                        table[dep.to_string()]["version"] =
-                                            Item::Value(latest_tag.clone().into());
-                                        if latest_tag.contains("-") {
-                                            // Tag contains a specrev.
-                                            table[dep.to_string()]["rev"] =
-                                                Item::Value(latest_tag.into());
+                            match tbl.get("git") {
+                                Some(git_item) => {
+                                    let git_value = git_item
+                                        .clone()
+                                        .into_value()
+                                        .map_err(ProjectEditError::ExpectedValue)?;
+                                    let git_url_str = git_value.as_str().ok_or(
+                                        ProjectEditError::ExpectedString(git_value.clone()),
+                                    )?;
+                                    let shorthand: RemoteGitUrlShorthand = git_url_str.parse()?;
+                                    match git::utils::latest_semver_tag_or_commit_sha(
+                                        &shorthand.into(),
+                                    )? {
+                                        SemVerTagOrSha::SemVerTag(latest_tag) => {
+                                            table[dep.to_string()]["version"] =
+                                                Item::Value(latest_tag.clone().into());
+                                            if latest_tag.contains("-") {
+                                                // Tag contains a specrev.
+                                                table[dep.to_string()]["rev"] =
+                                                    Item::Value(latest_tag.into());
+                                            }
+                                        }
+                                        SemVerTagOrSha::CommitSha(latest_sha) => {
+                                            table[dep.to_string()]["version"] =
+                                                Item::Value(latest_sha.into());
                                         }
                                     }
-                                    SemVerTagOrSha::CommitSha(latest_sha) => {
-                                        table[dep.to_string()]["version"] =
-                                            Item::Value(latest_sha.into());
-                                    }
+                                    table[dep.to_string()] = dep_item;
                                 }
-                                table[dep.to_string()] = dep_item;
-                            } else {
-                                let dep_version_str = latest_rock_version_str(dep)?;
-                                dep_item["version".to_string()] = toml_edit::value(dep_version_str);
-                                table[dep.to_string()] = dep_item;
+                                None => {
+                                    let dep_version_str = latest_rock_version_str(dep)?;
+                                    dep_item["version".to_string()] =
+                                        toml_edit::value(dep_version_str);
+                                    table[dep.to_string()] = dep_item;
+                                }
                             }
                         }
                         _ => {}
@@ -763,11 +765,12 @@ impl Project {
                         version @ Item::Value(_) => match &pin {
                             PinnedState::Unpinned => {}
                             PinnedState::Pinned => {
-                                let mut dep_entry = toml_edit::table().into_table().unwrap();
-                                dep_entry.set_implicit(true);
-                                dep_entry["version"] = version;
-                                dep_entry["pin"] = toml_edit::value(true);
-                                table[dep.to_string()] = toml_edit::Item::Table(dep_entry);
+                                if let Ok(mut dep_entry) = toml_edit::table().into_table() {
+                                    dep_entry.set_implicit(true);
+                                    dep_entry["version"] = version;
+                                    dep_entry["pin"] = toml_edit::value(true);
+                                    table[dep.to_string()] = toml_edit::Item::Table(dep_entry);
+                                }
                             }
                         },
                         Item::Table(_) => {
@@ -794,28 +797,28 @@ impl Project {
 
 fn prepare_dependency_tables(project_toml: &mut DocumentMut) {
     if !project_toml.contains_table("dependencies") {
-        let mut table = toml_edit::table().into_table().unwrap();
-        table.set_implicit(true);
-
-        project_toml["dependencies"] = toml_edit::Item::Table(table);
+        if let Ok(mut table) = toml_edit::table().into_table() {
+            table.set_implicit(true);
+            project_toml["dependencies"] = toml_edit::Item::Table(table);
+        }
     }
     if !project_toml.contains_table("build_dependencies") {
-        let mut table = toml_edit::table().into_table().unwrap();
-        table.set_implicit(true);
-
-        project_toml["build_dependencies"] = toml_edit::Item::Table(table);
+        if let Ok(mut table) = toml_edit::table().into_table() {
+            table.set_implicit(true);
+            project_toml["build_dependencies"] = toml_edit::Item::Table(table);
+        }
     }
     if !project_toml.contains_table("test_dependencies") {
-        let mut table = toml_edit::table().into_table().unwrap();
-        table.set_implicit(true);
-
-        project_toml["test_dependencies"] = toml_edit::Item::Table(table);
+        if let Ok(mut table) = toml_edit::table().into_table() {
+            table.set_implicit(true);
+            project_toml["test_dependencies"] = toml_edit::Item::Table(table);
+        }
     }
     if !project_toml.contains_table("external_dependencies") {
-        let mut table = toml_edit::table().into_table().unwrap();
-        table.set_implicit(true);
-
-        project_toml["external_dependencies"] = toml_edit::Item::Table(table);
+        if let Ok(mut table) = toml_edit::table().into_table() {
+            table.set_implicit(true);
+            project_toml["external_dependencies"] = toml_edit::Item::Table(table);
+        }
     }
 }
 

@@ -127,18 +127,16 @@ async fn remove_package(
 
     // Delete the corresponding binaries attached to the current package (located under `{LUX_TREE}/bin/`)
     for relative_binary_path in package.spec.binaries() {
-        let binary_file_name = relative_binary_path
-            .file_name()
-            .expect("malformed lockfile");
+        if let Some(binary_file_name) = relative_binary_path.file_name() {
+            let binary_path = tree.bin().join(binary_file_name);
+            if binary_path.is_file() {
+                tokio::fs::remove_file(binary_path).await?;
+            }
 
-        let binary_path = tree.bin().join(binary_file_name);
-        if binary_path.is_file() {
-            tokio::fs::remove_file(binary_path).await?;
-        }
-
-        let unwrapped_binary_path = tree.unwrapped_bin().join(binary_file_name);
-        if unwrapped_binary_path.is_file() {
-            tokio::fs::remove_file(unwrapped_binary_path).await?;
+            let unwrapped_binary_path = tree.unwrapped_bin().join(binary_file_name);
+            if unwrapped_binary_path.is_file() {
+                tokio::fs::remove_file(unwrapped_binary_path).await?;
+            }
         }
     }
 

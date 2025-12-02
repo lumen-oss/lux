@@ -347,7 +347,7 @@ impl RemoteLuaRockspec {
         source_spec: RockSourceSpec,
     ) -> Self {
         let version = package_spec.version().clone();
-        let rockspec_format: RockspecFormat = "3.0".into();
+        let rockspec_format = RockspecFormat::default();
         let raw_content = format!(
             r#"
 rockspec_format = "{}"
@@ -609,13 +609,14 @@ impl UserData for RockDescription {
 #[error("invalid rockspec format: {0}")]
 pub struct InvalidRockspecFormat(String);
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RockspecFormat {
     #[serde(rename = "1.0")]
     _1_0,
     #[serde(rename = "2.0")]
     _2_0,
     #[serde(rename = "3.0")]
+    #[default]
     _3_0,
 }
 
@@ -629,12 +630,6 @@ impl FromStr for RockspecFormat {
             "3.0" => Ok(Self::_3_0),
             txt => Err(InvalidRockspecFormat(txt.to_string())),
         }
-    }
-}
-
-impl From<&str> for RockspecFormat {
-    fn from(s: &str) -> Self {
-        Self::from_str(s).unwrap()
     }
 }
 
@@ -714,7 +709,7 @@ mod tests {
         "
         .to_string();
         let rockspec = RemoteLuaRockspec::new(&rockspec_content).unwrap();
-        assert_eq!(rockspec.local.rockspec_format, Some("1.0".into()));
+        assert_eq!(rockspec.local.rockspec_format, Some(RockspecFormat::_1_0));
         assert_eq!(rockspec.local.package, "foo".into());
         assert_eq!(rockspec.local.version, "1.0.0-1".parse().unwrap());
         assert_eq!(rockspec.local.description, RockDescription::default());

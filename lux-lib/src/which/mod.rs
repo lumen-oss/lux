@@ -76,7 +76,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
                 lockfile
                     .find_rocks(req)
                     .into_iter()
-                    .map(|id| lockfile.get(&id).unwrap())
+                    .filter_map(|id| lockfile.get(&id))
                     .cloned()
                     .collect_vec()
             })

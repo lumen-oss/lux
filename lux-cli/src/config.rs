@@ -1,4 +1,4 @@
-use eyre::{eyre, Result};
+use eyre::{eyre, Context, OptionExt, Result};
 use inquire::Confirm;
 use lux_lib::config::{Config, ConfigBuilder};
 
@@ -34,9 +34,13 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
                 || Confirm::new("Config already exists. Overwrite?")
                     .with_default(false)
                     .prompt()
-                    .expect("Error prompting to overwrite config")
+                    .wrap_err("error prompting to overwrite config")?
             {
-                std::fs::create_dir_all(config_file.parent().unwrap())?;
+                std::fs::create_dir_all(
+                    config_file
+                        .parent()
+                        .ok_or_eyre("error getting lux config parent directory")?,
+                )?;
                 let content = if init.default {
                     let cfg: ConfigBuilder = ConfigBuilder::default().build()?.into();
                     toml::to_string(&cfg)?

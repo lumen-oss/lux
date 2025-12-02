@@ -234,6 +234,15 @@ impl PackageReq {
             version_req,
         })
     }
+
+    /// # Safety
+    ///
+    /// Call this only if you are absolutely sure that a `PackageReq` can be parsed from the arguments.
+    /// Calling this with invalid arguments is undefined behaviour.
+    pub unsafe fn new_unchecked(name: String, version: Option<String>) -> Self {
+        Self::new(name, version).unwrap_unchecked()
+    }
+
     pub fn parse(pkg_constraints: &str) -> Result<Self, PackageReqParseError> {
         Self::from_str(pkg_constraints)
     }

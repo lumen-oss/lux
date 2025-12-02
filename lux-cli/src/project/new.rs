@@ -85,7 +85,7 @@ struct NewProjectValidated {
 
 fn clap_parse_license(s: &str) -> std::result::Result<LicenseId, String> {
     match validate_license(s) {
-        Ok(Validation::Valid) => Ok(parse_license_unchecked(s)),
+        Ok(Validation::Valid) => unsafe { Ok(parse_license_unchecked(s)) },
         Err(_) | Ok(Validation::Invalid(_)) => {
             Err(format!("unable to identify license {s}, please try again!"))
         }
@@ -110,13 +110,13 @@ fn clap_parse_list(input: &str) -> std::result::Result<Vec<String>, String> {
     }
 }
 
-/// Parses a license and panics upon failure.
+/// Parses a license.
 ///
 /// # Security
 ///
-/// This should only be invoked after validating the license with [`validate_license`].
-fn parse_license_unchecked(input: &str) -> LicenseId {
-    spdx::imprecise_license_id(input).unwrap().0
+/// WARNING: This should only be invoked after validating the license with [`validate_license`].
+unsafe fn parse_license_unchecked(input: &str) -> LicenseId {
+    spdx::imprecise_license_id(input).unwrap_unchecked().0
 }
 
 fn validate_license(input: &str) -> std::result::Result<Validation, Box<dyn Error + Send + Sync>> {
@@ -231,7 +231,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject) -> Result<()> {
                             .as_str()
                         {
                             "none" => None,
-                            license => Some(parse_license_unchecked(license)),
+                            license => unsafe { Some(parse_license_unchecked(license)) },
                         },
                     )
                 },

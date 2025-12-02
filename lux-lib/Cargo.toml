@@ -107,3 +107,8 @@ vendored-openssl = ["openssl/vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
 vendored-lua = ["mlua/vendored"]
 ssh-tests = []
+
+[lints.clippy]
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
