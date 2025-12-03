@@ -140,23 +140,37 @@ pub enum ProjectTomlError {
 pub enum LocalProjectTomlValidationError {
     #[error("no lua version provided")]
     NoLuaVersion,
-    #[error(transparent)]
+    #[error("could not decode the test spec:\n:{0}")]
     TestSpecError(#[from] TestSpecDecodeError),
-    #[error(transparent)]
+    #[error("could not decode the build spec:\n:{0}")]
     BuildSpecInternal(#[from] BuildSpecInternalError),
     #[error(transparent)]
-    PlatformValidationError(#[from] PlatformValidationError),
+    PlatformValidation(#[from] PlatformValidationError),
     #[error("{}copy_directories cannot contain a rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error(transparent)]
-    RockSourceError(#[from] RockSourceError),
+    #[error("could not decode the source spec:\n:{0}")]
+    RockSource(#[from] RockSourceError),
     #[error("duplicate dependencies: {0}")]
     DuplicateDependencies(PackageNameList),
     #[error("duplicate test dependencies: {0}")]
     DuplicateTestDependencies(PackageNameList),
     #[error("duplicate build dependencies: {0}")]
     DuplicateBuildDependencies(PackageNameList),
-    #[error("dependencies field cannot contain lua - please provide the version in the top-level lua field")]
+    #[error(
+        r#"dependencies field cannot contain 'lua'.
+        Please provide the version in the top-level 'lua' field
+
+        Example:
+
+        ```toml
+        package = "my-package"
+        lua = ">=5.1"
+
+        [dependencies]
+        # do not add Lua here!
+        ```
+        "#
+    )]
     DependenciesContainLua,
     #[error("error generating rockspec source:\n{0}")]
     GenerateSource(#[from] GenerateSourceError),
@@ -382,7 +396,7 @@ impl PartialProjectToml {
         let source = PerPlatform::new(
             RemoteRockSource::from_platform_overridable(source).map_err(|err| {
                 RemoteProjectTomlValidationError::LocalProjectTomlValidationError(
-                    LocalProjectTomlValidationError::RockSourceError(err),
+                    LocalProjectTomlValidationError::RockSource(err),
                 )
             })?,
         );

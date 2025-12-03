@@ -38,9 +38,17 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum LuaRockspecError {
-    #[error("could not parse rockspec ({cause}):\n\n{content}")]
+    #[error(
+        r#"could not parse rockspec ({cause}):
+
+    {content}"#
+    )]
     MLua { content: String, cause: mlua::Error },
-    #[error("could not parse rockspec field '{field}' ({cause}):\n\n{content}")]
+    #[error(
+        r#"could not parse rockspec field '{field}' ({cause}):
+
+    {content}"#
+    )]
     MLuaGetKey {
         field: String,
         content: String,
@@ -48,7 +56,11 @@ pub enum LuaRockspecError {
     },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error("could not parse rockspec ({cause})\n\n{content}")]
+    #[error(
+        r#"could not parse rockspec ({cause})
+
+    {content}"#
+    )]
     LuaTable {
         content: String,
         cause: LuaTableError,

@@ -25,17 +25,17 @@ const NLUA_EXE: &str = "nlua.bat";
 
 #[derive(Error, Debug)]
 pub enum TestSpecDecodeError {
-    #[error("'command' test type must specify 'command' or 'script' field")]
+    #[error("the 'command' test type must specify either a 'command' or 'script' field")]
     NoCommandOrScript,
-    #[error("'command' test type cannot have both 'command' and 'script' fields")]
+    #[error("the 'command' test type cannot have both 'command' and 'script' fields")]
     CommandAndScript,
 }
 
 #[derive(Error, Debug)]
 pub enum TestSpecError {
-    #[error("could not auto-detect test spec. Please add one to your lux.toml")]
+    #[error("could not auto-detect the test spec. Please add one to your lux.toml")]
     NoTestSpecDetected,
-    #[error(transparent)]
+    #[error("project validation failed:\n{0}")]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
 }
 

@@ -33,13 +33,11 @@ pub enum RemotePackageDBError {
 
 #[derive(Error, Debug)]
 pub enum SearchError {
-    #[error(transparent)]
-    Mlua(#[from] mlua::Error),
     #[error("no rock that matches '{0}' found")]
     RockNotFound(PackageReq),
     #[error("no rock that matches '{0}' found in the lockfile.")]
     RockNotFoundInLockfile(PackageReq),
-    #[error("error when pulling manifest: {0}")]
+    #[error("error when pulling manifest:\n{0}")]
     Manifest(#[from] ManifestError),
 }
 
