@@ -25,15 +25,15 @@ use crate::{
 pub enum ManifestFromServerError {
     #[error(transparent)]
     Io(#[from] io::Error),
-    #[error("failed to pull manifest: {0}")]
+    #[error("failed to pull manifest:\n{0}")]
     Request(#[from] reqwest::Error),
-    #[error("failed to parse manifest: {0}")]
+    #[error("failed to parse manifest:\n{0}")]
     FromUtf8(#[from] FromUtf8Error),
-    #[error("invalidate date received from server: {0}")]
+    #[error("invalidate date received from server:\n{0}")]
     InvalidDate(#[from] httpdate::Error),
-    #[error("non-ASCII characters returned in response header: {0}")]
+    #[error("non-ASCII characters returned in response header:\n{0}")]
     InvalidHeader(#[from] ToStrError),
-    #[error("error parsing manifest URL: {0}")]
+    #[error("error parsing manifest URL:\n{0}")]
     Url(#[from] url::ParseError),
     #[error("failed to read manifest archive {0}:\n{1}")]
     ZipRead(Url, zip::result::ZipError),
@@ -209,13 +209,14 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 }
 
 #[derive(Error, Debug)]
-#[error("failed to parse manifest: {0}")]
+#[error("failed to parse Lua manifest:\n{0}")]
 pub struct ManifestLuaError(#[from] mlua::Error);
 
 #[derive(Error, Debug)]
-#[error("failed to parse manifest from configuration: {0}")]
 pub enum ManifestError {
+    #[error(transparent)]
     Lua(#[from] ManifestLuaError),
+    #[error("failed to fetch manifest from server:\n{0}")]
     Server(#[from] ManifestFromServerError),
 }
 

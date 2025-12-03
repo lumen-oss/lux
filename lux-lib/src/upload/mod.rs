@@ -57,17 +57,18 @@ pub struct VersionCheckResponse {
 
 #[derive(Error, Debug)]
 pub enum ToolCheckError {
-    #[error("error parsing tool check URL: {0}")]
+    #[error("error parsing tool check URL:\n{0}")]
     ParseError(#[from] url::ParseError),
-    #[error(transparent)]
+    #[error("error sending HTTP request:\n{0}")]
     Request(#[from] reqwest::Error),
-    #[error("`lux` is out of date with {0}'s expected tool version! `lux` is at version {TOOL_VERSION}, server is at {server_version}", server_version = _1.version)]
+    #[error(r#"`lux` is out of date with {0}'s expected tool version.
+    `lux` is at version {TOOL_VERSION}, server is at {server_version}"#, server_version = _1.version)]
     ToolOutdated(String, VersionCheckResponse),
 }
 
 #[derive(Error, Debug)]
 pub enum UserCheckError {
-    #[error("error parsing user check URL: {0}")]
+    #[error("error parsing user check URL:\n{0}")]
     ParseError(#[from] url::ParseError),
     #[error(transparent)]
     Request(#[from] reqwest::Error),
@@ -78,20 +79,21 @@ pub enum UserCheckError {
 }
 
 #[derive(Error, Debug)]
-#[error("could not check rock status on server: {0}")]
 pub enum RockCheckError {
-    #[error(transparent)]
+    #[error("parse error while checking rock status on server:\n{0}")]
     ParseError(#[from] url::ParseError),
-    #[error(transparent)]
+    #[error("HTTP request error while checking rock status on server:\n{0}")]
     Request(#[from] reqwest::Error),
 }
 
 #[derive(Error, Debug)]
 #[error(transparent)]
 pub enum UploadError {
-    #[error("error parsing upload URL: {0}")]
+    #[error("error parsing upload URL:\n{0}")]
     ParseError(#[from] url::ParseError),
+    #[error("Lua error while uploading:\n{0}")]
     Lua(#[from] mlua::Error),
+    #[error("HTPP request error while uploading:\n{0}")]
     Request(#[from] reqwest::Error),
     #[error("server {0} responded with error status: {1}")]
     Server(Url, StatusCode),
@@ -103,7 +105,13 @@ pub enum UploadError {
     #[error("unable to read rockspec: {0}")]
     RockspecRead(#[from] std::io::Error),
     #[cfg(feature = "gpgme")]
-    #[error("{0}.\nHINT: If you'd like to skip the signing step supply `--sign-protocol none` to the CLI")]
+    #[error(
+        r#"{0}.
+
+    HINT: Please ensure that a GPG agent is running and that a valid GPG signing key is registered.
+          If you'd like to skip the signing step, supply `--sign-protocol none`
+        "#
+    )]
     Signature(#[from] gpgme::Error),
     ToolCheck(#[from] ToolCheckError),
     UserCheck(#[from] UserCheckError),
@@ -126,7 +134,7 @@ pub enum UploadError {
 pub struct ApiKey(String);
 
 #[derive(Error, Debug)]
-#[error("no API key provided! Please set the $LUX_API_KEY variable")]
+#[error("no API key provided! Please set the $LUX_API_KEY environment variable")]
 pub struct ApiKeyUnspecified;
 
 impl ApiKey {
