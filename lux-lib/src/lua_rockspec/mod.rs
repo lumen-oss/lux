@@ -548,7 +548,15 @@ impl Rockspec for RemoteLuaRockspec {
 
 #[derive(Error, Debug)]
 pub enum LuaVersionError {
-    #[error("The lua version {0} is not supported by {1} version {2}!")]
+    #[error(
+        r#"
+The lua version {0} is not supported by {1} version {2}.
+
+HINT: If Lux has auto-detected an incompatible Lua installation,
+      use `--lua-version` to specify the Lua version to use.
+      Valid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.
+"#
+    )]
     LuaVersionUnsupported(LuaVersion, PackageName, PackageVersion),
     #[error(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),

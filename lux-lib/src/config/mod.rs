@@ -174,7 +174,12 @@ fn lux_lib_resource_dir() -> Option<PathBuf> {
 }
 
 #[derive(Error, Debug)]
-#[error("lua version not set! Please provide a version through `lx --lua-version <ver> <cmd>`\nValid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.")]
+#[error(
+    r#"lua version not set.
+Please provide a version through `lx --lua-version <ver> <cmd>`
+Valid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.
+"#
+)]
 pub struct LuaVersionUnset;
 
 impl LuaVersion {
