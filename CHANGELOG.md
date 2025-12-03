@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.21.0](https://github.com/lumen-oss/lux/compare/v0.20.4...v0.21.0) - 2025-12-03
+
+### Added
+- dependencies update + better error messages when failing to parse rockspec ([#1202](https://github.com/lumen-oss/lux/pull/1202))
+
+### Other
+- *(deps)* bump spdx from 0.12.0 to 0.13.0 ([#1226](https://github.com/lumen-oss/lux/pull/1226))
+- [**breaking**] disallow panic, expect and unwrap ([#1223](https://github.com/lumen-oss/lux/pull/1223))
+
+## `lux-lib` - [0.29.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.28.5...lux-lib-v0.29.0) - 2025-12-03
+
+### Added
+- [**breaking**] various error type and message improvements ([#1229](https://github.com/lumen-oss/lux/pull/1229))
+- better error message on project lua version mismatch ([#1228](https://github.com/lumen-oss/lux/pull/1228))
+- dependencies update + better error messages when failing to parse rockspec ([#1202](https://github.com/lumen-oss/lux/pull/1202))
+
+### Other
+- [**breaking**] disallow panic, expect and unwrap ([#1223](https://github.com/lumen-oss/lux/pull/1223))
+
 ## `lux-cli` - [0.20.4](https://github.com/lumen-oss/lux/compare/v0.20.3...v0.20.4) - 2025-12-01
 
 ### Other
