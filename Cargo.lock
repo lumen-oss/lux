@@ -3341,7 +3341,7 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "toml_datetime 0.7.3",
- "toml_edit 0.22.27",
+ "toml_edit 0.23.7",
  "toml_parser",
  "toml_writer",
  "tracing",
@@ -6165,6 +6165,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6485ef6d0d9b5d0ec17244ff7eb05310113c3f316f2d14200d4de56b3cb98f8d"
 dependencies = [
  "indexmap 2.12.1",
+ "serde_core",
+ "serde_spanned 1.0.3",
  "toml_datetime 0.7.3",
  "toml_parser",
  "toml_writer",

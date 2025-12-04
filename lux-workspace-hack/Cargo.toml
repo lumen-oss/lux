@@ -67,7 +67,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
 toml = { version = "0.8" }
 toml_datetime = { version = "0.7", features = ["serde"] }
-toml_edit = { version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
+toml_edit = { version = "0.23", default-features = false, features = ["display", "parse", "serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
@@ -95,7 +95,7 @@ serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 syn = { version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 toml = { version = "0.8" }
-toml_edit = { version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
+toml_edit = { version = "0.23", default-features = false, features = ["display", "parse", "serde"] }
 winnow = { version = "0.7" }
 
 ### END HAKARI SECTION
