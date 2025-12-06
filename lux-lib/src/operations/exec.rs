@@ -4,7 +4,7 @@ use tokio::process::Command;
 use crate::{
     config::{Config, LuaVersion, LuaVersionUnset},
     lua_rockspec::LuaVersionError,
-    operations::Install,
+    operations::{BuildProject, BuildProjectError, Install},
     package::{PackageReq, PackageVersionReqError},
     path::{Paths, PathsError},
     project::{Project, ProjectTreeError},
@@ -14,6 +14,7 @@ use crate::{
 use bon::Builder;
 use itertools::Itertools;
 use thiserror::Error;
+use which::which;
 
 use super::{InstallError, PackageInstallSpec};
 
@@ -78,9 +79,23 @@ pub enum ExecError {
     #[error(transparent)]
     LuaVersionError(#[from] LuaVersionError),
     #[error(transparent)]
+    BuildProject(#[from] BuildProjectError),
+    #[error(transparent)]
+    InstallCommand(#[from] InstallCommandError),
+    #[error(transparent)]
     ProjectTreeError(#[from] ProjectTreeError),
     #[error("failed to execute `{0}`:\n{1}")]
     Io(String, io::Error),
+}
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub enum InstallCommandError {
+    InstallError(#[from] InstallError),
+    PackageVersionReqError(#[from] PackageVersionReqError),
+    RemotePackageDBError(#[from] RemotePackageDBError),
+    Tree(#[from] TreeError),
+    LuaVersionUnset(#[from] LuaVersionUnset),
 }
 
 async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
@@ -89,6 +104,16 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         .map(|project| project.lua_version(run.config))
         .transpose()?
         .unwrap_or(LuaVersion::from(run.config)?.clone());
+
+    if let Some(project) = run.project {
+        BuildProject::new(project, run.config)
+            .no_lock(false)
+            .only_deps(false)
+            .build()
+            .await?;
+    } else if which(run.command).is_err() {
+        install_command(run.command, run.config).await?
+    };
 
     let user_tree = run.config.user_tree(lua_version)?;
     let mut paths = Paths::new(&user_tree)?;
@@ -136,19 +161,9 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
     }
 }
 
-#[derive(Error, Debug)]
-#[error(transparent)]
-pub enum InstallCmdError {
-    InstallError(#[from] InstallError),
-    PackageVersionReqError(#[from] PackageVersionReqError),
-    RemotePackageDBError(#[from] RemotePackageDBError),
-    Tree(#[from] TreeError),
-    LuaVersionUnset(#[from] LuaVersionUnset),
-}
-
 /// Ensure that a command is installed.
 /// This defaults to the local project tree if cwd is a project root.
-pub async fn install_command(command: &str, config: &Config) -> Result<(), InstallCmdError> {
+async fn install_command(command: &str, config: &Config) -> Result<(), InstallCommandError> {
     let install_spec = PackageInstallSpec::new(
         PackageReq::new(command.into(), None)?,
         tree::EntryType::Entrypoint,

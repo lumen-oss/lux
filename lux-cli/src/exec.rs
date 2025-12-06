@@ -4,13 +4,10 @@ use clap::Args;
 use eyre::Result;
 use lux_lib::{
     config::{Config, LuaVersion},
-    operations::{self, install_command},
+    operations,
     path::Paths,
     project::Project,
 };
-use which::which;
-
-use crate::build::Build;
 
 #[derive(Args)]
 pub struct Exec {
@@ -43,14 +40,6 @@ pub async fn exec(run: Exec, config: Config) -> Result<()> {
         // safe as long as this is single-threaded
         env::set_var("PATH", paths.path_prepended().joined());
     }
-    if which(&run.command).is_err() {
-        match project {
-            Some(_) => {
-                super::build::build(Build::default(), config.clone()).await?;
-            }
-            None => install_command(&run.command, &config).await?,
-        }
-    };
     operations::Exec::new(&run.command, project.as_ref(), &config)
         .args(run.args.unwrap_or_default())
         .disable_loader(run.no_loader)
