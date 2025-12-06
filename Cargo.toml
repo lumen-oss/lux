@@ -11,7 +11,7 @@ default-members = ["lux-cli", "lux-lib"]
 resolver = "2"
 
 [workspace.package]
-version = "0.21.0"
+version = "0.22.0"
 
 [workspace.dependencies]
 git-url-parse = "0.6"
