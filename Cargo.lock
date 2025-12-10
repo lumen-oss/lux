@@ -1697,6 +1697,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "etcetera"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "exr"
 version = "1.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6294,14 +6304,15 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-config"
-version = "0.25.10"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86c21227cd412efee2de004d2cc5f3bd0411ca751df2e515b05e8669155fa0ba"
+checksum = "feda9dcb5657ae368625f42f2471a86f4c4460d6acc23a77c031243001e350b0"
 dependencies = [
- "anyhow",
- "etcetera",
+ "etcetera 0.11.0",
+ "log",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -6354,7 +6365,7 @@ checksum = "c7070f4e817a1e3ab5103d3404c1c6537577b7a2dd43a41061b08db74116e532"
 dependencies = [
  "anyhow",
  "cc",
- "etcetera",
+ "etcetera 0.8.0",
  "fs4",
  "indoc",
  "libloading",
