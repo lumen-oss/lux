@@ -187,7 +187,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     };
 
     let pc_content = format!(
-        r#"prefix=${{pcfiledir}}/../share/lux-lua/{canonical_lua_version}
+        r#"prefix=${{pcfiledir}}/../../share/lux-lua/{canonical_lua_version}
 exec_prefix=${{prefix}}
 libdir=${{prefix}}
 luaversion={canonical_lua_version}
