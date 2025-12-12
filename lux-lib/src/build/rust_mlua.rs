@@ -53,7 +53,7 @@ impl BuildBackend for RustMluaBuildSpec {
         let config = args.config;
         let build_dir = args.build_dir;
         let progress = args.progress;
-        let lua_version = LuaVersion::from(config)?;
+        let lua_version = LuaVersion::from_current_project_or_config(config)?;
         let lua_feature = match lua_version {
             LuaVersion::Lua51 => "lua51",
             LuaVersion::Lua52 => "lua52",

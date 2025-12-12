@@ -68,7 +68,7 @@ async fn test_install(install_spec: PackageInstallSpec) {
         .unwrap();
 
     let tree = config
-        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .user_tree(LuaVersion::from_config(&config).unwrap().clone())
         .unwrap();
     let installed = Install::new(&config)
         .package(install_spec)

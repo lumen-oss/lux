@@ -20,7 +20,7 @@ pub struct Uninstall {
 
 /// Uninstall one or multiple rocks from the user tree
 pub async fn uninstall(uninstall_args: Uninstall, config: Config) -> Result<()> {
-    let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+    let tree = config.user_tree(LuaVersion::from_config(&config)?.clone())?;
 
     let package_matches = uninstall_args
         .packages
@@ -166,7 +166,7 @@ Reinstall?
 
     let mut has_dangling_rocks = true;
     while has_dangling_rocks {
-        let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+        let tree = config.user_tree(LuaVersion::from_config(&config)?.clone())?;
         let lockfile = tree.lockfile()?;
         let dangling_rocks = lockfile
             .rocks()

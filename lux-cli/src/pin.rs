@@ -82,7 +82,7 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
             }
         }
         None => {
-            let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+            let tree = config.user_tree(LuaVersion::from_config(&config)?.clone())?;
 
             for package in &data.package {
                 match tree.match_rocks_and(package, |package| pin != package.pinned())? {

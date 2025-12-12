@@ -103,7 +103,7 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         .project
         .map(|project| project.lua_version(run.config))
         .transpose()?
-        .unwrap_or(LuaVersion::from(run.config)?.clone());
+        .unwrap_or(LuaVersion::from_config(run.config)?.clone());
 
     if let Some(project) = run.project {
         BuildProject::new(project, run.config)
@@ -169,7 +169,7 @@ async fn install_command(command: &str, config: &Config) -> Result<(), InstallCo
         tree::EntryType::Entrypoint,
     )
     .build();
-    let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
+    let tree = config.user_tree(LuaVersion::from_config(config)?.clone())?;
     Install::new(config)
         .package(install_spec)
         .tree(tree)
