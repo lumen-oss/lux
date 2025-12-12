@@ -22,7 +22,7 @@ use crate::{
     remote_package_source::RemotePackageSource,
     tree::{RockLayout, Tree},
 };
-use bon::{builder, Builder};
+use bon::Builder;
 use builtin::BuiltinBuildError;
 use cmake::CMakeError;
 use command::CommandError;

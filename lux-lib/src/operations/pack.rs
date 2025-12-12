@@ -12,7 +12,7 @@ use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
 use crate::tree::RockLayout;
 use crate::tree::Tree;
-use bon::{builder, Builder};
+use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
 use std::collections::HashMap;

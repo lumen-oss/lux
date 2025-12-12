@@ -14,7 +14,7 @@ use crate::{
     rockspec::Rockspec,
     tree::{self, TreeError},
 };
-use bon::{builder, Builder};
+use bon::Builder;
 use itertools::Itertools;
 use thiserror::Error;
 
