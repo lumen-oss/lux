@@ -1,16 +1,16 @@
 [alias]
-tt = "nextest run --tests --no-fail-fast"                     # All
-tl = "nextest run --lib --no-fail-fast"                       # Lib only
-lx = "run --bin lx --"
-xtask = "run --package xtask --"
-xtask-lua51 = "run --package xtask-lua --features lua51 --"
-xtask-lua52 = "run --package xtask-lua --features lua52 --"
-xtask-lua53 = "run --package xtask-lua --features lua53 --"
-xtask-lua54 = "run --package xtask-lua --features lua54 --"
-xtask-luajit = "run --package xtask-lua --features luajit --"
-build-all = "run --package xtask -- build"
-build-all-release = "run --package xtask -- build-release"
-dist = "run --package xtask -- dist"
+tt = "--locked nextest run --tests --no-fail-fast"                     # All
+tl = "--locked nextest run --lib --no-fail-fast"                       # Lib only
+lx = "--locked run --bin lx --"
+xtask = "--locked run --package xtask --"
+xtask-lua51 = "--locked run --package xtask-lua --features lua51 --"
+xtask-lua52 = "--locked run --package xtask-lua --features lua52 --"
+xtask-lua53 = "--locked run --package xtask-lua --features lua53 --"
+xtask-lua54 = "--locked run --package xtask-lua --features lua54 --"
+xtask-luajit = "--locked run --package xtask-lua --features luajit --"
+build-all = "--locked run --package xtask -- build"
+build-all-release = "--locked run --package xtask -- build-release"
+dist = "--locked run --package xtask -- dist"
 
 # lux-lua needs this to build in module mode
 [target.aarch64-apple-darwin]
