@@ -44,13 +44,17 @@ impl BuildBackend for TreesitterParserBuildSpec {
                 Ok(v) => v.parse()?,
                 Err(_) => DEFAULT_GENERATE_ABI_VERSION,
             };
+            let out_path: Option<PathBuf> = None;
+            let grammar_path: Option<PathBuf> = None;
             tree_sitter_generate::generate_parser_in_directory(
                 &build_dir,
-                None,
-                None,
+                out_path,
+                grammar_path,
                 abi_version,
                 None,
                 None,
+                true,
+                tree_sitter_generate::OptLevel::default(),
             )?;
         }
         progress.map(|b| b.set_message("🌳 Building (tree-sitter parser)..."));
