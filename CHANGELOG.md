@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.22.2](https://github.com/lumen-oss/lux/compare/v0.22.1...v0.22.2) - 2025-12-12
+
+### Other
+- update Cargo.lock dependencies
+
+## `lux-lib` - [0.30.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.30.1...lux-lib-v0.30.2) - 2025-12-12
+
+### Fixed
+- compilation error due to unused import
+
+### Other
+- *(deps)* update tree-sitter
+
 ## `lux-cli` - [0.22.1](https://github.com/lumen-oss/lux/compare/v0.22.0...v0.22.1) - 2025-12-12
 
 ### Other
