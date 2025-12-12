@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use bon::{builder, Builder};
+use bon::Builder;
 use itertools::Itertools;
 use thiserror::Error;
 
