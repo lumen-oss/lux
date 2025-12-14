@@ -354,7 +354,10 @@ impl ManifestMetadata for LuarocksManifest {
             Some((package, package_type)) => {
                 let remote_source = match package_type {
                     RemotePackageType::Rockspec => {
-                        RemotePackageSource::LuarocksRockspec(self.server_url().clone())
+                        let rockspec_name =
+                            format!("{}-{}.rockspec", package.name(), package.version());
+                        let url = self.server_url().join(&rockspec_name).ok()?;
+                        RemotePackageSource::LuarocksRockspec(url)
                     }
                     RemotePackageType::Src => {
                         RemotePackageSource::LuarocksSrcRock(self.server_url().clone())

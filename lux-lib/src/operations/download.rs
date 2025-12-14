@@ -236,11 +236,11 @@ async fn download_remote_rock(
     let remote_package = package_db.find(package_req, None, progress).await?;
     progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {package_req}")));
     match &remote_package.source {
-        RemotePackageSource::LuarocksRockspec(url) => {
-            let package = &remote_package.package;
-            let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
+        RemotePackageSource::LuarocksRockspec(url) | RemotePackageSource::LuanoxRockspec(url) => {
+            // NOTE(vhyrro): Maybe parse the luarocks URL as we used to before this was changed
+            // and add a different case for LuanoxRockspec?
             let bytes = reqwest::Client::new()
-                .get(format!("{}/{}", &url, rockspec_name))
+                .get(url.clone())
                 .send()
                 .await
                 .map_err(DownloadRockspecError::Request)?
@@ -344,6 +344,8 @@ pub enum SearchAndDownloadError {
     LocalSource,
     #[error("cannot download from a local rock or embedded rockspec source.")]
     NonURLSource,
+    #[error(transparent)]
+    ParseError(#[from] ParseError),
 }
 
 async fn search_and_download_src_rock(
@@ -514,4 +516,53 @@ pub(crate) async fn unpack_rockspec(
     rockspec_file.read_to_string(&mut content)?;
     let rockspec = RemoteLuaRockspec::new(&content)?;
     Ok(rockspec)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::manifest::luarocks::{LuarocksManifest, LuarocksManifestMetadata};
+    use httptest::{matchers::request, responders::status_code, Expectation, Server};
+
+    #[tokio::test]
+    async fn download_remote_rockspec() {
+        let server = Server::run();
+        let rockspec_content =
+            "package = 'dummy'; version = '1.0.0-1'; source = { url = 'http://example.com' }";
+
+        server.expect(
+            Expectation::matching(request::method_path("GET", "/dummy-1.0.0-1.rockspec"))
+                .respond_with(status_code(200).body(rockspec_content)),
+        );
+
+        let manifest_content = r#"
+            repository = {
+                dummy = {
+                    ["1.0.0"] = { { arch = "rockspec" } }
+                }
+            }
+        "#;
+
+        let metadata = LuarocksManifestMetadata::new(&manifest_content.to_string()).unwrap();
+        let manifest = LuarocksManifest::new(
+            Url::parse(server.url_str("").trim_end_matches('/')).unwrap(),
+            metadata,
+        );
+        let db = RemotePackageDB::from(manifest);
+
+        let package_req: PackageReq = "dummy".parse().unwrap();
+        let progress = Progress::no_progress();
+
+        let result = download_remote_rock(&package_req, &db, &progress)
+            .await
+            .unwrap();
+
+        match result {
+            RemoteRockDownload::RockspecOnly { rockspec_download } => {
+                assert_eq!(rockspec_download.rockspec.package().to_string(), "dummy");
+                assert_eq!(rockspec_download.rockspec.version().to_string(), "1.0.0-1");
+            }
+            _ => panic!("Expected RockspecOnly"),
+        }
+    }
 }

@@ -13,9 +13,12 @@ const PLUS: &str = "+";
 /// The source of a remote package.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) enum RemotePackageSource {
+    // Remote luarocks-compatible source
     LuarocksRockspec(Url),
     LuarocksSrcRock(Url),
     LuarocksBinaryRock(Url),
+    // Remote luanox-compatible source
+    LuanoxRockspec(Url),
     RockspecContent(String),
     Local,
     #[cfg(test)]
@@ -27,7 +30,8 @@ impl IntoLua for RemotePackageSource {
         let table = lua.create_table()?;
 
         match self {
-            RemotePackageSource::LuarocksRockspec(url) => table.set("rockspec", url.to_string())?,
+            RemotePackageSource::LuarocksRockspec(url)
+            | RemotePackageSource::LuanoxRockspec(url) => table.set("rockspec", url.to_string())?,
             RemotePackageSource::LuarocksSrcRock(url) => table.set("src_rock", url.to_string())?,
             RemotePackageSource::LuarocksBinaryRock(url) => table.set("rock", url.to_string())?,
             RemotePackageSource::RockspecContent(content) => {
@@ -47,7 +51,8 @@ impl RemotePackageSource {
         match self {
             Self::LuarocksRockspec(url)
             | Self::LuarocksSrcRock(url)
-            | Self::LuarocksBinaryRock(url) => Some(url),
+            | Self::LuarocksBinaryRock(url)
+            | Self::LuanoxRockspec(url) => Some(url),
             Self::RockspecContent(_) | Self::Local => None,
             #[cfg(test)]
             Self::Test => None,
@@ -60,6 +65,9 @@ impl Display for RemotePackageSource {
         match &self {
             RemotePackageSource::LuarocksRockspec(url) => {
                 format!("luarocks_rockspec{PLUS}{url}").fmt(f)
+            }
+            RemotePackageSource::LuanoxRockspec(url) => {
+                format!("luanox_rockspec{PLUS}{url}").fmt(f)
             }
             RemotePackageSource::LuarocksSrcRock(url) => {
                 format!("luarocks_src_rock{PLUS}{url}").fmt(f)
@@ -109,6 +117,7 @@ impl TryFrom<String> for RemotePackageSource {
                     "luarocks_rockspec" => Ok(Self::LuarocksRockspec(Url::parse(str)?)),
                     "luarocks_src_rock" => Ok(Self::LuarocksSrcRock(Url::parse(str)?)),
                     "luarocks_rock" => Ok(Self::LuarocksBinaryRock(Url::parse(str)?)),
+                    "luanox_rockspec" => Ok(Self::LuanoxRockspec(Url::parse(str)?)),
                     "rockspec" => Ok(Self::RockspecContent(str.into())),
                     _ => Err(RemotePackageSourceError::UnknownRemoteSourceType(
                         remote_source_type.into(),
@@ -159,6 +168,14 @@ source = {
         let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped);
         let source = RemotePackageSource::LuarocksBinaryRock(url);
+        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        assert_eq!(source, roundtripped)
+    }
+
+    #[test]
+    fn luanox_source_roundtrip() {
+        let url = Url::parse("https://beta.luanox.org/").unwrap();
+        let source = RemotePackageSource::LuanoxRockspec(url.clone());
         let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped)
     }

@@ -700,7 +700,8 @@ impl LocalPackageLock {
                     .iter()
                     .filter(|package| match &filter {
                         Some(filter_spec) => match package.source {
-                            RemotePackageSource::LuarocksRockspec(_) => filter_spec.rockspec,
+                            RemotePackageSource::LuarocksRockspec(_)
+                            | RemotePackageSource::LuanoxRockspec(_) => filter_spec.rockspec,
                             RemotePackageSource::LuarocksSrcRock(_) => filter_spec.src,
                             RemotePackageSource::LuarocksBinaryRock(_) => filter_spec.binary,
                             RemotePackageSource::RockspecContent(_) => true,
