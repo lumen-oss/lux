@@ -8,7 +8,7 @@ use lux_lib::{
     lua::lua_runtime,
     package::{PackageName, PackageVersion},
     progress::Progress,
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
 };
 use mlua::prelude::*;
 
@@ -31,7 +31,7 @@ async fn search(
     query: String,
     config: &Config,
 ) -> mlua::Result<HashMap<PackageName, Vec<PackageVersion>>> {
-    let remote_db = RemotePackageDB::from_config(config, &Progress::no_progress())
+    let remote_db = PackageDB::from_config(config, &Progress::no_progress())
         .await
         .into_lua_err()?;
 

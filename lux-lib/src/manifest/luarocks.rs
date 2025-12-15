@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use mlua::{Lua, LuaSerdeExt};
 use reqwest::{header::ToStrError, Client};
+use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
 use std::time::SystemTime;
@@ -13,7 +14,8 @@ use url::Url;
 use zip::ZipArchive;
 
 use crate::config::LuaVersionUnset;
-use crate::manifest::ManifestMetadata;
+use crate::manifest::{DownloadedRock, ManifestDownloadError, RemotePackageDB};
+use crate::operations::DownloadedPackedRockBytes;
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
 use crate::progress::{Progress, ProgressBar};
 use crate::{
@@ -195,11 +197,11 @@ async fn mk_manifest_cache(url: &Url, config: &Config) -> io::Result<PathBuf> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct LuarocksManifestMetadata {
+pub(crate) struct LuarocksManifestData {
     pub repository: HashMap<PackageName, HashMap<PackageVersion, Vec<RemotePackageType>>>,
 }
 
-impl<'de> serde::Deserialize<'de> for LuarocksManifestMetadata {
+impl<'de> serde::Deserialize<'de> for LuarocksManifestData {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -221,7 +223,7 @@ pub enum ManifestError {
     Server(#[from] ManifestFromLuarocksServerError),
 }
 
-impl LuarocksManifestMetadata {
+impl LuarocksManifestData {
     pub fn new(manifest: &String) -> Result<Self, ManifestLuaError> {
         let lua = Lua::new();
 
@@ -309,14 +311,14 @@ impl LuarocksManifestMetadata {
 #[derive(Clone, Debug)]
 pub(crate) struct LuarocksManifest {
     server_url: Url,
-    metadata: LuarocksManifestMetadata,
+    data: LuarocksManifestData,
 }
 
 impl LuarocksManifest {
-    pub fn new(server_url: Url, metadata: LuarocksManifestMetadata) -> Self {
+    pub fn new(server_url: Url, data: LuarocksManifestData) -> Self {
         Self {
             server_url,
-            metadata,
+            data,
         }
     }
 
@@ -326,44 +328,42 @@ impl LuarocksManifest {
         progress: &Progress<ProgressBar>,
     ) -> Result<Self, ManifestError> {
         let content = manifest_from_cache_or_server(&server_url, config, progress).await?;
-        match LuarocksManifestMetadata::new(&content) {
+        match LuarocksManifestData::new(&content) {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
             Err(_) => {
                 let manifest = manifest_from_server_only(&server_url, config, progress).await?;
                 Ok(Self::new(
                     server_url,
-                    LuarocksManifestMetadata::new(&manifest)?,
+                    LuarocksManifestData::new(&manifest)?,
                 ))
             }
         }
     }
 
-    pub fn metadata(&self) -> &LuarocksManifestMetadata {
-        &self.metadata
+    pub fn data(&self) -> &LuarocksManifestData {
+        &self.data
     }
 }
 
-impl ManifestMetadata for LuarocksManifest {
+
+impl RemotePackageDB for LuarocksManifest {
     async fn find(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<RemotePackage> {
-        match self.metadata().latest_match(package_req, filter) {
+        match self.data().latest_match(package_req, filter) {
             None => None,
             Some((package, package_type)) => {
                 let remote_source = match package_type {
                     RemotePackageType::Rockspec => {
-                        let rockspec_name =
-                            format!("{}-{}.rockspec", package.name(), package.version());
-                        let url = self.server_url().join(&rockspec_name).ok()?;
-                        RemotePackageSource::LuarocksRockspec(url)
+                        RemotePackageSource::LuarocksRockspec(self)
                     }
                     RemotePackageType::Src => {
-                        RemotePackageSource::LuarocksSrcRock(self.server_url().clone())
+                        RemotePackageSource::LuarocksSrcRock(self)
                     }
                     RemotePackageType::Binary => {
-                        RemotePackageSource::LuarocksBinaryRock(self.server_url().clone())
+                        RemotePackageSource::LuarocksBinaryRock(self)
                     }
                 };
                 Some(RemotePackage::new(package, remote_source, None))
@@ -371,8 +371,114 @@ impl ManifestMetadata for LuarocksManifest {
         }
     }
 
-    fn server_url(&self) -> &Url {
+    fn url(&self) -> &Url {
         &self.server_url
+    }
+
+    fn search(&self, package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
+        self.data()
+            .repository
+            .iter()
+            .filter_map(|(name, elements)| {
+                if name.to_string().contains(&package_req.name().to_string()) {
+                    Some((
+                        name,
+                        elements
+                            .keys()
+                            .filter(|version| package_req.version_req().matches(version))
+                            .sorted_by(|a, b| Ord::cmp(b, a))
+                            .collect_vec(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    async fn download_rockspec(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<String, ManifestDownloadError> {
+        progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {}", package)));
+        let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
+        let url = self.server_url.join(&rockspec_name)?;
+        let bytes = reqwest::Client::new()
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+        Ok(String::from_utf8(bytes.to_vec())?)
+    }
+
+    async fn download_src_rock(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedPackedRockBytes, DownloadError> {
+        ArchiveDownload::new(package, server_url, "src.rock", progress)
+            .download()
+            .await
+    }
+
+    async fn download_binary_rock(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedRock, ManifestDownloadError> {
+        let platform = crate::luarocks::current_platform_luarocks_identifier();
+        progress.map(|p| {
+            p.set_message(format!(
+                "📥 Downloading {}-{}.{}.rock",
+                package.name(),
+                package.version(),
+                platform
+            ))
+        });
+
+        // Try platform-specific binary first
+        let rock_name = format!("{}-{}.{}.rock", package.name(), package.version(), platform);
+        let url = self.server_url.join(&rock_name)?;
+        let response = reqwest::Client::new().get(url.clone()).send().await?;
+
+        let (bytes, final_url) = if response.status().is_success() {
+            (response.bytes().await?, url)
+        } else {
+            // Fallback to "all" architecture
+            let rock_name = format!("{}-{}.all.rock", package.name(), package.version());
+            let url = self.server_url.join(&rock_name)?;
+            let bytes = reqwest::Client::new()
+                .get(url.clone())
+                .send()
+                .await?
+                .error_for_status()?
+                .bytes()
+                .await?;
+            (bytes, url)
+        };
+
+        Ok(DownloadedRock {
+            name: package.name().clone(),
+            version: package.version().clone(),
+            bytes,
+            url: final_url,
+        })
+    }
+
+    async fn has_update(
+        &self,
+        package: &PackageSpec,
+        constraint: &PackageReq,
+    ) -> Option<PackageVersion> {
+        let latest = self.data().latest_match(constraint, None)?;
+        if latest.0.version() > package.version() {
+            Some(latest.0.version().clone())
+        } else {
+            None
+        }
     }
 }
 
@@ -529,7 +635,7 @@ mod tests {
             repository = {}\n
             "
         .to_string();
-        LuarocksManifestMetadata::new(&manifest).unwrap();
+        LuarocksManifestData::new(&manifest).unwrap();
     }
 
     #[tokio::test]
@@ -537,7 +643,7 @@ mod tests {
         let mut test_manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         test_manifest_path.push("resources/test/manifest-5.1");
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
-        LuarocksManifestMetadata::new(&manifest).unwrap();
+        LuarocksManifestData::new(&manifest).unwrap();
     }
 
     #[tokio::test]
@@ -545,7 +651,7 @@ mod tests {
         let mut test_manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         test_manifest_path.push("resources/test/manifest-5.1");
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
-        let metadata = LuarocksManifestMetadata::new(&manifest).unwrap();
+        let metadata = LuarocksManifestData::new(&manifest).unwrap();
 
         let package_req: PackageReq = "30log > 1.3.0".parse().unwrap();
         assert!(metadata.latest_match(&package_req, None).is_none());

@@ -5,6 +5,8 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use url::Url;
 
+use crate::manifest::{luanox::LuanoxRemoteDB, luarocks::LuarocksManifest, RemotePackageDB};
+
 const PLUS: &str = "+";
 
 // NOTE: We don't want to expose the internals to the API,
@@ -14,11 +16,11 @@ const PLUS: &str = "+";
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) enum RemotePackageSource {
     // Remote luarocks-compatible source
-    LuarocksRockspec(Url),
-    LuarocksSrcRock(Url),
-    LuarocksBinaryRock(Url),
+    LuarocksRockspec(LuarocksManifest),
+    LuarocksSrcRock(LuarocksManifest),
+    LuarocksBinaryRock(LuarocksManifest),
     // Remote luanox-compatible source
-    LuanoxRockspec(Url),
+    LuanoxRockspec(LuanoxRemoteDB),
     RockspecContent(String),
     Local,
     #[cfg(test)]
@@ -30,10 +32,16 @@ impl IntoLua for RemotePackageSource {
         let table = lua.create_table()?;
 
         match self {
-            RemotePackageSource::LuarocksRockspec(url)
-            | RemotePackageSource::LuanoxRockspec(url) => table.set("rockspec", url.to_string())?,
-            RemotePackageSource::LuarocksSrcRock(url) => table.set("src_rock", url.to_string())?,
-            RemotePackageSource::LuarocksBinaryRock(url) => table.set("rock", url.to_string())?,
+            RemotePackageSource::LuarocksRockspec(manifest)
+            | RemotePackageSource::LuanoxRockspec(manifest) => {
+                table.set("rockspec", manifest.to_string())?
+            }
+            RemotePackageSource::LuarocksSrcRock(manifest) => {
+                table.set("src_rock", manifest.to_string())?
+            }
+            RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                table.set("rock", manifest.to_string())?
+            }
             RemotePackageSource::RockspecContent(content) => {
                 table.set("rockspec_content", content)?
             }
@@ -49,10 +57,10 @@ impl IntoLua for RemotePackageSource {
 impl RemotePackageSource {
     pub(crate) fn url(self) -> Option<Url> {
         match self {
-            Self::LuarocksRockspec(url)
-            | Self::LuarocksSrcRock(url)
-            | Self::LuarocksBinaryRock(url)
-            | Self::LuanoxRockspec(url) => Some(url),
+            Self::LuarocksRockspec(manifest)
+            | Self::LuarocksSrcRock(manifest)
+            | Self::LuarocksBinaryRock(manifest)
+            | Self::LuanoxRockspec(manifest) => Some(manifest.url()),
             Self::RockspecContent(_) | Self::Local => None,
             #[cfg(test)]
             Self::Test => None,
@@ -63,17 +71,17 @@ impl RemotePackageSource {
 impl Display for RemotePackageSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            RemotePackageSource::LuarocksRockspec(url) => {
-                format!("luarocks_rockspec{PLUS}{url}").fmt(f)
+            RemotePackageSource::LuarocksRockspec(manifest) => {
+                format!("luarocks_rockspec{PLUS}{manifest}").fmt(f)
             }
-            RemotePackageSource::LuanoxRockspec(url) => {
-                format!("luanox_rockspec{PLUS}{url}").fmt(f)
+            RemotePackageSource::LuanoxRockspec(manifest) => {
+                format!("luanox_rockspec{PLUS}{manifest}").fmt(f)
             }
-            RemotePackageSource::LuarocksSrcRock(url) => {
-                format!("luarocks_src_rock{PLUS}{url}").fmt(f)
+            RemotePackageSource::LuarocksSrcRock(manifest) => {
+                format!("luarocks_src_rock{PLUS}{manifest}").fmt(f)
             }
-            RemotePackageSource::LuarocksBinaryRock(url) => {
-                format!("luarocks_rock{PLUS}{url}").fmt(f)
+            RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                format!("luarocks_rock{PLUS}{manifest}").fmt(f)
             }
             RemotePackageSource::RockspecContent(content) => {
                 format!("rockspec{PLUS}{content}").fmt(f)

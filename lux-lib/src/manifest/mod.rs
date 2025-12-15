@@ -1,12 +1,40 @@
-use crate::package::{PackageReq, RemotePackage, RemotePackageTypeFilterSpec};
+use crate::package::{
+    PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
+    RemotePackageTypeFilterSpec,
+};
+use crate::progress::{Progress, ProgressBar};
+use bytes::Bytes;
 use enum_dispatch::enum_dispatch;
+use std::hash::Hash;
+use std::string::FromUtf8Error;
+use thiserror::Error;
 use url::Url;
 
 pub mod luanox;
 pub mod luarocks;
 
+#[derive(Error, Debug)]
+pub enum ManifestDownloadError {
+    #[error("failed to download: {0}")]
+    Request(#[from] reqwest::Error),
+    #[error("failed to parse URL: {0}")]
+    UrlParse(#[from] url::ParseError),
+    #[error("package not found: {0}")]
+    PackageNotFound(String),
+    #[error("invalid UTF-8 in response: {0}")]
+    Utf8(#[from] FromUtf8Error),
+}
+
+#[derive(Debug, Clone)]
+pub struct DownloadedRock {
+    pub name: PackageName,
+    pub version: PackageVersion,
+    pub bytes: Bytes,
+    pub url: Url,
+}
+
 #[enum_dispatch]
-pub(crate) trait ManifestMetadata {
+pub(crate) trait RemotePackageDB {
     /// Find a package that matches the requirement, returning the latest match
     async fn find(
         &self,
@@ -14,15 +42,46 @@ pub(crate) trait ManifestMetadata {
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<RemotePackage>;
 
-    fn server_url(&self) -> &Url;
+    fn url(&self) -> &Url;
+
+    /// Search for all packages that match the requirement
+    fn search(&self, package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)>;
+
+    /// Download a rockspec for the given package
+    async fn download_rockspec(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<String, ManifestDownloadError>;
+
+    /// Download a source rock for the given package
+    async fn download_src_rock(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedRock, ManifestDownloadError>;
+
+    /// Download a binary rock for the given package
+    async fn download_binary_rock(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedRock, ManifestDownloadError>;
+
+    /// Check if an update is available for the given package
+    async fn has_update(
+        &self,
+        package: &PackageSpec,
+        constraint: &PackageReq,
+    ) -> Option<PackageVersion>;
 }
 
-use luanox::LuanoxManifest;
+use luanox::LuanoxRemoteDB;
 use luarocks::LuarocksManifest;
 
-#[enum_dispatch(ManifestMetadata)]
+#[enum_dispatch(RemotePackageDB)]
 #[derive(Debug, Clone)]
-pub(crate) enum Manifest {
+pub(crate) enum RemotePackageDBImpl {
     LuarocksManifest,
-    LuanoxManifest,
+    LuanoxRemoteDB,
 }

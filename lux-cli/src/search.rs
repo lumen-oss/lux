@@ -9,7 +9,7 @@ use lux_lib::{
     config::Config,
     package::{PackageName, PackageReq, PackageVersion},
     progress::MultiProgress,
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
 };
 
 #[derive(Args)]
@@ -26,7 +26,7 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
     let bar = progress.map(MultiProgress::new_bar);
     let formatting = TreeFormatting::dir_tree(FormatCharacters::box_chars());
 
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = PackageDB::from_config(&config, &bar).await?;
 
     bar.map(|b| b.set_message(format!("🔎 Searching for `{}`...", data.lua_package_req)));
 

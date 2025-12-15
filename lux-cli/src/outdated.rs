@@ -7,7 +7,7 @@ use lux_lib::{
     config::{Config, LuaVersion},
     progress::MultiProgress,
     project::Project,
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
 };
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
@@ -37,7 +37,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         }
     };
 
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = PackageDB::from_config(&config, &bar).await?;
 
     bar.map(|b| b.set_message("🔎 Checking for outdated rocks...".to_string()));
 

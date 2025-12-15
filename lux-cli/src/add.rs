@@ -4,7 +4,7 @@ use lux_lib::{
     config::Config,
     progress::MultiProgress,
     project::Project,
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
     rockspec::lua_dependency::{self},
 };
 
@@ -45,7 +45,7 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
 
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);
-    let db = RemotePackageDB::from_config(&config, &bar).await?;
+    let db = PackageDB::from_config(&config, &bar).await?;
 
     let progress = MultiProgress::new_arc(&config);
 

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::remote_package_db::RemotePackageDB;
+use crate::remote_package_db::PackageDB;
 
 use super::{version::PackageVersion, PackageName, PackageReq, PackageSpec, PackageVersionReq};
 
@@ -22,7 +22,7 @@ impl PackageSpec {
     /// Returns the latest version if found.
     pub async fn has_update(
         &self,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<Option<PackageVersion>, RockNotFound> {
         let latest_version = package_db
             .latest_version(&self.name)
@@ -41,7 +41,7 @@ impl PackageSpec {
     pub async fn has_update_with(
         &self,
         constraint: &PackageReq,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<Option<PackageVersion>, RockConstraintUnsatisfied> {
         let latest_version = package_db
             .latest_match(constraint, None)
@@ -72,7 +72,7 @@ mod test {
     use url::Url;
 
     use crate::{
-        manifest::luarocks::{LuarocksManifest, LuarocksManifestMetadata},
+        manifest::luarocks::{LuarocksManifest, LuarocksManifestData},
         package::PackageSpec,
     };
 
@@ -81,7 +81,7 @@ mod test {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = LuarocksManifestMetadata::new(&content).unwrap();
+        let metadata = LuarocksManifestData::new(&content).unwrap();
         let package_db =
             LuarocksManifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
 

@@ -20,7 +20,7 @@ use crate::{
         RemotePackageTypeFilterSpec,
     },
     progress::{Progress, ProgressBar},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError, SearchError},
+    remote_package_db::{PackageDB, RemotePackageDBError, SearchError},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
 };
@@ -28,7 +28,7 @@ use crate::{
 /// Builder for a rock downloader.
 pub struct Download<'a> {
     package_req: &'a PackageReq,
-    package_db: Option<&'a RemotePackageDB>,
+    package_db: Option<&'a PackageDB>,
     config: &'a Config,
     progress: &'a Progress<ProgressBar>,
 }
@@ -50,7 +50,7 @@ impl<'a> Download<'a> {
 
     /// Sets the package database to use for searching for packages.
     /// Instantiated from the config if not set.
-    pub fn package_db(self, package_db: &'a RemotePackageDB) -> Self {
+    pub fn package_db(self, package_db: &'a PackageDB) -> Self {
         Self {
             package_db: Some(package_db),
             ..self
@@ -62,7 +62,7 @@ impl<'a> Download<'a> {
         match self.package_db {
             Some(db) => download_rockspec(self.package_req, db, self.progress).await,
             None => {
-                let db = RemotePackageDB::from_config(self.config, self.progress).await?;
+                let db = PackageDB::from_config(self.config, self.progress).await?;
                 download_rockspec(self.package_req, &db, self.progress).await
             }
         }
@@ -80,7 +80,7 @@ impl<'a> Download<'a> {
                     .await
             }
             None => {
-                let db = RemotePackageDB::from_config(self.config, self.progress).await?;
+                let db = PackageDB::from_config(self.config, self.progress).await?;
                 download_src_rock_to_file(self.package_req, destination_dir, &db, self.progress)
                     .await
             }
@@ -94,7 +94,7 @@ impl<'a> Download<'a> {
         match self.package_db {
             Some(db) => search_and_download_src_rock(self.package_req, db, self.progress).await,
             None => {
-                let db = RemotePackageDB::from_config(self.config, self.progress).await?;
+                let db = PackageDB::from_config(self.config, self.progress).await?;
                 search_and_download_src_rock(self.package_req, &db, self.progress).await
             }
         }
@@ -106,7 +106,7 @@ impl<'a> Download<'a> {
         match self.package_db {
             Some(db) => download_remote_rock(self.package_req, db, self.progress).await,
             None => {
-                let db = RemotePackageDB::from_config(self.config, self.progress).await?;
+                let db = PackageDB::from_config(self.config, self.progress).await?;
                 download_remote_rock(self.package_req, &db, self.progress).await
             }
         }
@@ -209,7 +209,7 @@ pub enum DownloadRockspecError {
 /// Find and download a rockspec for a given package requirement
 async fn download_rockspec(
     package_req: &PackageReq,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     progress: &Progress<ProgressBar>,
 ) -> Result<DownloadedRockspec, SearchAndDownloadError> {
     let rockspec = match download_remote_rock(package_req, package_db, progress).await? {
@@ -230,7 +230,7 @@ async fn download_rockspec(
 
 async fn download_remote_rock(
     package_req: &PackageReq,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     progress: &Progress<ProgressBar>,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     let remote_package = package_db.find(package_req, None, progress).await?;
@@ -296,7 +296,9 @@ async fn download_remote_rock(
             } else {
                 url.clone()
             };
-            let rock = download_src_rock(&remote_package.package, &url, progress).await?;
+            let rock = package_db
+                .download_src_rock(&remote_package.package, progress)
+                .await?;
             let rockspec = DownloadedRockspec {
                 rockspec: unpack_rockspec(&rock).await?,
                 source: remote_package.source,
@@ -350,7 +352,7 @@ pub enum SearchAndDownloadError {
 
 async fn search_and_download_src_rock(
     package_req: &PackageReq,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     progress: &Progress<ProgressBar>,
 ) -> Result<DownloadedPackedRockBytes, SearchAndDownloadError> {
     let filter = Some(RemotePackageTypeFilterSpec {
@@ -374,16 +376,6 @@ pub enum DownloadSrcRockError {
     Parse(#[from] ParseError),
 }
 
-pub(crate) async fn download_src_rock(
-    package: &PackageSpec,
-    server_url: &Url,
-    progress: &Progress<ProgressBar>,
-) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
-    ArchiveDownload::new(package, server_url, "src.rock", progress)
-        .download()
-        .await
-}
-
 pub(crate) async fn download_binary_rock(
     package: &PackageSpec,
     server_url: &Url,
@@ -399,7 +391,7 @@ pub(crate) async fn download_binary_rock(
 async fn download_src_rock_to_file(
     package_req: &PackageReq,
     destination_dir: Option<PathBuf>,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     progress: &Progress<ProgressBar>,
 ) -> Result<DownloadedPackedRock, SearchAndDownloadError> {
     progress.map(|p| p.set_message(format!("📥 Downloading {package_req}")));
@@ -521,7 +513,7 @@ pub(crate) async fn unpack_rockspec(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manifest::luarocks::{LuarocksManifest, LuarocksManifestMetadata};
+    use crate::manifest::luarocks::{LuarocksManifest, LuarocksManifestData};
     use httptest::{matchers::request, responders::status_code, Expectation, Server};
 
     #[tokio::test]
@@ -543,12 +535,12 @@ mod tests {
             }
         "#;
 
-        let metadata = LuarocksManifestMetadata::new(&manifest_content.to_string()).unwrap();
+        let metadata = LuarocksManifestData::new(&manifest_content.to_string()).unwrap();
         let manifest = LuarocksManifest::new(
             Url::parse(server.url_str("").trim_end_matches('/')).unwrap(),
             metadata,
         );
-        let db = RemotePackageDB::from(manifest);
+        let db = PackageDB::from(manifest);
 
         let package_req: PackageReq = "dummy".parse().unwrap();
         let progress = Progress::no_progress();
