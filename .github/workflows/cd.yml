@@ -115,7 +115,7 @@ jobs:
           LUX_SIGN_PRIVATE_KEY_PASS: ${{ secrets.LUX_SIGN_PRIVATE_KEY_PASS }}
 
       - name: Upload .deb package
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
         with:
           path: target/dist/*.deb
@@ -123,7 +123,7 @@ jobs:
           name: lux-${{ matrix.target }}.deb
 
       - name: Upload AppImage
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
         with:
           path: target/dist/*.AppImage
@@ -131,7 +131,7 @@ jobs:
           name: lux-${{ matrix.target }}.AppImage
 
       - name: Upload PKGBUILD
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
         with:
           path: target/dist/PKGBUILD
@@ -139,7 +139,7 @@ jobs:
           name: lux-${{ matrix.target }}.PKGBUILD
 
       - name: Upload tar archive
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'ubuntu') && github.event_name != 'release'
         with:
           path: target/dist/*.tar.gz
@@ -147,7 +147,7 @@ jobs:
           name: lux-${{ matrix.target }}.tar.gz
 
       - name: Upload dmg archive
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'macos') && github.event_name != 'release'
         with:
           path: target/dist/*.dmg
@@ -155,7 +155,7 @@ jobs:
           name: lux-${{ matrix.target }}.dmg
 
       - name: Upload exe installer
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'windows') && github.event_name != 'release'
         with:
           path: target/dist/*-setup.exe
@@ -163,7 +163,7 @@ jobs:
           name: lux-${{ matrix.target }}-setup.exe
 
       - name: Upload msi installer
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: startsWith(matrix.os, 'windows') && github.event_name != 'release'
         with:
           path: target/dist/*.msi
