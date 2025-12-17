@@ -309,6 +309,7 @@ mod test {
     /// - Install the package from our packed rock.
     /// - Verify that the contents of the install directories when installing from both packed rocks
     ///   are the same.
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     #[tokio::test]
     async fn install_binary_rock_roundtrip() {
         if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
