@@ -14,7 +14,7 @@ use crate::{
     git::GitSource,
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec, RockSourceSpec},
-    luarocks,
+    manifest::{ManifestDownloadError, RemotePackageDB},
     package::{
         PackageName, PackageReq, PackageSpec, PackageSpecFromPackageReqError, PackageVersion,
         RemotePackageTypeFilterSpec,
@@ -235,12 +235,17 @@ async fn download_remote_rock(
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     let remote_package = package_db.find(package_req, None, progress).await?;
     progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {package_req}")));
-    match &remote_package.source {
-        RemotePackageSource::LuarocksRockspec(url) | RemotePackageSource::LuanoxRockspec(url) => {
+    match remote_package.source().clone() {
+        RemotePackageSource::LuarocksRockspec(manifest) => {
+            // NOTE(vhyrro): Maybe parse the luarocks URL as we used to before this was changed
+            // and add a different case for LuanoxRockspec?
+            Ok(manifest.download_rockspec(remote_package, progress).await?)
+        }
+        RemotePackageSource::LuanoxRockspec(remote) => {
             // NOTE(vhyrro): Maybe parse the luarocks URL as we used to before this was changed
             // and add a different case for LuanoxRockspec?
             let bytes = reqwest::Client::new()
-                .get(url.clone())
+                .get(remote.url().clone())
                 .send()
                 .await
                 .map_err(DownloadRockspecError::Request)?
@@ -261,7 +266,7 @@ async fn download_remote_rock(
         }
         RemotePackageSource::RockspecContent(content) => {
             let rockspec = DownloadedRockspec {
-                rockspec: RemoteLuaRockspec::new(content)?,
+                rockspec: RemoteLuaRockspec::new(&content)?,
                 source: remote_package.source,
                 source_url: remote_package.source_url,
             };
@@ -269,15 +274,10 @@ async fn download_remote_rock(
                 rockspec_download: rockspec,
             })
         }
-        RemotePackageSource::LuarocksBinaryRock(url) => {
-            // prioritise lockfile source_url
-            let url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote_package.source_url
-            {
-                url
-            } else {
-                url
-            };
-            let rock = download_binary_rock(&remote_package.package, url, progress).await?;
+        RemotePackageSource::LuarocksBinaryRock(manifest) => {
+            let rock = manifest
+                .download_binary_rock(remote_package.clone(), progress)
+                .await?;
             let rockspec = DownloadedRockspec {
                 rockspec: unpack_rockspec(&rock).await?,
                 source: remote_package.source,
@@ -288,16 +288,16 @@ async fn download_remote_rock(
                 packed_rock: rock.bytes,
             })
         }
-        RemotePackageSource::LuarocksSrcRock(url) => {
-            // prioritise lockfile source_url
+        RemotePackageSource::LuarocksSrcRock(manifest) => {
             let url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote_package.source_url
             {
-                url.clone()
+                url
             } else {
-                url.clone()
-            };
-            let rock = package_db
-                .download_src_rock(&remote_package.package, progress)
+                manifest.url()
+            }
+            .clone();
+            let rock = manifest
+                .download_src_rock(remote_package.clone(), progress)
                 .await?;
             let rockspec = DownloadedRockspec {
                 rockspec: unpack_rockspec(&rock).await?,
@@ -348,6 +348,10 @@ pub enum SearchAndDownloadError {
     NonURLSource,
     #[error(transparent)]
     ParseError(#[from] ParseError),
+    #[error(transparent)]
+    ManifestDownloadError(#[from] ManifestDownloadError),
+    #[error("package DB does not contain the right package type.")]
+    InvalidPackageSource,
 }
 
 async fn search_and_download_src_rock(
@@ -361,11 +365,12 @@ async fn search_and_download_src_rock(
         src: true,
     });
     let remote_package = package_db.find(package_req, filter, progress).await?;
-    let source_url = remote_package
-        .source
-        .url()
-        .ok_or(SearchAndDownloadError::NonURLSource)?;
-    Ok(download_src_rock(&remote_package.package, &source_url, progress).await?)
+    match remote_package.source().clone() {
+        RemotePackageSource::LuarocksSrcRock(manifest) => {
+            Ok(manifest.download_src_rock(remote_package, progress).await?)
+        }
+        _ => Err(SearchAndDownloadError::InvalidPackageSource),
+    }
 }
 
 #[derive(Error, Debug)]
@@ -374,18 +379,6 @@ pub enum DownloadSrcRockError {
     Request(#[from] reqwest::Error),
     #[error("failed to parse source rock URL: {0}")]
     Parse(#[from] ParseError),
-}
-
-pub(crate) async fn download_binary_rock(
-    package: &PackageSpec,
-    server_url: &Url,
-    progress: &Progress<ProgressBar>,
-) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
-    let ext = format!("{}.rock", luarocks::current_platform_luarocks_identifier());
-    ArchiveDownload::new(package, server_url, &ext, progress)
-        .fallback_ext("all.rock")
-        .download()
-        .await
 }
 
 async fn download_src_rock_to_file(
@@ -415,7 +408,7 @@ async fn download_src_rock_to_file(
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-struct ArchiveDownload<'a> {
+pub(crate) struct ArchiveDownload<'a> {
     #[builder(start_fn)]
     package: &'a PackageSpec,
 
@@ -433,9 +426,9 @@ struct ArchiveDownload<'a> {
 
 impl<State> ArchiveDownloadBuilder<'_, State>
 where
-    State: archive_download_builder::State,
+    State: archive_download_builder::State + archive_download_builder::IsComplete,
 {
-    async fn download(self) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
+    pub(crate) async fn download(self) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
         let args = self._build();
         let progress = args.progress;
         let package = args.package;

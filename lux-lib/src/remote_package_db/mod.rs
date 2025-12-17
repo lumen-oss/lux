@@ -4,9 +4,9 @@ use crate::{
     config::{Config, ConfigError},
     lockfile::{LocalPackageLock, LockfileIntegrityError},
     manifest::{
-        luarocks::{LuarocksManifest, ManifestError},
-        DownloadedRock, ManifestDownloadError, RemotePackageDB, RemotePackageDBImpl,
+        luarocks::{LuarocksManifest, ManifestError}, ManifestDownloadError, RemotePackageDB, RemotePackageDBImpl,
     },
+    operations::{DownloadedPackedRockBytes, RemoteRockDownload},
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
         RemotePackageTypeFilterSpec,
@@ -85,8 +85,13 @@ impl PackageDB {
         match &self.0 {
             Impl::RemotePackageDBs(remotes) => {
                 let search = stream::iter(remotes).filter_map(async |remote| {
-                    progress
-                        .map(|p| p.set_message(format!("🔎 Searching {}", &remote.server_url())));
+                    progress.map(|p| {
+                        let url = match remote {
+                            RemotePackageDBImpl::LuarocksManifest(m) => m.url(),
+                            RemotePackageDBImpl::LuanoxRemoteDB(m) => m.url(),
+                        };
+                        p.set_message(format!("🔎 Searching {}", url))
+                    });
                     remote.find(package_req, filter.clone()).await
                 });
 
@@ -166,18 +171,42 @@ impl PackageDB {
         &self,
         package: &PackageSpec,
         progress: &Progress<ProgressBar>,
-    ) -> Result<String, ManifestDownloadError> {
+    ) -> Result<RemoteRockDownload, ManifestDownloadError> {
         match &self.0 {
             Impl::RemotePackageDBs(manifests) => {
                 for manifest in manifests {
                     let package_req = PackageReq::from(package.clone());
-                    if manifest.find(&package_req, None).await.is_some() {
-                        return manifest.download_rockspec(package, progress).await;
+                    if let Some(remote_package) = manifest.find(&package_req, None).await {
+                        return manifest.download_rockspec(remote_package, progress).await;
                     }
                 }
                 Err(ManifestDownloadError::PackageNotFound(format!(
                     "Package {} not found in any manifest",
                     package
+                )))
+            }
+            Impl::Lock(_) => Err(ManifestDownloadError::PackageNotFound(
+                "Cannot download from lockfile".to_string(),
+            )),
+        }
+    }
+
+    pub async fn download_src_rock(
+        &self,
+        package_req: &PackageReq,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError> {
+        match &self.0 {
+            Impl::RemotePackageDBs(manifests) => {
+                for manifest in manifests {
+                    // TODO(vhyrro): readd filtering
+                    if let Some(remote_package) = manifest.find(package_req, None).await {
+                        return manifest.download_src_rock(remote_package, progress).await;
+                    }
+                }
+                Err(ManifestDownloadError::PackageNotFound(format!(
+                    "Package {} not found in any manifest",
+                    package_req
                 )))
             }
             Impl::Lock(_) => Err(ManifestDownloadError::PackageNotFound(
@@ -209,9 +238,9 @@ impl UserData for PackageDB {
 
 impl From<LuarocksManifest> for PackageDB {
     fn from(manifest: LuarocksManifest) -> Self {
-        Self(Impl::RemotePackageDBs(vec![RemotePackageDBImpl::LuarocksManifest(
-            manifest,
-        )]))
+        Self(Impl::RemotePackageDBs(vec![
+            RemotePackageDBImpl::LuarocksManifest(manifest),
+        ]))
     }
 }
 

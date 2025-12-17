@@ -1,7 +1,6 @@
 use itertools::Itertools;
 use mlua::{Lua, LuaSerdeExt};
 use reqwest::{header::ToStrError, Client};
-use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
 use std::time::SystemTime;
@@ -14,8 +13,13 @@ use url::Url;
 use zip::ZipArchive;
 
 use crate::config::LuaVersionUnset;
-use crate::manifest::{DownloadedRock, ManifestDownloadError, RemotePackageDB};
-use crate::operations::DownloadedPackedRockBytes;
+use crate::lockfile::RemotePackageSourceUrl;
+use crate::lua_rockspec::RemoteLuaRockspec;
+use crate::luarocks;
+use crate::manifest::{ManifestDownloadError, RemotePackageDB};
+use crate::operations::{
+    ArchiveDownload, DownloadedPackedRockBytes, DownloadedRockspec, RemoteRockDownload,
+};
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
 use crate::progress::{Progress, ProgressBar};
 use crate::{
@@ -316,10 +320,7 @@ pub(crate) struct LuarocksManifest {
 
 impl LuarocksManifest {
     pub fn new(server_url: Url, data: LuarocksManifestData) -> Self {
-        Self {
-            server_url,
-            data,
-        }
+        Self { server_url, data }
     }
 
     pub async fn from_config(
@@ -332,10 +333,7 @@ impl LuarocksManifest {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
             Err(_) => {
                 let manifest = manifest_from_server_only(&server_url, config, progress).await?;
-                Ok(Self::new(
-                    server_url,
-                    LuarocksManifestData::new(&manifest)?,
-                ))
+                Ok(Self::new(server_url, LuarocksManifestData::new(&manifest)?))
             }
         }
     }
@@ -344,7 +342,6 @@ impl LuarocksManifest {
         &self.data
     }
 }
-
 
 impl RemotePackageDB for LuarocksManifest {
     async fn find(
@@ -357,13 +354,11 @@ impl RemotePackageDB for LuarocksManifest {
             Some((package, package_type)) => {
                 let remote_source = match package_type {
                     RemotePackageType::Rockspec => {
-                        RemotePackageSource::LuarocksRockspec(self)
+                        RemotePackageSource::LuarocksRockspec(self.clone())
                     }
-                    RemotePackageType::Src => {
-                        RemotePackageSource::LuarocksSrcRock(self)
-                    }
+                    RemotePackageType::Src => RemotePackageSource::LuarocksSrcRock(self.clone()),
                     RemotePackageType::Binary => {
-                        RemotePackageSource::LuarocksBinaryRock(self)
+                        RemotePackageSource::LuarocksBinaryRock(self.clone())
                     }
                 };
                 Some(RemotePackage::new(package, remote_source, None))
@@ -398,11 +393,12 @@ impl RemotePackageDB for LuarocksManifest {
 
     async fn download_rockspec(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<String, ManifestDownloadError> {
-        progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {}", package)));
-        let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
+    ) -> Result<RemoteRockDownload, ManifestDownloadError> {
+        let spec = package.spec();
+        progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {}", spec)));
+        let rockspec_name = format!("{}-{}.rockspec", spec.name(), spec.version());
         let url = self.server_url.join(&rockspec_name)?;
         let bytes = reqwest::Client::new()
             .get(url)
@@ -411,61 +407,55 @@ impl RemotePackageDB for LuarocksManifest {
             .error_for_status()?
             .bytes()
             .await?;
-        Ok(String::from_utf8(bytes.to_vec())?)
+        let content = String::from_utf8(bytes.to_vec())?;
+        let rockspec = DownloadedRockspec {
+            rockspec: RemoteLuaRockspec::new(&content)?,
+            source: package.source,
+            source_url: package.source_url,
+        };
+        Ok(RemoteRockDownload::RockspecOnly {
+            rockspec_download: rockspec,
+        })
     }
 
     async fn download_src_rock(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<DownloadedPackedRockBytes, DownloadError> {
-        ArchiveDownload::new(package, server_url, "src.rock", progress)
-            .download()
-            .await
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError> {
+        // TODO(vhyrro): these checks shouldn't be this manual - we should have a better way of
+        // enforcing that this URL is used forcefully whenever possible.
+        // prioritise lockfile source URL
+        let url = if let Some(RemotePackageSourceUrl::Url { url }) = &package.source_url {
+            url
+        } else {
+            self.url()
+        };
+        Ok(
+            ArchiveDownload::new(package.spec(), url, "src.rock", progress)
+                .download()
+                .await?,
+        )
     }
 
     async fn download_binary_rock(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<DownloadedRock, ManifestDownloadError> {
-        let platform = crate::luarocks::current_platform_luarocks_identifier();
-        progress.map(|p| {
-            p.set_message(format!(
-                "📥 Downloading {}-{}.{}.rock",
-                package.name(),
-                package.version(),
-                platform
-            ))
-        });
-
-        // Try platform-specific binary first
-        let rock_name = format!("{}-{}.{}.rock", package.name(), package.version(), platform);
-        let url = self.server_url.join(&rock_name)?;
-        let response = reqwest::Client::new().get(url.clone()).send().await?;
-
-        let (bytes, final_url) = if response.status().is_success() {
-            (response.bytes().await?, url)
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError> {
+        // TODO(vhyrro): these checks shouldn't be this manual - we should have a better way of
+        // enforcing that this URL is used forcefully whenever possible.
+        // prioritise lockfile source URL
+        let url = if let Some(RemotePackageSourceUrl::Url { url }) = &package.source_url {
+            url
         } else {
-            // Fallback to "all" architecture
-            let rock_name = format!("{}-{}.all.rock", package.name(), package.version());
-            let url = self.server_url.join(&rock_name)?;
-            let bytes = reqwest::Client::new()
-                .get(url.clone())
-                .send()
-                .await?
-                .error_for_status()?
-                .bytes()
-                .await?;
-            (bytes, url)
+            self.url()
         };
-
-        Ok(DownloadedRock {
-            name: package.name().clone(),
-            version: package.version().clone(),
-            bytes,
-            url: final_url,
-        })
+        let ext = format!("{}.rock", luarocks::current_platform_luarocks_identifier());
+        Ok(ArchiveDownload::new(package.spec(), url, &ext, progress)
+            .fallback_ext("all.rock")
+            .download()
+            .await?)
     }
 
     async fn has_update(

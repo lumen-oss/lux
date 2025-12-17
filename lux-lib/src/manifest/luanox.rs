@@ -3,7 +3,8 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{
-    manifest::{DownloadedRock, ManifestDownloadError, RemotePackageDB},
+    manifest::{ManifestDownloadError, RemotePackageDB},
+    operations::{DownloadedPackedRockBytes, RemoteRockDownload},
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionParseError,
         RemotePackage, RemotePackageTypeFilterSpec,
@@ -39,6 +40,12 @@ pub enum LuanoxManifestError {
     PackageVersionParseError(#[from] PackageVersionParseError),
 }
 
+impl LuanoxRemoteDB {
+    pub fn new(url: Url) -> Self {
+        Self(url)
+    }
+}
+
 impl RemotePackageDB for LuanoxRemoteDB {
     fn url(&self) -> &Url {
         &self.0
@@ -63,22 +70,11 @@ impl RemotePackageDB for LuanoxRemoteDB {
             .into_iter()
             .filter_map(|release| release.version.parse::<PackageVersion>().ok())
             .sorted_by(|a, b| b.cmp(a))
-            .find(|version| package_req.version_req().matches(version))
-            .and_then(|release| {
-                Some(RemotePackage {
-                    source: RemotePackageSource::LuarocksRockspec(
-                        Url::parse(&format!(
-                            "{}/download/{}/{}",
-                            self.0,
-                            package_req.name(),
-                            release
-                        ))
-                        .ok()?,
-                    ),
+            .find(|version| package_req.version_req().matches(version)).map(|release| RemotePackage {
+                    source: RemotePackageSource::LuanoxRockspec(self.clone()),
                     package: PackageSpec::new(package_req.name().clone(), release),
                     source_url: None,
                 })
-            })
     }
 
     fn search(&self, _package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
@@ -88,38 +84,40 @@ impl RemotePackageDB for LuanoxRemoteDB {
 
     async fn download_rockspec(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<String, ManifestDownloadError> {
-        progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {}", package)));
+    ) -> Result<RemoteRockDownload, ManifestDownloadError> {
+        let spec = package.spec();
+        progress.map(|p| p.set_message(format!("📥 Downloading rockspec for {}", spec)));
         let url = Url::parse(&format!(
             "{}/download/{}/{}",
             self.0,
-            package.name(),
-            package.version()
+            spec.name(),
+            spec.version()
         ))?;
-        let bytes = reqwest::Client::new()
+        let _bytes = reqwest::Client::new()
             .get(url)
             .send()
             .await?
             .error_for_status()?
             .bytes()
             .await?;
-        Ok(String::from_utf8(bytes.to_vec())?)
+        // Ok(String::from_utf8(bytes.to_vec())?)
+        todo!()
     }
 
     async fn download_src_rock(
         &self,
-        package: &PackageSpec,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<DownloadedRock, ManifestDownloadError> {
-        progress.map(|p| {
-            p.set_message(format!(
-                "📥 Downloading {}-{}.src.rock",
-                package.name(),
-                package.version()
-            ))
-        });
+        _package: RemotePackage,
+        _progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError> {
+        // progress.map(|p| {
+        //     p.set_message(format!(
+        //         "📥 Downloading {}-{}.src.rock",
+        //         package.name(),
+        //         package.version()
+        //     ))
+        // });
         // Luanox typically serves rockspecs, not src rocks
         // For now, we'll return an error suggesting this isn't supported
         Err(ManifestDownloadError::PackageNotFound(
@@ -129,16 +127,16 @@ impl RemotePackageDB for LuanoxRemoteDB {
 
     async fn download_binary_rock(
         &self,
-        package: &PackageSpec,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<DownloadedRock, ManifestDownloadError> {
-        progress.map(|p| {
-            p.set_message(format!(
-                "📥 Downloading {}-{} binary rock",
-                package.name(),
-                package.version()
-            ))
-        });
+        _package: RemotePackage,
+        _progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError> {
+        // progress.map(|p| {
+        //     p.set_message(format!(
+        //         "📥 Downloading {}-{} binary rock",
+        //         package.name(),
+        //         package.version()
+        //     ))
+        // });
         // Luanox typically serves rockspecs, not binary rocks
         // For now, we'll return an error suggesting this isn't supported
         Err(ManifestDownloadError::PackageNotFound(
@@ -148,24 +146,9 @@ impl RemotePackageDB for LuanoxRemoteDB {
 
     async fn has_update(
         &self,
-        package: &PackageSpec,
-        constraint: &PackageReq,
+        _package: &PackageSpec,
+        _constraint: &PackageReq,
     ) -> Option<PackageVersion> {
-        let package_response: LuanoxPackageResponse =
-            reqwest::get(self.0.join(&format!("api/{}", package.name())).ok()?)
-                .await
-                .ok()?
-                .json()
-                .await
-                .ok()?;
-
-        package_response
-            .data
-            .releases
-            .into_iter()
-            .filter_map(|release| release.version.parse::<PackageVersion>().ok())
-            .filter(|version| constraint.version_req().matches(version))
-            .filter(|version| version > package.version())
-            .max()
+        todo!()
     }
 }

@@ -1,3 +1,5 @@
+use crate::lua_rockspec::LuaRockspecError;
+use crate::operations::{DownloadSrcRockError, DownloadedPackedRockBytes, RemoteRockDownload};
 use crate::package::{
     PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
     RemotePackageTypeFilterSpec,
@@ -5,7 +7,6 @@ use crate::package::{
 use crate::progress::{Progress, ProgressBar};
 use bytes::Bytes;
 use enum_dispatch::enum_dispatch;
-use std::hash::Hash;
 use std::string::FromUtf8Error;
 use thiserror::Error;
 use url::Url;
@@ -23,6 +24,10 @@ pub enum ManifestDownloadError {
     PackageNotFound(String),
     #[error("invalid UTF-8 in response: {0}")]
     Utf8(#[from] FromUtf8Error),
+    #[error(transparent)]
+    LuaRockspec(#[from] LuaRockspecError),
+    #[error(transparent)]
+    DownloadSrcRock(#[from] DownloadSrcRockError),
 }
 
 #[derive(Debug, Clone)]
@@ -50,23 +55,23 @@ pub(crate) trait RemotePackageDB {
     /// Download a rockspec for the given package
     async fn download_rockspec(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<String, ManifestDownloadError>;
+    ) -> Result<RemoteRockDownload, ManifestDownloadError>;
 
     /// Download a source rock for the given package
     async fn download_src_rock(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<DownloadedRock, ManifestDownloadError>;
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError>;
 
     /// Download a binary rock for the given package
     async fn download_binary_rock(
         &self,
-        package: &PackageSpec,
+        package: RemotePackage,
         progress: &Progress<ProgressBar>,
-    ) -> Result<DownloadedRock, ManifestDownloadError>;
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError>;
 
     /// Check if an update is available for the given package
     async fn has_update(
