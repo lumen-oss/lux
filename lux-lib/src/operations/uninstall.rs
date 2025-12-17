@@ -66,7 +66,7 @@ where
         };
         let tree = args.tree.unwrap_or(
             args.config
-                .user_tree(LuaVersion::from(args.config)?.clone())?,
+                .user_tree(LuaVersion::from_config(args.config)?.clone())?,
         );
         remove(args.packages, tree, args.config, &Arc::clone(&progress)).await
     }

@@ -493,7 +493,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
     }
 
     fn lua_version_matches(&self, config: &Config) -> Result<LuaVersion, LuaVersionError> {
-        let version = LuaVersion::from(config)?.clone();
+        let version = LuaVersion::from_config(config)?.clone();
         if self.supports_lua_version(&version) {
             Ok(version)
         } else {

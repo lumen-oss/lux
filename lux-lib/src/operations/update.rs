@@ -242,7 +242,7 @@ async fn update_install_tree(
 ) -> Result<Vec<LocalPackage>, UpdateError> {
     let tree = args
         .config
-        .user_tree(LuaVersion::from(args.config)?.clone())?;
+        .user_tree(LuaVersion::from_current_project_or_config(args.config)?.clone())?;
     let lockfile = tree.lockfile()?;
     let packages = updatable_packages(&lockfile)
         .into_iter()

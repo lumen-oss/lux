@@ -207,9 +207,8 @@ async fn do_sync(
 
     let packages_to_install = to_add
         .iter()
-        .cloned()
         .map(|(entry_type, pkg)| {
-            PackageInstallSpec::new(pkg.clone().into_package_req(), entry_type)
+            PackageInstallSpec::new(pkg.clone().into_package_req(), *entry_type)
                 .build_behaviour(BuildBehaviour::Force)
                 .pin(pkg.pinned())
                 .opt(pkg.opt())
@@ -242,12 +241,7 @@ async fn do_sync(
         }
     }
 
-    let packages_to_remove = report
-        .removed
-        .iter()
-        .cloned()
-        .map(|pkg| pkg.id())
-        .collect_vec();
+    let packages_to_remove = report.removed.iter().map(|pkg| pkg.id()).collect_vec();
 
     Uninstall::new()
         .config(args.config)
