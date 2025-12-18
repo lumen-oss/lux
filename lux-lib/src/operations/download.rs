@@ -135,7 +135,7 @@ pub struct DownloadedRockspec {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum RemoteRockDownload {
+pub enum RemoteRockDownload {
     RockspecOnly {
         rockspec_download: DownloadedRockspec,
     },

@@ -1,8 +1,7 @@
 use crate::lua_rockspec::LuaRockspecError;
 use crate::operations::{DownloadSrcRockError, DownloadedPackedRockBytes, RemoteRockDownload};
 use crate::package::{
-    PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
-    RemotePackageTypeFilterSpec,
+    PackageName, PackageReq, PackageVersion, RemotePackage, RemotePackageTypeFilterSpec,
 };
 use crate::progress::{Progress, ProgressBar};
 use bytes::Bytes;
@@ -72,13 +71,6 @@ pub(crate) trait RemotePackageDB {
         package: RemotePackage,
         progress: &Progress<ProgressBar>,
     ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError>;
-
-    /// Check if an update is available for the given package
-    async fn has_update(
-        &self,
-        package: &PackageSpec,
-        constraint: &PackageReq,
-    ) -> Option<PackageVersion>;
 }
 
 use luanox::LuanoxRemoteDB;

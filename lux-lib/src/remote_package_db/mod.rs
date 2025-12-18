@@ -4,7 +4,8 @@ use crate::{
     config::{Config, ConfigError},
     lockfile::{LocalPackageLock, LockfileIntegrityError},
     manifest::{
-        luarocks::{LuarocksManifest, ManifestError}, ManifestDownloadError, RemotePackageDB, RemotePackageDBImpl,
+        luarocks::{LuarocksManifest, ManifestError},
+        ManifestDownloadError, RemotePackageDB, RemotePackageDBImpl,
     },
     operations::{DownloadedPackedRockBytes, RemoteRockDownload},
     package::{

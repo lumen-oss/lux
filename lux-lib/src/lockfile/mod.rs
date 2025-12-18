@@ -14,12 +14,16 @@ use ssri::Integrity;
 use thiserror::Error;
 use url::Url;
 
+use crate::config::Config;
 use crate::config::tree::RockLayoutConfig;
+use crate::manifest::luanox::LuanoxRemoteDB;
+use crate::manifest::luarocks::{LuarocksManifest, ManifestError};
 use crate::package::{
     PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq,
     PackageVersionReqError, RemotePackageTypeFilterSpec,
 };
-use crate::remote_package_source::RemotePackageSource;
+use crate::progress::{Progress, ProgressBar};
+use crate::remote_package_source::{IntermediateRemotePackageSource, RemotePackageSource};
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
 
@@ -312,7 +316,7 @@ impl LocalPackageSpec {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase", tag = "type")]
-pub(crate) enum RemotePackageSourceUrl {
+pub enum RemotePackageSourceUrl {
     Git {
         url: String,
         #[serde(rename = "ref")]
@@ -395,29 +399,48 @@ struct LocalPackageIntermediate {
     dependencies: Vec<LocalPackageId>,
     constraint: Option<String>,
     binaries: RockBinaries,
-    source: RemotePackageSource,
+    source: IntermediateRemotePackageSource,
     source_url: Option<RemotePackageSourceUrl>,
     hashes: LocalPackageHashes,
 }
 
-impl TryFrom<LocalPackageIntermediate> for LocalPackage {
-    type Error = LockConstraintParseError;
-
-    fn try_from(value: LocalPackageIntermediate) -> Result<Self, Self::Error> {
-        let constraint = LockConstraint::try_from(&value.constraint)?;
+impl LocalPackage {
+    pub async fn from_intermediate(intermediate: LocalPackageIntermediate, config: &Config, progress: &Progress<ProgressBar>) -> Result<Self, LockConstraintParseError> {
+        let constraint = LockConstraint::try_from(&intermediate.constraint)?;
         Ok(Self {
             spec: LocalPackageSpec::new(
-                &value.name,
-                &value.version,
+                &intermediate.name,
+                &intermediate.version,
                 constraint,
-                value.dependencies,
-                &value.pinned,
-                &value.opt,
-                value.binaries,
+                intermediate.dependencies,
+                &intermediate.pinned,
+                &intermediate.opt,
+                intermediate.binaries,
             ),
-            source: value.source,
-            source_url: value.source_url,
-            hashes: value.hashes,
+            source: match intermediate.source {
+                IntermediateRemotePackageSource::LuarocksRockspec(url) => {
+                    let source = LuarocksManifest::from_config(url, config, progress).await?;
+                    RemotePackageSource::LuarocksRockspec(source)
+                }
+                IntermediateRemotePackageSource::LuarocksSrcRock(url) => {
+                    let source = LuarocksManifest::from_config(url, config, progress).await?;
+                    RemotePackageSource::LuarocksSrcRock(source)
+                },
+                IntermediateRemotePackageSource::LuarocksBinaryRock(url) => {
+                    let source = LuarocksManifest::from_config(url, config, progress).await?;
+                    RemotePackageSource::LuarocksBinaryRock(source)
+                },
+                IntermediateRemotePackageSource::LuanoxRockspec(url) => {
+                    RemotePackageSource::LuanoxRockspec(LuanoxRemoteDB::new(url))
+                },
+                IntermediateRemotePackageSource::RockspecContent(content) => {
+                    RemotePackageSource::RockspecContent(content)
+                },
+                IntermediateRemotePackageSource::Local => RemotePackageSource::Local,
+                // TODO: Add cfg(test) case
+            },
+            source_url: intermediate.source_url,
+            hashes: intermediate.hashes,
         })
     }
 }
@@ -432,20 +455,10 @@ impl From<&LocalPackage> for LocalPackageIntermediate {
             dependencies: value.spec.dependencies.clone(),
             constraint: value.spec.constraint.clone(),
             binaries: value.spec.binaries.clone(),
-            source: value.source.clone(),
+            source: value.source.clone().into(),
             source_url: value.source_url.clone(),
             hashes: value.hashes.clone(),
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for LocalPackage {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        LocalPackage::try_from(LocalPackageIntermediate::deserialize(deserializer)?)
-            .map_err(de::Error::custom)
     }
 }
 
@@ -612,6 +625,8 @@ impl From<PackageVersionReq> for LockConstraint {
 pub enum LockConstraintParseError {
     #[error("Invalid constraint in LuaPackage: {0}")]
     LockConstraintParseError(#[from] PackageVersionReqError),
+    #[error(transparent)]
+    Manifest(#[from] ManifestError),
 }
 
 impl TryFrom<&Option<String>> for LockConstraint {

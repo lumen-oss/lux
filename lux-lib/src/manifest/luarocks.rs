@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use mlua::{Lua, LuaSerdeExt};
 use reqwest::{header::ToStrError, Client};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
 use std::time::SystemTime;
@@ -343,6 +344,12 @@ impl LuarocksManifest {
     }
 }
 
+impl Display for LuarocksManifest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.url().fmt(f)
+    }
+}
+
 impl RemotePackageDB for LuarocksManifest {
     async fn find(
         &self,
@@ -456,19 +463,6 @@ impl RemotePackageDB for LuarocksManifest {
             .fallback_ext("all.rock")
             .download()
             .await?)
-    }
-
-    async fn has_update(
-        &self,
-        package: &PackageSpec,
-        constraint: &PackageReq,
-    ) -> Option<PackageVersion> {
-        let latest = self.data().latest_match(constraint, None)?;
-        if latest.0.version() > package.version() {
-            Some(latest.0.version().clone())
-        } else {
-            None
-        }
     }
 }
 

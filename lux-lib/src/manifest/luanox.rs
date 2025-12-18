@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use itertools::Itertools;
 use thiserror::Error;
 use url::Url;
@@ -70,11 +72,12 @@ impl RemotePackageDB for LuanoxRemoteDB {
             .into_iter()
             .filter_map(|release| release.version.parse::<PackageVersion>().ok())
             .sorted_by(|a, b| b.cmp(a))
-            .find(|version| package_req.version_req().matches(version)).map(|release| RemotePackage {
-                    source: RemotePackageSource::LuanoxRockspec(self.clone()),
-                    package: PackageSpec::new(package_req.name().clone(), release),
-                    source_url: None,
-                })
+            .find(|version| package_req.version_req().matches(version))
+            .map(|release| RemotePackage {
+                source: RemotePackageSource::LuanoxRockspec(self.clone()),
+                package: PackageSpec::new(package_req.name().clone(), release),
+                source_url: None,
+            })
     }
 
     fn search(&self, _package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
@@ -143,12 +146,10 @@ impl RemotePackageDB for LuanoxRemoteDB {
             "Luanox does not support binary rock downloads directly".to_string(),
         ))
     }
+}
 
-    async fn has_update(
-        &self,
-        _package: &PackageSpec,
-        _constraint: &PackageReq,
-    ) -> Option<PackageVersion> {
-        todo!()
+impl Display for LuanoxRemoteDB {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.url().fmt(f)
     }
 }

@@ -8,15 +8,7 @@ use serde::{
 use thiserror::Error;
 use url::Url;
 
-use crate::{
-    config::Config,
-    manifest::{
-        luanox::LuanoxRemoteDB,
-        luarocks::{LuarocksManifest, ManifestError},
-        RemotePackageDB,
-    },
-    progress::{Progress, ProgressBar},
-};
+use crate::{config::Config, manifest::{RemotePackageDB, luanox::LuanoxRemoteDB, luarocks::{LuarocksManifest, ManifestError}}, progress::{Progress, ProgressBar}};
 
 const PLUS: &str = "+";
 
@@ -36,6 +28,36 @@ pub(crate) enum RemotePackageSource {
     Local,
     #[cfg(test)]
     Test,
+}
+
+impl RemotePackageSource {
+    pub async fn from_intermediate(
+        intermediate: IntermediateRemotePackageSource,
+        config: &Config,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<Self, RemotePackageSourceError> {
+        match intermediate {
+            IntermediateRemotePackageSource::LuarocksRockspec(url) => {
+                let manifest = LuarocksManifest::from_config(url, config, progress).await?;
+                Ok(Self::LuarocksRockspec(manifest))
+            }
+            IntermediateRemotePackageSource::LuarocksSrcRock(url) => {
+                let manifest = LuarocksManifest::from_config(url, config, progress).await?;
+                Ok(Self::LuarocksSrcRock(manifest))
+            }
+            IntermediateRemotePackageSource::LuarocksBinaryRock(url) => {
+                let manifest = LuarocksManifest::from_config(url, config, progress).await?;
+                Ok(Self::LuarocksBinaryRock(manifest))
+            }
+            IntermediateRemotePackageSource::LuanoxRockspec(url) => {
+                Ok(Self::LuanoxRockspec(LuanoxRemoteDB::new(url)))
+            }
+            IntermediateRemotePackageSource::RockspecContent(content) => {
+                Ok(Self::RockspecContent(content))
+            }
+            IntermediateRemotePackageSource::Local => Ok(Self::Local),
+        }
+    }
 }
 
 impl Hash for RemotePackageSource {
@@ -73,7 +95,7 @@ impl Eq for RemotePackageSource {}
 
 impl PartialOrd for RemotePackageSource {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.url().cmp(&other.url()))
+        Some(self.cmp(other))
     }
 }
 
@@ -124,29 +146,6 @@ impl RemotePackageSource {
             Self::Test => None,
         }
     }
-
-    pub(crate) async fn from_lockfile_url(
-        src: IntermediateRemotePackageSource,
-        config: &Config,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<Self, ManifestError> {
-        match src {
-            IntermediateRemotePackageSource::LuarocksRockspec(url)
-            | IntermediateRemotePackageSource::LuarocksSrcRock(url)
-            | IntermediateRemotePackageSource::LuarocksBinaryRock(url) => {
-                Ok(RemotePackageSource::LuarocksRockspec(
-                    LuarocksManifest::from_config(url, config, progress).await?,
-                ))
-            }
-            IntermediateRemotePackageSource::LuanoxRockspec(url) => Ok(
-                RemotePackageSource::LuanoxRockspec(LuanoxRemoteDB::new(url)),
-            ),
-            IntermediateRemotePackageSource::RockspecContent(_) => todo!(),
-            IntermediateRemotePackageSource::Local => todo!(),
-            #[cfg(test)]
-            IntermediateRemotePackageSource::Test => Ok(RemotePackageSource::Test),
-        }
-    }
 }
 
 impl Serialize for RemotePackageSource {
@@ -164,18 +163,6 @@ impl Serialize for RemotePackageSource {
     }
 }
 
-impl<'de> Deserialize<'de> for RemotePackageSource {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let intermediate = IntermediateRemotePackageSource::deserialize(deserializer)?;
-        Err(de::Error::custom(format!(
-            "cannot deserialize RemotePackageSource from intermediate source: {intermediate:?}"
-        )))
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum RemotePackageSourceError {
     #[error("error parsing remote source URL {0}. Missing URL.")]
@@ -186,6 +173,8 @@ pub enum RemotePackageSourceError {
     UnknownRemoteSourceType(String),
     #[error(transparent)]
     Url(#[from] url::ParseError),
+    #[error(transparent)]
+    Manifest(#[from] ManifestError),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -196,8 +185,6 @@ pub(crate) enum IntermediateRemotePackageSource {
     LuanoxRockspec(Url),
     RockspecContent(String),
     Local,
-    #[cfg(test)]
-    Test,
 }
 
 impl TryFrom<String> for IntermediateRemotePackageSource {
@@ -228,13 +215,26 @@ impl TryFrom<String> for IntermediateRemotePackageSource {
     }
 }
 
-impl<'de> Deserialize<'de> for IntermediateRemotePackageSource {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::try_from(value).map_err(de::Error::custom)
+impl From<RemotePackageSource> for IntermediateRemotePackageSource {
+    fn from(value: RemotePackageSource) -> Self {
+        match value {
+            RemotePackageSource::LuarocksRockspec(manifest) => {
+                Self::LuarocksRockspec(manifest.url().clone())
+            }
+            RemotePackageSource::LuarocksSrcRock(manifest) => {
+                Self::LuarocksSrcRock(manifest.url().clone())
+            }
+            RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                Self::LuarocksBinaryRock(manifest.url().clone())
+            }
+            RemotePackageSource::LuanoxRockspec(remote) => {
+                Self::LuanoxRockspec(remote.url().clone())
+            }
+            RemotePackageSource::RockspecContent(content) => Self::RockspecContent(content),
+            RemotePackageSource::Local => Self::Local,
+            #[cfg(test)]
+            RemotePackageSource::Test => unreachable!("TODO: FIXME"),
+        }
     }
 }
 
@@ -257,9 +257,17 @@ impl Display for IntermediateRemotePackageSource {
                 format!("rockspec{PLUS}{content}").fmt(f)
             }
             IntermediateRemotePackageSource::Local => "local".fmt(f),
-            #[cfg(test)]
-            IntermediateRemotePackageSource::Test => "test+foo_bar".fmt(f),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for IntermediateRemotePackageSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::try_from(value).map_err(de::Error::custom)
     }
 }
 
