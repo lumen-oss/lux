@@ -1,5 +1,5 @@
 package = "lux-lua"
-lua = ">=5.1"
+lua = ">=5.1,< 5.6"
 
 [description]
 summary = "The Lua API for the lux package manager"

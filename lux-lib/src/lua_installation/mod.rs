@@ -148,6 +148,7 @@ impl LuaInstallation {
             LuaVersion::Lua52 => vec!["lua5.2", "lua-5.2"],
             LuaVersion::Lua53 => vec!["lua5.3", "lua-5.3"],
             LuaVersion::Lua54 => vec!["lua5.4", "lua-5.4"],
+            LuaVersion::Lua55 => vec!["lua5.5", "lua-5.5"],
             LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => vec!["luajit"],
         };
 
@@ -579,6 +580,7 @@ mod test {
         assert!(is_lua_lib_name("liblua-5.1.a", &LuaVersion::Lua51));
         assert!(is_lua_lib_name("liblua53.a", &LuaVersion::Lua53));
         assert!(is_lua_lib_name("liblua-54.a", &LuaVersion::Lua54));
+        assert!(is_lua_lib_name("liblua-55.a", &LuaVersion::Lua55));
     }
 
     #[cfg(target_env = "msvc")]

@@ -15,6 +15,7 @@ pub enum LuaFeature {
     Lua52,
     Lua53,
     Lua54,
+    Lua55,
     Luajit,
 }
 
@@ -25,6 +26,7 @@ impl LuaFeature {
             LuaFeature::Lua52 => ("lua52", "5.2"),
             LuaFeature::Lua53 => ("lua53", "5.3"),
             LuaFeature::Lua54 => ("lua54", "5.4"),
+            LuaFeature::Lua55 => ("lua55", "5.5"),
             LuaFeature::Luajit => ("luajit", "jit"),
         }
     }
@@ -74,6 +76,8 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
                 LuaFeature::Lua53
             } else if cfg!(feature = "lua54") {
                 LuaFeature::Lua54
+            } else if cfg!(feature = "lua55") {
+                LuaFeature::Lua55
             } else if cfg!(feature = "luajit") {
                 LuaFeature::Luajit
             } else {

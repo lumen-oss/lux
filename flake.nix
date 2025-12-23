@@ -51,6 +51,7 @@
             lux-lua52
             lux-lua53
             lux-lua54
+            lux-lua55
             lux-luajit
             ;
         };
@@ -99,16 +100,22 @@
             };
         in rec {
           default = lua51;
+
           lua51 = mkDevShell [pkgs.lua5_1];
           lua52 = mkDevShell [pkgs.lua5_2];
           lua53 = mkDevShell [pkgs.lua5_3];
           lua54 = mkDevShell [pkgs.lua5_4];
+          lua55 = mkDevShell [pkgs.lua5_5];
           luajit = mkDevShell [pkgs.luajit];
-          lua51-nvim = mkDevShell (with pkgs; [lua5_1 neovim-unwrapped]);
-          lua52-nvim = mkDevShell (with pkgs; [lua5_2 neovim-unwrapped]);
-          lua53-nvim = mkDevShell (with pkgs; [lua5_3 neovim-unwrapped]);
-          lua54-nvim = mkDevShell (with pkgs; [lua5_4 neovim-unwrapped]);
-          luajit-nvim = mkDevShell (with pkgs; [luajit neovim-unwrapped]);
+
+          # devShells with neovim-unwrapped (for CI integration tests)
+          lua51-ci = mkDevShell (with pkgs; [lua5_1 neovim-unwrapped]);
+          lua52-ci = mkDevShell (with pkgs; [lua5_2 neovim-unwrapped]);
+          lua53-ci = mkDevShell (with pkgs; [lua5_3 neovim-unwrapped]);
+          lua54-ci = mkDevShell (with pkgs; [lua5_4 neovim-unwrapped]);
+          lua55-ci = mkDevShell (with pkgs; [lua5_5 neovim-unwrapped]);
+          luajit-ci = mkDevShell (with pkgs; [luajit neovim-unwrapped]);
+
           cd = mkBuildShell pkgs;
         };
 
