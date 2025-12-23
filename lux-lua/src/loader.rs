@@ -13,6 +13,8 @@ const fn lua_version() -> &'static str {
         "5.3"
     } else if cfg!(feature = "lua54") {
         "5.4"
+    } else if cfg!(feature = "lua55") {
+        "5.5"
     } else {
         unreachable!()
     }

@@ -30,6 +30,8 @@ const LUA53_VERSION: &str = "5.3.6";
 const LUA53_HASH: &str = "sha256-/F/Wm7hzYyPwJmcrG3I12mE9cXfnJViJOgvc0yBGbWA=";
 const LUA54_VERSION: &str = "5.4.8";
 const LUA54_HASH: &str = "sha256-TxjdrhVOeT5G7qtyfFnvHAwMK3ROe5QhlxDXb1MGKa4=";
+const LUA55_VERSION: &str = "5.5.0";
+const LUA55_HASH: &str = "sha256-V8zDK7vQBcq3W8xSREBSU1r2kXiduiuQFtXFBkDWiz0=";
 // XXX: there's no tag with lua 5.2 compatibility, so we have to use the v2.1 branch for now
 // this is unstable and might break the build.
 const LUAJIT_MM_VERSION: &str = "2.1";
@@ -78,9 +80,11 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
         let args = self._build();
         let lua_version = args.lua_version;
         match lua_version {
-            LuaVersion::Lua51 | LuaVersion::Lua52 | LuaVersion::Lua53 | LuaVersion::Lua54 => {
-                do_build_lua(args).await
-            }
+            LuaVersion::Lua51
+            | LuaVersion::Lua52
+            | LuaVersion::Lua53
+            | LuaVersion::Lua54
+            | LuaVersion::Lua55 => do_build_lua(args).await,
             LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => do_build_luajit(args).await,
         }
     }
@@ -374,6 +378,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             LuaVersion::Lua52 => (LUA52_HASH.parse().unwrap_unchecked(), LUA52_VERSION),
             LuaVersion::Lua53 => (LUA53_HASH.parse().unwrap_unchecked(), LUA53_VERSION),
             LuaVersion::Lua54 => (LUA54_HASH.parse().unwrap_unchecked(), LUA54_VERSION),
+            LuaVersion::Lua55 => (LUA55_HASH.parse().unwrap_unchecked(), LUA55_VERSION),
             LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
         }
     };
@@ -439,7 +444,7 @@ async fn do_build_lua_unix(
     let build_target = if cfg!(target_os = "linux") && matches!(&lua_version, LuaVersion::Lua54) {
         "linux"
     } else {
-        // For older lua versions, the "linux" target uses readline.
+        // For other lua versions, the "linux" target uses readline.
         "generic"
     };
 
@@ -545,6 +550,7 @@ async fn do_build_lua_msvc(
         LuaVersion::Lua52 => "lua5.2",
         LuaVersion::Lua53 => "lua5.3",
         LuaVersion::Lua54 => "lua5.4",
+        LuaVersion::Lua55 => "lua5.5",
         LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
     };
     let host = Triple::host();

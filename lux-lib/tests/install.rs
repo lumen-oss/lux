@@ -8,9 +8,11 @@ use lux_lib::{
     operations::{Exec, Install, PackageInstallSpec},
     tree::EntryType,
 };
-use serial_test::serial;
 use std::path::PathBuf;
 use walkdir::WalkDir;
+
+#[cfg(not(target_env = "msvc"))]
+use serial_test::serial;
 
 #[tokio::test]
 async fn install_git_package() {

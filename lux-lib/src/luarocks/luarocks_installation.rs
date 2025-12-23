@@ -32,16 +32,16 @@ const LUAROCKS_EXE: &str = "luarocks";
 #[cfg(target_family = "windows")]
 const LUAROCKS_EXE: &str = "luarocks.exe";
 
-pub(crate) const LUAROCKS_VERSION: &str = "3.11.1-1";
+pub(crate) const LUAROCKS_VERSION: &str = "3.13.0-1";
 
 #[cfg(target_family = "unix")]
 const LUAROCKS_ROCKSPEC: &str = "
 rockspec_format = '3.0'
 package = 'luarocks'
-version = '3.11.1-1'
+version = '3.13.0-1'
 source = {
     url = 'git+https://github.com/luarocks/luarocks',
-    tag = 'v3.11.1',
+    tag = 'v3.13.0',
 }
 build = {
     type = 'builtin',
@@ -148,12 +148,15 @@ impl LuaRocksInstallation {
     ) -> Result<(), LuaRocksInstallError> {
         use crate::{hash::HasIntegrity, operations};
         use std::io::Cursor;
-        let url = "https://luarocks.github.io/luarocks/releases/luarocks-3.11.1-windows-64.zip";
+        let file_name = "luarocks-3.13.0-windows-64";
+        let url = format!("https://luarocks.github.io/luarocks/releases/{file_name}.zip");
         let response = reqwest::get(url).await?.error_for_status()?.bytes().await?;
         let hash = response.hash()?;
-        let expected_hash: Integrity = "sha256-xx26PQPhIwXpzNAixiHIhpq6PRJNkkniFK7VwW82gqM="
-            .parse()
-            .unwrap();
+        let expected_hash: Integrity = unsafe {
+            "sha256-CJet5dRZ1VzRliqUgVN0WmdJ/rNFQDxoqqkgc4hVerk="
+                .parse()
+                .unwrap_unchecked()
+        };
         if expected_hash.matches(&hash).is_none() {
             return Err(LuaRocksInstallError::IntegrityMismatch {
                 expected: expected_hash,
@@ -167,15 +170,12 @@ impl LuaRocksInstallation {
             mime_type,
             cursor,
             false,
-            "luarocks-3.11.1-windows-64.zip".into(),
+            format!("{file_name}.zip"),
             unpack_dir.path(),
             progress,
         )
         .await?;
-        let luarocks_exe = unpack_dir
-            .path()
-            .join("luarocks-3.11.1-windows-64")
-            .join(LUAROCKS_EXE);
+        let luarocks_exe = unpack_dir.path().join(file_name).join(LUAROCKS_EXE);
         tokio::fs::copy(luarocks_exe, &self.tree.bin().join(LUAROCKS_EXE)).await?;
 
         Ok(())
@@ -216,6 +216,7 @@ impl LuaRocksInstallation {
             LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2",
             LuaVersion::Lua53 => "5.3",
             LuaVersion::Lua54 => "5.4",
+            LuaVersion::Lua55 => "5.5",
         };
         let luarocks_config_content = format!(
             r#"

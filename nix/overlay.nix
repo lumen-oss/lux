@@ -189,6 +189,10 @@ in {
     luaPkg = final.lua5_4;
     isLuaJIT = false;
   };
+  lux-lua55 = mk-lux-lua {
+    luaPkg = final.lua5_5;
+    isLuaJIT = false;
+  };
   lux-luajit = mk-lux-lua {
     luaPkg = final.luajit;
     isLuaJIT = true;

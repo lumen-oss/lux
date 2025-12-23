@@ -280,6 +280,16 @@ jobs:
           overwrite: true
           file_glob: true
 
+      - name: Upload lux-lua55.so to release
+        uses: svenstaro/upload-release-action@v2
+        if: github.event_name == 'release'
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/dist/lux-lua55-${{ matrix.target }}.*
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
       - name: Upload lux-luajit.so to release
         uses: svenstaro/upload-release-action@v2
         if: github.event_name == 'release'
