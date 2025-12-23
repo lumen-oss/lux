@@ -279,6 +279,8 @@ pub enum CompileCModulesError {
     Compilation(#[from] cc::Error),
     #[error("error compiling C modules (linking failed):\n{0}")]
     Link(#[from] LinkCModulesError),
+    #[error(transparent)]
+    VariableSubstitution(#[from] VariableSubstitutionError),
 }
 
 #[derive(Error, Debug)]
@@ -312,7 +314,7 @@ pub(crate) async fn compile_c_modules(
         target.display()
     )))?;
 
-    std::fs::create_dir_all(target_parent_dir)?;
+    tokio::fs::create_dir_all(target_parent_dir).await?;
 
     let host = Triple::host();
 
@@ -320,17 +322,33 @@ pub(crate) async fn compile_c_modules(
     let source_files = data
         .sources
         .iter()
-        .map(|dir| source_dir.join(dir))
-        .collect_vec();
+        .map(|dir| {
+            variables::substitute(
+                &[lua, external_dependencies, &Environment {}, config],
+                &dir.to_slash_lossy(),
+            )
+        })
+        .map(|dir| dir.map(|dir| source_dir.join(dir)))
+        .try_collect::<_, Vec<_>, _>()?;
     let include_dirs = data
         .incdirs
         .iter()
-        .map(|dir| source_dir.join(dir))
+        .map(|dir| {
+            variables::substitute(
+                &[lua, external_dependencies, &Environment {}, config],
+                &dir.to_slash_lossy(),
+            )
+        })
+        .map(|dir| dir.map(|dir| source_dir.join(dir)))
         .chain(
             external_dependencies
                 .iter()
-                .filter_map(|(_, dep)| dep.include_dir.clone()),
+                .filter_map(|(_, dep)| dep.include_dir.clone())
+                .map(Result::Ok),
         )
+        .try_collect::<_, Vec<_>, _>()?
+        .into_iter()
+        .unique() // Some rocks specify the include dirs via variable substitution.
         .collect_vec();
 
     let intermediate_dir = tempfile::tempdir()?;
@@ -383,26 +401,42 @@ pub(crate) async fn compile_c_modules(
     let libdir_args = data
         .libdirs
         .iter()
-        .map(|libdir| {
-            if is_msvc {
-                format!("/LIBPATH:{}", source_dir.join(libdir).display())
-            } else {
-                format!("-L{}", source_dir.join(libdir).display())
-            }
+        .map(|dir| {
+            variables::substitute(
+                &[lua, external_dependencies, &Environment {}, config],
+                &dir.to_slash_lossy(),
+            )
         })
-        .collect_vec();
+        .map(|libdir| {
+            libdir.map(|libdir| {
+                if is_msvc {
+                    format!("/LIBPATH:{}", source_dir.join(libdir).display())
+                } else {
+                    format!("-L{}", source_dir.join(libdir).display())
+                }
+            })
+        })
+        .try_collect::<_, Vec<_>, _>()?;
 
     let library_args = data
         .libraries
         .iter()
-        .map(|library| {
-            if is_msvc {
-                format!("{}.lib", library.to_slash_lossy())
-            } else {
-                format!("-l{}", library.to_slash_lossy())
-            }
+        .map(|dir| {
+            variables::substitute(
+                &[lua, external_dependencies, &Environment {}, config],
+                &dir.to_slash_lossy(),
+            )
         })
-        .collect_vec();
+        .map(|library| {
+            library.map(|library| {
+                if is_msvc {
+                    format!("{}.lib", library)
+                } else {
+                    format!("-l{}", library)
+                }
+            })
+        })
+        .try_collect::<_, Vec<_>, _>()?;
 
     link_c_artifacts(
         build,
