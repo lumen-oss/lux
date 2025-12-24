@@ -327,26 +327,6 @@ pub(crate) enum RemotePackageSourceUrl {
     },
 }
 
-impl RemotePackageSourceUrl {
-    /// If the source is a URL to an archive, this returns the archive file name.
-    pub(crate) fn archive_name(&self) -> Option<PathBuf> {
-        match self {
-            RemotePackageSourceUrl::Git { .. } => None,
-            RemotePackageSourceUrl::Url { url } => PathBuf::from(url.path())
-                .file_name()
-                .map(|name| name.into()),
-            RemotePackageSourceUrl::File { path } => {
-                if path.is_file() {
-                    // We assume source files are archives
-                    path.file_name().map(|name| name.into())
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-
 // TODO(vhyrro): Move to `package/local.rs`
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, FromLua)]
 pub struct LocalPackage {

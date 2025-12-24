@@ -50,12 +50,6 @@ pub(crate) struct RemotePackageSourceMetadata {
     pub source_url: RemotePackageSourceUrl,
 }
 
-impl RemotePackageSourceMetadata {
-    pub(crate) fn archive_name(&self) -> Option<PathBuf> {
-        self.source_url.archive_name()
-    }
-}
-
 impl<R: Rockspec, State> FetchSrcBuilder<'_, R, State>
 where
     State: fetch_src_builder::State + fetch_src_builder::IsComplete,

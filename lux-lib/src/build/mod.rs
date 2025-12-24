@@ -8,6 +8,7 @@ use crate::tree::{self, EntryType, TreeError};
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::path::PathBuf;
 use std::{io, path::Path};
 
 use crate::{
@@ -362,29 +363,31 @@ where
             let build_dir = match &rock_source.unpack_dir {
                 Some(unpack_dir) => temp_dir.path().join(unpack_dir),
                 None => {
-                    // Some older/off-spec rockspecs don't specify a source.dir.
-                    // If there exists a single directory with the archive name
-                    // after unpacking an archive, we assume it's the source directory.
+                    // Some older/off-spec rockspecs don't specify a `source.dir`.
+                    // After unpacking the archive, if there exists a single directory with
+                    //   - a 'lua' or 'src' subdirectory
+                    //   - or a subdirectory that matches one of the `copy_directory` items
+                    // we assume it's the `source.dir`.
+                    let copy_dirs = &rockspec.build().current_platform().copy_directories;
                     let dir_entries = std::fs::read_dir(temp_dir.path())?
                         .filter_map(Result::ok)
                         .filter(|f| f.path().is_dir())
-                        .collect_vec();
-                    let archive_name = rock_source
-                        .archive_name
-                        .clone()
-                        .or(source_metadata.archive_name());
-                    if dir_entries.len() == 1
-                        && archive_name.is_some_and(|archive_name| unsafe {
-                            archive_name.to_string_lossy().starts_with(
-                                &dir_entries
-                                    .first()
-                                    .unwrap_unchecked()
-                                    .file_name()
-                                    .to_string_lossy()
-                                    .to_string(),
+                        .filter(|f| {
+                            !matches!(
+                                f.file_name().to_string_lossy().to_string().as_str(),
+                                "src" | "lua"
                             )
                         })
-                    {
+                        .filter(|f| !copy_dirs.iter().any(|dir| &f.path() == dir))
+                        .collect_vec();
+                    if dir_entries.len() == 1 && {
+                        let dir_entry = unsafe { dir_entries.first().unwrap_unchecked() };
+                        copy_dirs
+                            .iter()
+                            .chain(std::iter::once(&PathBuf::from("src")))
+                            .chain(std::iter::once(&PathBuf::from("lua")))
+                            .any(|sub_dir| dir_entry.path().join(sub_dir).is_dir())
+                    } {
                         unsafe {
                             temp_dir
                                 .path()
