@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.22.3](https://github.com/lumen-oss/lux/compare/v0.22.2...v0.22.3) - 2025-12-24
+
+### Other
+- *(deps)* bump octocrab from 0.48.1 to 0.49.2 ([#1256](https://github.com/lumen-oss/lux/pull/1256))
+
+## `lux-lib` - [0.30.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.30.2...lux-lib-v0.30.3) - 2025-12-24
+
+### Added
+- improved logic for `source.dir` auto-detection ([#1262](https://github.com/lumen-oss/lux/pull/1262))
+- better error message on copy lua module failure ([#1261](https://github.com/lumen-oss/lux/pull/1261))
+
+### Other
+- *(deps)* bump zip from 6.0.0 to 7.0.0 ([#1255](https://github.com/lumen-oss/lux/pull/1255))
+- *(deps)* bump insta from 1.44.3 to 1.45.0 ([#1254](https://github.com/lumen-oss/lux/pull/1254))
+- *(deps)* bump chumsky from 0.11.2 to 0.12.0 ([#1251](https://github.com/lumen-oss/lux/pull/1251))
+
 ## `lux-cli` - [0.22.2](https://github.com/lumen-oss/lux/compare/v0.22.1...v0.22.2) - 2025-12-12
 
 ### Other
