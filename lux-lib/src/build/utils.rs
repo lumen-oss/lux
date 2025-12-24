@@ -37,10 +37,23 @@ pub(crate) fn copy_lua_to_module_path(
     let target = target_dir.join(target_module.to_lua_path());
 
     if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent).map_err(|err| {
+            io::Error::other(format!(
+                "Failed to create directory {}:\n{}",
+                parent.display(),
+                err
+            ))
+        })?;
     }
 
-    std::fs::copy(source, target)?;
+    std::fs::copy(source, &target).map_err(|err| {
+        io::Error::other(format!(
+            "Failed to copy {} to {}:\n{}",
+            source.display(),
+            target.display(),
+            err
+        ))
+    })?;
 
     Ok(())
 }
