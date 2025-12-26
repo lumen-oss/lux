@@ -35,6 +35,8 @@ pub enum LuaVersion {
     Lua53,
     #[serde(rename = "5.4")]
     Lua54,
+    #[serde(rename = "5.5")]
+    Lua55,
     #[serde(rename = "jit")]
     LuaJIT,
     #[serde(rename = "jit5.2")]
@@ -70,6 +72,7 @@ impl LuaVersion {
                 LuaVersion::Lua52 => "5.2.0".parse().unwrap_unchecked(),
                 LuaVersion::Lua53 => "5.3.0".parse().unwrap_unchecked(),
                 LuaVersion::Lua54 => "5.4.0".parse().unwrap_unchecked(),
+                LuaVersion::Lua55 => "5.5.0".parse().unwrap_unchecked(),
                 LuaVersion::LuaJIT => "5.1.0".parse().unwrap_unchecked(),
                 LuaVersion::LuaJIT52 => "5.2.0".parse().unwrap_unchecked(),
             }
@@ -81,6 +84,7 @@ impl LuaVersion {
             LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2".into(),
             LuaVersion::Lua53 => "5.3".into(),
             LuaVersion::Lua54 => "5.4".into(),
+            LuaVersion::Lua55 => "5.5".into(),
         }
     }
     pub fn as_version_req(&self) -> PackageVersionReq {
@@ -177,7 +181,7 @@ fn lux_lib_resource_dir() -> Option<PathBuf> {
 #[error(
     r#"lua version not set.
 Please provide a version through `lx --lua-version <ver> <cmd>`
-Valid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.
+Valid versions are: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit' and 'jit52'.
 "#
 )]
 pub struct LuaVersionUnset;
@@ -214,6 +218,7 @@ impl Display for LuaVersion {
             LuaVersion::Lua52 => "5.2",
             LuaVersion::Lua53 => "5.3",
             LuaVersion::Lua54 => "5.4",
+            LuaVersion::Lua55 => "5.5",
             LuaVersion::LuaJIT => "jit",
             LuaVersion::LuaJIT52 => "jit52",
         })
