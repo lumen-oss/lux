@@ -1551,7 +1551,7 @@ checksum = "3c562b8eb980c001b463c993676eefc696a3c65d2eb7afa8d6748e00a67e94c8"
 dependencies = [
  "dirs",
  "emmy_lsp_types",
- "emmylua_codestyle",
+ "emmylua_codestyle 0.5.0",
  "emmylua_diagnostic_macro",
  "emmylua_parser",
  "encoding_rs",
@@ -1580,6 +1580,17 @@ name = "emmylua_codestyle"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b314bbea2641a6012ab45f480fefa2eaac123e7d8ed2bc736d4772453cd20d2"
+dependencies = [
+ "cc",
+ "glob",
+ "libc",
+]
+
+[[package]]
+name = "emmylua_codestyle"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2fb179dd808be6e4da3dfc7dcbb058a9f3ee840e238e1bce62d317d0afdfca8"
 dependencies = [
  "cc",
  "glob",
@@ -3162,7 +3173,7 @@ dependencies = [
  "clap_complete",
  "edit",
  "emmylua_check",
- "emmylua_codestyle",
+ "emmylua_codestyle 0.6.0",
  "eyre",
  "git-url-parse",
  "git2",
