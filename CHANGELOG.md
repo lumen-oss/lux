@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.22.4](https://github.com/lumen-oss/lux/compare/v0.22.3...v0.22.4) - 2025-12-26
+
+### Other
+- *(deps)* bump emmylua_codestyle from 0.5.0 to 0.6.0 ([#1263](https://github.com/lumen-oss/lux/pull/1263))
+
 ## `lux-cli` - [0.22.3](https://github.com/lumen-oss/lux/compare/v0.22.2...v0.22.3) - 2025-12-24
 
 ### Other
