@@ -70,6 +70,7 @@
                   cargo-hakari
                   cargo-insta
                   cargo-cross
+                  cargo-modules
                   clippy
                   taplo
                   # Needed for integration test builds
@@ -111,6 +112,12 @@
           clippy = pkgs.lux-clippy;
           workspace-hack = pkgs.lux-workspace-hack;
           taplo = pkgs.lux-taplo;
+          inherit
+            (pkgs)
+            lux-lib-cycle-check
+            lux-cli-cycle-check
+            lux-lua-cycle-check
+            ;
         };
 
         formatter = let
