@@ -45,6 +45,15 @@ jobs:
     - name: Lua tests
       run: nix build ".#checks.${{matrix.job.target}}.lua-tests" --accept-flake-config --log-lines 500 --fallback
       shell: bash
+    - name: lux-lib dependency cycle check
+      run: nix build ".#checks.${{matrix.job.target}}.lux-lib-cycle-check" --accept-flake-config --log-lines 500 --fallback
+      if: ${{ matrix.job.target == 'x86_64-linux' }}
+    - name: lux-cli dependency cycle check
+      run: nix build ".#checks.${{matrix.job.target}}.lux-cli-cycle-check" --accept-flake-config --log-lines 500 --fallback
+      if: ${{ matrix.job.target == 'x86_64-linux' }}
+    - name: lux-lua dependency cycle check
+      run: nix build ".#checks.${{matrix.job.target}}.lux-lua-cycle-check" --accept-flake-config --log-lines 500 --fallback
+      if: ${{ matrix.job.target == 'x86_64-linux' }}
     - name: Build devShell
       run: nix build ".#devShells.${{matrix.job.target}}.default" --accept-flake-config --log-lines 500 --fallback
       shell: bash

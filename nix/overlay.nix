@@ -169,6 +169,25 @@
 
         meta.mainProgram = "lx";
       });
+
+  # Uses cargo-modules to prevent cyclic module dependencies
+  mk-dependency-cycle-check = crate:
+    craneLib.buildPackage (individualCrateArgs
+      // {
+        pname = "${crate}-dependency-cycle-check";
+        inherit (luxCargo) version;
+        nativeBuildInputs =
+          individualCrateArgs.nativeBuildInputs
+          ++ (with final; [
+            cargo-modules
+          ]);
+
+        buildPhase = ''
+          runHook preBuild
+          cargo modules dependencies --package ${crate} --lib --acyclic
+          runHook postBuild
+        '';
+      });
 in {
   inherit xtask;
   lux-cli = mk-lux-cli {};
@@ -290,4 +309,8 @@ in {
       cargoArtifacts = lux-deps;
       cargoClippyExtraArgs = "--all-targets -- --deny warnings";
     });
+
+  lux-lib-cycle-check = mk-dependency-cycle-check "lux-lib";
+  lux-cli-cycle-check = mk-dependency-cycle-check "lux-cli";
+  lux-lua-cycle-check = mk-dependency-cycle-check "lux-lua";
 }
