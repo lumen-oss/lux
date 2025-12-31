@@ -4,7 +4,7 @@ use itertools::Itertools;
 use lux_lib::package::{PackageName, PackageReq};
 use lux_lib::progress::{MultiProgress, ProgressBar};
 use lux_lib::project::Project;
-use lux_lib::remote_package_db::RemotePackageDB;
+use lux_lib::remote_package_db::PackageDB;
 use lux_lib::rockspec::lua_dependency;
 use lux_lib::{config::Config, operations};
 
@@ -43,7 +43,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
 
         let progress = MultiProgress::new(&config);
         let bar = progress.map(|progress| progress.new_bar());
-        let db = RemotePackageDB::from_config(&config, &bar).await?;
+        let db = PackageDB::from_config(&config, &bar).await?;
         let package_names = to_package_names(args.packages.as_ref())?;
         let mut upgrade_all = true;
         if let Some(packages) = package_names {

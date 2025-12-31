@@ -4,7 +4,7 @@ use crate::operations::SearchAndDownloadError;
 use crate::package::SpecRevIterator;
 use crate::progress::{Progress, ProgressBar};
 use crate::project::project_toml::RemoteProjectTomlValidationError;
-use crate::remote_package_db::RemotePackageDB;
+use crate::remote_package_db::PackageDB;
 use crate::rockspec::Rockspec;
 use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
@@ -36,7 +36,7 @@ pub struct ProjectUpload<'a> {
     sign_protocol: SignatureProtocol,
     config: &'a Config,
     progress: &'a Progress<ProgressBar>,
-    package_db: &'a RemotePackageDB,
+    package_db: &'a PackageDB,
 }
 
 impl<State> ProjectUploadBuilder<'_, State>
@@ -367,7 +367,7 @@ mod helpers {
         api_key: &ApiKey,
         config: &Config,
         progress: &Progress<ProgressBar>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<(RemoteProjectToml, String), UploadError> {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;

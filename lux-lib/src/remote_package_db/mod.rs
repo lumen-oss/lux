@@ -3,23 +3,28 @@ use std::collections::HashMap;
 use crate::{
     config::{Config, ConfigError},
     lockfile::{LocalPackageLock, LockfileIntegrityError},
-    manifest::{Manifest, ManifestError},
+    manifest::{
+        luarocks::{LuarocksManifest, ManifestError},
+        ManifestDownloadError, RemotePackageDB, RemotePackageDBImpl,
+    },
+    operations::{DownloadedPackedRockBytes, RemoteRockDownload},
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
         RemotePackageTypeFilterSpec,
     },
     progress::{Progress, ProgressBar},
 };
+use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use mlua::{FromLua, UserData};
 use thiserror::Error;
 
-#[derive(Clone, FromLua, Debug)]
-pub struct RemotePackageDB(Impl);
+#[derive(Clone, FromLua)]
+pub struct PackageDB(Impl);
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum Impl {
-    LuarocksManifests(Vec<Manifest>),
+    RemotePackageDBs(Vec<RemotePackageDBImpl>),
     Lock(LocalPackageLock),
 }
 
@@ -47,39 +52,57 @@ pub enum RemotePackageDbIntegrityError {
     Lockfile(#[from] LockfileIntegrityError),
 }
 
-impl RemotePackageDB {
+impl PackageDB {
     pub async fn from_config(
         config: &Config,
         progress: &Progress<ProgressBar>,
     ) -> Result<Self, RemotePackageDBError> {
-        let mut manifests = Vec::new();
+        // NOTE: We assume that all custom servers provided via `extra_servers` are Luarocks
+        // servers. We do not assume that any other server is Luanox-compatible.
+        // If we ever support other server types, we will need to add a way to specify
+        // the server type in the config.
+        let mut remotes = Vec::new();
         for server in config.enabled_dev_servers()? {
-            let manifest = Manifest::from_config(server, config, progress).await?;
-            manifests.push(manifest);
+            let remote = LuarocksManifest::from_config(server, config, progress).await?;
+            remotes.push(RemotePackageDBImpl::from(remote));
         }
         for server in config.extra_servers() {
-            let manifest = Manifest::from_config(server.clone(), config, progress).await?;
-            manifests.push(manifest);
+            let remote = LuarocksManifest::from_config(server.clone(), config, progress).await?;
+            remotes.push(RemotePackageDBImpl::from(remote));
         }
-        manifests.push(Manifest::from_config(config.server().clone(), config, progress).await?);
-        Ok(Self(Impl::LuarocksManifests(manifests)))
+        remotes.push(RemotePackageDBImpl::from(
+            LuarocksManifest::from_config(config.server().clone(), config, progress).await?,
+        ));
+        Ok(Self(Impl::RemotePackageDBs(remotes)))
     }
 
     /// Find a remote package that matches the requirement, returning the latest match.
-    pub(crate) fn find(
+    pub(crate) async fn find(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
         progress: &Progress<ProgressBar>,
     ) -> Result<RemotePackage, SearchError> {
         match &self.0 {
-            Impl::LuarocksManifests(manifests) => match manifests.iter().find_map(|manifest| {
-                progress.map(|p| p.set_message(format!("🔎 Searching {}", &manifest.server_url())));
-                manifest.find(package_req, filter.clone())
-            }) {
-                Some(package) => Ok(package),
-                None => Err(SearchError::RockNotFound(package_req.clone())),
-            },
+            Impl::RemotePackageDBs(remotes) => {
+                let search = stream::iter(remotes).filter_map(async |remote| {
+                    progress.map(|p| {
+                        let url = match remote {
+                            RemotePackageDBImpl::LuarocksManifest(m) => m.url(),
+                            RemotePackageDBImpl::LuanoxRemoteDB(m) => m.url(),
+                        };
+                        p.set_message(format!("🔎 Searching {}", url))
+                    });
+                    remote.find(package_req, filter.clone()).await
+                });
+
+                tokio::pin!(search);
+
+                match search.next().await {
+                    Some(package) => Ok(package),
+                    None => Err(SearchError::RockNotFound(package_req.clone())),
+                }
+            }
             Impl::Lock(lockfile) => {
                 match lockfile.has_rock(package_req, filter).map(|local_package| {
                     RemotePackage::new(
@@ -98,29 +121,11 @@ impl RemotePackageDB {
     /// Search for all packages that match the requirement.
     pub fn search(&self, package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
         match &self.0 {
-            Impl::LuarocksManifests(manifests) => manifests
+            Impl::RemotePackageDBs(manifests) => manifests
                 .iter()
-                .flat_map(|manifest| {
-                    manifest
-                        .metadata()
-                        .repository
-                        .iter()
-                        .filter_map(|(name, elements)| {
-                            if name.to_string().contains(&package_req.name().to_string()) {
-                                Some((
-                                    name,
-                                    elements
-                                        .keys()
-                                        .filter(|version| {
-                                            package_req.version_req().matches(version)
-                                        })
-                                        .sorted_by(|a, b| Ord::cmp(b, a))
-                                        .collect_vec(),
-                                ))
-                            } else {
-                                None
-                            }
-                        })
+                .flat_map(|manifest| match manifest {
+                    RemotePackageDBImpl::LuarocksManifest(m) => m.search(package_req),
+                    RemotePackageDBImpl::LuanoxRemoteDB(m) => m.search(package_req),
                 })
                 .collect(),
             Impl::Lock(lockfile) => lockfile
@@ -141,25 +146,78 @@ impl RemotePackageDB {
     }
 
     /// Find the latest version for a package by name.
-    pub(crate) fn latest_version(&self, rock_name: &PackageName) -> Option<PackageVersion> {
+    pub(crate) async fn latest_version(&self, rock_name: &PackageName) -> Option<PackageVersion> {
         self.latest_match(&rock_name.clone().into(), None)
+            .await
             .map(|result| result.version().clone())
     }
 
     /// Find the latest package that matches the requirement.
-    pub fn latest_match(
+    pub async fn latest_match(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<PackageSpec> {
-        match self.find(package_req, filter, &Progress::no_progress()) {
+        match self
+            .find(package_req, filter, &Progress::no_progress())
+            .await
+        {
             Ok(result) => Some(result.package),
             Err(_) => None,
         }
     }
+
+    /// Download a rockspec from the first manifest that has the package
+    pub async fn download_rockspec(
+        &self,
+        package: &PackageSpec,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<RemoteRockDownload, ManifestDownloadError> {
+        match &self.0 {
+            Impl::RemotePackageDBs(manifests) => {
+                for manifest in manifests {
+                    let package_req = PackageReq::from(package.clone());
+                    if let Some(remote_package) = manifest.find(&package_req, None).await {
+                        return manifest.download_rockspec(remote_package, progress).await;
+                    }
+                }
+                Err(ManifestDownloadError::PackageNotFound(format!(
+                    "Package {} not found in any manifest",
+                    package
+                )))
+            }
+            Impl::Lock(_) => Err(ManifestDownloadError::PackageNotFound(
+                "Cannot download from lockfile".to_string(),
+            )),
+        }
+    }
+
+    pub async fn download_src_rock(
+        &self,
+        package_req: &PackageReq,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<DownloadedPackedRockBytes, ManifestDownloadError> {
+        match &self.0 {
+            Impl::RemotePackageDBs(manifests) => {
+                for manifest in manifests {
+                    // TODO(vhyrro): readd filtering
+                    if let Some(remote_package) = manifest.find(package_req, None).await {
+                        return manifest.download_src_rock(remote_package, progress).await;
+                    }
+                }
+                Err(ManifestDownloadError::PackageNotFound(format!(
+                    "Package {} not found in any manifest",
+                    package_req
+                )))
+            }
+            Impl::Lock(_) => Err(ManifestDownloadError::PackageNotFound(
+                "Cannot download from lockfile".to_string(),
+            )),
+        }
+    }
 }
 
-impl UserData for RemotePackageDB {
+impl UserData for PackageDB {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("search", |_, this, package_req: PackageReq| {
             Ok(this
@@ -173,19 +231,21 @@ impl UserData for RemotePackageDB {
                 })
                 .collect::<HashMap<_, _>>())
         });
-        methods.add_method("latest_match", |_, this, package_req| {
-            Ok(this.latest_match(&package_req, None))
+        methods.add_async_method("latest_match", |_, this, package_req| async move {
+            Ok(this.latest_match(&package_req, None).await)
         });
     }
 }
 
-impl From<Manifest> for RemotePackageDB {
-    fn from(manifest: Manifest) -> Self {
-        Self(Impl::LuarocksManifests(vec![manifest]))
+impl From<LuarocksManifest> for PackageDB {
+    fn from(manifest: LuarocksManifest) -> Self {
+        Self(Impl::RemotePackageDBs(vec![
+            RemotePackageDBImpl::LuarocksManifest(manifest),
+        ]))
     }
 }
 
-impl From<LocalPackageLock> for RemotePackageDB {
+impl From<LocalPackageLock> for PackageDB {
     fn from(lock: LocalPackageLock) -> Self {
         Self(Impl::Lock(lock))
     }
