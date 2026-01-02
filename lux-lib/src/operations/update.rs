@@ -28,7 +28,7 @@ pub enum UpdateError {
     Install(#[from] InstallError),
     #[error("failed to remove old rock: {0}")]
     Remove(#[from] RemoveError),
-    #[error("error initialising remote package DB: {0}")]
+    #[error("error initialising remote package DB:\n{0}")]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("error loading project: {0}")]
     Project(#[from] ProjectError),

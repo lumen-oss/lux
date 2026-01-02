@@ -75,7 +75,7 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push("--features");
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
-        progress.map(|bar| bar.set_message("🦀 Building (rust-mlua)..."));
+        progress.map(|bar| bar.set_message("🛠️ Building (🦀 rust-mlua)..."));
         match Command::new("cargo")
             .current_dir(build_dir)
             .args(build_args)

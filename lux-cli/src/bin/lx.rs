@@ -9,7 +9,7 @@ use lux_cli::{
     install_rockspec, lint, list, outdated, pack, path, pin, project, purge, remove, run, run_lua,
     search, shell, test, uninstall, unpack, update,
     upload::{self},
-    which, Cli, Commands,
+    vendor, which, Cli, Commands,
 };
 use lux_lib::{
     config::{tree::RockLayoutConfig, ConfigBuilder, LuaVersion},
@@ -100,6 +100,7 @@ async fn main() -> Result<()> {
         Commands::Doc(doc_args) => doc::doc(doc_args, config).await?,
         Commands::Pack(pack_args) => pack::pack(pack_args, config).await?,
         Commands::Uninstall(uninstall_data) => uninstall::uninstall(uninstall_data, config).await?,
+        Commands::Vendor(vendor_args) => vendor::vendor(vendor_args, config).await?,
         Commands::Which(which_args) => which::which(which_args, config)?,
         Commands::Run(run_args) => run::run(run_args, config).await?,
         Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data)?,
