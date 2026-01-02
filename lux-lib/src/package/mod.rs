@@ -214,7 +214,7 @@ impl FromStr for PackageSpec {
 }
 
 /// A lua package requirement with a name and an optional version requirement.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct PackageReq {
     /// The name of the package.

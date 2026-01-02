@@ -17,6 +17,7 @@ mod test;
 mod uninstall;
 mod unpack;
 mod update;
+mod vendor;
 
 pub use build_lua::*;
 pub use build_project::*;
@@ -34,3 +35,4 @@ pub use test::*;
 pub use uninstall::*;
 pub use unpack::*;
 pub use update::*;
+pub use vendor::*;
