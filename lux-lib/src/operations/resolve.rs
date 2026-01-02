@@ -62,8 +62,8 @@ where
     packages: Vec<PackageInstallSpec>,
     package_db: Arc<RemotePackageDB>,
     parent_packages: Option<Arc<Vec<PackageName>>>,
-    lockfile: Arc<Lockfile<P>>,
-    build_lockfile: Arc<Lockfile<P>>,
+    lockfile: Option<Arc<Lockfile<P>>>,
+    build_lockfile: Option<Arc<Lockfile<P>>>,
     config: &'a Config,
     progress: Arc<Progress<MultiProgress>>,
 }
@@ -101,7 +101,7 @@ where
     futures::stream::iter(
         packages
             .into_iter()
-            // Exclude packages that are already installed
+            // If there is a lockfile, exclude packages that are already installed
             .filter(
                 |PackageInstallSpec {
                      package,
@@ -109,7 +109,9 @@ where
                      ..
                  }| {
                     *build_behaviour == BuildBehaviour::Force
-                        || lockfile.has_rock(package, None).is_none()
+                        || lockfile
+                            .as_ref()
+                            .is_none_or(|lockfile| lockfile.has_rock(package, None).is_none())
                 },
             )
             .map(
@@ -130,8 +132,14 @@ where
                     let package_db = Arc::clone(&package_db);
                     let progress = Arc::clone(&progress);
                     let build_dep_progress = Arc::clone(&progress);
-                    let lockfile = Arc::clone(&lockfile);
-                    let build_lockfile = Arc::clone(&build_lockfile);
+                    let lockfile = match &lockfile {
+                        Some(lockfile) => Some(Arc::clone(lockfile)),
+                        None => None,
+                    };
+                    let build_lockfile = match &build_lockfile {
+                        Some(lockfile) => Some(Arc::clone(lockfile)),
+                        None => None,
+                    };
 
                     tokio::spawn(async move {
                         let bar = progress.map(|p| p.new_bar());
@@ -205,8 +213,8 @@ where
                                         .collect_vec(),
                                 ))
                                 .package_db(package_db.clone())
-                                .lockfile(build_lockfile.clone())
-                                .build_lockfile(build_lockfile.clone())
+                                .maybe_lockfile(build_lockfile.clone())
+                                .maybe_build_lockfile(build_lockfile.clone())
                                 .config(&config)
                                 .progress(build_dep_progress)
                                 .get_all_dependencies()
@@ -221,11 +229,13 @@ where
                                 // If we're forcing a rebuild, retain the `EntryType`
                                 // of existing dependencies
                                 let entry_type = if build_behaviour == BuildBehaviour::Force
-                                    && lockfile.has_rock(dep.package_req(), None).is_some_and(
-                                        |installed_rock| {
+                                    && lockfile.as_ref().is_some_and(|lockfile| {
+                                        let installed_rock =
+                                            lockfile.has_rock(dep.package_req(), None);
+                                        installed_rock.is_some_and(|installed_rock| {
                                             lockfile.is_entrypoint(&installed_rock.id())
-                                        },
-                                    ) {
+                                        })
+                                    }) {
                                     tree::EntryType::Entrypoint
                                 } else {
                                     tree::EntryType::DependencyOnly
@@ -252,8 +262,8 @@ where
                                     .collect_vec(),
                             ))
                             .package_db(package_db)
-                            .lockfile(lockfile)
-                            .build_lockfile(build_lockfile)
+                            .maybe_lockfile(lockfile)
+                            .maybe_build_lockfile(build_lockfile)
                             .config(&config)
                             .progress(progress)
                             .get_all_dependencies()

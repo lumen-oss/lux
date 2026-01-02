@@ -147,9 +147,9 @@ pub enum BuildError {
         expected: Integrity,
         actual: Integrity,
     },
-    #[error("failed to unpack src.rock: {0}")]
+    #[error("failed to unpack src.rock:\n{0}")]
     UnpackSrcRock(UnpackError),
-    #[error("failed to fetch rock source: {0}")]
+    #[error("failed to fetch rock source:\n{0}")]
     FetchSrcError(#[from] FetchSrcError),
     #[error("failed to install binary {0}: {1}")]
     InstallBinary(String, InstallBinaryError),
@@ -292,7 +292,7 @@ where
 
     build.progress.map(|p| {
         p.set_message(format!(
-            "Building {}@{}...",
+            "🛠️ Building {}@{}...",
             rockspec.package(),
             rockspec.version()
         ))

@@ -32,6 +32,7 @@ use uninstall::Uninstall;
 use update::Update;
 use upload::Upload;
 use url::Url;
+use vendor::Vendor;
 use which::Which;
 
 pub mod add;
@@ -69,6 +70,7 @@ pub mod unpack;
 pub mod update;
 pub mod upload;
 pub mod utils;
+pub mod vendor;
 pub mod which;
 
 /// A luxurious package manager for Lua.
@@ -305,6 +307,8 @@ pub enum Commands {
     /// If the `version` is not set in the lux.toml, lux will search the current
     /// commit for SemVer tags and if found, will use it to generate the package version.
     Upload(Upload),
+    /// Vendor the dependencies of a project or RockSpec locally.
+    Vendor(Vendor),
     /// Tell which file corresponds to a given module name.
     Which(Which),
     /// Spawns an interactive shell with PATH, LUA_PATH, LUA_CPATH and LUA_INIT set.

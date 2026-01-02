@@ -115,14 +115,14 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             }
         }
         Some(PackageOrRockspec::RockSpec(rockspec_path)) => {
-            let content = std::fs::read_to_string(&rockspec_path)?;
+            let content = tokio::fs::read_to_string(&rockspec_path).await?;
             let rockspec = match rockspec_path
                 .extension()
                 .map(|ext| ext.to_string_lossy().to_string())
                 .unwrap_or("".into())
                 .as_str()
             {
-                ".rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
+                "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
                 _ => Err(eyre!(
                     "expected a path to a .rockspec or a package requirement."
                 )),
