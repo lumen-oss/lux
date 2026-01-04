@@ -247,6 +247,8 @@ pub struct Config {
 
     cache_dir: PathBuf,
     data_dir: PathBuf,
+    vendor_dir: Option<PathBuf>,
+
     generate_luarc: bool,
 }
 
@@ -371,6 +373,10 @@ impl Config {
         &self.data_dir
     }
 
+    pub fn vendor_dir(&self) -> Option<&PathBuf> {
+        self.vendor_dir.as_ref()
+    }
+
     pub fn generate_luarc(&self) -> bool {
         self.generate_luarc
     }
@@ -417,6 +423,7 @@ pub struct ConfigBuilder {
     lua_dir: Option<PathBuf>,
     cache_dir: Option<PathBuf>,
     data_dir: Option<PathBuf>,
+    vendor_dir: Option<PathBuf>,
     enable_development_packages: Option<bool>,
     verbose: Option<bool>,
     no_progress: Option<bool>,
@@ -557,6 +564,13 @@ impl ConfigBuilder {
         }
     }
 
+    pub fn vendor_dir(self, vendor_dir: Option<PathBuf>) -> Self {
+        Self {
+            vendor_dir: vendor_dir.or(self.vendor_dir),
+            ..self
+        }
+    }
+
     pub fn entrypoint_layout(self, rock_layout: RockLayoutConfig) -> Self {
         Self {
             entrypoint_layout: rock_layout,
@@ -605,6 +619,7 @@ impl ConfigBuilder {
             entrypoint_layout: self.entrypoint_layout,
             cache_dir,
             data_dir,
+            vendor_dir: self.vendor_dir,
             generate_luarc: self.generate_luarc.unwrap_or(true),
         })
     }
@@ -633,6 +648,7 @@ impl From<Config> for ConfigBuilder {
             variables: Some(value.variables),
             cache_dir: Some(value.cache_dir),
             data_dir: Some(value.data_dir),
+            vendor_dir: value.vendor_dir,
             external_deps: value.external_deps,
             entrypoint_layout: value.entrypoint_layout,
             generate_luarc: Some(value.generate_luarc),

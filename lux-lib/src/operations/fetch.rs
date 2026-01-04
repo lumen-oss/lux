@@ -65,6 +65,14 @@ where
     pub(crate) async fn fetch_internal(self) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
         let fetch = self._build();
         match do_fetch_src(&fetch).await {
+            Err(err)
+                if fetch
+                    .source_url
+                    .is_some_and(|url| matches!(url, RemotePackageSourceUrl::File { .. })) =>
+            {
+                // Don't fall back to downloading .src.rock archives if a local source was specified.
+                Err(err)
+            }
             Err(err) => match &fetch.rockspec.source().current_platform().source_spec {
                 RockSourceSpec::Git(_) | RockSourceSpec::Url(_) => {
                     let package = PackageSpec::new(
@@ -163,8 +171,9 @@ async fn do_fetch_src<R: Rockspec>(
     let rock_source = rockspec.source().current_platform();
     let progress = fetch.progress;
     let dest_dir = fetch.dest_dir;
+    let config = fetch.config;
     // prioritise lockfile source, if present
-    let source_spec = match &fetch.source_url {
+    let mut source_spec = match &fetch.source_url {
         Some(source_url) => match source_url {
             RemotePackageSourceUrl::Git { url, checkout_ref } => RockSourceSpec::Git(GitSource {
                 url: url.parse()?,
@@ -175,6 +184,18 @@ async fn do_fetch_src<R: Rockspec>(
         },
         None => rock_source.source_spec.clone(),
     };
+    if let Some(vendor_dir) = config.vendor_dir() {
+        source_spec = match source_spec {
+            // could be a project directory (not vendored) or a local source
+            // or a vendored dependency that we have already resolved
+            RockSourceSpec::File(_) => source_spec,
+            _ => {
+                let pkg_vendor_dir =
+                    vendor_dir.join(format!("{}@{}", rockspec.package(), rockspec.version()));
+                RockSourceSpec::File(pkg_vendor_dir)
+            }
+        }
+    }
     let metadata = match &source_spec {
         RockSourceSpec::Git(git) => {
             let url = git.url.to_string();

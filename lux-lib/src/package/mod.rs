@@ -33,7 +33,7 @@ pub enum PackageSpecFromPackageReqError {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct PackageSpec {
     name: PackageName,
@@ -188,7 +188,7 @@ impl Default for RemotePackageTypeFilterSpec {
 pub enum ParseRemotePackageError {
     #[error("unable to parse package {0}. expected format: `name@version`")]
     InvalidInput(String),
-    #[error("unable to parse package {package_str}: {error}")]
+    #[error("unable to parse package {package_str}:\n{error}")]
     InvalidPackageVersion {
         #[source]
         error: PackageVersionParseError,
@@ -579,5 +579,42 @@ mod tests {
                 RemotePackageType::Binary,
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn package_spec_req_roundtrips() {
+        let spec = PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap());
+        let req: PackageReq = spec.clone().into();
+        assert_eq!(spec, req.try_into().unwrap());
+
+        let spec = PackageSpec::new("foo".into(), "1.0.0".parse().unwrap());
+        let req: PackageReq = spec.clone().into();
+        assert_eq!(spec, req.try_into().unwrap());
+    }
+
+    #[tokio::test]
+    async fn package_req_spec_roundtrips() {
+        let req: PackageReq = "foo@1.0.0".parse().unwrap();
+        let spec: PackageSpec = req.clone().try_into().unwrap();
+        assert_eq!(req, spec.into());
+
+        let req: PackageReq = "foo@1.0.0-1".parse().unwrap();
+        let spec: PackageSpec = req.clone().try_into().unwrap();
+        assert_eq!(req, spec.into());
+    }
+
+    #[tokio::test]
+    async fn package_spec_parses_same_as_name_version() {
+        let req: PackageReq = "foo@1.0.0".parse().unwrap();
+        let spec: PackageSpec = req.clone().try_into().unwrap();
+        let name: PackageName = "foo".into();
+        let version: PackageVersion = "1.0.0".parse().unwrap();
+        assert_eq!(spec, PackageSpec::new(name, version));
+
+        let req: PackageReq = "foo@1.0.0-1".parse().unwrap();
+        let spec: PackageSpec = req.clone().try_into().unwrap();
+        let name: PackageName = "foo".into();
+        let version: PackageVersion = "1.0.0-1".parse().unwrap();
+        assert_eq!(spec, PackageSpec::new(name, version));
     }
 }

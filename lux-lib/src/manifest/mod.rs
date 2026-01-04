@@ -1,8 +1,10 @@
+use path_slash::PathExt;
 use thiserror::Error;
 use url::Url;
 
 pub use crate::manifest::metadata::*;
 use crate::manifest::metadata_from_server::*;
+use crate::manifest::metadata_from_vendor_dir::manifest_from_vendor_dir;
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
 use crate::progress::{Progress, ProgressBar};
 use crate::{
@@ -13,6 +15,7 @@ use crate::{
 
 pub mod metadata;
 mod metadata_from_server;
+mod metadata_from_vendor_dir;
 
 #[derive(Error, Debug)]
 pub enum ManifestError {
@@ -20,6 +23,8 @@ pub enum ManifestError {
     Lua(#[from] ManifestLuaError),
     #[error("failed to fetch manifest from server:\n{0}")]
     Server(#[from] ManifestFromServerError),
+    #[error("error parsing URL from `vendor-dir`: {0}:")]
+    Vendor(String),
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +46,11 @@ impl Manifest {
         config: &Config,
         progress: &Progress<ProgressBar>,
     ) -> Result<Self, ManifestError> {
+        if let Some(vendor_dir) = config.vendor_dir() {
+            let server_url: Url = Url::from_file_path(vendor_dir)
+                .map_err(|_err| ManifestError::Vendor(vendor_dir.to_slash_lossy().to_string()))?;
+            return Ok(Self::new(server_url, manifest_from_vendor_dir(vendor_dir)));
+        }
         let content = manifest_from_cache_or_server(&server_url, config, progress).await?;
         match ManifestMetadata::new(&content) {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
