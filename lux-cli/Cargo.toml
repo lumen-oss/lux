@@ -55,7 +55,7 @@ walkdir = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
-serial_test = { version = "3.2" }
+serial_test = { version = "3.3" }
 assert_fs = "1.1"
 
 [dependencies.lux-lib]
