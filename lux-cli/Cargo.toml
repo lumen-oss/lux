@@ -33,7 +33,7 @@ termcolor = "1.4"
 termtree = "0.5"
 text_trees = "0.1"
 url = "2.5"
-whoami = "1.6"
+whoami = "2.0"
 
 git-url-parse = { workspace = true }
 git2 = { workspace = true }

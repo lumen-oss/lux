@@ -27,7 +27,9 @@ impl RepoMetadata {
                 .to_string(),
             description: None,
             license: None,
-            contributors: vec![whoami::realname()],
+            contributors: whoami::realname()
+                .map(|realname| vec![realname])
+                .unwrap_or_default(),
             labels: None,
         })
     }
