@@ -255,14 +255,17 @@ pub async fn write_project_rockspec(cli_flags: NewProject) -> Result<()> {
 
             let maintainer = maintainer.map_or_else(
                 || {
-                    let default_maintainer = repo_metadata
+                    let prompt = Text::new("Maintainer:");
+                    if let Some(default_maintainer) = repo_metadata
                         .contributors
                         .first()
                         .cloned()
-                        .unwrap_or_else(whoami::realname);
-                    Text::new("Maintainer:")
-                        .with_default(&default_maintainer)
-                        .prompt()
+                        .or_else(|| whoami::realname().ok())
+                    {
+                        prompt.with_default(&default_maintainer).prompt()
+                    } else {
+                        prompt.prompt()
+                    }
                 },
                 Ok,
             )?;
