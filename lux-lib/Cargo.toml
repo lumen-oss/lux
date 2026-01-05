@@ -44,7 +44,7 @@ remove_dir_all = "1.0"
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-serde-enum-str = "0.4"
+serde-enum-str = "0.5"
 sha2 = "0.10"
 shell-words = "1.1"
 shlex = "1.3"
