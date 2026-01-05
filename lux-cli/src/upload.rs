@@ -1,7 +1,7 @@
 use clap::Args;
 use eyre::{OptionExt, Result};
 use lux_lib::{
-    config::Config, progress::MultiProgress, project::Project, remote_package_db::RemotePackageDB,
+    config::Config, progress::MultiProgress, project::Project, remote_package_db::PackageDB,
     upload::ProjectUpload,
 };
 
@@ -22,7 +22,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
 
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = PackageDB::from_config(&config, &bar).await?;
     ProjectUpload::new()
         .project(project)
         .config(&config)
@@ -40,7 +40,7 @@ pub async fn upload(_data: Upload, config: Config) -> Result<()> {
     let project = Project::current()?.ok_or_eyre("No project found")?;
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = PackageDB::from_config(&config, &bar).await?;
 
     ProjectUpload::new()
         .project(project)
