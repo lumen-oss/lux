@@ -200,7 +200,7 @@ pub enum DownloadRockspecError {
     Request(#[from] reqwest::Error),
     #[error("failed to convert rockspec response: {0}")]
     ResponseConversion(#[from] FromUtf8Error),
-    #[error("error initialising remote package DB: {0}")]
+    #[error("error initialising remote package DB:\n{0}")]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error(transparent)]
     DownloadSrcRock(#[from] DownloadSrcRockError),
@@ -328,7 +328,7 @@ pub enum SearchAndDownloadError {
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
     Rockspec(#[from] LuaRockspecError),
-    #[error("error initialising remote package DB: {0}")]
+    #[error("error initialising remote package DB:\n{0}")]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to read packed rock {0}:\n{1}")]
     ZipRead(String, zip::result::ZipError),

@@ -11,6 +11,7 @@ use mlua::{ExternalResult, FromLua, IntoLua, UserData};
 use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
+use strum_macros::EnumIter;
 use thiserror::Error;
 use url::Url;
 
@@ -781,6 +782,7 @@ pub struct Lockfile<P: LockfilePermissions> {
     pub(crate) entrypoint_layout: RockLayoutConfig,
 }
 
+#[derive(EnumIter, Debug, PartialEq, Eq)]
 pub enum LocalPackageLockType {
     Regular,
     Test,
