@@ -2,7 +2,7 @@ use async_recursion::async_recursion;
 use flate2::read::GzDecoder;
 use itertools::Itertools;
 use path_slash::PathExt;
-use std::fs;
+use tokio::fs;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -141,7 +141,7 @@ where
                     progress,
                 )
                 .await?;
-                fs::remove_file(nested_archive_path)?;
+                fs::remove_file(nested_archive_path).await?;
             }
         }
     }
