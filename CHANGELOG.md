@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.22.4](https://github.com/lumen-oss/lux/compare/v0.22.3...v0.22.4) - 2026-01-12
+
+### Other
+- *(deps)* bump whoami from 1.6.1 to 2.0.0 ([#1275](https://github.com/lumen-oss/lux/pull/1275))
+- *(deps)* bump serial_test from 3.2.0 to 3.3.1 ([#1272](https://github.com/lumen-oss/lux/pull/1272))
+- *(deps)* bump emmylua_codestyle from 0.5.0 to 0.6.0 ([#1263](https://github.com/lumen-oss/lux/pull/1263))
+
+## `lux-lib` - [0.30.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.30.3...lux-lib-v0.30.4) - 2026-01-12
+
+### Fixed
+- *(build)* better inferring of `source.dir` ([#1279](https://github.com/lumen-oss/lux/pull/1279))
+
+### Other
+- *(deps)* bump insta from 1.45.0 to 1.46.0 ([#1276](https://github.com/lumen-oss/lux/pull/1276))
+- *(deps)* bump serde-enum-str from 0.4.0 to 0.5.0 ([#1274](https://github.com/lumen-oss/lux/pull/1274))
+- *(deps)* bump serial_test from 3.2.0 to 3.3.1 ([#1272](https://github.com/lumen-oss/lux/pull/1272))
+- enable install_binary_rock test only on x86_64-linux ([#1181](https://github.com/lumen-oss/lux/pull/1181))
+
 ## `lux-cli` - [0.22.3](https://github.com/lumen-oss/lux/compare/v0.22.2...v0.22.3) - 2025-12-24
 
 ### Other
