@@ -2,7 +2,6 @@ use async_recursion::async_recursion;
 use flate2::read::GzDecoder;
 use itertools::Itertools;
 use path_slash::PathExt;
-use tokio::fs;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -11,6 +10,7 @@ use std::io::Seek;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
+use tokio::fs;
 
 use crate::progress::Progress;
 use crate::progress::ProgressBar;

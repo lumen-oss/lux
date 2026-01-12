@@ -7,6 +7,7 @@ use crate::rockspec::{LuaVersionCompatibility, Rockspec};
 use crate::tree::{self, EntryType, TreeError};
 use bytes::Bytes;
 use std::collections::HashMap;
+use std::fs::DirEntry;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::{io, path::Path};
@@ -364,37 +365,49 @@ where
                 Some(unpack_dir) => temp_dir.path().join(unpack_dir),
                 None => {
                     // Some older/off-spec rockspecs don't specify a `source.dir`.
-                    // After unpacking the archive, if there exists a single directory with
-                    //   - a 'lua' or 'src' subdirectory
-                    //   - or a subdirectory that matches one of the `copy_directory` items
+                    // After unpacking the archive, if
+                    //
+                    //   - there exist no Lua or C sources
+                    //   - there exists a single subdirectory that is not a source
+                    //     or etc directory
+                    //
                     // we assume it's the `source.dir`.
-                    let copy_dirs = &rockspec.build().current_platform().copy_directories;
-                    let dir_entries = std::fs::read_dir(temp_dir.path())?
+                    // Unlike the LuaRocks implementation - which filters when fetching sources -
+                    // we only infer `source.dir` if the directory name is not 'src', 'lua'
+                    // or one of the `build.copy_directories`.
+                    // This allows us to build local projects with only a `src` directory.
+                    //
+                    // LuaRocks implementation:
+                    // https://github.com/luarocks/luarocks/blob/4188fdb235aca66530d274c782374cf6afba09b8/src/luarocks/fetch.tl?plain=1#L526
+                    let has_lua_or_c_sources = std::fs::read_dir(temp_dir.path())?
                         .filter_map(Result::ok)
-                        .filter(|f| f.path().is_dir())
-                        .filter(|f| {
-                            !matches!(
-                                f.file_name().to_string_lossy().to_string().as_str(),
-                                "src" | "lua"
-                            )
-                        })
-                        .filter(|f| !copy_dirs.iter().any(|dir| &f.path() == dir))
-                        .collect_vec();
-                    if dir_entries.len() == 1 && {
-                        let dir_entry = unsafe { dir_entries.first().unwrap_unchecked() };
-                        copy_dirs
-                            .iter()
-                            .chain(std::iter::once(&PathBuf::from("src")))
-                            .chain(std::iter::once(&PathBuf::from("lua")))
-                            .any(|sub_dir| dir_entry.path().join(sub_dir).is_dir())
-                    } {
-                        unsafe {
-                            temp_dir
-                                .path()
-                                .join(dir_entries.first().unwrap_unchecked().path())
-                        }
-                    } else {
+                        .filter(|f| f.path().is_file())
+                        .any(|f| {
+                            f.path().extension().is_some_and(|ext| {
+                                matches!(ext.to_string_lossy().to_string().as_str(), "lua" | "c")
+                            })
+                        });
+                    if has_lua_or_c_sources {
                         temp_dir.path().into()
+                    } else {
+                        let dir_entries = std::fs::read_dir(temp_dir.path())?
+                            .filter_map(Result::ok)
+                            .filter(|f| f.path().is_dir())
+                            .collect_vec();
+                        if dir_entries.len() == 1
+                            && !is_source_or_etc_dir(
+                                unsafe { dir_entries.first().unwrap_unchecked() },
+                                rockspec,
+                            )
+                        {
+                            unsafe {
+                                temp_dir
+                                    .path()
+                                    .join(dir_entries.first().unwrap_unchecked().path())
+                            }
+                        } else {
+                            temp_dir.path().into()
+                        }
                     }
                 }
             };
@@ -472,6 +485,18 @@ where
             Ok(package)
         }
     }
+}
+
+fn is_source_or_etc_dir<R>(dir: &DirEntry, rockspec: &R) -> bool
+where
+    R: Rockspec + HasIntegrity,
+{
+    let copy_dirs = &rockspec.build().current_platform().copy_directories;
+    let dir_name = dir.file_name().to_string_lossy().to_string();
+    matches!(dir_name.as_str(), "lua" | "src")
+        || copy_dirs
+            .iter()
+            .any(|copy_dir_name| copy_dir_name == &PathBuf::from(&dir_name))
 }
 
 async fn recursive_copy_doc_dir(
