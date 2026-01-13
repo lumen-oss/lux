@@ -19,7 +19,7 @@ bench = false
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
-edit = "0.1"
+edit = { version = "0.1", features = ["quoted-env"] }
 emmylua_check = { version = "0.17", features = [] }
 emmylua_codestyle = "0.6.0"
 eyre = "0.6"
