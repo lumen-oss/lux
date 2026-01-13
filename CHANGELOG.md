@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.22.5](https://github.com/lumen-oss/lux/compare/v0.22.4...v0.22.5) - 2026-01-13
+
+### Fixed
+- *(lux-cli)* make `lx config edit` work with `VISUAL="nvim --cmd 'let g:flatten_wait=1'"` ([#1280](https://github.com/lumen-oss/lux/pull/1280))
+
 ## `lux-cli` - [0.22.4](https://github.com/lumen-oss/lux/compare/v0.22.3...v0.22.4) - 2026-01-12
 
 ### Other
