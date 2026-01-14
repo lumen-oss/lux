@@ -18,10 +18,12 @@ use crate::git::GitSource;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::RockSourceSpec;
+use crate::manifest::ManifestDownloadError;
 use crate::operations;
 use crate::package::PackageSpec;
 use crate::progress::Progress;
 use crate::progress::ProgressBar;
+use crate::remote_package_db::{PackageDB, RemotePackageDBError};
 use crate::rockspec::Rockspec;
 
 use super::DownloadSrcRockError;
@@ -137,6 +139,8 @@ struct FetchSrcRock<'a> {
     config: &'a Config,
     #[builder(start_fn)]
     progress: &'a Progress<ProgressBar>,
+
+    package_db: Option<&'a PackageDB>,
 }
 
 impl<State> FetchSrcRockBuilder<'_, State>
@@ -154,6 +158,8 @@ pub enum FetchSrcRockError {
     DownloadSrcRock(#[from] DownloadSrcRockError),
     Unpack(#[from] UnpackError),
     Io(#[from] io::Error),
+    RemotePackageDB(#[from] RemotePackageDBError),
+    ManifestDownload(#[from] ManifestDownloadError),
 }
 
 async fn do_fetch_src<R: Rockspec>(
@@ -308,7 +314,13 @@ async fn do_fetch_src_rock(
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
     let progress = fetch.progress;
-    let src_rock = operations::download_src_rock(package, config.server(), progress).await?;
+    let package_db = fetch
+        .package_db
+        .cloned()
+        .unwrap_or(PackageDB::from_config(config, progress).await?);
+    let src_rock = package_db
+        .download_src_rock(&package.clone().into_package_req(), progress)
+        .await?;
     let hash = src_rock.bytes.hash()?;
     let cursor = Cursor::new(src_rock.bytes);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());

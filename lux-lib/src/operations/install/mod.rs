@@ -17,7 +17,7 @@ use crate::{
     package::{PackageName, PackageNameList},
     progress::{MultiProgress, Progress, ProgressBar},
     project::{Project, ProjectTreeError},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
+    remote_package_db::{PackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
     rockspec::Rockspec,
     tree::{self, Tree, TreeError},
 };
@@ -46,7 +46,7 @@ pub struct Install<'a> {
     packages: Vec<PackageInstallSpec>,
     #[builder(setters(name = "_tree", vis = ""))]
     tree: Tree,
-    package_db: Option<RemotePackageDB>,
+    package_db: Option<PackageDB>,
     progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
@@ -106,7 +106,7 @@ where
             Some(db) => db,
             None => {
                 let bar = progress.map(|p| p.new_bar());
-                RemotePackageDB::from_config(install_built.config, &bar).await?
+                PackageDB::from_config(install_built.config, &bar).await?
             }
         };
 
@@ -172,7 +172,7 @@ pub enum InstallError {
 #[allow(clippy::too_many_arguments)]
 async fn install_impl(
     packages: Vec<PackageInstallSpec>,
-    package_db: Arc<RemotePackageDB>,
+    package_db: Arc<PackageDB>,
     config: &Config,
     tree: &Tree,
     progress_arc: Arc<Progress<MultiProgress>>,

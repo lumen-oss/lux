@@ -31,7 +31,7 @@ use crate::{
     },
     package::SpecRev,
     progress::Progress,
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         LuaVersionCompatibility,
@@ -202,7 +202,7 @@ impl UserData for Project {
                 // `Runtime::enter()`. During testing in `lux-lua`, this seems to be working just fine.
                 let _guard = lua_runtime().enter();
 
-                let package_db = RemotePackageDB::from_config(&config, &Progress::no_progress())
+                let package_db = PackageDB::from_config(&config, &Progress::no_progress())
                     .await
                     .into_lua_err()?;
                 this.add(deps, &package_db).await.into_lua_err()
@@ -220,7 +220,7 @@ impl UserData for Project {
 
         methods.add_async_method_mut(
             "upgrade",
-            |_, mut this, (deps, package_db): (LuaDependencyType<PackageName>, RemotePackageDB)| async move {
+            |_, mut this, (deps, package_db): (LuaDependencyType<PackageName>, PackageDB)| async move {
                 let _guard = lua_runtime().enter();
 
                 this.upgrade(deps, &package_db).await.into_lua_err()
@@ -229,7 +229,7 @@ impl UserData for Project {
 
         methods.add_async_method_mut(
             "upgrade_all",
-            |_, mut this, package_db: RemotePackageDB| async move {
+            |_, mut this, package_db: PackageDB| async move {
                 let _guard = lua_runtime().enter();
 
                 this.upgrade_all(&package_db).await.into_lua_err()
@@ -448,7 +448,7 @@ impl Project {
     pub async fn add(
         &mut self,
         dependencies: DependencyType<PackageReq>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
@@ -469,6 +469,7 @@ impl Project {
                     let dep_version_str = if dep.version_req().is_any() {
                         package_db
                             .latest_version(dep.name())
+                            .await
                             .map(|latest_version| latest_version.to_string())
                             .unwrap_or_else(|| dep.version_req().to_string())
                     } else {
@@ -589,7 +590,7 @@ impl Project {
     pub async fn upgrade(
         &mut self,
         dependencies: LuaDependencyType<PackageName>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
@@ -605,18 +606,15 @@ impl Project {
             LuaDependencyType::Regular(ref deps)
             | LuaDependencyType::Build(ref deps)
             | LuaDependencyType::Test(ref deps) => {
-                let latest_rock_version_str =
-                    |dep: &PackageName| -> Result<String, ProjectEditError> {
-                        Ok(package_db
-                            .latest_version(dep)
-                            .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
-                            .to_string())
-                    };
                 for dep in deps {
                     let mut dep_item = table[dep.to_string()].clone();
                     match &dep_item {
                         Item::Value(_) => {
-                            let dep_version_str = latest_rock_version_str(dep)?;
+                            let dep_version_str = package_db
+                                .latest_version(dep)
+                                .await
+                                .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
+                                .to_string();
                             table[dep.to_string()] = toml_edit::value(dep_version_str);
                         }
                         Item::Table(tbl) => {
@@ -650,7 +648,13 @@ impl Project {
                                     table[dep.to_string()] = dep_item;
                                 }
                                 None => {
-                                    let dep_version_str = latest_rock_version_str(dep)?;
+                                    let dep_version_str = package_db
+                                        .latest_version(dep)
+                                        .await
+                                        .ok_or(ProjectEditError::LatestVersionNotFound(
+                                            dep.clone(),
+                                        ))?
+                                        .to_string();
                                     dep_item["version".to_string()] =
                                         toml_edit::value(dep_version_str);
                                     table[dep.to_string()] = dep_item;
@@ -670,10 +674,7 @@ impl Project {
         Ok(())
     }
 
-    pub async fn upgrade_all(
-        &mut self,
-        package_db: &RemotePackageDB,
-    ) -> Result<(), ProjectEditError> {
+    pub async fn upgrade_all(&mut self, package_db: &PackageDB) -> Result<(), ProjectEditError> {
         if let Some(dependencies) = &self.toml().dependencies {
             let packages = dependencies
                 .iter()
@@ -833,7 +834,7 @@ mod tests {
     use super::*;
     use crate::{
         lua_rockspec::ExternalDependencySpec,
-        manifest::{Manifest, ManifestMetadata},
+        manifest::luarocks::{LuarocksManifest, LuarocksManifestData},
         package::PackageReq,
         rockspec::Rockspec,
     };
@@ -854,8 +855,9 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
+        let metadata = LuarocksManifestData::new(&content).unwrap();
+        let package_db =
+            LuarocksManifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
 
         project
             .add(

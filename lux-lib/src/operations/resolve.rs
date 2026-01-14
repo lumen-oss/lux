@@ -15,7 +15,7 @@ use crate::{
     },
     package::PackageName,
     progress::{MultiProgress, Progress},
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
     rockspec::Rockspec,
     tree,
 };
@@ -60,7 +60,7 @@ where
     dependencies_tx: UnboundedSender<PackageInstallData>,
     build_dependencies_tx: UnboundedSender<PackageInstallData>,
     packages: Vec<PackageInstallSpec>,
-    package_db: Arc<RemotePackageDB>,
+    package_db: Arc<PackageDB>,
     parent_packages: Option<Arc<Vec<PackageName>>>,
     lockfile: Arc<Lockfile<P>>,
     build_lockfile: Arc<Lockfile<P>>,

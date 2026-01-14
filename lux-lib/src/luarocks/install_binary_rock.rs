@@ -21,6 +21,7 @@ use crate::{
     },
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::rock_manifest::RockManifest,
+    manifest::RemotePackageDB,
     package::PackageSpec,
     progress::{Progress, ProgressBar},
     remote_package_source::RemotePackageSource,
@@ -130,8 +131,10 @@ impl<'a> BinaryRockInstall<'a> {
             source: self.rock_bytes.hash()?,
         };
         let source_url = match &self.source {
-            RemotePackageSource::LuarocksBinaryRock(url) => {
-                Some(RemotePackageSourceUrl::Url { url: url.clone() })
+            RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                Some(RemotePackageSourceUrl::Url {
+                    url: manifest.url().clone(),
+                })
             }
             _ => None,
         };

@@ -5,11 +5,9 @@ use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{
     config::{Config, LuaVersion},
-    lockfile::LocalPackage,
-    package::PackageVersion,
     progress::MultiProgress,
     project::Project,
-    remote_package_db::RemotePackageDB,
+    remote_package_db::PackageDB,
 };
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
@@ -39,7 +37,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         }
     };
 
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = PackageDB::from_config(&config, &bar).await?;
 
     bar.map(|b| b.set_message("🔎 Checking for outdated rocks...".to_string()));
 
@@ -48,15 +46,13 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     // This will naturally occur with lockfiles and should be accounted for directly in the
     // `has_update` function.
     let rock_list = tree.as_rock_list()?;
-    let rock_list = rock_list
-        .iter()
-        .map(|rock| {
-            rock.to_package()
-                .has_update(&package_db)
-                .map(|mb_version| mb_version.map(|version| (rock, version)))
-        })
-        .filter_map_ok(|mb_tuple| mb_tuple)
-        .try_collect::<_, Vec<(&LocalPackage, PackageVersion)>, _>()?;
+    let mut updates = Vec::new();
+    for rock in &rock_list {
+        if let Some(version) = rock.to_package().has_update(&package_db).await? {
+            updates.push((rock, version));
+        }
+    }
+    let rock_list = updates;
 
     let rock_list = rock_list
         .iter()

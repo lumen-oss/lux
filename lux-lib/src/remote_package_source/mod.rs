@@ -1,9 +1,14 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use mlua::IntoLua;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{
+    de::{self},
+    Deserialize, Deserializer, Serialize,
+};
 use thiserror::Error;
 use url::Url;
+
+use crate::{config::Config, manifest::{RemotePackageDB, luanox::LuanoxRemoteDB, luarocks::{LuarocksManifest, ManifestError}}, progress::{Progress, ProgressBar}};
 
 const PLUS: &str = "+";
 
@@ -11,15 +16,93 @@ const PLUS: &str = "+";
 // because adding variants would be a breaking change.
 
 /// The source of a remote package.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) enum RemotePackageSource {
-    LuarocksRockspec(Url),
-    LuarocksSrcRock(Url),
-    LuarocksBinaryRock(Url),
+    // Remote luarocks-compatible source
+    LuarocksRockspec(LuarocksManifest),
+    LuarocksSrcRock(LuarocksManifest),
+    LuarocksBinaryRock(LuarocksManifest),
+    // Remote luanox-compatible source
+    LuanoxRockspec(LuanoxRemoteDB),
     RockspecContent(String),
     Local,
     #[cfg(test)]
     Test,
+}
+
+impl RemotePackageSource {
+    pub async fn from_intermediate(
+        intermediate: IntermediateRemotePackageSource,
+        config: &Config,
+        progress: &Progress<ProgressBar>,
+    ) -> Result<Self, RemotePackageSourceError> {
+        match intermediate {
+            IntermediateRemotePackageSource::LuarocksRockspec(url) => {
+                let manifest = LuarocksManifest::from_config(url, config, progress).await?;
+                Ok(Self::LuarocksRockspec(manifest))
+            }
+            IntermediateRemotePackageSource::LuarocksSrcRock(url) => {
+                let manifest = LuarocksManifest::from_config(url, config, progress).await?;
+                Ok(Self::LuarocksSrcRock(manifest))
+            }
+            IntermediateRemotePackageSource::LuarocksBinaryRock(url) => {
+                let manifest = LuarocksManifest::from_config(url, config, progress).await?;
+                Ok(Self::LuarocksBinaryRock(manifest))
+            }
+            IntermediateRemotePackageSource::LuanoxRockspec(url) => {
+                Ok(Self::LuanoxRockspec(LuanoxRemoteDB::new(url)))
+            }
+            IntermediateRemotePackageSource::RockspecContent(content) => {
+                Ok(Self::RockspecContent(content))
+            }
+            IntermediateRemotePackageSource::Local => Ok(Self::Local),
+        }
+    }
+}
+
+impl Hash for RemotePackageSource {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            RemotePackageSource::LuarocksRockspec(manifest)
+            | RemotePackageSource::LuarocksSrcRock(manifest)
+            | RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                manifest.url().hash(state);
+            }
+            RemotePackageSource::LuanoxRockspec(remote) => {
+                remote.url().hash(state);
+            }
+            RemotePackageSource::RockspecContent(content) => {
+                content.hash(state);
+            }
+            RemotePackageSource::Local => {
+                "local".hash(state);
+            }
+            #[cfg(test)]
+            RemotePackageSource::Test => {
+                "test".hash(state);
+            }
+        }
+    }
+}
+
+impl PartialEq for RemotePackageSource {
+    fn eq(&self, other: &Self) -> bool {
+        self.url() == other.url()
+    }
+}
+
+impl Eq for RemotePackageSource {}
+
+impl PartialOrd for RemotePackageSource {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RemotePackageSource {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.url().cmp(&other.url())
+    }
 }
 
 impl IntoLua for RemotePackageSource {
@@ -27,9 +110,18 @@ impl IntoLua for RemotePackageSource {
         let table = lua.create_table()?;
 
         match self {
-            RemotePackageSource::LuarocksRockspec(url) => table.set("rockspec", url.to_string())?,
-            RemotePackageSource::LuarocksSrcRock(url) => table.set("src_rock", url.to_string())?,
-            RemotePackageSource::LuarocksBinaryRock(url) => table.set("rock", url.to_string())?,
+            RemotePackageSource::LuarocksRockspec(manifest) => {
+                table.set("rockspec", manifest.url().to_string())?
+            }
+            RemotePackageSource::LuarocksSrcRock(manifest) => {
+                table.set("src_rock", manifest.url().to_string())?
+            }
+            RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                table.set("rock", manifest.url().to_string())?
+            }
+            RemotePackageSource::LuanoxRockspec(remote) => {
+                table.set("rockspec", remote.url().to_string())?
+            }
             RemotePackageSource::RockspecContent(content) => {
                 table.set("rockspec_content", content)?
             }
@@ -43,36 +135,15 @@ impl IntoLua for RemotePackageSource {
 }
 
 impl RemotePackageSource {
-    pub(crate) fn url(self) -> Option<Url> {
+    pub(crate) fn url(&self) -> Option<Url> {
         match self {
-            Self::LuarocksRockspec(url)
-            | Self::LuarocksSrcRock(url)
-            | Self::LuarocksBinaryRock(url) => Some(url),
+            Self::LuarocksRockspec(manifest)
+            | Self::LuarocksSrcRock(manifest)
+            | Self::LuarocksBinaryRock(manifest) => Some(manifest.url().clone()),
+            Self::LuanoxRockspec(remote) => Some(remote.url().clone()),
             Self::RockspecContent(_) | Self::Local => None,
             #[cfg(test)]
             Self::Test => None,
-        }
-    }
-}
-
-impl Display for RemotePackageSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            RemotePackageSource::LuarocksRockspec(url) => {
-                format!("luarocks_rockspec{PLUS}{url}").fmt(f)
-            }
-            RemotePackageSource::LuarocksSrcRock(url) => {
-                format!("luarocks_src_rock{PLUS}{url}").fmt(f)
-            }
-            RemotePackageSource::LuarocksBinaryRock(url) => {
-                format!("luarocks_rock{PLUS}{url}").fmt(f)
-            }
-            RemotePackageSource::RockspecContent(content) => {
-                format!("rockspec{PLUS}{content}").fmt(f)
-            }
-            RemotePackageSource::Local => "local".fmt(f),
-            #[cfg(test)]
-            RemotePackageSource::Test => "test+foo_bar".fmt(f),
         }
     }
 }
@@ -82,7 +153,13 @@ impl Serialize for RemotePackageSource {
     where
         S: serde::Serializer,
     {
-        format!("{self}").serialize(serializer)
+        format!(
+            "{}",
+            self.clone()
+                .url()
+                .ok_or_else(|| serde::ser::Error::custom("no URL"))?
+        )
+        .serialize(serializer)
     }
 }
 
@@ -96,9 +173,21 @@ pub enum RemotePackageSourceError {
     UnknownRemoteSourceType(String),
     #[error(transparent)]
     Url(#[from] url::ParseError),
+    #[error(transparent)]
+    Manifest(#[from] ManifestError),
 }
 
-impl TryFrom<String> for RemotePackageSource {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum IntermediateRemotePackageSource {
+    LuarocksRockspec(Url),
+    LuarocksSrcRock(Url),
+    LuarocksBinaryRock(Url),
+    LuanoxRockspec(Url),
+    RockspecContent(String),
+    Local,
+}
+
+impl TryFrom<String> for IntermediateRemotePackageSource {
     type Error = RemotePackageSourceError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -109,6 +198,7 @@ impl TryFrom<String> for RemotePackageSource {
                     "luarocks_rockspec" => Ok(Self::LuarocksRockspec(Url::parse(str)?)),
                     "luarocks_src_rock" => Ok(Self::LuarocksSrcRock(Url::parse(str)?)),
                     "luarocks_rock" => Ok(Self::LuarocksBinaryRock(Url::parse(str)?)),
+                    "luanox_rockspec" => Ok(Self::LuanoxRockspec(Url::parse(str)?)),
                     "rockspec" => Ok(Self::RockspecContent(str.into())),
                     _ => Err(RemotePackageSourceError::UnknownRemoteSourceType(
                         remote_source_type.into(),
@@ -125,7 +215,53 @@ impl TryFrom<String> for RemotePackageSource {
     }
 }
 
-impl<'de> Deserialize<'de> for RemotePackageSource {
+impl From<RemotePackageSource> for IntermediateRemotePackageSource {
+    fn from(value: RemotePackageSource) -> Self {
+        match value {
+            RemotePackageSource::LuarocksRockspec(manifest) => {
+                Self::LuarocksRockspec(manifest.url().clone())
+            }
+            RemotePackageSource::LuarocksSrcRock(manifest) => {
+                Self::LuarocksSrcRock(manifest.url().clone())
+            }
+            RemotePackageSource::LuarocksBinaryRock(manifest) => {
+                Self::LuarocksBinaryRock(manifest.url().clone())
+            }
+            RemotePackageSource::LuanoxRockspec(remote) => {
+                Self::LuanoxRockspec(remote.url().clone())
+            }
+            RemotePackageSource::RockspecContent(content) => Self::RockspecContent(content),
+            RemotePackageSource::Local => Self::Local,
+            #[cfg(test)]
+            RemotePackageSource::Test => unreachable!("TODO: FIXME"),
+        }
+    }
+}
+
+impl Display for IntermediateRemotePackageSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            IntermediateRemotePackageSource::LuarocksRockspec(manifest) => {
+                format!("luarocks_rockspec{PLUS}{manifest}").fmt(f)
+            }
+            IntermediateRemotePackageSource::LuanoxRockspec(manifest) => {
+                format!("luanox_rockspec{PLUS}{manifest}").fmt(f)
+            }
+            IntermediateRemotePackageSource::LuarocksSrcRock(manifest) => {
+                format!("luarocks_src_rock{PLUS}{manifest}").fmt(f)
+            }
+            IntermediateRemotePackageSource::LuarocksBinaryRock(manifest) => {
+                format!("luarocks_rock{PLUS}{manifest}").fmt(f)
+            }
+            IntermediateRemotePackageSource::RockspecContent(content) => {
+                format!("rockspec{PLUS}{content}").fmt(f)
+            }
+            IntermediateRemotePackageSource::Local => "local".fmt(f),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for IntermediateRemotePackageSource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -150,23 +286,31 @@ source = {
 ";
 
     #[test]
-    fn luarocks_source_roundtrip() {
+    fn luarocks_intermediate_source_roundtrip() {
         let url = Url::parse("https://luarocks.org/").unwrap();
-        let source = RemotePackageSource::LuarocksRockspec(url.clone());
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = IntermediateRemotePackageSource::LuarocksRockspec(url.clone());
+        let roundtripped = IntermediateRemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped);
-        let source = RemotePackageSource::LuarocksSrcRock(url.clone());
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = IntermediateRemotePackageSource::LuarocksSrcRock(url.clone());
+        let roundtripped = IntermediateRemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped);
-        let source = RemotePackageSource::LuarocksBinaryRock(url);
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = IntermediateRemotePackageSource::LuarocksBinaryRock(url);
+        let roundtripped = IntermediateRemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped)
     }
 
     #[test]
-    fn rockspec_source_roundtrip() {
-        let source = RemotePackageSource::RockspecContent(LUAROCKS_ROCKSPEC.into());
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+    fn luanox_intermediate_source_roundtrip() {
+        let url = Url::parse("https://beta.luanox.org/").unwrap();
+        let source = IntermediateRemotePackageSource::LuanoxRockspec(url.clone());
+        let roundtripped = IntermediateRemotePackageSource::try_from(format!("{source}")).unwrap();
+        assert_eq!(source, roundtripped)
+    }
+
+    #[test]
+    fn rockspec_intermediate_source_roundtrip() {
+        let source = IntermediateRemotePackageSource::RockspecContent(LUAROCKS_ROCKSPEC.into());
+        let roundtripped = IntermediateRemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped)
     }
 }

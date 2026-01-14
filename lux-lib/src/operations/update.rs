@@ -13,7 +13,7 @@ use crate::{
     package::{PackageReq, RockConstraintUnsatisfied},
     progress::{MultiProgress, Progress},
     project::{Project, ProjectError, ProjectTreeError},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
+    remote_package_db::{PackageDB, RemotePackageDBError},
     remote_package_source::RemotePackageSource,
     tree::{self, Tree, TreeError},
 };
@@ -68,7 +68,7 @@ pub struct Update<'a> {
     /// Whether to validate the integrity when syncing the project lockfile.
     validate_integrity: Option<bool>,
 
-    package_db: Option<RemotePackageDB>,
+    package_db: Option<PackageDB>,
 
     progress: Option<Arc<Progress<MultiProgress>>>,
 }
@@ -113,7 +113,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
             Some(db) => db.clone(),
             None => {
                 let bar = progress.map(|p| p.new_bar());
-                let db = RemotePackageDB::from_config(args.config, &bar).await?;
+                let db = PackageDB::from_config(args.config, &bar).await?;
                 bar.map(|b| b.finish_and_clear());
                 db
             }
@@ -129,7 +129,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 async fn update_project(
     project: Project,
     args: Update<'_>,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<Vec<LocalPackage>, UpdateError> {
     let mut project_lockfile = project.lockfile()?.write_guard();
@@ -204,7 +204,7 @@ async fn update_dependency_tree(
     tree: Tree,
     project_lockfile: &mut ProjectLockfile<ReadWrite>,
     lock_type: LocalPackageLockType,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     config: &Config,
     progress: Arc<Progress<MultiProgress>>,
     packages: &Option<Vec<PackageReq>>,
@@ -237,7 +237,7 @@ fn is_included(
 
 async fn update_install_tree(
     args: Update<'_>,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<Vec<LocalPackage>, UpdateError> {
     let tree = args
@@ -253,27 +253,25 @@ async fn update_install_tree(
 
 async fn update(
     packages: Vec<(LocalPackage, PackageReq)>,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     tree: Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<Vec<LocalPackage>, UpdateError> {
-    let updatable = packages
-        .clone()
-        .into_iter()
-        .filter_map(|(package, constraint)| {
-            match package
-                .to_package()
-                .has_update_with(&constraint, &package_db)
-            {
-                Ok(Some(_)) if package.pinned() == PinnedState::Unpinned => {
-                    Some((package, constraint))
-                }
-                _ => None,
+    let mut updatable = Vec::new();
+    for (package, constraint) in packages.clone() {
+        match package
+            .to_package()
+            .has_update_with(&constraint, &package_db)
+            .await
+        {
+            Ok(Some(_)) if package.pinned() == PinnedState::Unpinned => {
+                updatable.push((package, constraint));
             }
-        })
-        .collect_vec();
+            _ => {}
+        }
+    }
     if updatable.is_empty() {
         Ok(Vec::new())
     } else {
@@ -309,6 +307,7 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LocalPackage, Packa
                     RemotePackageSource::LuarocksRockspec(_) => true,
                     RemotePackageSource::LuarocksSrcRock(_) => true,
                     RemotePackageSource::LuarocksBinaryRock(_) => true,
+                    RemotePackageSource::LuanoxRockspec(_) => true,
                     // We don't support updating git sources or local packages
                     // Git sources can be updated with the --toml flag
                     RemotePackageSource::RockspecContent(_) => false,
