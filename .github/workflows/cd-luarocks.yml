@@ -4,7 +4,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-
+permissions:
+  contents: read
+  pull-requests: read
+  
 jobs:
   luarocks-release:
     if: github.repository_owner == 'lumen-oss' && (
