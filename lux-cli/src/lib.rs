@@ -40,6 +40,7 @@ pub mod check;
 pub mod completion;
 pub mod config;
 pub mod debug;
+pub mod dependencies;
 pub mod doc;
 pub mod download;
 pub mod exec;
