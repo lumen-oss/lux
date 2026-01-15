@@ -8,11 +8,11 @@ publish = false
 cargo-packager = { version = "0.11.7", default-features = false, features = [
   "rustls-tls",
 ] }
-clap = { version = "4.5.23", features = ["derive"] }
-clap_complete = "4.5.40"
-clap_mangen = "0.2.24"
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+clap_mangen = "0.2"
 lux-workspace-hack = { version = "0.1", path = "../lux-workspace-hack" }
-serde = { version = "1.0.219", default-features = false }
+serde = { version = "1", default-features = false }
 
 strum = { workspace = true }
 toml = { workspace = true }
