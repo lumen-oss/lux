@@ -216,6 +216,7 @@ impl LuaRocksInstallation {
             LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2",
             LuaVersion::Lua53 => "5.3",
             LuaVersion::Lua54 => "5.4",
+            LuaVersion::Lua55 => "5.5",
         };
         let luarocks_config_content = format!(
             r#"

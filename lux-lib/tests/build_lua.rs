@@ -53,6 +53,7 @@ async fn test_build_lua() {
                 LuaVersion::Lua52 => "lua5.2.lib",
                 LuaVersion::Lua53 => "lua5.3.lib",
                 LuaVersion::Lua54 => "lua5.4.lib",
+                LuaVersion::Lua55 => "lua5.5.lib",
                 LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
             };
             lua_lib_dir.child(lib_name)
