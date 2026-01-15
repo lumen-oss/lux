@@ -1,0 +1,34 @@
+---
+name: "CD (LuaRocks)"
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  luarocks-release:
+    if: github.repository_owner == 'lumen-oss' && (
+      ( github.event_name == 'release' && startsWith(github.event.release.name, 'v')) ||
+        github.event_name == 'workflow_dispatch'
+      )
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Install Lux
+        uses: lumen-oss/gh-actions-lux@v1
+        with:
+          version: 0.23.0
+
+      - name: Upload
+        run: |
+          lx --lua-version 5.1 upload
+        env:
+          LUX_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
