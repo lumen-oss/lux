@@ -113,8 +113,18 @@ pub struct Cli {
     pub tree: Option<PathBuf>,
 
     /// Specifies the cache directory for e.g. luarocks manifests.
-    #[arg(long, value_name = "path")]
-    pub cache_path: Option<PathBuf>,
+    #[arg(long, value_name = "cache-dir")]
+    pub cache_dir: Option<PathBuf>,
+
+    /// Specifies the data directory (e.g. ~/.local/share/lux).
+    #[arg(long, value_name = "data-dir")]
+    pub data_dir: Option<PathBuf>,
+
+    /// Specifies a directory with locally vendored sources and RockSpecs.{n}
+    /// When building or installing a package with this flag,{n}
+    /// Lux will fetch sources from the <vendor-dir> instead of from a remote server.
+    #[arg(long, value_name = "vendor-dir")]
+    pub vendor_dir: Option<PathBuf>,
 
     /// Override config variables.{n}
     /// Example: `lx -v "LUA=/path/to/lua" ...`
@@ -308,6 +318,9 @@ pub enum Commands {
     /// commit for SemVer tags and if found, will use it to generate the package version.
     Upload(Upload),
     /// Vendor the dependencies of a project or RockSpec locally.
+    /// When building or installing a package with the `--vendor-dir` option{n}
+    /// or the `[vendor_dir]` config option, Lux will fetch sources from the <vendor-dir>{n}
+    /// instead of from a remote server.
     Vendor(Vendor),
     /// Tell which file corresponds to a given module name.
     Which(Which),

@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::package::{PackageName, PackageReq, PackageSpec, PackageVersion};
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ManifestMetadata {
     pub repository: HashMap<PackageName, HashMap<PackageVersion, Vec<RemotePackageType>>>,
 }

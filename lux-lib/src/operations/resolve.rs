@@ -13,7 +13,8 @@ use crate::{
     lockfile::{
         LocalPackageId, LocalPackageSpec, Lockfile, LockfilePermissions, OptState, PinnedState,
     },
-    package::PackageName,
+    operations::{FetchVendored, FetchVendoredError},
+    package::{PackageName, PackageReq},
     progress::{MultiProgress, Progress},
     remote_package_db::RemotePackageDB,
     rockspec::Rockspec,
@@ -30,6 +31,8 @@ pub enum ResolveDependenciesError {
     CyclicDependency(DependencyCycle),
     #[error("error processing resolved dependency:\n{0}")]
     ChannelSend(String),
+    #[error("error fetching vendored dependency {0}:\n{1}")]
+    FetchVendored(PackageReq, FetchVendoredError),
 }
 
 #[derive(Debug)]
@@ -149,6 +152,17 @@ where
                                 package.clone(),
                                 source,
                             )?
+                        } else if let Some(vendor_dir) = config.vendor_dir() {
+                            FetchVendored::new()
+                                .vendor_dir(vendor_dir)
+                                .package(&package)
+                                .package_db(&package_db)
+                                .progress(&bar)
+                                .fetch_vendored_rock()
+                                .await
+                                .map_err(|err| {
+                                    ResolveDependenciesError::FetchVendored(package.clone(), err)
+                                })?
                         } else {
                             Download::new(&package, &config, &bar)
                                 .package_db(&package_db)

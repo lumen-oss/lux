@@ -87,12 +87,14 @@ pub struct Build<'a, R: Rockspec + HasIntegrity> {
     source: Option<RemotePackageSource>,
 }
 
+#[derive(Debug)]
 pub(crate) enum RemotePackageSourceSpec {
     RockSpec(Option<RemotePackageSourceUrl>),
     SrcRock(SrcRockSource),
 }
 
 /// A packed .src.rock archive.
+#[derive(Debug)]
 pub(crate) struct SrcRockSource {
     pub bytes: Bytes,
     pub source_url: RemotePackageSourceUrl,
@@ -151,7 +153,7 @@ pub enum BuildError {
     UnpackSrcRock(UnpackError),
     #[error("failed to fetch rock source:\n{0}")]
     FetchSrcError(#[from] FetchSrcError),
-    #[error("failed to install binary {0}: {1}")]
+    #[error("failed to install binary {0}:\n{1}")]
     InstallBinary(String, InstallBinaryError),
     #[error(transparent)]
     LuaInstallation(#[from] LuaInstallationError),

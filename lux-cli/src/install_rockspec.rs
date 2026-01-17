@@ -132,3 +132,101 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use assert_fs::{
+        prelude::{FileWriteStr, PathChild, PathCreateDir},
+        TempDir,
+    };
+
+    use lux_lib::{
+        config::{ConfigBuilder, LuaVersion},
+        lua_installation::detect_installed_lua_version,
+    };
+
+    #[tokio::test]
+    async fn test_install_rockspec_from_vendored() {
+        // This test runs without a network connection when run with Nix
+        let vendor_dir = TempDir::new().unwrap();
+        let foo_dir = vendor_dir.child("foo@1.0.0-1");
+        foo_dir.create_dir_all().unwrap();
+        let foo_rockspec = vendor_dir.child("foo-1.0.0-1.rockspec");
+        foo_rockspec
+            .write_str(
+                r#"
+                package = 'foo'
+                version = '1.0.0-1'
+                source = {
+                    url = 'https://github.com/lumen-oss/luarocks-stub',
+                }
+            "#,
+            )
+            .unwrap();
+        let bar_dir = vendor_dir.child("bar@2.0.0-2");
+        bar_dir.create_dir_all().unwrap();
+        let bar_rockspec = vendor_dir.child("bar-2.0.0-2.rockspec");
+        bar_rockspec
+            .write_str(
+                r#"
+                package = 'bar'
+                version = '2.0.0-2'
+                source = {
+                    url = 'https://github.com/lumen-oss/luarocks-stub',
+                }
+            "#,
+            )
+            .unwrap();
+        let baz_dir = vendor_dir.child("baz@2.0.0-1");
+        baz_dir.create_dir_all().unwrap();
+        let baz_rockspec = vendor_dir.child("baz-2.0.0-1.rockspec");
+        baz_rockspec
+            .write_str(
+                r#"
+                package = 'baz'
+                version = '2.0.0-1'
+                source = {
+                    url = 'https://github.com/lumen-oss/luarocks-stub',
+                }
+            "#,
+            )
+            .unwrap();
+        let test_rock_dir = vendor_dir.child("test_rock@scm-1");
+        test_rock_dir.create_dir_all().unwrap();
+        let rockspec_content = r#"
+        package = 'test_rock'
+        version = 'scm-1'
+        source = {
+            url = 'https://github.com/lumen-oss/luarocks-stub',
+        }
+        dependencies = {
+            'foo >= 1.0.0',
+            'bar',
+            'baz == 2.0.0',
+        }
+        "#;
+        let temp_dir = TempDir::new().unwrap();
+        let rockspec = temp_dir.child("test_rock-scm-1.rockspec");
+        rockspec.write_str(rockspec_content).unwrap();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .vendor_dir(Some(vendor_dir.to_path_buf()))
+            .lua_version(lua_version)
+            .user_tree(Some(temp_dir.to_path_buf()))
+            .build()
+            .unwrap();
+        install_rockspec(
+            InstallRockspec {
+                rockspec_path: rockspec.to_path_buf(),
+                pin: false,
+            },
+            config,
+        )
+        .await
+        .unwrap()
+    }
+}

@@ -97,6 +97,7 @@ The following table provides a brief comparison:
 | static type checking                                                  | :white_check_mark:           | :x:                |
 | generate a `.luarc` file with dependencies                            | :white_check_mark:           | :x:                |
 | git dependencies in local projects                                    | :white_check_mark:           | :x:                |
+| vendor sources for offline use                                        | :white_check_mark:           | :x:                |
 
 [^1]: Supported via a compatibility layer that uses luarocks as a backend.
 [^2]: [You Aren't Gonna Need It.](https://martinfowler.com/bliki/Yagni.html)

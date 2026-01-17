@@ -36,6 +36,9 @@ async fn main() -> Result<()> {
         .lua_version(lua_version)
         .namespace(cli.namespace)
         .only_sources(cli.only_sources)
+        .cache_dir(cli.cache_dir)
+        .data_dir(cli.data_dir)
+        .vendor_dir(cli.vendor_dir)
         .server(cli.server)
         .timeout(
             cli.timeout
