@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.23.1](https://github.com/lumen-oss/lux/compare/v0.23.0...v0.23.1) - 2026-01-17
+
+### Fixed
+- *(install-rockspec)* dependencies not installed ([#1292](https://github.com/lumen-oss/lux/pull/1292))
+
 ## `lux-cli` - [0.23.0](https://github.com/lumen-oss/lux/compare/v0.22.5...v0.23.0) - 2026-01-15
 
 ### Fixed
