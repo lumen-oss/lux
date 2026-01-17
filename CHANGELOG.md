@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.24.0](https://github.com/lumen-oss/lux/compare/v0.23.1...v0.24.0) - 2026-01-17
+
+### Added
+- [**breaking**] option to build with vendored directory ([#1283](https://github.com/lumen-oss/lux/pull/1283))
+- `vendor` command
+
+## `lux-lib` - [0.31.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.30.5...lux-lib-v0.31.0) - 2026-01-17
+
+### Added
+- [**breaking**] option to build with vendored directory ([#1283](https://github.com/lumen-oss/lux/pull/1283))
+- `vendor` command
+
 ## `lux-cli` - [0.23.1](https://github.com/lumen-oss/lux/compare/v0.23.0...v0.23.1) - 2026-01-17
 
 ### Fixed
