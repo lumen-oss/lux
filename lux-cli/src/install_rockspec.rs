@@ -89,21 +89,20 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
 
     let dependencies = rockspec.dependencies().current_platform();
 
-    let dependencies_to_install = dependencies
-        .iter()
-        .filter(|dep| {
-            tree.match_rocks(dep.package_req())
-                .is_ok_and(|rock_match| rock_match.is_found())
-        })
-        .map(|dep| {
-            PackageInstallSpec::new(dep.package_req().clone(), tree::EntryType::DependencyOnly)
-                .build_behaviour(BuildBehaviour::NoForce)
-                .pin(pin)
-                .opt(OptState::Required)
-                .maybe_source(dep.source().clone())
-                .build()
-        })
-        .collect();
+    let mut dependencies_to_install = Vec::new();
+    for dep in dependencies {
+        let rock_match = tree.match_rocks(dep.package_req())?;
+        if !rock_match.is_found() {
+            let dep =
+                PackageInstallSpec::new(dep.package_req().clone(), tree::EntryType::DependencyOnly)
+                    .build_behaviour(BuildBehaviour::NoForce)
+                    .pin(pin)
+                    .opt(OptState::Required)
+                    .maybe_source(dep.source().clone())
+                    .build();
+            dependencies_to_install.push(dep);
+        }
+    }
 
     Install::new(&config)
         .packages(dependencies_to_install)
