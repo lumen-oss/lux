@@ -101,7 +101,14 @@ impl ValidatedTestSpec {
     pub fn args(&self) -> Vec<String> {
         match self {
             Self::Busted(spec) => spec.flags.clone(),
-            Self::BustedNlua(spec) => spec.flags.clone(),
+            Self::BustedNlua(spec) => {
+                let mut flags = spec.flags.clone();
+                // If there's a .busted config file which has lua set to "nlua",
+                // we tell busted to ignore it, because we set the correct
+                // platform-dependent "nlua" executable in the wrapper script.
+                flags.push("--ignore-lua".into());
+                flags
+            }
             Self::Command(spec) => spec.flags.clone(),
             Self::LuaScript(spec) => std::iter::once(spec.script.to_slash_lossy().to_string())
                 .chain(spec.flags.clone())
