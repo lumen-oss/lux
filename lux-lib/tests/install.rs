@@ -5,7 +5,7 @@ use lux_lib::{
     git::GitSource,
     lua_installation::detect_installed_lua_version,
     lua_rockspec::RockSourceSpec,
-    operations::{Install, PackageInstallSpec},
+    operations::{Exec, Install, PackageInstallSpec},
     tree::EntryType,
 };
 use std::path::PathBuf;
@@ -32,6 +32,42 @@ async fn install_http_package() {
     let install_spec =
         PackageInstallSpec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint).build();
     test_install(install_spec).await
+}
+
+#[tokio::test]
+async fn install_and_use_luafilesystem() {
+    let install_spec = PackageInstallSpec::new(
+        "luafilesystem@1.9.0".parse().unwrap(),
+        EntryType::Entrypoint,
+    )
+    .build();
+    let dir = TempDir::new().unwrap();
+    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+
+    let config = ConfigBuilder::new()
+        .unwrap()
+        .user_tree(Some(dir.to_path_buf()))
+        .lua_version(lua_version)
+        .build()
+        .unwrap();
+
+    let tree = config
+        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .unwrap();
+    let installed = Install::new(&config)
+        .package(install_spec)
+        .tree(tree)
+        .install()
+        .await
+        .unwrap();
+    assert!(!installed.is_empty());
+
+    Exec::new("lua", None, &config)
+        .arg("-e")
+        .arg("require('lfs')")
+        .exec()
+        .await
+        .unwrap()
 }
 
 // See https://github.com/lumen-oss/lux/issues/1106
