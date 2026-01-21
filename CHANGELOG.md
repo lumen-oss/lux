@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.24.1](https://github.com/lumen-oss/lux/releases/tag/v0.24.1) - 2026-01-21
+
+### Added
+- *(fmt)* include file path in error message ([#1302](https://github.com/lumen-oss/lux/pull/1302))
+
+### Other
+- release ([#1301](https://github.com/lumen-oss/lux/pull/1301))
+
+## `lux-lib` - [0.31.1](https://github.com/lumen-oss/lux/releases/tag/lux-lib-v0.31.1) - 2026-01-21
+
+### Fixed
+- *(build/builtin)* pass `LIBFLAG` and `LDFLAGS` to linker ([#1300](https://github.com/lumen-oss/lux/pull/1300))
+- *(test/busted-nlua)* ignore lua in `.busted` config file ([#1303](https://github.com/lumen-oss/lux/pull/1303))
+
+### Other
+- release ([#1301](https://github.com/lumen-oss/lux/pull/1301))
+- *(deps)* bump zip from 7.0.0 to 7.2.0 ([#1299](https://github.com/lumen-oss/lux/pull/1299))
+
 ## `lux-cli` - [0.24.1](https://github.com/lumen-oss/lux/compare/v0.24.0...v0.24.1) - 2026-01-21
 
 ### Added
