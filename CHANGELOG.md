@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.24.2](https://github.com/lumen-oss/lux/releases/tag/v0.24.2) - 2026-01-21
+
+### Fixed
+- *(test/busted-nlua)* unbreak on macOS ([#1304](https://github.com/lumen-oss/lux/pull/1304))
+
+### Other
+- release ([#1306](https://github.com/lumen-oss/lux/pull/1306))
+
+## `lux-lib` - [0.31.2](https://github.com/lumen-oss/lux/releases/tag/lux-lib-v0.31.2) - 2026-01-21
+
+### Fixed
+- *(test/busted-nlua)* unbreak on macOS ([#1304](https://github.com/lumen-oss/lux/pull/1304))
+
+### Other
+- release ([#1306](https://github.com/lumen-oss/lux/pull/1306))
+
 ## `lux-cli` - [0.24.2](https://github.com/lumen-oss/lux/compare/v0.24.1...v0.24.2) - 2026-01-21
 
 ### Fixed
