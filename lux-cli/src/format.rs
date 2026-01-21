@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use eyre::{OptionExt, Result};
+use eyre::{Context, OptionExt, Result};
 use lux_lib::project::Project;
 use path_slash::PathExt;
 use stylua_lib::Config;
@@ -51,16 +51,18 @@ pub fn format(args: Fmt) -> Result<()> {
                 .extension()
                 .is_some_and(|ext| ext == "lua")
             {
-                let unformatted_code = std::fs::read_to_string(file.path())?;
+                let file = file.path();
+                let unformatted_code = std::fs::read_to_string(file)?;
                 let formatted_code = match args.backend {
                     FmtBackend::Stylua => stylua_lib::format_code(
                         &unformatted_code,
                         config,
                         None,
                         stylua_lib::OutputVerification::Full,
-                    )?,
+                    )
+                    .context(format!("error formatting {} with stylua.", file.display()))?,
                     FmtBackend::EmmyluaCodestyle => {
-                        let uri = file.path().to_slash_lossy().to_string();
+                        let uri = file.to_slash_lossy().to_string();
                         emmylua_codestyle::reformat_code(
                             &unformatted_code,
                             &uri,
@@ -69,7 +71,8 @@ pub fn format(args: Fmt) -> Result<()> {
                     }
                 };
 
-                std::fs::write(file.into_path(), formatted_code)?;
+                std::fs::write(file, formatted_code)
+                    .context(format!("error writing formatted file {}.", file.display()))?
             };
             Ok::<_, eyre::Report>(())
         })?;
