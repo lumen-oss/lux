@@ -250,7 +250,7 @@ pub enum Commands {
     /// {n}
     ///   - busted-nlua:{n}:
     ///     {n}
-    ///     [currently broken on macOS and Windows]
+    ///     [currently broken on Windows]{n}
     ///     A build backend for running busted tests with Neovim as the Lua interpreter.
     ///     Used for testing Neovim plugins.
     ///     {n}
