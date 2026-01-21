@@ -120,8 +120,18 @@ impl ValidatedTestSpec {
         match self {
             Self::BustedNlua(_) => {
                 let config_builder: ConfigBuilder = config.clone().into();
+
+                // XXX: On macos and msvc, Neovim and LuaJIT segfault when
+                // requiring luafilesystem's `lfs` module
+                // if it is built with Lua 5.1 headers.
+                #[cfg(not(any(target_os = "macos", target_env = "msvc")))]
+                let lua_version = LuaVersion::Lua51;
+
+                #[cfg(any(target_os = "macos", target_env = "msvc"))]
+                let lua_version = LuaVersion::LuaJIT;
+
                 Ok(config_builder
-                    .lua_version(Some(LuaVersion::Lua51))
+                    .lua_version(Some(lua_version))
                     .variables(Some(
                         vec![("LUA".to_string(), NLUA_EXE.to_string())]
                             .into_iter()

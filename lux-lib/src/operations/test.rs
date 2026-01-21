@@ -121,7 +121,7 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
 
     let progress = test
         .progress
-        .unwrap_or_else(|| MultiProgress::new_arc(test.config));
+        .unwrap_or_else(|| MultiProgress::new_arc(&config));
 
     if no_lock {
         ensure_test_dependencies(&test.project, &rocks, &config, progress).await?;

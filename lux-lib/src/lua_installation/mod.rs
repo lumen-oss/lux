@@ -258,7 +258,12 @@ impl LuaInstallation {
 
     /// NOTE: In luarocks, these are behind a link_lua_explicity config option
     pub(crate) fn lib_link_args(&self, compiler: &cc::Tool) -> Vec<String> {
-        self.dependency_info.lib_link_args(compiler)
+        if cfg!(target_os = "macos") {
+            // On macos, linking Lua can lead to duplicate symbol errors
+            Vec::new()
+        } else {
+            self.dependency_info.lib_link_args(compiler)
+        }
     }
 
     /// Get the Lua binary (if present), prioritising
