@@ -444,17 +444,15 @@ async fn link_c_artifacts(
         ))
     })?;
     let is_msvc = compiler.is_like_msvc();
+    let cmd = build.try_get_compiler()?.to_command();
+    let mut cmd: tokio::process::Command = cmd.into();
+    cmd.current_dir(temp_work_dir.path());
+    add_variable_if_set(config, "LIBFLAG", &mut cmd);
     let output = if is_msvc {
         let def_file = mk_def_file(temp_work_dir.path(), target_file_name, target_module)?;
-        let cmd = build.try_get_compiler()?.to_command();
-        let mut cmd: tokio::process::Command = cmd.into();
-        cmd.current_dir(temp_work_dir.path())
-            .arg("/NOLOGO")
-            .arg("/NOIMPLIB")
-            .arg("/NOEXP")
-            .args(&objects)
-            .arg("/LD")
-            .arg("/link")
+        cmd.arg("/NOIMPLIB").arg("/NOEXP").args(&objects).arg("/LD");
+        add_variable_if_set(config, "LDFLAGS", &mut cmd);
+        cmd.arg("/link")
             .arg(format!("/DEF:{}", def_file.display()))
             .arg(format!("/OUT:{}", output_path.display()))
             .args(lua.lib_link_args(&compiler))
@@ -468,11 +466,8 @@ async fn link_c_artifacts(
             .output()
             .await?
     } else {
-        let cmd = build.try_get_compiler()?.to_command();
-        let mut cmd: tokio::process::Command = cmd.into();
-        cmd.current_dir(temp_work_dir.path())
-            .arg("-shared")
-            .args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
+        add_variable_if_set(config, "LDFLAGS", &mut cmd);
+        cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
             .args(lua.lib_link_args(&build.try_get_compiler()?))
             .args(
                 external_dependencies
@@ -503,6 +498,18 @@ async fn link_c_artifacts(
         Err(LinkCModulesError::LibOutputNotCreated(
             output_path.to_slash_lossy().to_string(),
         ))
+    }
+}
+
+/// Lookup a variable in the `Config` and if set and non-empty,
+/// split it into multiple arguments and add them to the `Command`.
+fn add_variable_if_set(config: &Config, name: &str, cmd: &mut Command) {
+    let variables = config.variables();
+    if let Some(var_str) = variables.get(name) {
+        if !var_str.is_empty() {
+            let vars = var_str.split_whitespace().collect_vec();
+            cmd.args(vars);
+        }
     }
 }
 
