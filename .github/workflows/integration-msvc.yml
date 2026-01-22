@@ -50,7 +50,7 @@ jobs:
         env:
           OPENSSL_DIR: C:\Program Files\OpenSSL
           OPENSSL_LIB_DIR: C:\Program Files\OpenSSL\lib\VC\x64\MD
-        run: cargo build --locked --no-default-features --features lua54,vendored
+        run: cargo build --locked --no-default-features --features luau,vendored
 
       - name: Run tests
         env:
@@ -59,4 +59,4 @@ jobs:
           CC_ENABLE_DEBUG_OUTPUT: true
           CFLAGS: "/NOLOGO /MT /O2"
         run: |
-          cargo nextest run --locked --test "*" --no-fail-fast --no-default-features --features lua54,vendored
+          cargo nextest run --locked --test "*" --no-fail-fast --no-default-features --features luau,vendored

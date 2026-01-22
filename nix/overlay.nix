@@ -144,7 +144,7 @@
         buildInputs =
           individualCrateArgs.buildInputs
           ++ [
-            final.lua5_4
+            final.luau
           ];
 
         cargoBuildCommand = "cargo build --profile ${buildType}";
