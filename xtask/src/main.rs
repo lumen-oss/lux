@@ -92,7 +92,7 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
         target_dir.to_string_lossy().to_string(),
         "--no-default-features".into(),
         "--features".into(),
-        "lua54".into(),
+        "luau".into(),
     ];
 
     if opts.vendored {

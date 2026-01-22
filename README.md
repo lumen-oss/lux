@@ -17,7 +17,7 @@
 <p align="center">
   <a href="#star2-key-features">Key Features</a> •
   <a href="#gear-how-to-use">How To Use</a> •
-  <a href="#bar_chart-comparison-with-luarocks">Comparison with Luarocks</a> •
+  <a href="#bar_chart-comparison-with-luarocks">Comparison with LuaRocks</a> •
   <a href="#bulb-you-may-also-like">Related Projects</a> •
   <a href="#green_heart-contributing">Contributing</a>
 </p>
@@ -43,7 +43,7 @@
   - Makes for fully reproducible developer environments.
   - Makes Lux easy to integrate with Nix!
 * Fully compatible
-  - Works with existing luarocks packages.
+  - Works with existing LuaRocks packages.
   - Have a complex rockspec that you don't want to rewrite to TOML? No problem!
     Lux allows the creation of an `extra.rockspec` file, everything just works.
   - Have a very complex build script? Lux can shell out to `luarocks` if it knows it has
@@ -62,49 +62,51 @@ Feel free to consult the [documentation](https://lux.lumen-labs.org/tutorial/get
 
 It features a tutorial and several guides to make you good at managing Lua projects.
 
-## :bar_chart: Comparison with `luarocks`
+## :bar_chart: Comparison with LuaRocks
 
-As this project is still a work in progress, some luarocks features
+As this project is still a work in progress, some LuaRocks features
 have not been (fully) implemented yet.
-On the other hand, lux has some features that are not present in luarocks.
+On the other hand, Lux has some features that are not present in LuaRocks.
 
 The following table provides a brief comparison:
 
-|                                                                       | lux                          | luarocks v3.12.2   |
-| ---                                                                   | ---                          | ---                |
-| project format                                                        | TOML / Lua                   | Lua                |
-| add/remove dependencies                                               | :white_check_mark:           | :x:                |
-| parallel builds/installs                                              | :white_check_mark:           | :x:                |
-| proper lockfile support with integrity checks                         | :white_check_mark:           | :x: (basic, dependency versions only) |
-| run tests with busted                                                 | :white_check_mark:           | :white_check_mark: |
-| linting with luacheck                                                 | :white_check_mark:           | :x:                |
-| code formatting with stylua                                           | :white_check_mark:           | :x:                |
-| automatic lua detection/installation                                  | :white_check_mark:           | :x:                |
-| default build specs                                                   | :white_check_mark:           | :white_check_mark: |
-| custom build backends                                                 | :white_check_mark:[^1]       | :white_check_mark: |
-| `rust-mlua` build spec                                                | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
-| `treesitter-parser` build spec                                        | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
-| install pre-built binary rocks                                        | :white_check_mark:           | :white_check_mark: |
-| install multiple packages with a single command                       | :white_check_mark:           | :x:                |
-| install packages using version constraints                            | :white_check_mark:           | :x:                |
-| auto-detect external dependencies and Lua headers with `pkg-config`   | :white_check_mark:           | :x:                |
-| resolve multiple versions of the same dependency at runtime           | :white_check_mark:           | :white_check_mark: |
-| pack and upload pre-built binary rocks                                | :white_check_mark:           | :white_check_mark: |
-| luarocks.org manifest namespaces                                      | :white_check_mark:           | :white_check_mark: |
-| luarocks.org dev packages                                             | :white_check_mark:           | :white_check_mark: |
-| versioning                                                            | SemVer[^3]                   | arbitrary          |
-| rockspecs with CVS/Mercurial/SVN/SSCM sources                         | :x: (YAGNI[^2])              | :white_check_mark: |
-| static type checking                                                  | :white_check_mark:           | :x:                |
-| generate a `.luarc` file with dependencies                            | :white_check_mark:           | :x:                |
-| git dependencies in local projects                                    | :white_check_mark:           | :x:                |
-| vendor sources for offline use                                        | :white_check_mark:           | :x:                |
+|                                                                                         | Lux                          | LuaRocks v3.13.0   |
+| ---                                                                                     | ---                          | ---                |
+| Project format                                                                          | TOML / Lua                   | Lua                |
+| Add/remove dependencies                                                                 | :white_check_mark:           | :x:                |
+| Parallel builds/installs                                                                | :white_check_mark:           | :x:                |
+| Proper lockfile support with integrity checks                                           | :white_check_mark:           | :x: (basic, dependency versions only) |
+| Run tests with busted                                                                   | :white_check_mark:           | :white_check_mark: |
+| Linting with luacheck                                                                   | :white_check_mark:           | :x:                |
+| Code formatting with stylua                                                             | :white_check_mark:           | :x:                |
+| Automatic lua detection/installation                                                    | :white_check_mark:           | :x:                |
+| Default build specs                                                                     | :white_check_mark:           | :white_check_mark: |
+| Custom build backends                                                                   | :white_check_mark:[^1]       | :white_check_mark: |
+| `rust-mlua` build spec                                                                  | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
+| `treesitter-parser` build spec                                                          | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
+| Install pre-built binary rocks                                                          | :white_check_mark:           | :white_check_mark: |
+| Install multiple packages with a single command                                         | :white_check_mark:           | :x:                |
+| Install packages using version constraints                                              | :white_check_mark:           | :x:                |
+| Auto-detect external dependencies and Lua headers with `pkg-config`                     | :white_check_mark:           | :x:                |
+| Resolve multiple versions of the same dependency at runtime                             | :white_check_mark:           | :white_check_mark: |
+| Pack and upload pre-built binary rocks                                                  | :white_check_mark:           | :white_check_mark: |
+| Luarocks.org manifest namespaces                                                        | :white_check_mark:           | :white_check_mark: |
+| Luarocks.org dev packages                                                               | :white_check_mark:           | :white_check_mark: |
+| Versioning                                                                              | SemVer[^2]                   | arbitrary          |
+| Rockspecs with CVS/Mercurial/SVN/SSCM sources                                           | :x: (YAGNI[^3])              | :white_check_mark: |
+| Static type checking                                                                    | :white_check_mark:           | :x:                |
+| Generate a `.luarc` file with dependencies                                              | :white_check_mark:           | :x:                |
+| Git dependencies in local projects                                                      | :white_check_mark:           | :x:                |
+| Vendor sources for offline use                                                          | :white_check_mark:           | :x:                |
+| Load RockSpecs and LuaRocks manifests with [Luau sandboxing](https://luau.org/sandbox/) | :white_check_mark:[^4]       | :x:                |
 
-[^1]: Supported via a compatibility layer that uses luarocks as a backend.
-[^2]: [You Aren't Gonna Need It.](https://martinfowler.com/bliki/Yagni.html)
-[^3]: Mostly compatible with the luarocks version parser,
+[^1]: Supported via a compatibility layer that uses LuaRocks as a backend.
+[^2]: Mostly compatible with the LuaRocks version parser,
       which allows an arbitrary number of version components.
       To comply with SemVer, we treat anything after the third version component
       (except for the specrev) as a prerelease/build version.
+[^3]: [You Aren't Gonna Need It.](https://martinfowler.com/bliki/Yagni.html)
+[^4]: When built with the default `luau` feature enabled.
 
 ## :package: Packages
 
@@ -147,7 +149,7 @@ Dependencies:
 
 If building without the `vendored` feature:
 
-- `lua`
+- `lua`, `luajit` or `luau`
 - `libgit2`
 - `openssl`
 
@@ -160,7 +162,7 @@ To link `gpgme` statically on Linux and macOS, set the environment variable
 `SYSTEM_DEPS_LINK=static`.
 
 We usually recommend building with the `vendored` feature enabled,
-to statically link `lua`, `libgit2` and `openssl`:
+to statically link `luau`, `libgit2` and `openssl`:
 
 ```bash
 SYSTEM_DEPS_LINK="static" cargo build --locked --profile release --features vendored
@@ -212,7 +214,7 @@ cargo xtask dist-package
 
 ## :snowflake: Nix flake
 
-If you would like to use the latest version of lux with Nix,
+If you would like to use the latest version of Lux with Nix,
 you can import our flake.
 It provides an overlay and packages for:
 
@@ -228,12 +230,12 @@ Lux will auto-detect `lux-lua`.
 
 ## :bulb: You may also like...
 
-- [luarocks](https://github.com/luarocks/luarocks) - The original Lua package manager
+- [LuaRocks](https://github.com/luarocks/luarocks) - The original Lua package manager
 - [rocks.nvim](https://github.com/lumen-oss/rocks.nvim) - A Neovim plugin manager that uses `luarocks` under the hood, and will soon be undergoing a rewrite to use Lux instead.
 
 ## :purple_heart: Credits
 
-Credits go to the Luarocks team for maintaining [luarocks](https://github.com/luarocks/luarocks) and [luarocks.org](https://luarocks.org) for as long as they have.
+Credits go to the LuaRocks team for maintaining [LuaRocks](https://github.com/luarocks/luarocks) and [luarocks.org](https://luarocks.org) for as long as they have.
 Without their prior work Lux would not be possible.
 
 ## :green_heart: Contributing

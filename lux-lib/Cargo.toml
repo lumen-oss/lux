@@ -98,7 +98,7 @@ assert_fs = "1.1"
 predicates = "3.1"
 
 [features]
-default = ["lua54"]
+default = ["luau"]
 clap = ["dep:clap"]
 lua = []
 lua51 = ["mlua/lua51"]
@@ -106,6 +106,7 @@ lua52 = ["mlua/lua52"]
 lua53 = ["mlua/lua53"]
 lua54 = ["mlua/lua54"]
 luajit = ["mlua/luajit"]
+luau = ["mlua/luau"]
 gpgme = ["dep:gpgme"]
 vendored = ["mlua/vendored", "openssl/vendored", "git2/vendored-libgit2"]
 vendored-openssl = ["openssl/vendored"]
