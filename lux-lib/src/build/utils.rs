@@ -7,7 +7,7 @@ use crate::{
     variables::{self, Environment, VariableSubstitutionError},
 };
 use itertools::Itertools;
-use mlua::{Lua, LuaSerdeExt};
+use mlua::Lua;
 use path_slash::PathExt;
 use shlex::try_quote;
 use std::{
@@ -677,24 +677,24 @@ async fn is_compatible_lua_script_fallback(
     lua_installation: &LuaInstallation,
     config: &Config,
 ) -> bool {
-    lua_installation
-        .lua_binary_or_config_override(config)
-        .is_some_and(|_| {
-            let lua = Lua::new();
-            lua.load(format!(
-                "is_compatible_lua_script = loadfile('{}') ~= nil",
-                file.to_slash_lossy()
-            ))
-            .exec()
-            .is_ok_and(|()| {
-                lua.globals()
-                    .get("is_compatible_lua_script")
-                    .is_ok_and(|value| {
-                        lua.from_value(value)
-                            .is_ok_and(|is_compatible| is_compatible)
-                    })
+    if let Ok(file_content) = tokio::fs::read_to_string(&file).await {
+        let file_content_without_comments = file_content
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("#"))
+            .collect_vec()
+            .join("\n");
+        lua_installation
+            .lua_binary_or_config_override(config)
+            .is_some_and(|_| {
+                let lua = Lua::new();
+                // Try to compile the content without executing it
+                lua.load(file_content_without_comments)
+                    .into_function()
+                    .is_ok()
             })
-        })
+    } else {
+        false
+    }
 }
 
 pub(crate) fn substitute_variables(
