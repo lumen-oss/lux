@@ -27,6 +27,10 @@ pub enum RockManifestError {
 impl RockManifest {
     pub fn new(rock_manifest_content: &str) -> Result<Self, RockManifestError> {
         let lua = Lua::new();
+
+        #[cfg(feature = "luau")]
+        lua.sandbox(true)?;
+
         lua.load(rock_manifest_content).exec()?;
         let globals = lua.globals();
         let value = globals.get("rock_manifest")?;
