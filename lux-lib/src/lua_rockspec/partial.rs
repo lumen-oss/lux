@@ -34,6 +34,10 @@ pub type PartialRockspecError = mlua::Error;
 impl PartialLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, PartialRockspecError> {
         let lua = Lua::new();
+
+        #[cfg(feature = "luau")]
+        lua.sandbox(true)?;
+
         lua.load(rockspec_content).exec()?;
 
         let globals = lua.globals();
