@@ -685,8 +685,16 @@ async fn is_compatible_lua_script_fallback(
             .join("\n");
         lua_installation
             .lua_binary_or_config_override(config)
-            .is_some_and(|_| {
+            .and_then(|_| {
                 let lua = Lua::new();
+
+                #[cfg(feature = "luau")]
+                return lua.sandbox(true).ok().map(|_| lua);
+
+                #[cfg(not(feature = "luau"))]
+                Some(lua)
+            })
+            .is_some_and(|lua| {
                 // Try to compile the content without executing it
                 lua.load(file_content_without_comments)
                     .into_function()
