@@ -38,6 +38,8 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum LuaRockspecError {
+    #[error("error enabling the Luau sandbox:\n{0}")]
+    LuauSandbox(mlua::Error),
     #[error(
         r#"could not parse rockspec ({cause}):
 
@@ -161,6 +163,10 @@ impl LocalLuaRockspec {
         project_root: ProjectRoot,
     ) -> Result<Self, LuaRockspecError> {
         let lua = Lua::new();
+
+        #[cfg(feature = "luau")]
+        lua.sandbox(true).map_err(LuaRockspecError::LuauSandbox)?;
+
         lua.load(rockspec_content)
             .exec()
             .map_err(|cause| LuaRockspecError::MLua {
