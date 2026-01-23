@@ -29,6 +29,9 @@ impl ManifestMetadata {
     pub fn new(manifest: &String) -> Result<Self, ManifestLuaError> {
         let lua = Lua::new();
 
+        #[cfg(feature = "luau")]
+        lua.sandbox(true)?;
+
         lua.load(manifest).exec()?;
 
         let intermediate = IntermediateManifest {
