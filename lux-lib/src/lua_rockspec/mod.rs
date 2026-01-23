@@ -400,6 +400,10 @@ impl UserData for RemoteLuaRockspec {
 impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
         let lua = Lua::new();
+
+        #[cfg(feature = "luau")]
+        lua.sandbox(true).map_err(LuaRockspecError::LuauSandbox)?;
+
         lua.load(rockspec_content)
             .exec()
             .map_err(|cause| LuaRockspecError::MLua {
