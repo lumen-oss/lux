@@ -55,6 +55,8 @@
             ;
         };
 
+        legacyPackages = pkgs;
+
         devShells = let
           isDarwin = pkgs.stdenv.isDarwin;
           mkDevShell = extra_pkgs:
@@ -102,6 +104,11 @@
           lua53 = mkDevShell [pkgs.lua5_3];
           lua54 = mkDevShell [pkgs.lua5_4];
           luajit = mkDevShell [pkgs.luajit];
+          lua51-nvim = mkDevShell (with pkgs; [lua5_1 neovim-unwrapped]);
+          lua52-nvim = mkDevShell (with pkgs; [lua5_2 neovim-unwrapped]);
+          lua53-nvim = mkDevShell (with pkgs; [lua5_3 neovim-unwrapped]);
+          lua54-nvim = mkDevShell (with pkgs; [lua5_4 neovim-unwrapped]);
+          luajit-nvim = mkDevShell (with pkgs; [luajit neovim-unwrapped]);
           cd = mkBuildShell pkgs;
         };
 

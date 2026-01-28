@@ -27,13 +27,8 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - name: Install neovim
-        uses: rhysd/action-setup-vim@v1 # Used by the 'run' integration test
-        with:
-          neovim: true
-          version: v0.11.4
-
+      - name: Checkout repository
+        uses: actions/checkout@v6
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
       - name: Setup cachix
@@ -41,9 +36,10 @@ jobs:
         with:
           name: neorocks
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
       - name: Run tests (Linux/macOS)
         run: |
-          nix develop .#${{ matrix.lua.feature }} \
+          nix develop .#${{ matrix.lua.feature }}-nvim \
             --command cargo nextest run \
             --locked \
             --test "*" \
