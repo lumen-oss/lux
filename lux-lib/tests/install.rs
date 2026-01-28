@@ -8,6 +8,7 @@ use lux_lib::{
     operations::{Exec, Install, PackageInstallSpec},
     tree::EntryType,
 };
+use serial_test::serial;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
@@ -27,11 +28,16 @@ async fn install_git_package() {
 
 // http 0.4 has an http-0.4-0.all.rock packed rock on luarocks.org
 #[tokio::test]
+#[serial]
 #[cfg(not(target_env = "msvc"))] // http has dependencies that are not supported on Windows
 async fn install_http_package() {
+    let cflags = std::env::var("CFLAGS").unwrap_or_default();
+    // See https://github.com/wahern/luaossl/issues/220#issuecomment-3401472124
+    std::env::set_var("CFLAGS", "-Wno-error=incompatible-pointer-types");
     let install_spec =
         PackageInstallSpec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint).build();
-    test_install(install_spec).await
+    test_install(install_spec).await;
+    std::env::set_var("CFLAGS", cflags);
 }
 
 #[tokio::test]
