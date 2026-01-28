@@ -38,7 +38,7 @@
 * Automatic EmmyLua/LuaCATS based type checking via `lx check`
   - Powered by [`emmylua-analyzer-rust`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust)
 * Automatic code linting via `lx lint`
-  - Powered by [`luacheck`](https://github.com/mpeterv/luacheck)
+  - Powered by [`luacheck`](https://github.com/lunarmodules/luacheck)
 * Powerful lockfile support
   - Makes for fully reproducible developer environments.
   - Makes Lux easy to integrate with Nix!
