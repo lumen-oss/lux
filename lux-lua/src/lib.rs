@@ -14,6 +14,7 @@ fn lux(lua: &Lua) -> LuaResult<LuaTable> {
         feature = "lua52",
         feature = "lua53",
         feature = "lua54",
+        feature = "lua55",
         feature = "luajit",
         feature = "test"
     )))]
@@ -21,7 +22,7 @@ fn lux(lua: &Lua) -> LuaResult<LuaTable> {
         "
         At least one Lua version feature must be enabled. \
         Please enable one of the following features: \
-        lua51, lua52, lua53, lua54, luajit."
+        lua51, lua52, lua53, lua54, lua55, luajit."
     );
 
     let exports = lua.create_table()?;

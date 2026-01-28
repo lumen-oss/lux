@@ -59,6 +59,7 @@ impl BuildBackend for RustMluaBuildSpec {
             LuaVersion::Lua52 => "lua52",
             LuaVersion::Lua53 => "lua53",
             LuaVersion::Lua54 => "lua54",
+            LuaVersion::Lua55 => "lua55",
             LuaVersion::LuaJIT => "luajit",
             LuaVersion::LuaJIT52 => "luajit",
         };
