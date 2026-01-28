@@ -67,6 +67,19 @@ We use the following tools:
 - [`cargo check`](https://doc.rust-lang.org/cargo/commands/cargo-check.html)
 - [`clippy`](https://doc.rust-lang.org/clippy/)
 
+#### Preventing cyclic module dependencies
+
+We have CI checks in place to prevent cyclic module dependencies
+using [cargo-modules](https://github.com/regexident/cargo-modules).
+
+To run them locally:
+
+```console
+cargo modules dependencies --package <package> --lib --acyclic
+```
+
+...where `<package>` is one of `lux-lib`, `lux-cli` or `lux-lua`.
+
 ### Nix dev shell
 
 - Requires [flakes](https://nixos.wiki/wiki/Flakes) to be enabled.
