@@ -126,7 +126,7 @@ Lux includes the following packages and libraries:
 - `lux-lua`: The Lux Lua API, which provides:
   - `lux.loader` for resolving dependencies on `require` at runtime.
   - A work-in-progress API for embedding Lux into Lua applications.
-  We provide builds of `lux-lua` for Lua 5.1, 5.2, 5.3, 5.4 and Luajit.
+  We provide builds of `lux-lua` for Lua 5.1, 5.2, 5.3, 5.4 and LuaJIT.
   `lux-cli` uses `lux-lua` for commands like `lx lua`, `lx run` and `lx path`.
 
 - `lux-lib`: The Lux library for Rust. A dependency of `lux-cli` and `lux-lua`.
@@ -187,6 +187,7 @@ cargo xtask51 dist-lua # lux-lua for Lua 5.1
 cargo xtask52 dist-lua # for Lua 5.2
 cargo xtask53 dist-lua # ...
 cargo xtask54 dist-lua
+cargo xtask55 dist-lua
 cargo xtaskjit dist-lua
 ```
 
@@ -223,7 +224,8 @@ It provides an overlay and packages for:
 - `lux-lua52` The Lux Lua API for Lua 5.2
 - `lux-lua53` The Lux Lua API for Lua 5.3
 - `lux-lua54` The Lux Lua API for Lua 5.4
-- `lux-luajit` The Lux Lua API for Luajit
+- `lux-lua55` The Lux Lua API for Lua 5.5
+- `lux-luajit` The Lux Lua API for LuaJIT
 
 If you have a `lux-lua` build and `pkg-config` in a Nix devShell,
 Lux will auto-detect `lux-lua`.
