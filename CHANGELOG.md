@@ -13,6 +13,39 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(lux-cli)* vendor with luau for sandboxing ([#1309](https://github.com/lumen-oss/lux/pull/1309))
 
 ### Other
+- release ([#1310](https://github.com/lumen-oss/lux/pull/1310))
+- *(deps)* bump whoami from 2.0.0 to 2.1.0 ([#1320](https://github.com/lumen-oss/lux/pull/1320))
+- *(readme)* update luacheck url ([#1319](https://github.com/lumen-oss/lux/pull/1319))
+
+## `lux-lib` - [0.32.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.31.2...lux-lib-v0.32.0) - 2026-01-29
+
+### Added
+- [**breaking**] support lua 5.5 ([#1258](https://github.com/lumen-oss/lux/pull/1258))
+- enable luau sandbox mode when loading luarocks manifest
+- enable luau sandbox mode when loading remote rockspecs
+- enable luau sandbox mode when detecting Lua bin scripts
+- enable luau sandbox mode when loading rock manifests
+- enable luau sandbox mode when loading `extra.rockspec`
+- enable luau sandbox mode when loading rockspecs
+- *(lux-cli)* vendor with luau for sandboxing ([#1309](https://github.com/lumen-oss/lux/pull/1309))
+
+### Fixed
+- *(build)* substitute variables in rockspec modules ([#1317](https://github.com/lumen-oss/lux/pull/1317))
+
+### Other
+- release ([#1310](https://github.com/lumen-oss/lux/pull/1310))
+- *(readme)* update luacheck url ([#1319](https://github.com/lumen-oss/lux/pull/1319))
+- *(build)* simplify Lua script detection ([#1308](https://github.com/lumen-oss/lux/pull/1308))
+
+## `lux-cli` - [0.25.0](https://github.com/lumen-oss/lux/compare/v0.24.2...v0.25.0) - 2026-01-29
+
+### Added
+- *(fmt)* [**breaking**] format `test` and `tests` directories
+- [**breaking**] support lua 5.5 ([#1258](https://github.com/lumen-oss/lux/pull/1258))
+- *(fmt)* [**breaking**] format `spec` directory ([#1318](https://github.com/lumen-oss/lux/pull/1318))
+- *(lux-cli)* vendor with luau for sandboxing ([#1309](https://github.com/lumen-oss/lux/pull/1309))
+
+### Other
 - *(deps)* bump whoami from 2.0.0 to 2.1.0 ([#1320](https://github.com/lumen-oss/lux/pull/1320))
 - *(readme)* update luacheck url ([#1319](https://github.com/lumen-oss/lux/pull/1319))
 
