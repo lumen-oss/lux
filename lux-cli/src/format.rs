@@ -39,6 +39,8 @@ pub fn format(args: Fmt) -> Result<()> {
         .chain(WalkDir::new(project.root().join("lua")))
         .chain(WalkDir::new(project.root().join("lib")))
         .chain(WalkDir::new(project.root().join("spec")))
+        .chain(WalkDir::new(project.root().join("test")))
+        .chain(WalkDir::new(project.root().join("tests")))
         .filter_map(Result::ok)
         .filter(|file| {
             args.workspace_or_file
