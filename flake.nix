@@ -7,7 +7,7 @@
   };
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks = {
@@ -51,15 +51,22 @@
             lux-lua52
             lux-lua53
             lux-lua54
+            lux-lua55
             lux-luajit
             ;
         };
 
+        legacyPackages = pkgs;
+
         devShells = let
+          isDarwin = pkgs.stdenv.isDarwin;
           mkDevShell = extra_pkgs:
             pkgs.mkShell {
               name = "lux devShell";
-              inherit (git-hooks-check) shellHook;
+              shellHook =
+                lib.optionalString
+                (!isDarwin)
+                git-hooks-check.shellHook;
               buildInputs =
                 extra_pkgs
                 ++ (with pkgs; [
@@ -79,7 +86,7 @@
                   zlib
                   gnum4
                 ])
-                ++ self.checks.${system}.git-hooks-check.enabledPackages
+                ++ (lib.optional (!isDarwin) self.checks.${system}.git-hooks-check.enabledPackages)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "lua" pkg.name)) pkgs.lux-cli.buildInputs)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "xtask" pkg.name)) pkgs.lux-cli.nativeBuildInputs);
             };
@@ -93,11 +100,22 @@
             };
         in rec {
           default = lua51;
+
           lua51 = mkDevShell [pkgs.lua5_1];
           lua52 = mkDevShell [pkgs.lua5_2];
           lua53 = mkDevShell [pkgs.lua5_3];
           lua54 = mkDevShell [pkgs.lua5_4];
+          lua55 = mkDevShell [pkgs.lua5_5];
           luajit = mkDevShell [pkgs.luajit];
+
+          # devShells with neovim-unwrapped (for CI integration tests)
+          lua51-ci = mkDevShell (with pkgs; [lua5_1 neovim-unwrapped]);
+          lua52-ci = mkDevShell (with pkgs; [lua5_2 neovim-unwrapped]);
+          lua53-ci = mkDevShell (with pkgs; [lua5_3 neovim-unwrapped]);
+          lua54-ci = mkDevShell (with pkgs; [lua5_4 neovim-unwrapped]);
+          lua55-ci = mkDevShell (with pkgs; [lua5_5 neovim-unwrapped]);
+          luajit-ci = mkDevShell (with pkgs; [luajit neovim-unwrapped]);
+
           cd = mkBuildShell pkgs;
         };
 

@@ -1000,7 +1000,7 @@ impl BuildType {
             | &BuildType::Source => None,
             &BuildType::RustMlua => unsafe {
                 Some(
-                    PackageReq::parse("luarocks-build-rust-mlua >= 0.2.5")
+                    PackageReq::parse("luarocks-build-rust-mlua >= 0.2.6")
                         .unwrap_unchecked()
                         .into(),
                 )

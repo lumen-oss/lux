@@ -515,6 +515,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
 
     fn lua_version(&self) -> Option<LuaVersion> {
         for (possibility, version) in [
+            ("5.5.0", LuaVersion::Lua55),
             ("5.4.0", LuaVersion::Lua54),
             ("5.3.0", LuaVersion::Lua53),
             ("5.2.0", LuaVersion::Lua52),

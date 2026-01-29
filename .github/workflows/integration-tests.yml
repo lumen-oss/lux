@@ -21,29 +21,35 @@ jobs:
           { version: "5.2", feature: "lua52" },
           { version: "5.3", feature: "lua53" },
           { version: "5.4", feature: "lua54" },
-          { version: "luajit-2.1", feature: "luajit" }
+          # FIXME: Not many packages support Lua 5.5 yet,
+          # so we skip integration tests for Lua 5.5 for now.
+          # { version: "5.5", feature: "lua55" },
+
+          # FIXME: the luajit devshell
+          # is failing to build in CI with a strange 'command not found' error message.
+          # It doesn't fail to build locally...
+          # { version: "luajit-2.1", feature: "luajit" }
         ]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - name: Install neovim
-        uses: rhysd/action-setup-vim@v1 # Used by the 'run' integration test
-        with:
-          neovim: true
-          version: v0.11.4
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: cachix/install-nix-action@v31
+
       - name: Setup cachix
         uses: cachix/cachix-action@v16
         with:
           name: neorocks
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
       - name: Run tests (Linux/macOS)
         run: |
-          nix develop .#${{ matrix.lua.feature }} \
+          nix develop .#${{ matrix.lua.feature }}-ci \
+            --accept-flake-config \
             --command cargo nextest run \
             --locked \
             --test "*" \
