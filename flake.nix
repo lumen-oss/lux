@@ -56,10 +56,14 @@
         };
 
         devShells = let
+          isDarwin = pkgs.stdenv.isDarwin;
           mkDevShell = extra_pkgs:
             pkgs.mkShell {
               name = "lux devShell";
-              inherit (git-hooks-check) shellHook;
+              shellHook =
+                lib.optionalString
+                (!isDarwin)
+                git-hooks-check.shellHook;
               buildInputs =
                 extra_pkgs
                 ++ (with pkgs; [
@@ -79,7 +83,7 @@
                   zlib
                   gnum4
                 ])
-                ++ self.checks.${system}.git-hooks-check.enabledPackages
+                ++ (lib.optional (!isDarwin) self.checks.${system}.git-hooks-check.enabledPackages)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "lua" pkg.name)) pkgs.lux-cli.buildInputs)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "xtask" pkg.name)) pkgs.lux-cli.nativeBuildInputs);
             };
