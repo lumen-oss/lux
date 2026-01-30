@@ -7,7 +7,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## `lux-cli` - [0.25.1](https://github.com/lumen-oss/lux/compare/v0.25.0...v0.25.1) - 2026-01-30
 
 ### Fixed
-- *(tests)* install vendored project to temp directory (2)
 - *(tests)* install vendored project to temp directory
 
 ### Other
