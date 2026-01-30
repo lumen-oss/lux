@@ -34,6 +34,8 @@ mod tests {
 
     use super::*;
 
+    use std::path::PathBuf;
+
     use assert_fs::{
         prelude::{FileWriteStr, PathChild, PathCreateDir},
         TempDir,
@@ -109,10 +111,12 @@ mod tests {
         let toml = project_dir.child("lux.toml");
         toml.write_str(toml_content).unwrap();
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let data_dir: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
         let config = ConfigBuilder::new()
             .unwrap()
             .vendor_dir(Some(vendor_dir.to_path_buf()))
             .lua_version(lua_version)
+            .data_dir(Some(data_dir))
             .build()
             .unwrap();
         build(Build::default(), config).await.unwrap();
