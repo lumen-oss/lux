@@ -179,12 +179,14 @@ mod test {
             ..RunLua::default()
         };
         let temp: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
+        let data_dir: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
         let cwd = &std::env::current_dir().unwrap();
         tokio::fs::create_dir_all(&temp).await.unwrap();
         std::env::set_current_dir(&temp).unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
             .user_tree(Some(temp.clone()))
+            .data_dir(Some(data_dir))
             .build()
             .unwrap();
         run_lua(args, config).await.unwrap();
