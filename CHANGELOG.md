@@ -11,6 +11,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(tests)* install vendored project to temp directory
 
 ### Other
+- release ([#1326](https://github.com/lumen-oss/lux/pull/1326))
+- *(readme)* add xtask snippet for Lua 5.5
+
+## `lux-lib` - [0.32.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.32.0...lux-lib-v0.32.1) - 2026-01-30
+
+### Other
+- release ([#1326](https://github.com/lumen-oss/lux/pull/1326))
+- *(readme)* add xtask snippet for Lua 5.5
+
+## `lux-cli` - [0.25.1](https://github.com/lumen-oss/lux/compare/v0.25.0...v0.25.1) - 2026-01-30
+
+### Fixed
+- *(tests)* install vendored project to temp directory (2)
+- *(tests)* install vendored project to temp directory
+
+### Other
 - *(readme)* add xtask snippet for Lua 5.5
 
 ## `lux-lib` - [0.32.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.32.0...lux-lib-v0.32.1) - 2026-01-30
