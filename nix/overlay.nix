@@ -238,10 +238,6 @@ in {
         nix # we use nix-hash in tests
       ];
 
-      preCheck = ''
-        export HOME=$(realpath .)
-      '';
-
       cargoArtifacts = lux-deps;
       partitions = 1;
       partitionType = "count";
@@ -264,10 +260,6 @@ in {
         lua5_1
         nix # we use nix-hash in tests
       ];
-
-      preCheck = ''
-        export HOME=$(realpath .)
-      '';
 
       cargoArtifacts = lux-deps;
       partitions = 1;
