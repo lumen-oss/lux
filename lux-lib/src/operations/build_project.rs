@@ -225,6 +225,7 @@ mod tests {
     async fn builtin_build_autodetect_bin_scripts() {
         let project_root =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
+        let data_dir: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
         let temp_dir = assert_fs::TempDir::new().unwrap();
         temp_dir.copy_from(&project_root, &["**"]).unwrap();
         let project_root = temp_dir.path();
@@ -243,6 +244,7 @@ mod tests {
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
+            .data_dir(Some(data_dir))
             .lua_version(lua_version)
             .build()
             .unwrap();
