@@ -126,7 +126,7 @@ Lux includes the following packages and libraries:
 - `lux-lua`: The Lux Lua API, which provides:
   - `lux.loader` for resolving dependencies on `require` at runtime.
   - A work-in-progress API for embedding Lux into Lua applications.
-  We provide builds of `lux-lua` for Lua 5.1, 5.2, 5.3, 5.4 and LuaJIT.
+  We provide builds of `lux-lua` for Lua 5.1, 5.2, 5.3, 5.4, 5.5 and LuaJIT.
   `lux-cli` uses `lux-lua` for commands like `lx lua`, `lx run` and `lx path`.
 
 - `lux-lib`: The Lux library for Rust. A dependency of `lux-cli` and `lux-lua`.
