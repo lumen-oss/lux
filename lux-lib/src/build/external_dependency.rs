@@ -514,7 +514,7 @@ mod tests {
         include_dir.create_dir_all().unwrap();
         lib_dir.create_dir_all().unwrap();
 
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         let lib = lib_dir.child("libfoo.so");
         #[cfg(target_os = "macos")]
         let lib = lib_dir.child("libfoo.dylib");
@@ -549,7 +549,7 @@ mod tests {
         let lib_dir = temp.child("lib");
         lib_dir.create_dir_all().unwrap();
 
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         let lib = lib_dir.child("libfoo.so");
         #[cfg(target_os = "macos")]
         let lib = lib_dir.child("libfoo.dylib");
@@ -586,7 +586,7 @@ mod tests {
         include_dir.create_dir_all().unwrap();
         lib_dir.create_dir_all().unwrap();
 
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         let lib = lib_dir.child("libfoo.so");
         #[cfg(target_os = "macos")]
         let lib = lib_dir.child("libfoo.dylib");
