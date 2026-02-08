@@ -1635,7 +1635,7 @@ mod tests {
         vec!["advapi32".into(), "winmm".into()]
     }
     fn luasystem_expected_libraries() -> Vec<PathBuf> {
-        if cfg!(target_os = "linux") {
+        if cfg!(any(target_os = "linux", target_os = "android")) {
             vec!["rt".into()]
         } else if cfg!(target_os = "windows") {
             luasystem_expected_windows_libraries()

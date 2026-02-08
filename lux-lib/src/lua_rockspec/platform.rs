@@ -653,6 +653,12 @@ mod tests {
         run_test_target_identifier(PlatformIdentifier::Windows)
     }
 
+    #[cfg(target_os = "android")]
+    #[tokio::test]
+    async fn test_target_identifier() {
+        run_test_target_identifier(PlatformIdentifier::Unix)
+    }
+
     fn run_test_target_identifier(expected: PlatformIdentifier) {
         assert_eq!(expected, target_identifier());
     }

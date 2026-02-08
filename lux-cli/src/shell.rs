@@ -51,7 +51,7 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
     let shell: PathBuf = match env::var("SHELL") {
         Ok(val) => PathBuf::from(val),
         Err(_) => {
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             let fallback = which("bash").wrap_err("Cannot find `bash` on your system!")?;
 
             #[cfg(target_os = "windows")]
