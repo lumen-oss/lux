@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.25.2](https://github.com/lumen-oss/lux/compare/v0.25.1...v0.25.2) - 2026-02-09
+
+### Added
+- (unofficial) Android compilation target support ([#1338](https://github.com/lumen-oss/lux/pull/1338))
+
+### Other
+- *(readme)* update package badge ([#1336](https://github.com/lumen-oss/lux/pull/1336))
+- *(readme)* add missing Lua 5.5 reference
+- *(deps)* bump emmylua_check to 0.20.0 ([#1330](https://github.com/lumen-oss/lux/pull/1330))
+
+## `lux-lib` - [0.32.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.32.1...lux-lib-v0.32.2) - 2026-02-09
+
+### Added
+- (unofficial) Android compilation target support ([#1338](https://github.com/lumen-oss/lux/pull/1338))
+
+### Other
+- *(deps)* bulk update ([#1339](https://github.com/lumen-oss/lux/pull/1339))
+- *(readme)* update package badge ([#1336](https://github.com/lumen-oss/lux/pull/1336))
+- *(deps)* bump zip from 7.3.0 to 7.4.0 ([#1333](https://github.com/lumen-oss/lux/pull/1333))
+- *(deps)* bump proptest from 1.9.0 to 1.10.0 ([#1332](https://github.com/lumen-oss/lux/pull/1332))
+- *(deps)* bump zip from 7.2.0 to 7.3.0 ([#1331](https://github.com/lumen-oss/lux/pull/1331))
+- *(readme)* add missing Lua 5.5 reference
+- *(nix)* don't export `$HOME` ([#1328](https://github.com/lumen-oss/lux/pull/1328))
+
 ## `lux-cli` - [0.25.1](https://github.com/lumen-oss/lux/compare/v0.25.0...v0.25.1) - 2026-01-30
 
 ### Fixed
