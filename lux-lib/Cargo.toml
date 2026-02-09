@@ -41,7 +41,14 @@ nonempty = { version = "0.12", features = ["serialize"] }
 openssl = "0.10"
 pkg-config = "0.3"
 remove_dir_all = "1.0"
-reqwest = { version = "0.12", features = ["json", "multipart"] }
+reqwest = { version = "0.13", default-features = false, features = [
+  "http2",
+  "charset",
+  "system-proxy",
+  "query",
+  "json",
+  "multipart",
+] }
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde-enum-str = "0.5"
@@ -51,7 +58,7 @@ shlex = "1.3"
 ssri = "9.2"
 tar = "0.4"
 thiserror = "2.0"
-toml_edit = "0.23"
+toml_edit = "0.24"
 tree-sitter = "0.26"
 tree-sitter-config = "0.26"
 # NOTE: The default qjs-rt feature of tree-sitter-generate
@@ -98,7 +105,10 @@ assert_fs = "1.1"
 predicates = "3.1"
 
 [features]
-default = ["luau"]
+default = [
+  "luau",
+  "reqwest/native-tls", # depends on OpenSSL
+]
 clap = ["dep:clap"]
 lua = []
 lua51 = ["mlua/lua51"]
@@ -109,8 +119,13 @@ lua55 = ["mlua/lua55"]
 luajit = ["mlua/luajit"]
 luau = ["mlua/luau"]
 gpgme = ["dep:gpgme"]
-vendored = ["mlua/vendored", "openssl/vendored", "git2/vendored-libgit2"]
-vendored-openssl = ["openssl/vendored"]
+vendored = [
+  "mlua/vendored",
+  "openssl/vendored",
+  "git2/vendored-libgit2",
+  "reqwest/native-tls-vendored",
+]
+vendored-openssl = ["openssl/vendored", "reqwest/native-tls-vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
 vendored-lua = ["mlua/vendored"]
 ssh-tests = []
