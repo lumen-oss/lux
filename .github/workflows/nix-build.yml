@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, ready_for_review, reopened, synchronize]
   push:
-    branches: [ master ]
+    branches: [ main ]
 jobs:
   build:
     if: github.event.pull_request.draft == false
