@@ -10,6 +10,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - (unofficial) Android compilation target support ([#1338](https://github.com/lumen-oss/lux/pull/1338))
 
 ### Other
+- release ([#1329](https://github.com/lumen-oss/lux/pull/1329))
+- *(readme)* update package badge ([#1336](https://github.com/lumen-oss/lux/pull/1336))
+- *(readme)* add missing Lua 5.5 reference
+- *(deps)* bump emmylua_check to 0.20.0 ([#1330](https://github.com/lumen-oss/lux/pull/1330))
+
+## `lux-cli` - [0.25.2](https://github.com/lumen-oss/lux/compare/v0.25.1...v0.25.2) - 2026-02-09
+
+### Added
+- (unofficial) Android compilation target support ([#1338](https://github.com/lumen-oss/lux/pull/1338))
+
+### Other
 - *(readme)* update package badge ([#1336](https://github.com/lumen-oss/lux/pull/1336))
 - *(readme)* add missing Lua 5.5 reference
 - *(deps)* bump emmylua_check to 0.20.0 ([#1330](https://github.com/lumen-oss/lux/pull/1330))
