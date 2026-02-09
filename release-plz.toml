@@ -56,14 +56,14 @@ commit_parsers = [
     { message = "^revert", group = "reverted" },
     { message = "^security", group = "security" },
     { message = "^perf", group = "performance" },
-    { message = "^chore\\(deps\\)", group = "dependencies" }
-    { message = "^chore: release", skip = true }
-    { message = "^refactor", skip = true }
-    { message = "^build\\(nix\\)", skip = true }
-    { message = "^ci", skip = true }
-    { message = "^cd", skip = true }
-    { message = "^docs", skip = true }
-    { message = "^test", skip = true }
-    { message = "^style", skip = true }
+    { message = "^chore\\(deps\\)", group = "dependencies" },
+    { message = "^chore: release", skip = true },
+    { message = "^refactor", skip = true },
+    { message = "^build\\(nix\\)", skip = true },
+    { message = "^ci", skip = true },
+    { message = "^cd", skip = true },
+    { message = "^docs", skip = true },
+    { message = "^test", skip = true },
+    { message = "^style", skip = true },
     { message = "^.*", group = "other" },
 ]
