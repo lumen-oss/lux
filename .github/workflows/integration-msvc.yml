@@ -3,7 +3,7 @@ on:
     types: [opened, ready_for_review, reopened, synchronize]
   push:
     branches:
-      - master
+      - main
 
 name: Integration tests (Windows/MSVC)
 
