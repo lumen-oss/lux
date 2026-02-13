@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.25.3](https://github.com/lumen-oss/lux/compare/v0.25.2...v0.25.3) - 2026-02-13
+
+### Dependencies
+- *(deps)* bump termtree from 0.5.1 to 1.0.0 ([#1346](https://github.com/lumen-oss/lux/pull/1346))
+
+## `lux-lib` - [0.32.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.32.2...lux-lib-v0.32.3) - 2026-02-13
+
+### Dependencies
+- *(deps)* bump bon from 3.8.1 to 3.9.0 ([#1347](https://github.com/lumen-oss/lux/pull/1347))
+
 ## `lux-cli` - [0.25.2](https://github.com/lumen-oss/lux/compare/v0.25.1...v0.25.2) - 2026-02-09
 
 ### Added
