@@ -8,10 +8,17 @@ mod serde_util;
 mod test_spec;
 
 use std::{
-    collections::HashMap, convert::Infallible, fmt::Display, io, path::PathBuf, str::FromStr,
+    collections::HashMap,
+    convert::Infallible,
+    fmt::Display,
+    io::{self, Cursor},
+    path::PathBuf,
+    str::FromStr,
 };
 
-use mlua::{FromLua, Lua, LuaSerdeExt, Value};
+use mlua::{FromLua, LuaSerdeExt};
+use piccolo::{Closure, Executor, Fuel};
+use piccolo_util::serde::from_value;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub use build::*;
@@ -31,30 +38,41 @@ use crate::{
     config::{LuaVersion, LuaVersionUnset},
     hash::HasIntegrity,
     package::{PackageName, PackageSpec, PackageVersion, PackageVersionReq},
-    project::project_toml::ProjectTomlError,
-    project::ProjectRoot,
+    project::{project_toml::ProjectTomlError, ProjectRoot},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
+    ROCKSPEC_FUEL_LIMIT,
 };
 
 #[derive(Error, Debug)]
 pub enum LuaRockspecError {
-    #[error("error enabling the Luau sandbox:\n{0}")]
-    LuauSandbox(mlua::Error),
+    #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    FuelLimitExceeded,
     #[error(
         r#"could not parse rockspec ({cause}):
 
     {content}"#
     )]
-    MLua { content: String, cause: mlua::Error },
+    ExecutionError {
+        #[source]
+        cause: piccolo::StaticError,
+        content: String,
+    },
     #[error(
-        r#"could not parse rockspec field '{field}' ({cause}):
+        r#"could not find rockspec field '{field}':
 
     {content}"#
     )]
-    MLuaGetKey {
+    LuaKeyNotFound { field: String, content: String },
+    #[error(
+        r#"could not deserialize rockspec field '{field}':
+
+    {content}"#
+    )]
+    LuaKeyDeserializationFailure {
         field: String,
         content: String,
-        cause: mlua::Error,
+        #[source]
+        cause: piccolo_util::serde::de::Error,
     },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
@@ -65,6 +83,7 @@ pub enum LuaRockspecError {
     )]
     LuaTable {
         content: String,
+        #[source]
         cause: LuaTableError,
     },
     #[error("cannot create Lua rockspec with off-spec dependency: {0}")]
@@ -137,24 +156,28 @@ impl UserData for LocalLuaRockspec {
 }
 */
 
-trait HasRockspecKey {
-    fn get_rockspec_key<V: FromLua>(
+trait HasRockspecKey<'gc> {
+    fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
-        key: &str,
+        ctx: piccolo::Context<'gc>,
+        key: String,
         rockspec_content: &str,
     ) -> Result<V, LuaRockspecError>;
 }
 
-impl HasRockspecKey for mlua::Table {
-    fn get_rockspec_key<V: FromLua>(
+impl<'gc> HasRockspecKey<'gc> for piccolo::Table<'gc> {
+    fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
-        key: &str,
+        ctx: piccolo::Context<'gc>,
+        key: String,
         rockspec_content: &str,
     ) -> Result<V, LuaRockspecError> {
-        self.get(key).map_err(|cause| LuaRockspecError::MLuaGetKey {
-            field: key.to_string(),
-            content: rockspec_content.to_string(),
-            cause,
+        from_value(self.get(ctx, key.clone())).map_err(|cause| {
+            LuaRockspecError::LuaKeyDeserializationFailure {
+                field: key,
+                content: rockspec_content.to_string(),
+                cause,
+            }
         })
     }
 }
@@ -164,88 +187,108 @@ impl LocalLuaRockspec {
         rockspec_content: &str,
         project_root: ProjectRoot,
     ) -> Result<Self, LuaRockspecError> {
-        let lua = Lua::new();
+        let mut lua = piccolo::Lua::core();
 
-        #[cfg(feature = "luau")]
-        lua.sandbox(true).map_err(LuaRockspecError::LuauSandbox)?;
+        let rockspec = lua
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
 
-        lua.load(rockspec_content)
-            .exec()
-            .map_err(|cause| LuaRockspecError::MLua {
+                let executor = Executor::start(ctx, closure.into(), ());
+
+                let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT));
+
+                if !output {
+                    return Ok(Err(LuaRockspecError::FuelLimitExceeded));
+                }
+
+                let globals = ctx.globals();
+
+                let dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+                    globals.get_rockspec_key(ctx, "dependencies".into(), rockspec_content)?;
+
+                let lua_version_req = dependencies
+                    .current_platform()
+                    .iter()
+                    .find(|dep| dep.name().to_string() == "lua")
+                    .cloned()
+                    .map(|dep| dep.version_req().clone())
+                    .unwrap_or(PackageVersionReq::Any);
+
+                fn strip_lua(
+                    dependencies: PerPlatform<Vec<LuaDependencySpec>>,
+                ) -> PerPlatform<Vec<LuaDependencySpec>> {
+                    dependencies.map(|deps| {
+                        deps.iter()
+                            .filter(|dep| dep.name().to_string() != "lua")
+                            .cloned()
+                            .collect()
+                    })
+                }
+
+                let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+                    globals.get_rockspec_key(ctx, "build_dependencies".into(), rockspec_content)?;
+
+                let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+                    globals.get_rockspec_key(ctx, "test_dependencies".into(), rockspec_content)?;
+
+                let source: PerPlatform<RemoteRockSource> = match globals.get(ctx, "source") {
+                    piccolo::Value::Nil => {
+                        PerPlatform::new(RockSourceSpec::File(project_root.to_path_buf()).into())
+                    }
+                    value => from_value(value).map_err(|cause| {
+                        LuaRockspecError::LuaKeyDeserializationFailure {
+                            field: "source".into(),
+                            content: rockspec_content.to_string(),
+                            cause,
+                        }
+                    })?,
+                };
+
+                let rockspec = LocalLuaRockspec {
+                    rockspec_format: globals.get_rockspec_key(
+                        ctx,
+                        "rockspec_format".into(),
+                        rockspec_content,
+                    )?,
+                    package: globals.get_rockspec_key(ctx, "package".into(), rockspec_content)?,
+                    version: globals.get_rockspec_key(ctx, "version".into(), rockspec_content)?,
+                    description: parse_lua_tbl_or_default(ctx, "description").map_err(|cause| {
+                        LuaRockspecError::LuaTable {
+                            content: rockspec_content.to_string(),
+                            cause,
+                        }
+                    })?,
+                    supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")
+                        .map_err(|cause| LuaRockspecError::LuaTable {
+                            content: rockspec_content.to_string(),
+                            cause,
+                        })?,
+                    lua: lua_version_req,
+                    dependencies: strip_lua(dependencies),
+                    build_dependencies: strip_lua(build_dependencies),
+                    test_dependencies: strip_lua(test_dependencies),
+                    external_dependencies: globals.get_rockspec_key(
+                        ctx,
+                        "external_dependencies".into(),
+                        rockspec_content,
+                    )?,
+                    build: globals.get_rockspec_key(ctx, "build".into(), rockspec_content)?,
+                    test: globals.get_rockspec_key(ctx, "test".into(), rockspec_content)?,
+                    deploy: globals.get_rockspec_key(ctx, "deploy".into(), rockspec_content)?,
+                    raw_content: rockspec_content.into(),
+
+                    source,
+                };
+
+                Ok(Ok(rockspec))
+            })
+            .map_err(|cause| LuaRockspecError::ExecutionError {
                 content: rockspec_content.to_string(),
                 cause,
-            })?;
-
-        let globals = lua.globals();
-
-        let dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get_rockspec_key("dependencies", rockspec_content)?;
-
-        let lua_version_req = dependencies
-            .current_platform()
-            .iter()
-            .find(|dep| dep.name().to_string() == "lua")
-            .cloned()
-            .map(|dep| dep.version_req().clone())
-            .unwrap_or(PackageVersionReq::Any);
-
-        fn strip_lua(
-            dependencies: PerPlatform<Vec<LuaDependencySpec>>,
-        ) -> PerPlatform<Vec<LuaDependencySpec>> {
-            dependencies.map(|deps| {
-                deps.iter()
-                    .filter(|dep| dep.name().to_string() != "lua")
-                    .cloned()
-                    .collect()
-            })
-        }
-
-        let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get_rockspec_key("build_dependencies", rockspec_content)?;
-
-        let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-            globals.get_rockspec_key("test_dependencies", rockspec_content)?;
-
-        let rockspec = LocalLuaRockspec {
-            rockspec_format: globals.get_rockspec_key("rockspec_format", rockspec_content)?,
-            package: globals.get_rockspec_key("package", rockspec_content)?,
-            version: globals.get_rockspec_key("version", rockspec_content)?,
-            description: parse_lua_tbl_or_default(&lua, "description").map_err(|cause| {
-                LuaRockspecError::LuaTable {
-                    content: rockspec_content.to_string(),
-                    cause,
-                }
-            })?,
-            supported_platforms: parse_lua_tbl_or_default(&lua, "supported_platforms").map_err(
-                |cause| LuaRockspecError::LuaTable {
-                    content: rockspec_content.to_string(),
-                    cause,
-                },
-            )?,
-            lua: lua_version_req,
-            dependencies: strip_lua(dependencies),
-            build_dependencies: strip_lua(build_dependencies),
-            test_dependencies: strip_lua(test_dependencies),
-            external_dependencies: globals
-                .get_rockspec_key("external_dependencies", rockspec_content)?,
-            build: globals.get_rockspec_key("build", rockspec_content)?,
-            test: globals.get_rockspec_key("test", rockspec_content)?,
-            deploy: globals.get_rockspec_key("deploy", rockspec_content)?,
-            raw_content: rockspec_content.into(),
-
-            source: globals
-                .get::<Option<PerPlatform<RemoteRockSource>>>("source")
-                .map_err(|cause| LuaRockspecError::MLuaGetKey {
-                    field: "source".to_string(),
-                    content: rockspec_content.to_string(),
-                    cause,
-                })?
-                .unwrap_or_else(|| {
-                    PerPlatform::new(RockSourceSpec::File(project_root.to_path_buf()).into())
-                }),
-        };
+            })??;
 
         let rockspec_file_name = format!("{}-{}.rockspec", rockspec.package(), rockspec.version());
+
         if rockspec
             .build()
             .default
@@ -403,27 +446,32 @@ impl UserData for RemoteLuaRockspec {
 
 impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
-        let lua = Lua::new();
+        let mut lua = piccolo::Lua::core();
 
-        #[cfg(feature = "luau")]
-        lua.sandbox(true).map_err(LuaRockspecError::LuauSandbox)?;
+        lua.try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
 
-        lua.load(rockspec_content)
-            .exec()
-            .map_err(|cause| LuaRockspecError::MLua {
-                content: rockspec_content.to_string(),
-                cause,
-            })?;
+            let executor = Executor::start(ctx, closure.into(), ());
 
-        let globals = lua.globals();
-        let source = globals.get_rockspec_key("source", rockspec_content)?;
+            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT));
 
-        let rockspec = RemoteLuaRockspec {
-            local: LocalLuaRockspec::new(rockspec_content, ProjectRoot::new())?,
-            source,
-        };
+            if !output {
+                return Ok(Err(LuaRockspecError::FuelLimitExceeded));
+            }
 
-        Ok(rockspec)
+            let globals = ctx.globals();
+
+            let source = globals.get_rockspec_key(ctx, "source".into(), rockspec_content)?;
+
+            Ok(Ok(RemoteLuaRockspec {
+                local: LocalLuaRockspec::new(rockspec_content, ProjectRoot::new())?,
+                source,
+            }))
+        })
+        .map_err(|cause| LuaRockspecError::ExecutionError {
+            content: rockspec_content.to_string(),
+            cause,
+        })?
     }
 
     pub fn from_package_and_source_spec(
@@ -738,7 +786,7 @@ impl FromLua for RockspecFormat {
 
 /*
 impl IntoLua for RockspecFormat {
-    fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
+    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<Value> {
         self.to_string().into_lua(lua)
     }
 }
@@ -762,17 +810,20 @@ pub enum LuaTableError {
         invalid_type: String,
     },
     #[error(transparent)]
-    MLua(#[from] mlua::Error),
+    DeserializationError(#[from] piccolo_util::serde::de::Error),
 }
 
-fn parse_lua_tbl_or_default<T>(lua: &Lua, lua_var_name: &str) -> Result<T, LuaTableError>
+fn parse_lua_tbl_or_default<T>(
+    ctx: piccolo::Context<'_>,
+    lua_var_name: &str,
+) -> Result<T, LuaTableError>
 where
     T: Default,
     T: DeserializeOwned,
 {
-    let ret = match lua.globals().get(lua_var_name)? {
-        Value::Nil => T::default(),
-        value @ Value::Table(_) => lua.from_value(value)?,
+    let ret = match ctx.globals().get(ctx, lua_var_name.to_string()) {
+        piccolo::Value::Nil => T::default(),
+        value @ piccolo::Value::Table(_) => from_value(value)?,
         value => Err(LuaTableError::ParseError {
             variable: lua_var_name.to_string(),
             invalid_type: value.type_name().to_string(),

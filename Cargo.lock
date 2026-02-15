@@ -1993,6 +1993,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "gc-arena"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cd70cf88a32937834aae9614ff2569b5d9467fa0c42c5d7762fd94a8de88266"
+dependencies = [
+ "allocator-api2",
+ "gc-arena-derive",
+ "hashbrown 0.14.5",
+ "sptr",
+]
+
+[[package]]
+name = "gc-arena-derive"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c612a69f5557a11046b77a7408d2836fe77077f842171cd211c5ef504bd3cddd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.111",
+ "synstructure",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2232,6 +2256,10 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+]
 
 [[package]]
 name = "hashbrown"
@@ -3275,6 +3303,8 @@ dependencies = [
  "openssl",
  "path-slash",
  "pathdiff",
+ "piccolo",
+ "piccolo-util",
  "pkg-config",
  "predicates",
  "proptest",
@@ -3309,17 +3339,6 @@ dependencies = [
  "walkdir",
  "which 8.0.0",
  "zip 7.4.0",
-]
-
-[[package]]
-name = "lux-lua"
-version = "0.25.2"
-dependencies = [
- "assert_fs",
- "lux-lib",
- "lux-workspace-hack",
- "mlua",
- "path-absolutize",
 ]
 
 [[package]]
@@ -3361,7 +3380,6 @@ dependencies = [
  "openssl-sys",
  "parking_lot",
  "percent-encoding",
- "ppv-lite86",
  "predicates",
  "proc-macro2",
  "quote",
@@ -4150,6 +4168,33 @@ checksum = "bf1d70880e76bdc13ba52eafa6239ce793d85c8e43896507e43dd8984ff05b82"
 dependencies = [
  "pest",
  "sha2",
+]
+
+[[package]]
+name = "piccolo"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "003bf52de285e1ff1adcbc6572588db3849988ea660a2d55af3a2ffbc81f597f"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+ "anyhow",
+ "gc-arena",
+ "hashbrown 0.14.5",
+ "rand 0.8.5",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "piccolo-util"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4423e61bbe92f7df753455dccf5b21b6b5c0dfd9f3222ed007cfb667ced503a9"
+dependencies = [
+ "gc-arena",
+ "piccolo",
+ "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -5658,6 +5703,12 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "sptr"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b9b39299b249ad65f3b7e96443bad61c02ca5cd3589f46cb6d610a0fd6c0d6a"
 
 [[package]]
 name = "ssri"

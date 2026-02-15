@@ -19,10 +19,7 @@ use builtin::{
 use itertools::Itertools;
 
 use mlua::{DeserializeOptions, FromLua, Lua, LuaSerdeExt, Value};
-use std::{
-    collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display,
-    path::PathBuf, str::FromStr,
-};
+use std::{collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
 use serde::{de, de::IntoDeserializer, Deserialize, Deserializer};
