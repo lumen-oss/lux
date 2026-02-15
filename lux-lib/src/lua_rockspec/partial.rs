@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
-use mlua::{Lua, LuaSerdeExt, Value};
-use serde::de::Error;
+
+use piccolo::{Closure, Executor, Fuel};
+use piccolo_util::serde::from_value;
+use thiserror::Error;
 
 use crate::{
-    lua_rockspec::RockspecFormat, package::PackageName, rockspec::lua_dependency::LuaDependencySpec,
+    lua_rockspec::RockspecFormat, package::PackageName,
+    rockspec::lua_dependency::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT,
 };
 
 use super::{
@@ -29,58 +32,64 @@ pub struct PartialLuaRockspec {
 
 // impl UserData for PartialLuaRockspec {}
 
-pub type PartialRockspecError = mlua::Error;
+#[derive(Debug, Error)]
+pub enum PartialRockspecError {
+    // #[error("Lua error while parsing rockspec: {0}")]
+    // Lua(#[from] mlua::Error),
+    #[error("rockspec execution exceeded fuel limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    FuelLimitExceeded,
+    #[error("field `{0}` should not be declared in extra.rockspec")]
+    ExtraneousField(String),
+    #[error("error while parsing rockspec: {0}")]
+    Lua(#[from] piccolo::StaticError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
 
 impl PartialLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, PartialRockspecError> {
-        let lua = Lua::new();
+        let mut lua = piccolo::Lua::core();
 
-        #[cfg(feature = "luau")]
-        lua.sandbox(true)?;
+        let rockspec = lua.try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
 
-        lua.load(rockspec_content).exec()?;
+            let executor = Executor::start(ctx, closure.into(), ());
 
-        let globals = lua.globals();
+            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT));
 
-        if globals.contains_key("version")? {
-            return Err(mlua::Error::custom(
-                "field `version` should not be declared in extra.rockspec.",
-            ));
-        }
-        if globals.contains_key("source")? {
-            return Err(mlua::Error::custom(
-                "field `source` should not be declared in extra.rockspec.",
-            ));
-        }
+            if !output {
+                return Ok(Err(PartialRockspecError::FuelLimitExceeded));
+            }
 
-        let rockspec = PartialLuaRockspec {
-            rockspec_format: globals.get("rockspec_format").unwrap_or_default(),
-            package: globals.get("package").unwrap_or_default(),
-            description: parse_lua_tbl_or_default(&lua, "description").unwrap_or_default(),
-            supported_platforms: parse_lua_tbl_or_default(&lua, "supported_platforms")
-                .unwrap_or_default(),
-            dependencies: lua
-                .from_value(globals.get("dependencies").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-            build_dependencies: lua
-                .from_value(globals.get("build_dependencies").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-            test_dependencies: lua
-                .from_value(globals.get("test_dependencies").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-            external_dependencies: lua
-                .from_value(globals.get("external_dependencies").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-            build: lua
-                .from_value(globals.get("build").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-            test: lua
-                .from_value(globals.get("test").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-            deploy: lua
-                .from_value(globals.get("deploy").unwrap_or(Value::Nil))
-                .unwrap_or_default(),
-        };
+            let globals = ctx.globals();
+
+            if !matches!(globals.get(ctx, "version"), piccolo::Value::Nil) {
+                return Ok(Err(PartialRockspecError::ExtraneousField(
+                    "version".to_string(),
+                )));
+            }
+            if !matches!(globals.get(ctx, "source"), piccolo::Value::Nil) {
+                return Ok(Err(PartialRockspecError::ExtraneousField(
+                    "source".to_string(),
+                )));
+            }
+
+            let rockspec = PartialLuaRockspec {
+                rockspec_format: from_value(globals.get(ctx, "rockspec_format")).unwrap_or_default(),
+                package: from_value(globals.get(ctx, "package")).unwrap_or_default(),
+                description: parse_lua_tbl_or_default(ctx, "description").unwrap_or_default(),
+                supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms").unwrap_or_default(),
+                dependencies: from_value(globals.get(ctx, "dependencies")).unwrap_or_default(),
+                build_dependencies: from_value(globals.get(ctx, "build_dependencies")).unwrap_or_default(),
+                test_dependencies: from_value(globals.get(ctx, "test_dependencies")).unwrap_or_default(),
+                external_dependencies: from_value(globals.get(ctx, "external_dependencies")).unwrap_or_default(),
+                build: from_value(globals.get(ctx, "build")).unwrap_or_default(),
+                test: from_value(globals.get(ctx, "test")).unwrap_or_default(),
+                deploy: from_value(globals.get(ctx, "deploy")).unwrap_or_default(),
+            };
+
+            Ok(Ok(rockspec))
+        })??;
 
         Ok(rockspec)
     }
