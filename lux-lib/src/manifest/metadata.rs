@@ -1,10 +1,12 @@
 use itertools::Itertools;
-use mlua::{Lua, LuaSerdeExt};
+use piccolo::{Closure, Executor, Fuel, Lua};
+use piccolo_util::serde::from_value;
 use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
 
 use crate::package::{PackageName, PackageReq, PackageSpec, PackageVersion};
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
+use crate::ROCKSPEC_FUEL_LIMIT;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ManifestMetadata {
@@ -22,21 +24,35 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 }
 
 #[derive(Error, Debug)]
-#[error("failed to parse Lua manifest:\n{0}")]
-pub struct ManifestLuaError(#[from] mlua::Error);
+pub enum ManifestLuaError {
+    #[error("failed to parse Lua manifest:\n{0}")]
+    ExecutionError(#[from] piccolo::StaticError),
+    #[error("failed to deserialize Lua manifest:\n{0}")]
+    DeserializationError(#[from] piccolo_util::serde::de::Error),
+    #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    FuelLimitExceeded,
+}
 
 impl ManifestMetadata {
     pub fn new(manifest: &String) -> Result<Self, ManifestLuaError> {
-        let lua = Lua::new();
+        let mut lua = Lua::core();
 
-        #[cfg(feature = "luau")]
-        lua.sandbox(true)?;
+        let success = lua.try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, manifest.as_bytes())?;
 
-        lua.load(manifest).exec()?;
+            let executor = Executor::start(ctx, closure.into(), ());
+
+            Ok(executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT)))
+        })?;
+
+        if !success {
+            return Err(ManifestLuaError::FuelLimitExceeded);
+        }
 
         let intermediate = IntermediateManifest {
-            repository: lua.from_value(lua.globals().get("repository")?)?,
+            repository: lua.enter(|ctx| from_value(ctx.globals().get(ctx, "repository")))?,
         };
+
         let manifest = Self::from_intermediate(intermediate);
 
         Ok(manifest)
