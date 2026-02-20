@@ -8,27 +8,13 @@ with [`good-first-issue`](https://github.com/lumen-oss/lux/issues?q=is%3Aissue%2
 This document assumes that you already know how to use GitHub and Git.
 If that's not the case, we recommend learning about it first [here](https://docs.github.com/en/get-started/quickstart/hello-world).
 
-## AI Policy
+## Strict No LLM / No AI Policy
 
-We don't mind if you use AI to assist your development.
-But we expect you to understand, validate and clean up
-any AI-generated code.
+No LLMs for issues.
 
-Reviewing AI generated code that has not been validated or cleaned up
-takes up more time for us than just writing the code ourselves.
+No LLMs for pull requests.
 
-We will close your pull request without further consideration if:
-
-- We ask you a question about your code and you cannot explain the intent,
-  tradeoffs, or mechanics of the code you submitted.
-- Change requests are repeatedly ignored by your AI agent
-  (i.e., you fail to make requested modifications or provide
-  responses that show you haven't understood the feedback).
-- The PR contains clearly uncleaned AI output
-  (e.g., many useless comments, placeholder text,
-  obviously unreviewed code).
-- The PR is too large to review in a reasonable time and
-  lacks sufficient tests or documentation.
+No LLMs for comments on issues/PRs, including translation. English is encouraged, but not required. You are welcome to post in your native language and rely on others to have their own translation tools of choice to interpret your words.
 
 ## Creating pull requests
 
