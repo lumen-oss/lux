@@ -14,9 +14,7 @@ use crate::{
     rockspec::Rockspec,
 };
 
-use super::{
-    FromPlatformOverridable, PartialOverride, PerPlatform, PerPlatformWrapper, PlatformOverridable,
-};
+use super::{PartialOverride, PerPlatform, PerPlatformWrapper, PlatformOverridable};
 
 #[cfg(target_family = "unix")]
 const NLUA_EXE: &str = "nlua";
@@ -172,10 +170,10 @@ impl IntoLua for TestSpec {
     }
 }
 
-impl FromPlatformOverridable<TestSpecInternal, Self> for TestSpec {
-    type Err = TestSpecDecodeError;
+impl TryFrom<TestSpecInternal> for TestSpec {
+    type Error = TestSpecDecodeError;
 
-    fn from_platform_overridable(internal: TestSpecInternal) -> Result<Self, Self::Err> {
+    fn try_from(internal: TestSpecInternal) -> Result<Self, Self::Error> {
         let test_spec = match internal.test_type {
             Some(TestType::Busted) => Ok(Self::Busted(BustedTestSpec {
                 flags: internal.flags.unwrap_or_default(),
@@ -206,7 +204,7 @@ impl FromLua for PerPlatform<TestSpec> {
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        let wrapper = PerPlatformWrapper::from_lua(value, lua)?;
+        let wrapper = PerPlatformWrapper::<_, TestSpecInternal>::from_lua(value, lua)?;
         Ok(wrapper.un_per_platform)
     }
 }
@@ -217,8 +215,7 @@ impl<'de> Deserialize<'de> for TestSpec {
         D: Deserializer<'de>,
     {
         let internal = TestSpecInternal::deserialize(deserializer)?;
-        let test_spec =
-            TestSpec::from_platform_overridable(internal).map_err(serde::de::Error::custom)?;
+        let test_spec = TestSpec::try_from(internal).map_err(serde::de::Error::custom)?;
         Ok(test_spec)
     }
 }
