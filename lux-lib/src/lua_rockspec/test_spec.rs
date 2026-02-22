@@ -14,7 +14,8 @@ use crate::{
     rockspec::Rockspec,
 };
 
-use super::{PartialOverride, PerPlatform, PerPlatformWrapper, PlatformOverridable};
+use super::platform::per_platform_from_lua;
+use super::{PartialOverride, PerPlatform, PlatformOverridable};
 
 #[cfg(target_family = "unix")]
 const NLUA_EXE: &str = "nlua";
@@ -204,8 +205,7 @@ impl FromLua for PerPlatform<TestSpec> {
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        let wrapper = PerPlatformWrapper::<_, TestSpecInternal>::from_lua(value, lua)?;
-        Ok(wrapper.un_per_platform)
+        per_platform_from_lua::<TestSpec, TestSpecInternal>(value, lua)
     }
 }
 
