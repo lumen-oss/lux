@@ -31,7 +31,8 @@
 * Automatic generation of rockspecs
   - Say goodbye to managing 10 different rockspec files in your source code :tada:
 * Integrated code formatting via `lx fmt`
-  - Powered by [`stylua`](https://github.com/JohnnyMorganz/StyLua).
+  - Powered by [`stylua`](https://github.com/JohnnyMorganz/StyLua)
+    or [`emmylua_codestyle`](https://github.com/CppCXY/EmmyLuaCodeStyle).
 * Easily specify compatible Lua versions
   - Lux will take care of Lua header installation automatically
   - Forget about users complaining they have the wrong Lua headers installed on their system
