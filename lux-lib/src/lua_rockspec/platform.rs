@@ -285,12 +285,6 @@ pub trait PlatformOverridable: PartialOverride {
         T: Default;
 }
 
-pub trait FromPlatformOverridable<T: PlatformOverridable, G: FromPlatformOverridable<T, G>> {
-    type Err: std::error::Error;
-
-    fn from_platform_overridable(internal: T) -> Result<G, Self::Err>;
-}
-
 /// Data that that can vary per platform
 #[derive(Clone, Debug, PartialEq)]
 pub struct PerPlatform<T> {
@@ -457,7 +451,7 @@ where
     }
 }
 
-/// Newtype wrapper used to implement a `FromLua` instance for `FromPlatformOverridable`
+/// Newtype wrapper used to implement a `FromLua` instance for types using `TryFrom`
 /// This is necessary, because Rust doesn't yet support specialization.
 pub struct PerPlatformWrapper<T, G> {
     pub un_per_platform: PerPlatform<T>,
@@ -466,7 +460,7 @@ pub struct PerPlatformWrapper<T, G> {
 
 impl<T, G> FromLua for PerPlatformWrapper<T, G>
 where
-    T: FromPlatformOverridable<G, T, Err: ToString>,
+    T: TryFrom<G, Error: ToString>,
     G: PlatformOverridable<Err: ToString>,
     G: DeserializeOwned,
     G: Default,
@@ -478,14 +472,14 @@ where
             .per_platform
             .into_iter()
             .map(|(platform, internal_override)| {
-                let override_spec = T::from_platform_overridable(internal_override)
+                let override_spec = T::try_from(internal_override)
                     .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?;
 
                 Ok((platform, override_spec))
             })
             .try_collect::<_, _, mlua::Error>()?;
         let un_per_platform = PerPlatform {
-            default: T::from_platform_overridable(internal.default)
+            default: T::try_from(internal.default)
                 .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?,
             per_platform,
         };
@@ -498,7 +492,7 @@ where
 
 impl<'de, T, G> Deserialize<'de> for PerPlatformWrapper<T, G>
 where
-    T: FromPlatformOverridable<G, T, Err: ToString>,
+    T: TryFrom<G, Error: std::fmt::Display>,
     G: PlatformOverridable<Err: ToString>,
     G: DeserializeOwned,
     G: Default,
@@ -513,15 +507,14 @@ where
             .per_platform
             .into_iter()
             .map(|(platform, internal_override)| {
-                let override_spec = T::from_platform_overridable(internal_override)
-                    .map_err(serde::de::Error::custom)?;
+                let override_spec =
+                    T::try_from(internal_override).map_err(serde::de::Error::custom)?;
 
                 Ok((platform, override_spec))
             })
             .try_collect::<_, _, D::Error>()?;
         let un_per_platform = PerPlatform {
-            default: T::from_platform_overridable(internal.default)
-                .map_err(serde::de::Error::custom)?,
+            default: T::try_from(internal.default).map_err(serde::de::Error::custom)?,
             per_platform,
         };
         Ok(PerPlatformWrapper {

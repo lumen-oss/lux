@@ -11,8 +11,8 @@ use crate::git::{
 };
 
 use super::{
-    DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, FromPlatformOverridable, PartialOverride,
-    PerPlatform, PerPlatformWrapper, PlatformOverridable,
+    DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, PartialOverride, PerPlatform,
+    PerPlatformWrapper, PlatformOverridable,
 };
 
 #[derive(Default, Deserialize, Clone, Debug, PartialEq)]
@@ -66,22 +66,20 @@ pub enum RockSourceError {
     SourceUrlMissing,
 }
 
-impl FromPlatformOverridable<RockSourceInternal, Self> for LocalRockSource {
-    type Err = Infallible;
-
-    fn from_platform_overridable(internal: RockSourceInternal) -> Result<Self, Self::Err> {
-        Ok(LocalRockSource {
+impl From<RockSourceInternal> for LocalRockSource {
+    fn from(internal: RockSourceInternal) -> Self {
+        LocalRockSource {
             archive_name: internal.file,
             unpack_dir: internal.dir,
-        })
+        }
     }
 }
 
-impl FromPlatformOverridable<RockSourceInternal, Self> for RemoteRockSource {
-    type Err = RockSourceError;
+impl TryFrom<RockSourceInternal> for RemoteRockSource {
+    type Error = RockSourceError;
 
-    fn from_platform_overridable(internal: RockSourceInternal) -> Result<Self, Self::Err> {
-        let local = LocalRockSource::from_platform_overridable(internal.clone()).unwrap();
+    fn try_from(internal: RockSourceInternal) -> Result<Self, Self::Error> {
+        let local = LocalRockSource::from(internal.clone());
 
         // The rockspec.source table allows invalid combinations
         // This ensures that invalid combinations are caught while parsing.
@@ -106,7 +104,8 @@ impl FromPlatformOverridable<RockSourceInternal, Self> for RemoteRockSource {
 
 impl FromLua for PerPlatform<RemoteRockSource> {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        let wrapper = PerPlatformWrapper::from_lua(value, lua)?;
+        let wrapper =
+            PerPlatformWrapper::<RemoteRockSource, RockSourceInternal>::from_lua(value, lua)?;
         Ok(wrapper.un_per_platform)
     }
 }

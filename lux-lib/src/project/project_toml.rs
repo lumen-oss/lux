@@ -31,10 +31,10 @@ use crate::{
     config::{Config, LuaVersion},
     lua_rockspec::{
         BuildSpec, BuildSpecInternal, BuildSpecInternalError, DisplayAsLuaKV, ExternalDependencies,
-        ExternalDependencySpec, FromPlatformOverridable, LuaVersionError, PartialLuaRockspec,
-        PerPlatform, PlatformIdentifier, PlatformSupport, PlatformValidationError,
-        RemoteRockSource, RockDescription, RockSourceError, RockspecFormat, TestSpec,
-        TestSpecDecodeError, TestSpecInternal,
+        ExternalDependencySpec, LuaVersionError, PartialLuaRockspec, PerPlatform,
+        PlatformIdentifier, PlatformSupport, PlatformValidationError, RemoteRockSource,
+        RockDescription, RockSourceError, RockspecFormat, TestSpec, TestSpecDecodeError,
+        TestSpecInternal,
     },
     package::{
         BuildDependencies, Dependencies, PackageName, PackageReq, PackageVersion, PackageVersionReq,
@@ -340,7 +340,7 @@ impl PartialProjectToml {
                 project_toml.external_dependencies.unwrap_or_default(),
             ),
             test_dependencies: PerPlatform::new(project_toml.test_dependencies.unwrap_or_default()),
-            test: PerPlatform::new(TestSpec::from_platform_overridable(
+            test: PerPlatform::new(TestSpec::try_from(
                 project_toml.test.clone().unwrap_or_default(),
             )?),
             build: PerPlatform::new(BuildSpec::from_internal_spec(project_toml.build.clone())?),
@@ -393,13 +393,11 @@ impl PartialProjectToml {
         let source =
             self.source_template
                 .try_generate(&self.project_root, &self.package, &version)?;
-        let source = PerPlatform::new(
-            RemoteRockSource::from_platform_overridable(source).map_err(|err| {
-                RemoteProjectTomlValidationError::LocalProjectTomlValidationError(
-                    LocalProjectTomlValidationError::RockSource(err),
-                )
-            })?,
-        );
+        let source = PerPlatform::new(RemoteRockSource::try_from(source).map_err(|err| {
+            RemoteProjectTomlValidationError::LocalProjectTomlValidationError(
+                LocalProjectTomlValidationError::RockSource(err),
+            )
+        })?);
         let mut local = self.into_local()?;
         local.version = version;
 
