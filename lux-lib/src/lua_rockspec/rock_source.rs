@@ -11,8 +11,8 @@ use crate::git::{
 };
 
 use super::{
-    DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, PartialOverride, PerPlatform,
-    PerPlatformWrapper, PlatformOverridable,
+    platform::per_platform_from_lua, DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue,
+    PartialOverride, PerPlatform, PlatformOverridable,
 };
 
 #[derive(Default, Deserialize, Clone, Debug, PartialEq)]
@@ -104,9 +104,7 @@ impl TryFrom<RockSourceInternal> for RemoteRockSource {
 
 impl FromLua for PerPlatform<RemoteRockSource> {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        let wrapper =
-            PerPlatformWrapper::<RemoteRockSource, RockSourceInternal>::from_lua(value, lua)?;
-        Ok(wrapper.un_per_platform)
+        per_platform_from_lua::<RemoteRockSource, RockSourceInternal>(value, lua)
     }
 }
 
