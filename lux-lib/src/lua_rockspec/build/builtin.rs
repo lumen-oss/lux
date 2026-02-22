@@ -7,8 +7,8 @@ use thiserror::Error;
 use crate::{
     build::utils::c_dylib_extension,
     lua_rockspec::{
-        deserialize_vec_from_lua_array_or_string, DisplayAsLuaValue, FromPlatformOverridable,
-        PartialOverride, PerPlatform, PlatformOverridable,
+        deserialize_vec_from_lua_array_or_string, DisplayAsLuaValue, PartialOverride, PerPlatform,
+        PlatformOverridable,
     },
 };
 
@@ -145,10 +145,10 @@ impl<'de> Deserialize<'de> for ModuleSpec {
     }
 }
 
-impl FromPlatformOverridable<ModuleSpecInternal, Self> for ModuleSpec {
-    type Err = ModulePathsMissingSources;
+impl TryFrom<ModuleSpecInternal> for ModuleSpec {
+    type Error = ModulePathsMissingSources;
 
-    fn from_platform_overridable(internal: ModuleSpecInternal) -> Result<Self, Self::Err> {
+    fn try_from(internal: ModuleSpecInternal) -> Result<Self, Self::Error> {
         Self::from_internal(internal)
     }
 }

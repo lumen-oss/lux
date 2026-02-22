@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use mlua::{FromLua, IntoLuaMulti, Lua, LuaSerdeExt, UserData, Value};
-use std::{cmp::Ordering, collections::HashMap, marker::PhantomData};
+use std::{cmp::Ordering, collections::HashMap};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use thiserror::Error;
@@ -285,12 +285,6 @@ pub trait PlatformOverridable: PartialOverride {
         T: Default;
 }
 
-pub trait FromPlatformOverridable<T: PlatformOverridable, G: FromPlatformOverridable<T, G>> {
-    type Err: std::error::Error;
-
-    fn from_platform_overridable(internal: T) -> Result<G, Self::Err>;
-}
-
 /// Data that that can vary per platform
 #[derive(Clone, Debug, PartialEq)]
 pub struct PerPlatform<T> {
@@ -457,78 +451,23 @@ where
     }
 }
 
-/// Newtype wrapper used to implement a `FromLua` instance for `FromPlatformOverridable`
-/// This is necessary, because Rust doesn't yet support specialization.
-pub struct PerPlatformWrapper<T, G> {
-    pub un_per_platform: PerPlatform<T>,
-    phantom: PhantomData<G>,
-}
-
-impl<T, G> FromLua for PerPlatformWrapper<T, G>
+/// Deserializes a Lua value into a `PerPlatform<T>` through a proxy representation `G`. This is
+/// useful when `T` cannot be directly deserialized from Lua, but can be constructed from a simpler type
+/// `G`.
+pub(crate) fn per_platform_from_lua<T, G>(value: Value, lua: &Lua) -> mlua::Result<PerPlatform<T>>
 where
-    T: FromPlatformOverridable<G, T, Err: ToString>,
+    T: TryFrom<G, Error: ToString>,
     G: PlatformOverridable<Err: ToString>,
     G: DeserializeOwned,
     G: Default,
     G: Clone,
 {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        let internal = PerPlatform::from_lua(value, lua)?;
-        let per_platform: HashMap<_, _> = internal
-            .per_platform
-            .into_iter()
-            .map(|(platform, internal_override)| {
-                let override_spec = T::from_platform_overridable(internal_override)
-                    .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?;
-
-                Ok((platform, override_spec))
-            })
-            .try_collect::<_, _, mlua::Error>()?;
-        let un_per_platform = PerPlatform {
-            default: T::from_platform_overridable(internal.default)
-                .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?,
-            per_platform,
-        };
-        Ok(PerPlatformWrapper {
-            un_per_platform,
-            phantom: PhantomData,
+    PerPlatform::<G>::from_lua(value, lua)?
+        .map(|internal| {
+            T::try_from(internal.clone())
+                .map_err(|err| mlua::Error::DeserializeError(err.to_string()))
         })
-    }
-}
-
-impl<'de, T, G> Deserialize<'de> for PerPlatformWrapper<T, G>
-where
-    T: FromPlatformOverridable<G, T, Err: ToString>,
-    G: PlatformOverridable<Err: ToString>,
-    G: DeserializeOwned,
-    G: Default,
-    G: Clone,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let internal = PerPlatform::deserialize(deserializer)?;
-        let per_platform: HashMap<_, _> = internal
-            .per_platform
-            .into_iter()
-            .map(|(platform, internal_override)| {
-                let override_spec = T::from_platform_overridable(internal_override)
-                    .map_err(serde::de::Error::custom)?;
-
-                Ok((platform, override_spec))
-            })
-            .try_collect::<_, _, D::Error>()?;
-        let un_per_platform = PerPlatform {
-            default: T::from_platform_overridable(internal.default)
-                .map_err(serde::de::Error::custom)?,
-            per_platform,
-        };
-        Ok(PerPlatformWrapper {
-            un_per_platform,
-            phantom: PhantomData,
-        })
-    }
+        .transpose()
 }
 
 fn apply_per_platform_overrides<T>(
