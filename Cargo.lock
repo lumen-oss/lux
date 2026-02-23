@@ -3220,7 +3220,7 @@ dependencies = [
  "spdx",
  "spinners",
  "strum 0.28.0",
- "strum_macros 0.27.2",
+ "strum_macros 0.28.0",
  "stylua",
  "tempfile",
  "termcolor",
@@ -3290,7 +3290,7 @@ dependencies = [
  "shlex",
  "ssri",
  "strum 0.28.0",
- "strum_macros 0.27.2",
+ "strum_macros 0.28.0",
  "stylua",
  "tar",
  "target-lexicon 0.13.3",
@@ -5770,9 +5770,9 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
-version = "0.27.2"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -7420,7 +7420,7 @@ version = "0.1.0"
 dependencies = [
  "lux-workspace-hack",
  "strum 0.28.0",
- "strum_macros 0.27.2",
+ "strum_macros 0.28.0",
  "target-lexicon 0.13.3",
  "toml 0.9.8",
 ]
