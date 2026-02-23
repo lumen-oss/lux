@@ -3283,6 +3283,7 @@ dependencies = [
  "semver",
  "serde",
  "serde-enum-str",
+ "serde-value",
  "serde_json",
  "serial_test",
  "sha2",
