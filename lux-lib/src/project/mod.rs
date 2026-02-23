@@ -163,6 +163,7 @@ pub struct Project {
     toml: PartialProjectToml,
 }
 
+/*
 impl UserData for Project {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("toml_path", |_, this, ()| Ok(this.toml_path()));
@@ -255,6 +256,7 @@ impl UserData for Project {
         // methods.add_method("try_lockfile", |_, this, ()| { this.try_lockfile().into_lua_err() });
     }
 }
+*/
 
 impl Project {
     pub fn current() -> Result<Option<Self>, ProjectError> {

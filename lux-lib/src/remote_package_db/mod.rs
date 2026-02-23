@@ -159,6 +159,7 @@ impl RemotePackageDB {
     }
 }
 
+/*
 impl UserData for RemotePackageDB {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("search", |_, this, package_req: PackageReq| {
@@ -178,6 +179,7 @@ impl UserData for RemotePackageDB {
         });
     }
 }
+*/
 
 impl From<Manifest> for RemotePackageDB {
     fn from(manifest: Manifest) -> Self {

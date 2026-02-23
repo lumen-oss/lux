@@ -15,6 +15,7 @@ pub struct GitSource {
     pub checkout_ref: Option<String>,
 }
 
+/*
 impl UserData for GitSource {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("url", |_, this, _: ()| Ok(this.url.to_string()));
@@ -23,6 +24,7 @@ impl UserData for GitSource {
         });
     }
 }
+*/
 
 impl DisplayAsLuaKV for GitSource {
     fn display_lua(&self) -> DisplayLuaKV {
