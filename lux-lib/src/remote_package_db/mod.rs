@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 
 use crate::{
     config::{Config, ConfigError},
@@ -11,7 +10,7 @@ use crate::{
     progress::{Progress, ProgressBar},
 };
 use itertools::Itertools;
-use mlua::{FromLua, UserData};
+use mlua::FromLua;
 use thiserror::Error;
 
 #[derive(Clone, FromLua, Debug)]

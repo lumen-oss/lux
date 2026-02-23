@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use mlua::UserData;
 
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct RustMluaBuildSpec {

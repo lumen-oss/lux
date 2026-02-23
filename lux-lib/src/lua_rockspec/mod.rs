@@ -11,7 +11,7 @@ use std::{
     collections::HashMap, convert::Infallible, fmt::Display, io, path::PathBuf, str::FromStr,
 };
 
-use mlua::{FromLua, IntoLua, Lua, LuaSerdeExt, UserData, Value};
+use mlua::{FromLua, Lua, LuaSerdeExt, Value};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub use build::*;
@@ -737,11 +737,13 @@ impl FromLua for RockspecFormat {
     }
 }
 
+/*
 impl IntoLua for RockspecFormat {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         self.to_string().into_lua(lua)
     }
 }
+*/
 
 impl Display for RockspecFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

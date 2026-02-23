@@ -1,13 +1,13 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use mlua::UserData;
+use serde::Serialize;
 
 #[cfg(not(target_env = "msvc"))]
 const MAKEFILE: &str = "Makefile";
 #[cfg(target_env = "msvc")]
 const MAKEFILE: &str = "Makefile.win";
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct MakeBuildSpec {
     /// Makefile to be used.
     /// Default is "Makefile" on Unix variants and "Makefile.win" under Win32.

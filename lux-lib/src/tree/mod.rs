@@ -8,7 +8,6 @@ use crate::{
 use std::{io, path::PathBuf};
 
 use itertools::Itertools;
-use mlua::{ExternalResult, IntoLua};
 use nonempty::NonEmpty;
 use thiserror::Error;
 
@@ -352,6 +351,7 @@ impl Tree {
     }
 }
 
+/*
 impl mlua::UserData for Tree {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("root", |_, this, ()| Ok(this.root()));
@@ -382,6 +382,7 @@ impl mlua::UserData for Tree {
         methods.add_method("lockfile", |_, this, ()| this.lockfile().into_lua_err());
     }
 }
+*/
 
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub enum EntryType {
@@ -409,6 +410,7 @@ impl RockMatches {
     }
 }
 
+/*
 impl IntoLua for RockMatches {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         let table = lua.create_table()?;
@@ -427,6 +429,7 @@ impl IntoLua for RockMatches {
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {

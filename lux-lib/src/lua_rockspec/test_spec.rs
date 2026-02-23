@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::{FromLua, IntoLua, UserData};
+use mlua::FromLua;
 use path_slash::PathExt;
 use serde_enum_str::Serialize_enum_str;
 use std::{convert::Infallible, path::PathBuf};
@@ -157,6 +157,7 @@ impl ValidatedTestSpec {
     }
 }
 
+/*
 impl IntoLua for TestSpec {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         let table = lua.create_table()?;
@@ -170,6 +171,7 @@ impl IntoLua for TestSpec {
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 impl TryFrom<TestSpecInternal> for TestSpec {
     type Error = TestSpecDecodeError;

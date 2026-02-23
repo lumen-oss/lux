@@ -6,7 +6,7 @@ use std::{
 
 use html_escape::decode_html_entities;
 use itertools::Itertools;
-use mlua::{ExternalResult, FromLua, IntoLua};
+use mlua::{ExternalResult, FromLua};
 use nonempty::NonEmpty;
 use semver::{Comparator, Error, Op, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -136,11 +136,13 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
     }
 }
 
+/*
 impl IntoLua for PackageVersion {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.to_string().into_lua(lua)
     }
 }
+*/
 
 #[derive(Error, Debug)]
 pub enum PackageVersionParseError {
@@ -394,11 +396,13 @@ impl Display for DevVersion {
     }
 }
 
+/*
 impl IntoLua for DevVersion {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.to_string().into_lua(lua)
     }
 }
+*/
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct DevVer {
@@ -529,6 +533,7 @@ impl FromLua for PackageVersionReq {
     }
 }
 
+/*
 impl IntoLua for PackageVersionReq {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         let table = lua.create_table()?;
@@ -545,6 +550,7 @@ impl IntoLua for PackageVersionReq {
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 impl PackageVersionReq {
     /// Returns a `PackageVersionReq` that matches any version.
