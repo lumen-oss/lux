@@ -7,7 +7,6 @@ use std::{
 
 use itertools::Itertools;
 use lua_dependency::LuaDependencySpec;
-use mlua::IntoLua;
 use serde::{Deserialize, Serialize};
 pub mod lua_dependency;
 
@@ -151,8 +150,10 @@ impl DerefMut for RockBinaries {
     }
 }
 
+/*
 impl IntoLua for RockBinaries {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.0.into_lua(lua)
     }
 }
+*/

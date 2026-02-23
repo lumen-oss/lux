@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 use std::{collections::HashMap, fs::File, io::ErrorKind, path::PathBuf};
 
 use itertools::Itertools;
-use mlua::{ExternalResult, FromLua, IntoLua, UserData};
+use mlua::{ExternalResult, FromLua};
 use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
@@ -41,11 +41,13 @@ impl FromLua for PinnedState {
     }
 }
 
+/*
 impl IntoLua for PinnedState {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.as_bool().into_lua(lua)
     }
 }
+*/
 
 impl Display for PinnedState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -130,11 +132,13 @@ impl FromLua for OptState {
     }
 }
 
+/*
 impl IntoLua for OptState {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.as_bool().into_lua(lua)
     }
 }
+*/
 
 impl Display for OptState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -230,11 +234,13 @@ impl Display for LocalPackageId {
     }
 }
 
+/*
 impl mlua::IntoLua for LocalPackageId {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         self.0.into_lua(lua)
     }
 }
+*/
 
 impl LocalPackageSpec {
     pub fn new(
@@ -545,6 +551,7 @@ pub enum LockConstraint {
     Constrained(PackageVersionReq),
 }
 
+/*
 impl IntoLua for LockConstraint {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         match self {
@@ -553,6 +560,7 @@ impl IntoLua for LockConstraint {
         }
     }
 }
+*/
 
 impl FromLua for LockConstraint {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {

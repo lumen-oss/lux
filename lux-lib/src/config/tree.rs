@@ -1,4 +1,4 @@
-use mlua::{FromLua, UserData};
+use mlua::FromLua;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

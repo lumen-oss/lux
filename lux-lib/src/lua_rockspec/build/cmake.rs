@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use mlua::UserData;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CMakeBuildSpec {

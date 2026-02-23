@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use mlua::IntoLua;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use url::Url;
@@ -22,6 +21,7 @@ pub(crate) enum RemotePackageSource {
     Test,
 }
 
+/*
 impl IntoLua for RemotePackageSource {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         let table = lua.create_table()?;
@@ -41,6 +41,7 @@ impl IntoLua for RemotePackageSource {
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 impl RemotePackageSource {
     pub(crate) fn url(self) -> Option<Url> {

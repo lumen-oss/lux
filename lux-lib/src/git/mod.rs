@@ -1,4 +1,3 @@
-use mlua::UserData;
 
 use crate::{
     git::url::RemoteGitUrl,

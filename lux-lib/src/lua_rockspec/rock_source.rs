@@ -1,4 +1,4 @@
-use mlua::{FromLua, IntoLua, Lua, UserData, Value};
+use mlua::{FromLua, Lua, Value};
 use path_slash::PathBufExt;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
@@ -117,6 +117,7 @@ pub enum RockSourceSpec {
     Url(Url),
 }
 
+/*
 impl IntoLua for RockSourceSpec {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         let table = lua.create_table()?;
@@ -136,6 +137,7 @@ impl IntoLua for RockSourceSpec {
         Ok(Value::Table(table))
     }
 }
+*/
 
 impl RockSourceSpec {
     fn default_from_source_url(url: SourceUrl) -> Self {

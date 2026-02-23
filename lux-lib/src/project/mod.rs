@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use lets_find_up::{find_up_with, FindUpKind, FindUpOptions};
-use mlua::{ExternalResult, UserData};
 use path_slash::PathBufExt;
 use project_toml::{
     LocalProjectTomlValidationError, PartialProjectToml, RemoteProjectTomlValidationError,
@@ -24,13 +23,11 @@ use crate::{
         utils::{GitError, SemVerTagOrSha},
     },
     lockfile::{LockfileError, ProjectLockfile, ReadOnly},
-    lua::lua_runtime,
     lua_rockspec::{
         LocalLuaRockspec, LuaRockspecError, LuaVersionError, PartialLuaRockspec,
         PartialRockspecError, RemoteLuaRockspec,
     },
     package::SpecRev,
-    progress::Progress,
     remote_package_db::RemotePackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},

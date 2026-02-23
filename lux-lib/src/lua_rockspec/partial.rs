@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mlua::{Lua, LuaSerdeExt, UserData, Value};
+use mlua::{Lua, LuaSerdeExt, Value};
 use serde::de::Error;
 
 use crate::{
