@@ -19,8 +19,6 @@ use std::io;
 use std::{collections::HashMap, path::PathBuf};
 
 use itertools::Itertools;
-use mlua::ExternalResult;
-use mlua::UserData;
 use nonempty::NonEmpty;
 use serde::de;
 use serde::{Deserialize, Deserializer};

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, fmt::Display, str::FromStr};
 
-use mlua::{FromLua, IntoLua, LuaSerdeExt};
+use mlua::{FromLua, LuaSerdeExt};
 use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
@@ -179,6 +179,7 @@ pub enum DependencyType<T> {
     External(HashMap<String, ExternalDependencySpec>),
 }
 
+/*
 impl<T> IntoLua for DependencyType<T>
 where
     T: IntoLua,
@@ -204,6 +205,7 @@ where
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 impl<T> FromLua for DependencyType<T>
 where
@@ -249,6 +251,7 @@ pub enum LuaDependencyType<T> {
     Test(Vec<T>),
 }
 
+/*
 impl<T> IntoLua for LuaDependencyType<T>
 where
     T: IntoLua,
@@ -271,6 +274,7 @@ where
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 impl<T> FromLua for LuaDependencyType<T>
 where

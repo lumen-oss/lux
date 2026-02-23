@@ -18,7 +18,7 @@ use builtin::{
 
 use itertools::Itertools;
 
-use mlua::{FromLua, IntoLua, Lua, LuaSerdeExt, UserData, Value};
+use mlua::{FromLua, Lua, LuaSerdeExt, Value};
 use std::{
     collections::HashMap, env::consts::DLL_EXTENSION, fmt::Display, path::PathBuf, str::FromStr,
 };
@@ -278,11 +278,12 @@ impl BuildBackendSpec {
     }
 }
 
+/*
 impl IntoLua for BuildBackendSpec {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         match self {
             BuildBackendSpec::Builtin(spec) => spec.into_lua(lua),
-            BuildBackendSpec::Make(spec) => spec.into_lua(lua),
+            BuildBackendSpec::Make(spec) => lua.to_value(&spec),
             BuildBackendSpec::CMake(spec) => spec.into_lua(lua),
             BuildBackendSpec::Command(spec) => spec.into_lua(lua),
             BuildBackendSpec::LuaRock(s) => s.into_lua(lua),
@@ -292,6 +293,7 @@ impl IntoLua for BuildBackendSpec {
         }
     }
 }
+*/
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CommandBuildSpec {

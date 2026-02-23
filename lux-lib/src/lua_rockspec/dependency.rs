@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
-use mlua::{FromLua, IntoLua};
+use mlua::FromLua;
 use path_slash::PathBufExt;
 use serde::Deserialize;
 
@@ -18,6 +18,7 @@ pub struct ExternalDependencySpec {
     pub(crate) library: Option<PathBuf>,
 }
 
+/*
 impl IntoLua for ExternalDependencySpec {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         let table = lua.create_table()?;
@@ -30,6 +31,7 @@ impl IntoLua for ExternalDependencySpec {
         Ok(mlua::Value::Table(table))
     }
 }
+*/
 
 impl FromLua for ExternalDependencySpec {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
