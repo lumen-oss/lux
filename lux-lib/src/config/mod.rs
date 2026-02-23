@@ -1,7 +1,7 @@
 use directories::ProjectDirs;
 use external_deps::ExternalDependencySearchConfig;
 use itertools::Itertools;
-use mlua::{ExternalError, ExternalResult, FromLua};
+use mlua::{ExternalResult, FromLua};
 use serde::{Deserialize, Serialize, Serializer};
 use std::env::current_exe;
 use std::path::Path;
@@ -726,15 +726,15 @@ where
     }
 }
 
-struct LuaUrl(Url);
-
-impl FromLua for LuaUrl {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        let url_str: String = FromLua::from_lua(value, lua)?;
-
-        Url::parse(&url_str).map(LuaUrl).into_lua_err()
-    }
-}
+// struct LuaUrl(Url);
+//
+// impl FromLua for LuaUrl {
+//     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+//         let url_str: String = FromLua::from_lua(value, lua)?;
+//
+//         Url::parse(&url_str).map(LuaUrl).into_lua_err()
+//     }
+// }
 
 /*
 impl UserData for Config {
