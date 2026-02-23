@@ -129,3 +129,31 @@ impl DisplayAsLuaKV for ExternalDependencies<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_external_dependency_spec_from_lua() {
+        let lua = mlua::Lua::new();
+        let lua_code = r#"
+            return {
+                foo = { header = "foo.h", library = "libfoo.so" },
+                bar = { header = "bar.h" },
+                baz = { library = "libbaz.so" },
+            }
+        "#;
+        let value = lua.load(lua_code).eval().unwrap();
+        let deps: HashMap<String, ExternalDependencySpec> = FromLua::from_lua(value, &lua).unwrap();
+        assert_eq!(deps.len(), 3);
+        assert_eq!(deps["foo"].header.as_ref().unwrap().to_slash_lossy(), "foo.h");
+        assert_eq!(deps["foo"].library.as_ref().unwrap().to_slash_lossy(), "libfoo.so");
+
+        assert_eq!(deps["bar"].header.as_ref().unwrap().to_slash_lossy(), "bar.h");
+        assert!(deps["bar"].library.is_none());
+
+        assert!(deps["baz"].header.is_none());
+        assert_eq!(deps["baz"].library.as_ref().unwrap().to_slash_lossy(), "libbaz.so");
+    }
+}
