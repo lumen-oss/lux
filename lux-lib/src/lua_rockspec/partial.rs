@@ -27,7 +27,7 @@ pub struct PartialLuaRockspec {
     pub(crate) test: Option<TestSpecInternal>,
 }
 
-impl UserData for PartialLuaRockspec {}
+// impl UserData for PartialLuaRockspec {}
 
 pub type PartialRockspecError = mlua::Error;
 

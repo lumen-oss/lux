@@ -133,6 +133,7 @@ impl Default for PlatformSupport {
     }
 }
 
+/*
 impl UserData for PlatformSupport {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("is_supported", |_, this, platform: PlatformIdentifier| {
@@ -140,6 +141,7 @@ impl UserData for PlatformSupport {
         });
     }
 }
+*/
 
 impl<'de> Deserialize<'de> for PlatformSupport {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

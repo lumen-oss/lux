@@ -225,11 +225,13 @@ pub struct BustedTestSpec {
     pub(crate) flags: Vec<String>,
 }
 
+/*
 impl UserData for BustedTestSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("flags", |_, this, _: ()| Ok(this.flags.clone()));
     }
 }
+*/
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandTestSpec {
@@ -237,12 +239,14 @@ pub struct CommandTestSpec {
     pub(crate) flags: Vec<String>,
 }
 
+/*
 impl UserData for CommandTestSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("command", |_, this, _: ()| Ok(this.command.clone()));
         methods.add_method("flags", |_, this, _: ()| Ok(this.flags.clone()));
     }
 }
+*/
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LuaScriptTestSpec {
@@ -250,12 +254,14 @@ pub struct LuaScriptTestSpec {
     pub(crate) flags: Vec<String>,
 }
 
+/*
 impl UserData for LuaScriptTestSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("script", |_, this, _: ()| Ok(this.script.clone()));
         methods.add_method("flags", |_, this, _: ()| Ok(this.flags.clone()));
     }
 }
+*/
 
 #[derive(Debug, Deserialize, Serialize_enum_str, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]

@@ -67,6 +67,7 @@ impl Default for BuildSpec {
     }
 }
 
+/*
 impl UserData for BuildSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("build_backend", |_, this, _: ()| {
@@ -79,6 +80,7 @@ impl UserData for BuildSpec {
         methods.add_method("patches", |_, this, _: ()| Ok(this.patches.clone()));
     }
 }
+*/
 
 #[derive(Error, Debug)]
 pub enum BuildSpecInternalError {
@@ -297,6 +299,7 @@ pub struct CommandBuildSpec {
     pub install_command: Option<String>,
 }
 
+/*
 impl UserData for CommandBuildSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("build_command", |_, this, _: ()| {
@@ -307,6 +310,7 @@ impl UserData for CommandBuildSpec {
         });
     }
 }
+*/
 
 #[derive(Clone, Debug, Deserialize)]
 struct LuaPathBufTable(HashMap<LuaTableKey, PathBuf>);
@@ -385,6 +389,7 @@ pub struct InstallSpec {
     pub bin: HashMap<String, PathBuf>,
 }
 
+/*
 impl UserData for InstallSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("lua", |_, this, _: ()| Ok(this.lua.clone()));
@@ -393,6 +398,7 @@ impl UserData for InstallSpec {
         methods.add_method("bin", |_, this, _: ()| Ok(this.bin.clone()));
     }
 }
+*/
 
 fn deserialize_module_path_map<'de, D>(
     deserializer: D,

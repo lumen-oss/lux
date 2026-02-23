@@ -734,6 +734,7 @@ impl FromLua for LuaUrl {
     }
 }
 
+/*
 impl UserData for Config {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_function("default", |_, _: ()| {
@@ -785,7 +786,9 @@ impl UserData for Config {
         });
     }
 }
+*/
 
+/*
 impl UserData for ConfigBuilder {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("dev", |_, this, dev: Option<bool>| {
@@ -843,3 +846,4 @@ impl UserData for ConfigBuilder {
         methods.add_method("build", |_, this, ()| this.clone().build().into_lua_err());
     }
 }
+*/

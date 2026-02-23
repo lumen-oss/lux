@@ -25,6 +25,7 @@ impl Default for CMakeBuildSpec {
     }
 }
 
+/*
 impl UserData for CMakeBuildSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("cmake_lists_content", |_, this, _: ()| {
@@ -35,6 +36,7 @@ impl UserData for CMakeBuildSpec {
         methods.add_method("variables", |_, this, _: ()| Ok(this.variables.clone()));
     }
 }
+*/
 
 fn default_pass() -> bool {
     true

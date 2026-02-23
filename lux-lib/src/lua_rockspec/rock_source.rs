@@ -36,6 +36,7 @@ impl From<RockSourceSpec> for RemoteRockSource {
     }
 }
 
+/*
 impl UserData for RemoteRockSource {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("source_spec", |_, this, _: ()| Ok(this.source_spec.clone()));
@@ -47,6 +48,7 @@ impl UserData for RemoteRockSource {
         });
     }
 }
+*/
 
 impl Deref for RemoteRockSource {
     type Target = LocalRockSource;
