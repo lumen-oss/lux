@@ -271,6 +271,7 @@ pub struct ModulePaths {
     pub libdirs: Vec<PathBuf>,
 }
 
+/*
 impl UserData for ModulePaths {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("sources", |_, this, _: ()| Ok(this.sources.clone()));
@@ -286,6 +287,7 @@ impl UserData for ModulePaths {
         methods.add_method("libdirs", |_, this, _: ()| Ok(this.libdirs.clone()));
     }
 }
+*/
 
 impl ModulePaths {
     fn from_internal(

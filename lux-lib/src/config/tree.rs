@@ -59,6 +59,7 @@ impl Default for RockLayoutConfig {
     }
 }
 
+/*
 impl UserData for RockLayoutConfig {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_function("new", |_, ()| Ok(RockLayoutConfig::default()));
@@ -67,3 +68,4 @@ impl UserData for RockLayoutConfig {
         });
     }
 }
+*/

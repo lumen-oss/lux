@@ -21,6 +21,7 @@ pub struct TreesitterParserBuildSpec {
     pub queries: HashMap<PathBuf, String>,
 }
 
+/*
 impl UserData for TreesitterParserBuildSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("lang", |_, this, _: ()| Ok(this.lang.clone()));
@@ -30,3 +31,4 @@ impl UserData for TreesitterParserBuildSpec {
         methods.add_method("queries", |_, this, _: ()| Ok(this.queries.clone()));
     }
 }
+*/

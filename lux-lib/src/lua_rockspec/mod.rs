@@ -102,6 +102,7 @@ pub struct LocalLuaRockspec {
     raw_content: String,
 }
 
+/*
 impl UserData for LocalLuaRockspec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("package", |_, this, _: ()| Ok(this.package.clone()));
@@ -134,6 +135,7 @@ impl UserData for LocalLuaRockspec {
         });
     }
 }
+*/
 
 trait HasRockspecKey {
     fn get_rockspec_key<V: FromLua>(
@@ -360,6 +362,7 @@ pub struct RemoteLuaRockspec {
     source: PerPlatform<RemoteRockSource>,
 }
 
+/*
 impl UserData for RemoteLuaRockspec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("package", |_, this, _: ()| Ok(this.local.package.clone()));
@@ -396,6 +399,7 @@ impl UserData for RemoteLuaRockspec {
         });
     }
 }
+*/
 
 impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
@@ -679,6 +683,7 @@ impl DisplayAsLuaKV for RockDescription {
     }
 }
 
+/*
 impl UserData for RockDescription {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("summary", |_, this, _: ()| Ok(this.summary.clone()));
@@ -692,6 +697,7 @@ impl UserData for RockDescription {
         methods.add_method("labels", |_, this, _: ()| Ok(this.labels.clone()));
     }
 }
+*/
 
 #[derive(Error, Debug)]
 #[error("invalid rockspec format: {0}")]

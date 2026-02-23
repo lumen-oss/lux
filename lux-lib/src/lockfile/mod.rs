@@ -337,6 +337,7 @@ pub struct LocalPackage {
     hashes: LocalPackageHashes,
 }
 
+/*
 impl UserData for LocalPackage {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("id", |_, this, _: ()| Ok(this.id()));
@@ -356,6 +357,7 @@ impl UserData for LocalPackage {
         });
     }
 }
+*/
 
 impl LocalPackage {
     pub fn into_package_spec(self) -> PackageSpec {
@@ -843,6 +845,7 @@ pub(crate) struct PackageSyncSpec {
     pub to_remove: Vec<LocalPackage>,
 }
 
+/*
 impl UserData for Lockfile<ReadOnly> {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("version", |_, this, _: ()| Ok(this.version().clone()));
@@ -857,6 +860,7 @@ impl UserData for Lockfile<ReadOnly> {
         });
     }
 }
+*/
 
 impl<P: LockfilePermissions> Lockfile<P> {
     pub fn version(&self) -> &String {
@@ -1282,6 +1286,7 @@ pub struct LockfileGuard(Lockfile<ReadWrite>);
 
 pub struct ProjectLockfileGuard(ProjectLockfile<ReadWrite>);
 
+/*
 impl UserData for LockfileGuard {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("version", |_, this, _: ()| Ok(this.version().clone()));
@@ -1291,6 +1296,7 @@ impl UserData for LockfileGuard {
         });
     }
 }
+*/
 
 impl Serialize for LockfileGuard {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1372,6 +1378,7 @@ impl Drop for ProjectLockfileGuard {
     }
 }
 
+/*
 impl UserData for Lockfile<ReadWrite> {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("version", |_, this, ()| Ok(this.version().to_owned()));
@@ -1389,6 +1396,7 @@ impl UserData for Lockfile<ReadWrite> {
         methods.add_method_mut("flush", |_, this, ()| this.flush().into_lua_err());
     }
 }
+*/
 
 fn serialize_sorted_package_ids<S>(
     package_ids: &[LocalPackageId],

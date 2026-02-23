@@ -20,6 +20,7 @@ pub struct RustMluaBuildSpec {
     pub include: HashMap<PathBuf, PathBuf>,
 }
 
+/*
 impl UserData for RustMluaBuildSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("modules", |_, this, _: ()| Ok(this.modules.clone()));
@@ -34,3 +35,4 @@ impl UserData for RustMluaBuildSpec {
         methods.add_method("include", |_, this, _: ()| Ok(this.include.clone()));
     }
 }
+*/

@@ -29,6 +29,7 @@ pub struct MakeBuildSpec {
     pub variables: HashMap<String, String>,
 }
 
+/*
 impl UserData for MakeBuildSpec {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("makefile", |_, this, _: ()| Ok(this.makefile.clone()));
@@ -49,6 +50,7 @@ impl UserData for MakeBuildSpec {
         methods.add_method("variables", |_, this, _: ()| Ok(this.variables.clone()));
     }
 }
+*/
 
 impl Default for MakeBuildSpec {
     fn default() -> Self {

@@ -227,6 +227,7 @@ pub struct PartialProjectToml {
     pub(crate) project_root: ProjectRoot,
 }
 
+/*
 impl UserData for PartialProjectToml {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("package", |_, this, _: ()| Ok(this.package().clone()));
@@ -242,6 +243,7 @@ impl UserData for PartialProjectToml {
         //});
     }
 }
+*/
 
 impl HasIntegrity for PartialProjectToml {
     fn hash(&self) -> io::Result<Integrity> {
@@ -996,6 +998,7 @@ impl HasIntegrity for RemoteProjectToml {
     }
 }
 
+/*
 impl UserData for LocalProjectToml {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("package", |_, this, _: ()| Ok(this.package().clone()));
@@ -1031,7 +1034,9 @@ impl UserData for LocalProjectToml {
         });
     }
 }
+*/
 
+/*
 impl UserData for RemoteProjectToml {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("package", |_, this, _: ()| Ok(this.package().clone()));
@@ -1067,6 +1072,7 @@ impl UserData for RemoteProjectToml {
         });
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {
