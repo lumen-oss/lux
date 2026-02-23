@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct TreesitterParserBuildSpec {
     /// Name of the parser language, e.g. "haskell"

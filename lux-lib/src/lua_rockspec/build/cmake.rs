@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct CMakeBuildSpec {
     pub cmake_lists_content: Option<String>,

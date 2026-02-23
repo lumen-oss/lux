@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::{FromLua, IntoLuaMulti, Lua, LuaSerdeExt, UserData, Value};
+use mlua::{DeserializeOptions, FromLua, IntoLuaMulti, Lua, LuaSerdeExt, UserData, Value};
 use std::{cmp::Ordering, collections::HashMap};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -371,30 +371,87 @@ impl<T: Default> Default for PerPlatform<T> {
 
 impl<'de, T> Deserialize<'de> for PerPlatform<T>
 where
-    T: Deserialize<'de>,
+    T: DeserializeOwned,
+    T: PlatformOverridable,
+    T: Default,
     T: Clone,
-    T: PartialOverride,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let mut map = toml::map::Map::deserialize(deserializer)?;
+        use serde_value::Value;
 
-        let mut per_platform: HashMap<PlatformIdentifier, T> = map
-            .remove("platforms")
-            .map_or(Ok(HashMap::default()), |platforms| platforms.try_into())
-            .map_err(serde::de::Error::custom)?;
+        let value = Value::deserialize(deserializer)?;
+        match value {
+            Value::Map(mut map) => {
+                let platforms_key = Value::String("platforms".to_string());
+                // Remove the platforms key from the map to avoid deserializing it as part of the default value
+                let mut per_platform = match map.remove(&platforms_key) {
+                    Some(val) => match val {
+                        Value::Map(_) => val
+                            .deserialize_into::<HashMap<PlatformIdentifier, T>>()
+                            .map_err(de::Error::custom)?,
+                        Value::Unit | Value::Option(None) => HashMap::default(),
+                        val => {
+                            return Err(de::Error::custom(format!(
+                                "Expected platforms to be a table or nil, but got {val:?}",
+                            )))
+                        }
+                    },
+                    None => HashMap::default(),
+                };
 
-        let default: T = map.try_into().map_err(serde::de::Error::custom)?;
+                // Upon deleting the platforms key, the map may suddenly become a sequence (if the
+                // original table only had integer keys). In this case, we convert the map into a
+                // sequence.
 
-        apply_per_platform_overrides(&mut per_platform, &default)
-            .map_err(serde::de::Error::custom)?;
+                if map.keys().all(|key| matches!(key, Value::I64(_))) {
+                    let sequence = map
+                        .into_iter()
+                        .sorted_by_key(|(key, _)| match key {
+                            Value::I64(index) => *index,
+                            _ => unreachable!(),
+                        })
+                        .map(|(_, value)| value)
+                        .collect();
+                    let default = Value::Seq(sequence)
+                        .deserialize_into::<T>()
+                        .map_err(de::Error::custom)?;
+                    apply_per_platform_overrides(&mut per_platform, &default).map_err(
+                        |err: <T as PartialOverride>::Err| de::Error::custom(err.to_string()),
+                    )?;
+                    return Ok(PerPlatform {
+                        default,
+                        per_platform,
+                    });
+                }
 
-        Ok(PerPlatform {
-            default,
-            per_platform,
-        })
+                // Deserialize the actual value without the platforms key
+                let default = Value::Map(map)
+                    .deserialize_into::<T>()
+                    .map_err(de::Error::custom)?;
+                apply_per_platform_overrides(&mut per_platform, &default).map_err(
+                    |err: <T as PartialOverride>::Err| de::Error::custom(err.to_string()),
+                )?;
+                Ok(PerPlatform {
+                    default,
+                    per_platform,
+                })
+            }
+            value @ Value::Seq(_) => {
+                // Any table without explicit keys is considered a sequence in Lua.
+                // Sequences cannot have platform overrides, so we simply deserialize
+                // them as the default value.
+                Ok(PerPlatform::new(
+                    value.deserialize_into::<T>().map_err(de::Error::custom)?,
+                ))
+            }
+            Value::Option(None) | Value::Unit => T::on_nil().map_err(de::Error::custom),
+            val => Err(de::Error::custom(format!(
+                "expected a table or nil, but got {val:?}"
+            ))),
+        }
     }
 }
 
@@ -407,34 +464,10 @@ where
     T: Clone,
 {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        match &value {
-            list @ Value::Table(tbl) => {
-                let mut per_platform = match tbl.get("platforms")? {
-                    val @ Value::Table(_) => Ok(lua.from_value(val)?),
-                    Value::Nil => Ok(HashMap::default()),
-                    val => Err(mlua::Error::DeserializeError(format!(
-                        "Expected platforms to be a table or nil, but got {}",
-                        val.type_name()
-                    ))),
-                }?;
-                let _ = tbl.raw_remove("platforms");
-                let default = lua.from_value(list.to_owned())?;
-                apply_per_platform_overrides(&mut per_platform, &default).map_err(
-                    |err: <T as PartialOverride>::Err| {
-                        mlua::Error::DeserializeError(err.to_string())
-                    },
-                )?;
-                Ok(PerPlatform {
-                    default,
-                    per_platform,
-                })
-            }
-            Value::Nil => T::on_nil().map_err(|err| mlua::Error::DeserializeError(err.to_string())),
-            val => Err(mlua::Error::DeserializeError(format!(
-                "Expected rockspec external dependencies to be a table or nil, but got {}",
-                val.type_name()
-            ))),
-        }
+        lua.from_value_with::<PerPlatform<T>>(
+            value,
+            DeserializeOptions::new().detect_mixed_tables(true),
+        )
     }
 }
 
