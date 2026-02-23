@@ -172,6 +172,7 @@ impl mlua::UserData for LuaDependencySpec {
     }
 }
 
+#[derive(Debug)]
 pub enum DependencyType<T> {
     Regular(Vec<T>),
     Build(Vec<T>),
@@ -245,6 +246,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum LuaDependencyType<T> {
     Regular(Vec<T>),
     Build(Vec<T>),
@@ -312,6 +314,8 @@ where
 #[cfg(test)]
 mod test {
 
+    use path_slash::PathBufExt;
+
     use super::*;
 
     #[tokio::test]
@@ -331,5 +335,189 @@ mod test {
                 .count(),
             3
         );
+    }
+
+    #[test]
+    fn test_dependency_type_from_lua() {
+        let lua = mlua::Lua::new();
+        let regular = lua
+            .load(
+                r#"
+                return {
+                    regular = {"neorg 1.0.0", "foo 1.0.0"},
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+        let build = lua
+            .load(
+                r#"
+                return {
+                    build = {"neorg 1.0.0", "foo 1.0.0"},
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+        let test = lua
+            .load(
+                r#"
+                return {
+                    test = {"neorg 1.0.0", "foo 1.0.0"},
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+        let external_deps = lua
+            .load(
+                r#"
+                return {
+                    external = {
+                        foo = { header = "foo.h", library = "libfoo.so" },
+                        bar = { header = "bar.h" },
+                    }
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+
+        let regular_deps: DependencyType<LuaDependencySpec> =
+            DependencyType::from_lua(regular, &lua).unwrap();
+        let build_deps: DependencyType<LuaDependencySpec> =
+            DependencyType::from_lua(build, &lua).unwrap();
+        let test_deps: DependencyType<LuaDependencySpec> =
+            DependencyType::from_lua(test, &lua).unwrap();
+        let external_deps: DependencyType<ExternalDependencySpec> =
+            DependencyType::from_lua(external_deps, &lua).unwrap();
+
+        match regular_deps {
+            DependencyType::Regular(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
+                assert_eq!(deps[1].to_string(), "foo==1.0.0");
+            }
+            _ => panic!("Expected regular dependencies"),
+        }
+
+        match build_deps {
+            DependencyType::Build(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
+                assert_eq!(deps[1].to_string(), "foo==1.0.0");
+            }
+            _ => panic!("Expected build dependencies"),
+        }
+
+        match test_deps {
+            DependencyType::Test(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
+                assert_eq!(deps[1].to_string(), "foo==1.0.0");
+            }
+            _ => panic!("Expected test dependencies"),
+        }
+
+        match external_deps {
+            DependencyType::External(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(
+                    deps["foo"].header.as_ref().unwrap().to_slash_lossy(),
+                    "foo.h"
+                );
+                assert_eq!(
+                    deps["foo"].library.as_ref().unwrap().to_slash_lossy(),
+                    "libfoo.so"
+                );
+
+                assert_eq!(
+                    deps["bar"].header.as_ref().unwrap().to_slash_lossy(),
+                    "bar.h"
+                );
+                assert!(deps["bar"].library.is_none());
+            }
+            _ => panic!("Expected external dependencies"),
+        }
+
+        let empty = lua.load("return {}").eval().unwrap();
+        let parsed: mlua::Result<DependencyType<ExternalDependencySpec>> =
+            DependencyType::from_lua(empty, &lua);
+        parsed.unwrap_err();
+    }
+
+    #[test]
+    fn test_lua_dependency_type_from_lua() {
+        let lua = mlua::Lua::new();
+        let regular = lua
+            .load(
+                r#"
+                return {
+                    regular = {"neorg 1.0.0", "foo 1.0.0"},
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+        let build = lua
+            .load(
+                r#"
+                return {
+                    build = {"neorg 1.0.0", "foo 1.0.0"},
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+        let test = lua
+            .load(
+                r#"
+                return {
+                    test = {"neorg 1.0.0", "foo 1.0.0"},
+                }
+            "#,
+            )
+            .eval()
+            .unwrap();
+
+        let regular_deps: LuaDependencyType<LuaDependencySpec> =
+            LuaDependencyType::from_lua(regular, &lua).unwrap();
+        let build_deps: LuaDependencyType<LuaDependencySpec> =
+            LuaDependencyType::from_lua(build, &lua).unwrap();
+        let test_deps: LuaDependencyType<LuaDependencySpec> =
+            LuaDependencyType::from_lua(test, &lua).unwrap();
+
+        match regular_deps {
+            LuaDependencyType::Regular(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
+                assert_eq!(deps[1].to_string(), "foo==1.0.0");
+            }
+            _ => panic!("Expected regular dependencies"),
+        }
+
+        match build_deps {
+            LuaDependencyType::Build(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
+                assert_eq!(deps[1].to_string(), "foo==1.0.0");
+            }
+            _ => panic!("Expected build dependencies"),
+        }
+
+        match test_deps {
+            LuaDependencyType::Test(deps) => {
+                assert_eq!(deps.len(), 2);
+                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
+                assert_eq!(deps[1].to_string(), "foo==1.0.0");
+            }
+            _ => panic!("Expected test dependencies"),
+        }
+
+        let empty = lua.load("return {}").eval().unwrap();
+        let parsed: mlua::Result<LuaDependencyType<LuaDependencySpec>> =
+            LuaDependencyType::from_lua(empty, &lua);
+        parsed.unwrap_err();
     }
 }
