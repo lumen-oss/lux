@@ -30,7 +30,7 @@ path-absolutize = "3.1"
 path-slash = "0.2"
 pathdiff = "0.2"
 serde_json = { version = "1.0", features = ["preserve_order"] }
-strum = { version = "0.27" }
+strum = { version = "0.28" }
 strum_macros = "0.27"
 stylua = { version = "2.3", features = ["fromstr", "lua52"] }
 target-lexicon = "0.13"
