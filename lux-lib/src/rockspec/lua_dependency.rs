@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::Infallible, fmt::Display, str::FromStr};
 
 use mlua::{FromLua, LuaSerdeExt};
-use serde::{Deserialize, Deserializer};
+use serde::{de::DeserializeOwned, Deserialize, Deserializer};
 use thiserror::Error;
 
 use crate::{
@@ -134,13 +134,7 @@ impl PlatformOverridable for Vec<LuaDependencySpec> {
 
 impl FromLua for LuaDependencySpec {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        let package_req = lua.from_value(value)?;
-        Ok(Self {
-            package_req,
-            pin: PinnedState::default(),
-            opt: OptState::default(),
-            source: None,
-        })
+        lua.from_value(value)
     }
 }
 
@@ -172,7 +166,8 @@ impl mlua::UserData for LuaDependencySpec {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum DependencyType<T> {
     Regular(Vec<T>),
     Build(Vec<T>),
@@ -211,42 +206,15 @@ where
 impl<T> FromLua for DependencyType<T>
 where
     T: FromLua,
+    T: DeserializeOwned,
 {
-    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
-        let tbl = value
-            .as_table()
-            .ok_or(mlua::Error::FromLuaConversionError {
-                from: "Value",
-                to: "table".to_string(),
-                message: Some("Expected a table".to_string()),
-            })?;
-
-        let deps = {
-            if let Some(regular) = tbl.get("regular")? {
-                DependencyType::Regular(regular)
-            } else if let Some(build) = tbl.get("build")? {
-                DependencyType::Build(build)
-            } else if let Some(test) = tbl.get("test")? {
-                DependencyType::Test(test)
-            } else if let Some(external) = tbl.get("external")? {
-                DependencyType::External(external)
-            } else {
-                return Err(mlua::Error::FromLuaConversionError {
-                    from: "table",
-                    to: "DependencyType".to_string(),
-                    message: Some(
-                        "expected a table with `regular`, `build`, `test` or `external`"
-                            .to_string(),
-                    ),
-                });
-            }
-        };
-
-        Ok(deps)
+    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+        lua.from_value(value)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LuaDependencyType<T> {
     Regular(Vec<T>),
     Build(Vec<T>),
@@ -281,33 +249,10 @@ where
 impl<T> FromLua for LuaDependencyType<T>
 where
     T: FromLua,
+    T: DeserializeOwned,
 {
-    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
-        let tbl = value
-            .as_table()
-            .ok_or(mlua::Error::FromLuaConversionError {
-                from: "Value",
-                to: "table".to_string(),
-                message: Some("Expected a table".to_string()),
-            })?;
-
-        let deps = {
-            if let Some(regular) = tbl.get("regular")? {
-                LuaDependencyType::Regular(regular)
-            } else if let Some(build) = tbl.get("build")? {
-                LuaDependencyType::Build(build)
-            } else if let Some(test) = tbl.get("test")? {
-                LuaDependencyType::Test(test)
-            } else {
-                return Err(mlua::Error::FromLuaConversionError {
-                    from: "table",
-                    to: "LuaDependencyType".to_string(),
-                    message: Some("expected a table with `regular`, `build` or `test`".to_string()),
-                });
-            }
-        };
-
-        Ok(deps)
+    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+        lua.from_value(value)
     }
 }
 

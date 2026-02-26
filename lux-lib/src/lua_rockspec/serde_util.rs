@@ -4,32 +4,11 @@ use itertools::Itertools;
 use serde::{de, Deserialize, Deserializer};
 use thiserror::Error;
 
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
+#[derive(Hash, Debug, Eq, PartialEq, Clone, Deserialize)]
+#[serde(untagged)]
 pub(crate) enum LuaTableKey {
     IntKey(u64),
     StringKey(String),
-}
-
-impl<'de> Deserialize<'de> for LuaTableKey {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        if value.is_u64() {
-            unsafe { Ok(LuaTableKey::IntKey(value.as_u64().unwrap_unchecked())) }
-        } else if value.is_string() {
-            unsafe {
-                Ok(LuaTableKey::StringKey(
-                    value.as_str().unwrap_unchecked().into(),
-                ))
-            }
-        } else {
-            Err(de::Error::custom(format!(
-                "Could not parse Lua table key. Expected an integer or string, but got {value}"
-            )))
-        }
-    }
 }
 
 /// Deserialize a json value into a Vec<T>, treating empty json objects as empty lists

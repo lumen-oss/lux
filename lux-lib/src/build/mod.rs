@@ -34,9 +34,10 @@ use indicatif::style::TemplateError;
 use itertools::Itertools;
 use luarocks::LuarocksBuildError;
 use make::MakeError;
-use mlua::FromLua;
+use mlua::{FromLua, LuaSerdeExt};
 use patch::{Patch, PatchError};
 use rust_mlua::RustError;
+use serde::{Deserialize, Deserializer};
 use source::SourceBuildError;
 use ssri::Integrity;
 use thiserror::Error;
@@ -168,9 +169,18 @@ pub enum BuildBehaviour {
     Force,
 }
 
+impl<'de> Deserialize<'de> for BuildBehaviour {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Self::from(bool::deserialize(deserializer)?))
+    }
+}
+
 impl FromLua for BuildBehaviour {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        Ok(bool::from_lua(value, lua)?.into())
+        lua.from_value(value)
     }
 }
 

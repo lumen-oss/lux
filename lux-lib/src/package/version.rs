@@ -6,7 +6,7 @@ use std::{
 
 use html_escape::decode_html_entities;
 use itertools::Itertools;
-use mlua::{ExternalResult, FromLua};
+use mlua::{FromLua, LuaSerdeExt};
 use nonempty::NonEmpty;
 use semver::{Comparator, Error, Op, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -180,8 +180,7 @@ impl FromLua for PackageVersion {
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        let s = String::from_lua(value, lua)?;
-        Self::from_str(&s).map_err(|err| mlua::Error::DeserializeError(err.to_string()))
+        lua.from_value(value)
     }
 }
 
@@ -265,25 +264,6 @@ impl Display for SpecRev {
 impl Default for SpecRev {
     fn default() -> Self {
         Self(1)
-    }
-}
-
-impl FromLua for SpecRev {
-    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
-        match value {
-            mlua::Value::Integer(value) => {
-                let value = u16::try_from(value).map_err(|err| {
-                    mlua::Error::DeserializeError(format!(
-                        "Error deserializing specrev {value}:\n{err}"
-                    ))
-                })?;
-                Ok(Self(value))
-            }
-            value => Err(mlua::Error::DeserializeError(format!(
-                "Expected specrev to be an integer, but got {}",
-                value.type_name()
-            ))),
-        }
     }
 }
 
@@ -529,7 +509,7 @@ pub enum PackageVersionReq {
 
 impl FromLua for PackageVersionReq {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        PackageVersionReq::parse(&String::from_lua(value, lua)?).into_lua_err()
+        lua.from_value(value)
     }
 }
 

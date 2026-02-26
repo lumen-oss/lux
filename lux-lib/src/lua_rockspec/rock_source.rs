@@ -1,18 +1,21 @@
-use mlua::{FromLua, Lua, Value};
+use mlua::{DeserializeOptions, FromLua, Lua, LuaSerdeExt, Value};
 use path_slash::PathBufExt;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
 use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
-use crate::git::{
-    url::{RemoteGitUrl, RemoteGitUrlParseError},
-    GitSource,
+use crate::{
+    git::{
+        url::{RemoteGitUrl, RemoteGitUrlParseError},
+        GitSource,
+    },
+    lua_rockspec::per_platform_from_intermediate,
 };
 
 use super::{
-    platform::per_platform_from_lua, DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue,
-    PartialOverride, PerPlatform, PlatformOverridable,
+    DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, PartialOverride, PerPlatform,
+    PlatformOverridable,
 };
 
 #[derive(Default, Deserialize, Clone, Debug, PartialEq)]
@@ -104,9 +107,18 @@ impl TryFrom<RockSourceInternal> for RemoteRockSource {
     }
 }
 
+impl<'de> Deserialize<'de> for PerPlatform<RemoteRockSource> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        per_platform_from_intermediate::<_, RockSourceInternal, _>(deserializer)
+    }
+}
+
 impl FromLua for PerPlatform<RemoteRockSource> {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        per_platform_from_lua::<RemoteRockSource, RockSourceInternal>(value, lua)
+        lua.from_value_with(value, DeserializeOptions::new().detect_mixed_tables(true))
     }
 }
 

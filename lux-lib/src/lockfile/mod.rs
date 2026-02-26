@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 use std::{collections::HashMap, fs::File, io::ErrorKind, path::PathBuf};
 
 use itertools::Itertools;
-use mlua::{ExternalResult, FromLua};
+use mlua::{FromLua, LuaSerdeExt};
 use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
@@ -37,7 +37,7 @@ pub enum PinnedState {
 
 impl FromLua for PinnedState {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        Ok(Self::from(bool::from_lua(value, lua)?))
+        lua.from_value(value)
     }
 }
 
@@ -128,7 +128,7 @@ impl From<bool> for OptState {
 
 impl FromLua for OptState {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        Ok(Self::from(bool::from_lua(value, lua)?))
+        lua.from_value(value)
     }
 }
 
@@ -187,7 +187,7 @@ pub struct LocalPackageId(String);
 
 impl FromLua for LocalPackageId {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        Ok(Self(String::from_lua(value, lua)?))
+        lua.from_value(value)
     }
 }
 
@@ -562,14 +562,24 @@ impl IntoLua for LockConstraint {
 }
 */
 
-impl FromLua for LockConstraint {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        let str = String::from_lua(value, lua)?;
-
+impl<'de> Deserialize<'de> for LockConstraint {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let str = String::deserialize(deserializer)?;
         match str.as_str() {
             "*" => Ok(LockConstraint::Unconstrained),
-            _ => Ok(LockConstraint::Constrained(str.parse().into_lua_err()?)),
+            _ => Ok(LockConstraint::Constrained(
+                str.parse().map_err(serde::de::Error::custom)?,
+            )),
         }
+    }
+}
+
+impl FromLua for LockConstraint {
+    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+        lua.from_value(value)
     }
 }
 

@@ -1,7 +1,7 @@
 use itertools::Itertools;
-use mlua::{FromLua, Lua, LuaSerdeExt, Table, Value};
+use mlua::{FromLua, Lua, LuaSerdeExt, Value};
 use path_slash::PathBufExt;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 /// Compatibility layer/adapter for the luarocks client
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
@@ -42,60 +42,55 @@ impl RockManifest {
     }
 }
 
+#[derive(Deserialize)]
+struct RockManifestInternal {
+    #[serde(default)]
+    lib: HashMap<PathBuf, DirOrFileEntry>,
+    #[serde(default)]
+    lua: HashMap<PathBuf, DirOrFileEntry>,
+    #[serde(default)]
+    bin: HashMap<PathBuf, String>,
+    #[serde(default)]
+    doc: HashMap<PathBuf, DirOrFileEntry>,
+    #[serde(default)]
+    conf: HashMap<PathBuf, DirOrFileEntry>,
+    #[serde(flatten)]
+    root: HashMap<PathBuf, DirOrFileEntry>,
+}
+
+impl<'de> Deserialize<'de> for RockManifest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let internal = RockManifestInternal::deserialize(deserializer)?;
+        Ok(Self {
+            lib: RockManifestLib {
+                entries: internal.lib,
+            },
+            lua: RockManifestLua {
+                entries: internal.lua,
+            },
+            bin: RockManifestBin {
+                entries: internal.bin,
+            },
+            doc: RockManifestDoc {
+                entries: internal.doc,
+            },
+            conf: RockManifestConf {
+                entries: internal.conf,
+            },
+            root: RockManifestRoot {
+                entries: internal.root,
+            },
+        })
+    }
+}
+
 impl FromLua for RockManifest {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        match &value {
-            Value::Table(rock_manifest) => {
-                let lib = RockManifestLib {
-                    entries: rock_manifest_dir_or_file_entry_from_lua(rock_manifest, lua, "lib")?,
-                };
-                let lua_entry = RockManifestLua {
-                    entries: rock_manifest_dir_or_file_entry_from_lua(rock_manifest, lua, "lua")?,
-                };
-                let bin = RockManifestBin {
-                    entries: rock_manifest_bin_entry_from_lua(rock_manifest, lua, "bin")?,
-                };
-                let doc = RockManifestDoc {
-                    entries: rock_manifest_dir_or_file_entry_from_lua(rock_manifest, lua, "doc")?,
-                };
-                let conf = RockManifestConf {
-                    entries: rock_manifest_dir_or_file_entry_from_lua(rock_manifest, lua, "conf")?,
-                };
-                let mut root_entry = HashMap::new();
-                rock_manifest.for_each(|key: String, value: Value| {
-                    if matches!(key.as_str(), "lib" | "lua" | "bin" | "doc" | "conf") {
-                        return Ok(());
-                    }
-                    if let val @ Value::String(_) = value {
-                        root_entry.insert(
-                            key.into(),
-                            DirOrFileEntry::FileEntry(String::from_lua(val, lua)?),
-                        );
-                    } else if let Value::Table(_) = value {
-                        let entry =
-                            rock_manifest_dir_or_file_entry_from_lua(rock_manifest, lua, &key)?;
-                        root_entry.insert(key.into(), DirOrFileEntry::DirEntry(entry));
-                    }
-                    Ok(())
-                })?;
-                let root = RockManifestRoot {
-                    entries: root_entry,
-                };
-                Ok(Self {
-                    lib,
-                    lua: lua_entry,
-                    bin,
-                    doc,
-                    conf,
-                    root,
-                })
-            }
-            Value::Nil => Ok(Self::default()),
-            val => Err(mlua::Error::DeserializeError(format!(
-                "Expected rock_manifest to be a table or nil, but got {}",
-                val.type_name()
-            ))),
-        }
+        lua.from_value::<Option<_>>(value)
+            .map(|opt| opt.unwrap_or_default())
     }
 }
 
@@ -248,30 +243,6 @@ impl DisplayAsLuaKV for RockManifestConf {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct RockManifestRoot {
     pub entries: HashMap<PathBuf, DirOrFileEntry>,
-}
-
-fn rock_manifest_dir_or_file_entry_from_lua(
-    tbl: &Table,
-    lua: &Lua,
-    key: &str,
-) -> mlua::Result<HashMap<PathBuf, DirOrFileEntry>> {
-    if tbl.contains_key(key)? {
-        lua.from_value(tbl.get(key)?)
-    } else {
-        Ok(HashMap::default())
-    }
-}
-
-fn rock_manifest_bin_entry_from_lua(
-    rock_manifest: &Table,
-    lua: &Lua,
-    key: &str,
-) -> mlua::Result<HashMap<PathBuf, String>> {
-    if rock_manifest.contains_key(key)? {
-        lua.from_value(rock_manifest.get(key)?)
-    } else {
-        Ok(HashMap::default())
-    }
 }
 
 #[cfg(test)]

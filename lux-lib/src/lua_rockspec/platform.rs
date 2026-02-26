@@ -59,10 +59,7 @@ impl PartialOrd for PlatformIdentifier {
 
 impl FromLua for PlatformIdentifier {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        let string = String::from_lua(value, lua)?;
-        Ok(string
-            .parse()
-            .unwrap_or(PlatformIdentifier::Unknown(string)))
+        lua.from_value(value)
     }
 }
 
@@ -487,20 +484,22 @@ where
 }
 
 /// Deserializes a Lua value into a `PerPlatform<T>` through a proxy representation `G`. This is
-/// useful when `T` cannot be directly deserialized from Lua, but can be constructed from a simpler type
-/// `G`.
-pub(crate) fn per_platform_from_lua<T, G>(value: Value, lua: &Lua) -> mlua::Result<PerPlatform<T>>
+/// useful when `T` cannot be directly deserialized from a flexible format like Lua, but can be
+/// constructed from a simpler type `G`.
+pub(crate) fn per_platform_from_intermediate<'de, D, I, T>(
+    deserializer: D,
+) -> Result<PerPlatform<T>, D::Error>
 where
-    T: TryFrom<G, Error: ToString>,
-    G: PlatformOverridable<Err: ToString>,
-    G: DeserializeOwned,
-    G: Default,
-    G: Clone,
+    D: Deserializer<'de>,
+    I: PlatformOverridable<Err: ToString>,
+    I: DeserializeOwned,
+    I: Default,
+    I: Clone,
+    T: TryFrom<I, Error: ToString>,
 {
-    PerPlatform::<G>::from_lua(value, lua)?
+    PerPlatform::<I>::deserialize(deserializer)?
         .map(|internal| {
-            T::try_from(internal.clone())
-                .map_err(|err| mlua::Error::DeserializeError(err.to_string()))
+            T::try_from(internal.clone()).map_err(|err| serde::de::Error::custom(err.to_string()))
         })
         .transpose()
 }
