@@ -1,7 +1,7 @@
 use directories::ProjectDirs;
 use external_deps::ExternalDependencySearchConfig;
 use itertools::Itertools;
-use mlua::{ExternalResult, FromLua};
+use mlua::{FromLua, LuaSerdeExt};
 use serde::{Deserialize, Serialize, Serializer};
 use std::env::current_exe;
 use std::path::Path;
@@ -47,8 +47,7 @@ pub enum LuaVersion {
 
 impl FromLua for LuaVersion {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        let version_str: String = FromLua::from_lua(value, lua)?;
-        LuaVersion::from_str(&version_str).into_lua_err()
+        lua.from_value(value)
     }
 }
 
