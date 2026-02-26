@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::FromLua;
+use mlua::{DeserializeOptions, FromLua, LuaSerdeExt};
 use path_slash::PathExt;
 use serde_enum_str::Serialize_enum_str;
 use std::{convert::Infallible, path::PathBuf};
@@ -9,12 +9,12 @@ use serde::{Deserialize, Deserializer};
 
 use crate::{
     config::{Config, ConfigBuilder, ConfigError, LuaVersion},
+    lua_rockspec::per_platform_from_intermediate,
     package::PackageReq,
     project::{project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
 };
 
-use super::platform::per_platform_from_lua;
 use super::{PartialOverride, PerPlatform, PlatformOverridable};
 
 #[cfg(target_family = "unix")]
@@ -202,12 +202,21 @@ impl TryFrom<TestSpecInternal> for TestSpec {
     }
 }
 
+impl<'de> Deserialize<'de> for PerPlatform<TestSpec> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        per_platform_from_intermediate::<_, TestSpecInternal, _>(deserializer)
+    }
+}
+
 impl FromLua for PerPlatform<TestSpec> {
     fn from_lua(
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        per_platform_from_lua::<TestSpec, TestSpecInternal>(value, lua)
+        lua.from_value_with(value, DeserializeOptions::new().detect_mixed_tables(true))
     }
 }
 

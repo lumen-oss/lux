@@ -18,22 +18,24 @@ use builtin::{
 
 use itertools::Itertools;
 
-use mlua::{FromLua, Lua, LuaSerdeExt, Value};
+use mlua::{DeserializeOptions, FromLua, Lua, LuaSerdeExt, Value};
 use std::{
-    collections::HashMap, env::consts::DLL_EXTENSION, fmt::Display, path::PathBuf, str::FromStr,
+    collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display,
+    path::PathBuf, str::FromStr,
 };
 use thiserror::Error;
 
 use serde::{de, de::IntoDeserializer, Deserialize, Deserializer};
 
 use crate::{
+    lua_rockspec::per_platform_from_intermediate,
     package::{PackageName, PackageReq},
     rockspec::lua_dependency::LuaDependencySpec,
 };
 
 use super::{
     mlua_json_value_to_vec, DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue,
-    LuaTableKey, PartialOverride, PerPlatform, PlatformIdentifier,
+    LuaTableKey, PartialOverride, PerPlatform, PlatformOverridable,
 };
 
 /// The build specification for a given rock, serialized from `rockspec.build = { ... }`.
@@ -210,6 +212,14 @@ impl BuildSpec {
     }
 }
 
+impl TryFrom<BuildSpecInternal> for BuildSpec {
+    type Error = BuildSpecInternalError;
+
+    fn try_from(internal: BuildSpecInternal) -> Result<Self, Self::Error> {
+        BuildSpec::from_internal_spec(internal)
+    }
+}
+
 impl<'de> Deserialize<'de> for BuildSpec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -220,21 +230,22 @@ impl<'de> Deserialize<'de> for BuildSpec {
     }
 }
 
+// TODO(vhyrro): Remove this when we migrate to deepmerge.
+// This is a hacky implementation that would work normally with just the above deserialization
+// strategy however since there is no PlatformOevrridable implemented for this struct this is
+// necessary.
+impl<'de> Deserialize<'de> for PerPlatform<BuildSpec> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        per_platform_from_intermediate::<_, BuildSpecInternal, _>(deserializer)
+    }
+}
+
 impl FromLua for PerPlatform<BuildSpec> {
     fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        let internal = PerPlatform::from_lua(value, lua)?;
-        let mut per_platform = HashMap::new();
-        for (platform, internal_override) in internal.per_platform {
-            let override_spec = BuildSpec::from_internal_spec(internal_override)
-                .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?;
-            per_platform.insert(platform, override_spec);
-        }
-        let result = PerPlatform {
-            default: BuildSpec::from_internal_spec(internal.default)
-                .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?,
-            per_platform,
-        };
-        Ok(result)
+        lua.from_value_with(value, DeserializeOptions::new().detect_mixed_tables(true))
     }
 }
 
@@ -314,8 +325,16 @@ impl UserData for CommandBuildSpec {
 }
 */
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 struct LuaPathBufTable(HashMap<LuaTableKey, PathBuf>);
+
+impl<'de> Deserialize<'de> for LuaPathBufTable {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(LuaPathBufTable(
+            deserialize_map_or_seq(deserializer)?.unwrap_or_default(),
+        ))
+    }
+}
 
 impl LuaPathBufTable {
     fn coerce<S>(self) -> Result<HashMap<S, PathBuf>, S::Err>
@@ -340,8 +359,16 @@ impl LuaPathBufTable {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 struct LibPathBufTable(HashMap<LuaTableKey, PathBuf>);
+
+impl<'de> Deserialize<'de> for LibPathBufTable {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(LibPathBufTable(
+            deserialize_map_or_seq(deserializer)?.unwrap_or_default(),
+        ))
+    }
+}
 
 impl LibPathBufTable {
     fn coerce<S>(self) -> Result<HashMap<S, PathBuf>, S::Err>
@@ -513,11 +540,44 @@ impl DisplayAsLuaKV for InstallSpec {
     }
 }
 
+/// Deserializes a map that may be represented as a sequence (integer-indexed Lua array).
+fn deserialize_map_or_seq<'de, D, V>(
+    deserializer: D,
+) -> Result<Option<HashMap<LuaTableKey, V>>, D::Error>
+where
+    D: Deserializer<'de>,
+    V: Deserialize<'de>,
+{
+    use serde_value::Value;
+
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::Map(_) => Ok(Some(value.deserialize_into().map_err(de::Error::custom)?)),
+        Value::Seq(_) => {
+            let vec: Vec<V> = value.deserialize_into().map_err(de::Error::custom)?;
+            let map = vec
+                .into_iter()
+                .enumerate()
+                .map(|(index, value)| (LuaTableKey::IntKey((index + 1) as u64), value))
+                .collect();
+            Ok(Some(map))
+        }
+        Value::Unit | Value::Option(None) => Ok(None),
+        _ => Err(de::Error::custom(
+            "expected a table or array for map or sequence deserialization",
+        )),
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize, Default, Clone)]
 pub(crate) struct BuildSpecInternal {
     #[serde(rename = "type", default)]
     pub(crate) build_type: Option<BuildType>,
-    #[serde(rename = "modules", default)]
+    #[serde(
+        rename = "modules",
+        default,
+        deserialize_with = "deserialize_map_or_seq"
+    )]
     pub(crate) builtin_spec: Option<HashMap<LuaTableKey, ModuleSpecInternal>>,
     #[serde(default)]
     pub(crate) makefile: Option<PathBuf>,
@@ -555,7 +615,7 @@ pub(crate) struct BuildSpecInternal {
     #[serde(default)]
     pub(crate) features: Option<Vec<String>>,
     pub(crate) cargo_extra_args: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_map_or_seq")]
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
     // treesitter-parser fields
     #[serde(default)]
@@ -570,60 +630,24 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) queries: Option<HashMap<PathBuf, String>>,
 }
 
-impl FromLua for PerPlatform<BuildSpecInternal> {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        match &value {
-            list @ Value::Table(tbl) => {
-                let mut per_platform = match tbl.get("platforms")? {
-                    Value::Table(overrides) => Ok(lua.from_value(Value::Table(overrides))?),
-                    Value::Nil => Ok(HashMap::default()),
-                    val => Err(mlua::Error::DeserializeError(format!(
-                        "Expected rockspec 'build' to be table or nil, but got {}",
-                        val.type_name()
-                    ))),
-                }?;
-                let _ = tbl.raw_remove("platforms");
-                let default = lua.from_value(list.clone())?;
-                override_platform_specs(&mut per_platform, &default)
-                    .map_err(|err| mlua::Error::DeserializeError(err.to_string()))?;
-                Ok(PerPlatform {
-                    default,
-                    per_platform,
-                })
-            }
-            Value::Nil => Ok(PerPlatform::default()),
-            val => Err(mlua::Error::DeserializeError(format!(
-                "Expected rockspec 'build' to be a table or nil, but got {}",
-                val.type_name()
-            ))),
-        }
+impl PartialOverride for BuildSpecInternal {
+    type Err = ModuleSpecAmbiguousPlatformOverride;
+
+    fn apply_overrides(&self, override_spec: &Self) -> Result<Self, Self::Err> {
+        override_build_spec_internal(self, override_spec)
     }
 }
 
-/// For each platform in `per_platform`, add the base specs,
-/// and apply overrides to the extended platforms of each platform override.
-fn override_platform_specs(
-    per_platform: &mut HashMap<PlatformIdentifier, BuildSpecInternal>,
-    base: &BuildSpecInternal,
-) -> Result<(), ModuleSpecAmbiguousPlatformOverride> {
-    let per_platform_raw = per_platform.clone();
-    for (platform, build_spec) in per_platform.clone() {
-        // Add base dependencies for each platform
-        per_platform.insert(platform, override_build_spec_internal(base, &build_spec)?);
+impl PlatformOverridable for BuildSpecInternal {
+    type Err = Infallible;
+
+    fn on_nil<T>() -> Result<PerPlatform<T>, <Self as PlatformOverridable>::Err>
+    where
+        T: PlatformOverridable,
+        T: Default,
+    {
+        Ok(PerPlatform::default())
     }
-    for (platform, build_spec) in per_platform_raw {
-        for extended_platform in &platform.get_extended_platforms() {
-            let extended_spec = per_platform
-                .get(extended_platform)
-                .unwrap_or(&base.to_owned())
-                .to_owned();
-            per_platform.insert(
-                extended_platform.to_owned(),
-                override_build_spec_internal(&extended_spec, &build_spec)?,
-            );
-        }
-    }
-    Ok(())
 }
 
 fn override_build_spec_internal(

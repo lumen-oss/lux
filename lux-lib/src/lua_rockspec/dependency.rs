@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
-use mlua::FromLua;
+use mlua::{FromLua, LuaSerdeExt};
 use path_slash::PathBufExt;
 use serde::Deserialize;
 
@@ -34,19 +34,8 @@ impl IntoLua for ExternalDependencySpec {
 */
 
 impl FromLua for ExternalDependencySpec {
-    fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
-        if let mlua::Value::Table(table) = value {
-            let header = table.get("header")?;
-            let library = table.get("library")?;
-
-            Ok(Self { header, library })
-        } else {
-            Err(mlua::Error::FromLuaConversionError {
-                from: "ExternalDependencySpec",
-                to: "table".to_string(),
-                message: Some("Expected a table".to_string()),
-            })
-        }
+    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+        lua.from_value(value)
     }
 }
 
@@ -145,7 +134,7 @@ mod tests {
             }
         "#;
         let value = lua.load(lua_code).eval().unwrap();
-        let deps: HashMap<String, ExternalDependencySpec> = FromLua::from_lua(value, &lua).unwrap();
+        let deps: HashMap<String, ExternalDependencySpec> = lua.from_value(value).unwrap();
         assert_eq!(deps.len(), 3);
         assert_eq!(
             deps["foo"].header.as_ref().unwrap().to_slash_lossy(),

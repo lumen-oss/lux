@@ -732,8 +732,7 @@ impl FromLua for RockspecFormat {
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        let s = String::from_lua(value, lua)?;
-        Self::from_str(&s).map_err(|err| mlua::Error::DeserializeError(err.to_string()))
+        lua.from_value(value)
     }
 }
 
@@ -1511,8 +1510,7 @@ mod tests {
         "
         .to_string();
         let rockspec = RemoteLuaRockspec::new(&rockspec_content).unwrap();
-        let per_platform = &rockspec.local.build.per_platform;
-        let win32 = per_platform.get(&PlatformIdentifier::Windows).unwrap();
+        let win32 = rockspec.local.build.get(&PlatformIdentifier::Windows);
         assert_eq!(
             win32.build_backend,
             Some(BuildBackendSpec::Builtin(BuiltinBuildSpec {

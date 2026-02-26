@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::{ExternalResult, FromLua, LuaSerdeExt};
+use mlua::{FromLua, LuaSerdeExt};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
@@ -79,14 +79,22 @@ impl TryFrom<PackageReq> for PackageSpec {
     }
 }
 
+impl<'de> Deserialize<'de> for PackageSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (name, version) = <_>::deserialize(deserializer)?;
+        Self::parse(name, version).map_err(serde::de::Error::custom)
+    }
+}
+
 impl FromLua for PackageSpec {
     fn from_lua(
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        let (name, version) = lua.from_value(value)?;
-
-        Self::parse(name, version).into_lua_err()
+        lua.from_value(value)
     }
 }
 
@@ -286,8 +294,7 @@ impl From<PackageName> for PackageReq {
 
 impl FromLua for PackageReq {
     fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        let str: String = lua.from_value(value)?;
-        Self::parse(&str).into_lua_err()
+        lua.from_value(value)
     }
 }
 
@@ -419,7 +426,7 @@ impl FromLua for PackageName {
         value: mlua::prelude::LuaValue,
         lua: &mlua::prelude::Lua,
     ) -> mlua::prelude::LuaResult<Self> {
-        Ok(Self::new(String::from_lua(value, lua)?))
+        lua.from_value(value)
     }
 }
 
