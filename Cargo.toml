@@ -2,7 +2,7 @@
 members = [
   "lux-lib",
   "lux-cli",
-  "lux-lua",
+  # "lux-lua",
   "lux-workspace-hack",
   "xtask",
   "xtask-lua",
