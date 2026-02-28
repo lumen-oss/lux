@@ -6,8 +6,8 @@ use thiserror::Error;
 use crate::{
     build::utils::c_dylib_extension,
     lua_rockspec::{
-        deserialize_vec_from_lua_array_or_string, DisplayAsLuaValue, PartialOverride, PerPlatform,
-        PlatformOverridable,
+        deserialize_vec_from_lua_array_or_string, normalize_lua_value, DisplayAsLuaValue,
+        PartialOverride, PerPlatform, PlatformOverridable,
     },
 };
 
@@ -170,16 +170,22 @@ impl<'de> Deserialize<'de> for ModuleSpecInternal {
     where
         D: Deserializer<'de>,
     {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        if value.is_string() {
-            let src_path = serde_json::from_value(value).map_err(de::Error::custom)?;
-            Ok(Self::SourcePath(src_path))
-        } else if value.is_array() {
-            let src_paths = serde_json::from_value(value).map_err(de::Error::custom)?;
-            Ok(Self::SourcePaths(src_paths))
-        } else {
-            let module_paths = serde_json::from_value(value).map_err(de::Error::custom)?;
-            Ok(Self::ModulePaths(module_paths))
+        let value = normalize_lua_value(serde_value::Value::deserialize(deserializer)?);
+        match value {
+            serde_value::Value::String(s) => Ok(Self::SourcePath(PathBuf::from(s))),
+            serde_value::Value::Seq(_) => {
+                let src_paths: Vec<PathBuf> =
+                    value.deserialize_into().map_err(de::Error::custom)?;
+                Ok(Self::SourcePaths(src_paths))
+            }
+            serde_value::Value::Map(_) => {
+                let module_paths: ModulePathsInternal =
+                    value.deserialize_into().map_err(de::Error::custom)?;
+                Ok(Self::ModulePaths(module_paths))
+            }
+            _ => Err(de::Error::custom(format!(
+                "expected a string, list, or table for module spec, got: {value:?}"
+            ))),
         }
     }
 }

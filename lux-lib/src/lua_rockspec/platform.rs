@@ -6,12 +6,12 @@ use strum_macros::EnumIter;
 use thiserror::Error;
 
 use serde::{
-    de::{self, DeserializeOwned},
+    de::{self, DeserializeOwned, IntoDeserializer, Visitor},
     Deserialize, Deserializer,
 };
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 
-use super::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue};
+use super::{normalize_lua_value, DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, LuaValueSeed};
 
 /// Identifier by a platform.
 /// The `PartialOrd` instance views more specific platforms as `Greater`
@@ -366,6 +366,108 @@ impl<T: Default> Default for PerPlatform<T> {
     }
 }
 
+struct PerPlatformVisitor<T>(std::marker::PhantomData<T>);
+
+impl<'de, T> Visitor<'de> for PerPlatformVisitor<T>
+where
+    T: DeserializeOwned,
+    T: PlatformOverridable,
+    T: Default,
+    T: Clone,
+{
+    type Value = PerPlatform<T>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a table or nil")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: de::MapAccess<'de>,
+    {
+        use serde_value::Value;
+
+        let mut platforms_val: Option<Value> = None;
+        let mut other_entries: Vec<(Value, Value)> = Vec::new();
+
+        while let Some(key) = map.next_key_seed(LuaValueSeed)? {
+            if key == Value::String("platforms".to_string()) {
+                platforms_val = Some(map.next_value_seed(LuaValueSeed)?);
+            } else {
+                other_entries.push((key, map.next_value_seed(LuaValueSeed)?));
+            }
+        }
+
+        let mut per_platform = match platforms_val {
+            Some(val) => match val {
+                Value::Map(_) => val
+                    .deserialize_into::<HashMap<PlatformIdentifier, T>>()
+                    .map_err(de::Error::custom)?,
+                Value::Unit => HashMap::default(),
+                val => {
+                    return Err(de::Error::custom(format!(
+                        "Expected platforms to be a table or nil, but got {val:?}",
+                    )))
+                }
+            },
+            None => HashMap::default(),
+        };
+
+        // Build a Map from remaining entries, then normalise: if all keys are
+        // integers (a Lua sequence), normalize_lua_value converts it to a
+        // Value::Seq so downstream struct deserializers work correctly.
+        let obj = normalize_lua_value(Value::Map(other_entries.into_iter().collect()));
+        let default = T::deserialize(obj.into_deserializer()).map_err(de::Error::custom)?;
+        apply_per_platform_overrides(&mut per_platform, &default)
+            .map_err(|err: <T as PartialOverride>::Err| de::Error::custom(err.to_string()))?;
+        Ok(PerPlatform {
+            default,
+            per_platform,
+        })
+    }
+
+    fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: de::SeqAccess<'de>,
+    {
+        // Any table without explicit keys is considered a sequence in Lua.
+        // Sequences cannot have platform overrides, so we simply deserialize
+        // them as the default value.
+        let default = T::deserialize(de::value::SeqAccessDeserializer::new(seq))?;
+        Ok(PerPlatform::new(default))
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        T::on_nil().map_err(de::Error::custom)
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let s = std::str::from_utf8(v).map_err(de::Error::custom)?;
+        self.visit_str(s)
+    }
+
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_bytes(&v)
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let default = T::deserialize(v.into_deserializer())?;
+        Ok(PerPlatform::new(default))
+    }
+}
+
 impl<'de, T> Deserialize<'de> for PerPlatform<T>
 where
     T: DeserializeOwned,
@@ -373,82 +475,8 @@ where
     T: Default,
     T: Clone,
 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use serde_value::Value;
-
-        let value = Value::deserialize(deserializer)?;
-        match value {
-            Value::Map(mut map) => {
-                let platforms_key = Value::String("platforms".to_string());
-                // Remove the platforms key from the map to avoid deserializing it as part of the default value
-                let mut per_platform = match map.remove(&platforms_key) {
-                    Some(val) => match val {
-                        Value::Map(_) => val
-                            .deserialize_into::<HashMap<PlatformIdentifier, T>>()
-                            .map_err(de::Error::custom)?,
-                        Value::Unit | Value::Option(None) => HashMap::default(),
-                        val => {
-                            return Err(de::Error::custom(format!(
-                                "Expected platforms to be a table or nil, but got {val:?}",
-                            )))
-                        }
-                    },
-                    None => HashMap::default(),
-                };
-
-                // Upon deleting the platforms key, the map may suddenly become a sequence (if the
-                // original table only had integer keys). In this case, we convert the map into a
-                // sequence.
-
-                if map.keys().all(|key| matches!(key, Value::I64(_))) {
-                    let sequence = map
-                        .into_iter()
-                        .sorted_by_key(|(key, _)| match key {
-                            Value::I64(index) => *index,
-                            _ => unreachable!(),
-                        })
-                        .map(|(_, value)| value)
-                        .collect();
-                    let default = Value::Seq(sequence)
-                        .deserialize_into::<T>()
-                        .map_err(de::Error::custom)?;
-                    apply_per_platform_overrides(&mut per_platform, &default).map_err(
-                        |err: <T as PartialOverride>::Err| de::Error::custom(err.to_string()),
-                    )?;
-                    return Ok(PerPlatform {
-                        default,
-                        per_platform,
-                    });
-                }
-
-                // Deserialize the actual value without the platforms key
-                let default = Value::Map(map)
-                    .deserialize_into::<T>()
-                    .map_err(de::Error::custom)?;
-                apply_per_platform_overrides(&mut per_platform, &default).map_err(
-                    |err: <T as PartialOverride>::Err| de::Error::custom(err.to_string()),
-                )?;
-                Ok(PerPlatform {
-                    default,
-                    per_platform,
-                })
-            }
-            value @ Value::Seq(_) => {
-                // Any table without explicit keys is considered a sequence in Lua.
-                // Sequences cannot have platform overrides, so we simply deserialize
-                // them as the default value.
-                Ok(PerPlatform::new(
-                    value.deserialize_into::<T>().map_err(de::Error::custom)?,
-                ))
-            }
-            Value::Option(None) | Value::Unit => T::on_nil().map_err(de::Error::custom),
-            val => Err(de::Error::custom(format!(
-                "expected a table or nil, but got {val:?}"
-            ))),
-        }
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(PerPlatformVisitor(std::marker::PhantomData))
     }
 }
 
