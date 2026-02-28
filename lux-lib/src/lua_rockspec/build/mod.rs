@@ -19,7 +19,10 @@ use builtin::{
 use itertools::Itertools;
 
 use mlua::{DeserializeOptions, FromLua, Lua, LuaSerdeExt, Value};
-use std::{collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display,
+    path::PathBuf, str::FromStr,
+};
 use thiserror::Error;
 
 use serde::{de, de::IntoDeserializer, Deserialize, Deserializer};
@@ -31,8 +34,8 @@ use crate::{
 };
 
 use super::{
-    mlua_json_value_to_vec, DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue,
-    LuaTableKey, PartialOverride, PerPlatform, PlatformOverridable,
+    DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue, LuaTableKey, LuaValueSeed,
+    PartialOverride, PerPlatform, PlatformOverridable,
 };
 
 /// The build specification for a given rock, serialized from `rockspec.build = { ... }`.
@@ -450,9 +453,9 @@ fn deserialize_copy_directories<'de, D>(deserializer: D) -> Result<Option<Vec<Pa
 where
     D: Deserializer<'de>,
 {
-    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    let value: Option<serde_value::Value> = Option::deserialize(deserializer)?;
     let copy_directories: Option<Vec<String>> = match value {
-        Some(json_value) => Some(mlua_json_value_to_vec(json_value).map_err(de::Error::custom)?),
+        Some(value) => Some(value.deserialize_into().map_err(de::Error::custom)?),
         None => None,
     };
     let special_directories: Vec<String> = vec!["lua".into(), "lib".into(), "rock_manifest".into()];
@@ -543,26 +546,38 @@ fn deserialize_map_or_seq<'de, D, V>(
 ) -> Result<Option<HashMap<LuaTableKey, V>>, D::Error>
 where
     D: Deserializer<'de>,
-    V: Deserialize<'de>,
+    V: de::DeserializeOwned,
 {
-    use serde_value::Value;
-
-    let value = Value::deserialize(deserializer)?;
-    match value {
-        Value::Map(_) => Ok(Some(value.deserialize_into().map_err(de::Error::custom)?)),
-        Value::Seq(_) => {
-            let vec: Vec<V> = value.deserialize_into().map_err(de::Error::custom)?;
-            let map = vec
-                .into_iter()
-                .enumerate()
-                .map(|(index, value)| (LuaTableKey::IntKey((index + 1) as u64), value))
-                .collect();
-            Ok(Some(map))
-        }
-        Value::Unit | Value::Option(None) => Ok(None),
-        _ => Err(de::Error::custom(
-            "expected a table or array for map or sequence deserialization",
-        )),
+    match de::DeserializeSeed::deserialize(LuaValueSeed, deserializer).map_err(de::Error::custom)? {
+        serde_value::Value::Map(map) => map
+            .into_iter()
+            .map(|(k, v)| {
+                let key = match k {
+                    serde_value::Value::I64(i) => LuaTableKey::IntKey(i as u64),
+                    serde_value::Value::U64(u) => LuaTableKey::IntKey(u),
+                    serde_value::Value::String(s) => LuaTableKey::StringKey(s),
+                    other => {
+                        return Err(de::Error::custom(format!("unexpected map key: {other:?}")))
+                    }
+                };
+                let val = v.deserialize_into::<V>().map_err(de::Error::custom)?;
+                Ok((key, val))
+            })
+            .try_collect()
+            .map(Some),
+        serde_value::Value::Seq(seq) => seq
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let val = v.deserialize_into::<V>().map_err(de::Error::custom)?;
+                Ok((LuaTableKey::IntKey(i as u64 + 1), val))
+            })
+            .try_collect()
+            .map(Some),
+        serde_value::Value::Unit => Ok(None),
+        other => Err(de::Error::custom(format!(
+            "expected a table or nil, got {other:?}"
+        ))),
     }
 }
 

@@ -1,8 +1,122 @@
 use std::fmt::Display;
 
 use itertools::Itertools;
-use serde::{de, Deserialize, Deserializer};
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer,
+};
 use thiserror::Error;
+
+/// A visitor and [`de::DeserializeSeed`] that collects a raw `serde_value::Value`
+/// from piccolo's deserializer, converting byte strings to Rust strings and
+/// preserving integer map keys (which piccolo emits for Lua sequences).
+pub(crate) struct LuaValueSeed;
+
+impl<'de> Visitor<'de> for LuaValueSeed {
+    type Value = serde_value::Value;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("any Lua value")
+    }
+
+    fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::Bool(v))
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::I64(v))
+    }
+
+    fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::U64(v))
+    }
+
+    fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::F64(v))
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::String(v.to_string()))
+    }
+
+    fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::String(v))
+    }
+
+    fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+        let s = std::str::from_utf8(v).map_err(de::Error::custom)?;
+        Ok(serde_value::Value::String(s.to_string()))
+    }
+
+    fn visit_byte_buf<E: de::Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+        self.visit_bytes(&v)
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::Unit)
+    }
+
+    fn visit_some<D2: Deserializer<'de>>(self, d: D2) -> Result<Self::Value, D2::Error> {
+        d.deserialize_any(LuaValueSeed)
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(serde_value::Value::Unit)
+    }
+
+    fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut arr = Vec::new();
+        while let Some(v) = seq.next_element_seed(LuaValueSeed)? {
+            arr.push(v);
+        }
+        Ok(serde_value::Value::Seq(arr))
+    }
+
+    fn visit_map<A: de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut obj = std::collections::BTreeMap::new();
+        while let Some(key) = map.next_key_seed(LuaValueSeed)? {
+            let val = map.next_value_seed(LuaValueSeed)?;
+            obj.insert(key, val);
+        }
+        Ok(serde_value::Value::Map(obj))
+    }
+}
+
+impl<'de> de::DeserializeSeed<'de> for LuaValueSeed {
+    type Value = serde_value::Value;
+
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        d.deserialize_any(self)
+    }
+}
+
+/// Normalise a `serde_value::Value` that came from piccolo (our Lua runtime).
+///
+/// Piccolo represents Lua sequences-with-holes (e.g. `{nil, nil, "foo"}`) as a
+/// `Value::Map` with integer keys rather than a `Value::Seq`. This function
+/// detects that case and converts such a map into a `Value::Seq` sorted by
+/// index, leaving all other values untouched.
+pub(crate) fn normalize_lua_value(value: serde_value::Value) -> serde_value::Value {
+    match value {
+        serde_value::Value::Map(ref map)
+            if map
+                .keys()
+                .all(|k| matches!(k, serde_value::Value::I64(_) | serde_value::Value::U64(_))) =>
+        {
+            let seq = map
+                .iter()
+                .sorted_by_key(|(k, _)| match k {
+                    serde_value::Value::I64(i) => *i,
+                    serde_value::Value::U64(u) => *u as i64,
+                    _ => unreachable!(),
+                })
+                .map(|(_, v)| v.clone())
+                .collect();
+            serde_value::Value::Seq(seq)
+        }
+        other => other,
+    }
+}
 
 #[derive(Hash, Debug, Eq, PartialEq, Clone, Deserialize)]
 #[serde(untagged)]
@@ -21,48 +135,19 @@ pub(crate) fn deserialize_vec_from_lua_array_or_string<'de, D, T>(
 where
     D: Deserializer<'de>,
     T: From<String>,
+    T: Deserialize<'de>,
 {
-    let values = serde_json::Value::deserialize(deserializer)?;
-    if values.is_string() {
-        let value = unsafe { T::from(values.as_str().unwrap_unchecked().into()) };
-        Ok(vec![value])
+    let value = serde_value::Value::deserialize(deserializer)?;
+    if let serde_value::Value::String(str) = value {
+        Ok(vec![T::from(str)])
     } else {
-        mlua_json_value_to_vec(values).map_err(de::Error::custom)
-    }
-}
-
-#[derive(Error, Debug)]
-#[error("expected list of strings, but got: {0}")]
-pub(crate) struct ExpectedListOfStrings(serde_json::Value);
-
-/// Convert a json value into a Vec<T>, treating empty json objects as empty lists
-/// This is needed to be able to deserialise Lua tables.
-pub(crate) fn mlua_json_value_to_vec<T>(
-    values: serde_json::Value,
-) -> Result<Vec<T>, ExpectedListOfStrings>
-where
-    T: From<String>,
-{
-    // If we deserialise an empty Lua table, mlua treats it as a dictionary.
-    // This case is handled here.
-    if let Some(values_as_obj) = values.as_object() {
-        if values_as_obj.is_empty() {
-            return Ok(Vec::default());
-        }
-    }
-    values
-        .as_array()
-        .ok_or_else(|| ExpectedListOfStrings(values.clone()))?
-        .iter()
-        .filter(|val| !val.is_null())
-        .map(|val| {
-            let str: String = val
-                .as_str()
-                .map(|s| s.into())
-                .ok_or_else(|| ExpectedListOfStrings(values.clone()))?;
-            Ok(str.into())
+        let value = normalize_lua_value(value);
+        value.clone().deserialize_into().map_err(|err| {
+            de::Error::custom(format!(
+                "expected a string or a list of strings, but got: {value:?} ({err})"
+            ))
         })
-        .try_collect()
+    }
 }
 
 pub(crate) enum DisplayLuaValue {
