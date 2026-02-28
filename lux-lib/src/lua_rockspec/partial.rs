@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 use piccolo::{Closure, Executor, Fuel};
 use piccolo_util::serde::from_value;
 use thiserror::Error;
@@ -75,14 +74,19 @@ impl PartialLuaRockspec {
             }
 
             let rockspec = PartialLuaRockspec {
-                rockspec_format: from_value(globals.get(ctx, "rockspec_format")).unwrap_or_default(),
+                rockspec_format: from_value(globals.get(ctx, "rockspec_format"))
+                    .unwrap_or_default(),
                 package: from_value(globals.get(ctx, "package")).unwrap_or_default(),
                 description: parse_lua_tbl_or_default(ctx, "description").unwrap_or_default(),
-                supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms").unwrap_or_default(),
+                supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")
+                    .unwrap_or_default(),
                 dependencies: from_value(globals.get(ctx, "dependencies")).unwrap_or_default(),
-                build_dependencies: from_value(globals.get(ctx, "build_dependencies")).unwrap_or_default(),
-                test_dependencies: from_value(globals.get(ctx, "test_dependencies")).unwrap_or_default(),
-                external_dependencies: from_value(globals.get(ctx, "external_dependencies")).unwrap_or_default(),
+                build_dependencies: from_value(globals.get(ctx, "build_dependencies"))
+                    .unwrap_or_default(),
+                test_dependencies: from_value(globals.get(ctx, "test_dependencies"))
+                    .unwrap_or_default(),
+                external_dependencies: from_value(globals.get(ctx, "external_dependencies"))
+                    .unwrap_or_default(),
                 build: from_value(globals.get(ctx, "build")).unwrap_or_default(),
                 test: from_value(globals.get(ctx, "test")).unwrap_or_default(),
                 deploy: from_value(globals.get(ctx, "deploy")).unwrap_or_default(),

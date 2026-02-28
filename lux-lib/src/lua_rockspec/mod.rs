@@ -834,7 +834,6 @@ where
 
 #[cfg(test)]
 mod tests {
-
     use std::path::PathBuf;
 
     use crate::git::GitSource;
@@ -843,8 +842,8 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    pub async fn parse_rockspec() {
+    #[test]
+    pub fn parse_rockspec() {
         let rockspec_content = "
         rockspec_format = '1.0'\n
         package = 'foo'\n
@@ -1596,8 +1595,8 @@ mod tests {
         assert!(!deploy_spec.wrap_bin_scripts);
     }
 
-    #[tokio::test]
-    pub async fn parse_scm_rockspec() {
+    #[test]
+    pub fn parse_scm_rockspec() {
         let rockspec_content = "
         package = 'foo'\n
         version = 'scm-1'\n
@@ -1611,8 +1610,8 @@ mod tests {
         assert_eq!(rockspec.local.version, "scm-1".parse().unwrap());
     }
 
-    #[tokio::test]
-    pub async fn regression_luasystem() {
+    #[test]
+    pub fn regression_luasystem() {
         let rockspec_content =
             String::from_utf8(std::fs::read("resources/test/luasystem-0.4.4-1.rockspec").unwrap())
                 .unwrap();
@@ -1709,8 +1708,8 @@ mod tests {
         Vec::default()
     }
 
-    #[tokio::test]
-    pub async fn rust_mlua_rockspec() {
+    #[test]
+    pub fn rust_mlua_rockspec() {
         let rockspec_content = "
     package = 'foo'\n
     version = 'scm-1'\n
@@ -1769,8 +1768,8 @@ mod tests {
 
     // Luarocks allows the `install.bin` field to be a list, even though it
     // should only allow a table.
-    #[tokio::test]
-    pub async fn regression_off_spec_install_binaries() {
+    #[test]
+    pub fn regression_off_spec_install_binaries() {
         let rockspec_content = r#"
             package = "WSAPI"
             version = "1.7-1"
@@ -1798,8 +1797,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    pub async fn regression_external_dependencies() {
+    #[test]
+    pub fn regression_external_dependencies() {
         let content =
             String::from_utf8(std::fs::read("resources/test/luaossl-20220711-0.rockspec").unwrap())
                 .unwrap();
@@ -1831,8 +1830,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    pub async fn remote_lua_rockspec_from_package_and_source_spec() {
+    #[test]
+    pub fn remote_lua_rockspec_from_package_and_source_spec() {
         let package_req = "foo@1.0.5".parse().unwrap();
         let source = GitSource {
             url: "https://hub.com/owner/example-project.git".parse().unwrap(),
