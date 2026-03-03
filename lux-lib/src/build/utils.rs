@@ -7,7 +7,6 @@ use crate::{
     variables::{self, Environment, VariableSubstitutionError},
 };
 use itertools::Itertools;
-use mlua::Lua;
 use path_slash::PathExt;
 use shlex::try_quote;
 use std::{
@@ -719,19 +718,17 @@ async fn is_compatible_lua_script_fallback(
             .join("\n");
         lua_installation
             .lua_binary_or_config_override(config)
-            .and_then(|_| {
-                let lua = Lua::new();
-
-                #[cfg(feature = "luau")]
-                return lua.sandbox(true).ok().map(|_| lua);
-
-                #[cfg(not(feature = "luau"))]
-                Some(lua)
-            })
-            .is_some_and(|lua| {
+            .is_some_and(|_| {
                 // Try to compile the content without executing it
-                lua.load(file_content_without_comments)
-                    .into_function()
+                piccolo::Lua::core()
+                    .try_enter(|ctx| {
+                        piccolo::Closure::load(
+                            ctx,
+                            None,
+                            file_content_without_comments.as_bytes(),
+                        )?;
+                        Ok(())
+                    })
                     .is_ok()
             })
     } else {

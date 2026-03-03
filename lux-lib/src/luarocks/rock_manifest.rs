@@ -1,12 +1,16 @@
 use itertools::Itertools;
-use mlua::{FromLua, Lua, LuaSerdeExt, Value};
 use path_slash::PathBufExt;
+use piccolo::{Closure, Executor, Fuel};
+use piccolo_util::serde::from_value;
 use serde::{Deserialize, Deserializer};
 /// Compatibility layer/adapter for the luarocks client
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
 
-use crate::lua_rockspec::{DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue};
+use crate::{
+    lua_rockspec::{DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue},
+    ROCKSPEC_FUEL_LIMIT,
+};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct RockManifest {
@@ -21,20 +25,27 @@ pub(crate) struct RockManifest {
 #[derive(Error, Debug)]
 pub enum RockManifestError {
     #[error("could not parse rock_manifest: {0}")]
-    MLua(#[from] mlua::Error),
+    Piccolo(#[from] piccolo::StaticError),
+    #[error("could not deserialize rock_manifest: {0}")]
+    Serde(#[from] piccolo_util::serde::de::Error),
+    #[error("rock_manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    FuelLimitExceeded,
 }
 
 impl RockManifest {
     pub fn new(rock_manifest_content: &str) -> Result<Self, RockManifestError> {
-        let lua = Lua::new();
+        let mut lua = piccolo::Lua::core();
 
-        #[cfg(feature = "luau")]
-        lua.sandbox(true)?;
-
-        lua.load(rock_manifest_content).exec()?;
-        let globals = lua.globals();
-        let value = globals.get("rock_manifest")?;
-        Ok(Self::from_lua(value, &lua)?)
+        Ok(lua
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, rock_manifest_content.as_bytes())?;
+                let executor = Executor::start(ctx, closure.into(), ());
+                if !executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT)) {
+                    return Ok(Err(RockManifestError::FuelLimitExceeded));
+                }
+                Ok(from_value::<Option<Self>>(ctx.globals().get(ctx, "rock_manifest")).map(Ok)?)
+            })??
+            .unwrap_or_default())
     }
 
     pub fn to_lua_string(&self) -> String {
@@ -84,13 +95,6 @@ impl<'de> Deserialize<'de> for RockManifest {
                 entries: internal.root,
             },
         })
-    }
-}
-
-impl FromLua for RockManifest {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        lua.from_value::<Option<_>>(value)
-            .map(|opt| opt.unwrap_or_default())
     }
 }
 
