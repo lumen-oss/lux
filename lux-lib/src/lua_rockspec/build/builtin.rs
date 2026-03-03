@@ -443,9 +443,22 @@ fn override_vec<T: Clone>(override_vec: &[T], base: &[T]) -> Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use mlua::{Lua, LuaSerdeExt};
+    use piccolo::{Closure, Executor, Fuel, Lua};
+    use piccolo_util::serde::from_value;
 
     use super::*;
+
+    fn exec_lua<T: serde::de::DeserializeOwned>(
+        code: &str,
+        key: &'static str,
+    ) -> Result<T, piccolo::StaticError> {
+        Lua::core().try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, code.as_bytes())?;
+            let executor = Executor::start(ctx, closure.into(), ());
+            executor.step(ctx, &mut Fuel::with(i32::MAX));
+            from_value(ctx.globals().get(ctx, key)).map_err(piccolo::Error::from)
+        })
+    }
 
     #[tokio::test]
     pub async fn parse_lua_module_from_path() {
@@ -479,10 +492,7 @@ mod tests {
             },\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let build_spec: BuiltinBuildSpec =
-            lua.from_value(lua.globals().get("build").unwrap()).unwrap();
+        let build_spec: BuiltinBuildSpec = exec_lua(lua_content, "build").unwrap();
         let foo = build_spec
             .modules
             .get(&LuaModule::from_str("foo").unwrap())
@@ -510,9 +520,7 @@ mod tests {
             },\n
         }\n
         ";
-        lua.load(lua_content_no_sources).exec().unwrap();
-        let result: mlua::Result<BuiltinBuildSpec> =
-            lua.from_value(lua.globals().get("build").unwrap());
+        let result: Result<BuiltinBuildSpec, _> = exec_lua(lua_content_no_sources, "build");
         let _err = result.unwrap_err();
         let lua_content_complex_defines = "
         build = {\n
@@ -526,9 +534,7 @@ mod tests {
             },\n
         }\n
         ";
-        lua.load(lua_content_complex_defines).exec().unwrap();
-        let build_spec: BuiltinBuildSpec =
-            lua.from_value(lua.globals().get("build").unwrap()).unwrap();
+        let build_spec: BuiltinBuildSpec = exec_lua(lua_content_complex_defines, "build").unwrap();
         let baz = build_spec
             .modules
             .get(&LuaModule::from_str("baz").unwrap())

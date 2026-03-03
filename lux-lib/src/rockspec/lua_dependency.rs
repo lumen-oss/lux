@@ -260,8 +260,21 @@ where
 mod test {
 
     use path_slash::PathBufExt;
+    use piccolo::{Closure, Executor, Fuel, Lua, Value};
+    use piccolo_util::serde::from_value;
 
     use super::*;
+
+    fn eval_lua<T: serde::de::DeserializeOwned>(
+        code: &str,
+    ) -> Result<T, piccolo::StaticError> {
+        Lua::core().try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, code.as_bytes())?;
+            let executor = Executor::start(ctx, closure.into(), ());
+            executor.step(ctx, &mut Fuel::with(i32::MAX));
+            from_value(executor.take_result::<Value<'_>>(ctx)??).map_err(piccolo::Error::from)
+        })
+    }
 
     #[tokio::test]
     async fn test_override_lua_dependency_spec() {
@@ -284,59 +297,22 @@ mod test {
 
     #[test]
     fn test_dependency_type_from_lua() {
-        let lua = mlua::Lua::new();
-        let regular = lua
-            .load(
-                r#"
-                return {
-                    regular = {"neorg 1.0.0", "foo 1.0.0"},
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-        let build = lua
-            .load(
-                r#"
-                return {
-                    build = {"neorg 1.0.0", "foo 1.0.0"},
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-        let test = lua
-            .load(
-                r#"
-                return {
-                    test = {"neorg 1.0.0", "foo 1.0.0"},
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-        let external_deps = lua
-            .load(
-                r#"
-                return {
-                    external = {
-                        foo = { header = "foo.h", library = "libfoo.so" },
-                        bar = { header = "bar.h" },
-                    }
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-
-        let regular_deps: DependencyType<LuaDependencySpec> =
-            DependencyType::from_lua(regular, &lua).unwrap();
-        let build_deps: DependencyType<LuaDependencySpec> =
-            DependencyType::from_lua(build, &lua).unwrap();
-        let test_deps: DependencyType<LuaDependencySpec> =
-            DependencyType::from_lua(test, &lua).unwrap();
-        let external_deps: DependencyType<ExternalDependencySpec> =
-            DependencyType::from_lua(external_deps, &lua).unwrap();
+        let regular_deps: DependencyType<LuaDependencySpec> = eval_lua(
+            r#"return { regular = {"neorg 1.0.0", "foo 1.0.0"} }"#,
+        )
+        .unwrap();
+        let build_deps: DependencyType<LuaDependencySpec> = eval_lua(
+            r#"return { build = {"neorg 1.0.0", "foo 1.0.0"} }"#,
+        )
+        .unwrap();
+        let test_deps: DependencyType<LuaDependencySpec> = eval_lua(
+            r#"return { test = {"neorg 1.0.0", "foo 1.0.0"} }"#,
+        )
+        .unwrap();
+        let external_deps: DependencyType<ExternalDependencySpec> = eval_lua(
+            r#"return { external = { foo = { header = "foo.h", library = "libfoo.so" }, bar = { header = "bar.h" } } }"#,
+        )
+        .unwrap();
 
         match regular_deps {
             DependencyType::Regular(deps) => {
@@ -386,52 +362,23 @@ mod test {
             _ => panic!("Expected external dependencies"),
         }
 
-        let empty = lua.load("return {}").eval().unwrap();
-        let parsed: mlua::Result<DependencyType<ExternalDependencySpec>> =
-            DependencyType::from_lua(empty, &lua);
-        parsed.unwrap_err();
+        let _err: piccolo::StaticError = eval_lua::<DependencyType<ExternalDependencySpec>>("return {}").unwrap_err();
     }
 
     #[test]
     fn test_lua_dependency_type_from_lua() {
-        let lua = mlua::Lua::new();
-        let regular = lua
-            .load(
-                r#"
-                return {
-                    regular = {"neorg 1.0.0", "foo 1.0.0"},
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-        let build = lua
-            .load(
-                r#"
-                return {
-                    build = {"neorg 1.0.0", "foo 1.0.0"},
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-        let test = lua
-            .load(
-                r#"
-                return {
-                    test = {"neorg 1.0.0", "foo 1.0.0"},
-                }
-            "#,
-            )
-            .eval()
-            .unwrap();
-
-        let regular_deps: LuaDependencyType<LuaDependencySpec> =
-            LuaDependencyType::from_lua(regular, &lua).unwrap();
-        let build_deps: LuaDependencyType<LuaDependencySpec> =
-            LuaDependencyType::from_lua(build, &lua).unwrap();
-        let test_deps: LuaDependencyType<LuaDependencySpec> =
-            LuaDependencyType::from_lua(test, &lua).unwrap();
+        let regular_deps: LuaDependencyType<LuaDependencySpec> = eval_lua(
+            r#"return { regular = {"neorg 1.0.0", "foo 1.0.0"} }"#,
+        )
+        .unwrap();
+        let build_deps: LuaDependencyType<LuaDependencySpec> = eval_lua(
+            r#"return { build = {"neorg 1.0.0", "foo 1.0.0"} }"#,
+        )
+        .unwrap();
+        let test_deps: LuaDependencyType<LuaDependencySpec> = eval_lua(
+            r#"return { test = {"neorg 1.0.0", "foo 1.0.0"} }"#,
+        )
+        .unwrap();
 
         match regular_deps {
             LuaDependencyType::Regular(deps) => {
@@ -460,9 +407,6 @@ mod test {
             _ => panic!("Expected test dependencies"),
         }
 
-        let empty = lua.load("return {}").eval().unwrap();
-        let parsed: mlua::Result<LuaDependencyType<LuaDependencySpec>> =
-            LuaDependencyType::from_lua(empty, &lua);
-        parsed.unwrap_err();
+        eval_lua::<LuaDependencyType<LuaDependencySpec>>("return {}").unwrap_err();
     }
 }
