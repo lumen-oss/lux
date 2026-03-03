@@ -98,7 +98,12 @@ impl<'de> de::DeserializeSeed<'de> for LuaValueSeed {
 /// index, leaving all other values untouched.
 pub(crate) fn normalize_lua_value(value: serde_value::Value) -> serde_value::Value {
     match value {
-        serde_value::Value::Map(ref map)
+        // piccolo_util serializes Lua strings as Bytes; convert to String
+        serde_value::Value::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
+            Ok(s) => serde_value::Value::String(s),
+            Err(_) => serde_value::Value::Bytes(bytes),
+        },
+        serde_value::Value::Map(map)
             if map
                 .keys()
                 .all(|k| matches!(k, serde_value::Value::I64(_) | serde_value::Value::U64(_))) =>
@@ -110,9 +115,17 @@ pub(crate) fn normalize_lua_value(value: serde_value::Value) -> serde_value::Val
                     serde_value::Value::U64(u) => *u as i64,
                     _ => unreachable!(),
                 })
-                .map(|(_, v)| v.clone())
+                .map(|(_, v)| normalize_lua_value(v.clone()))
                 .collect();
             serde_value::Value::Seq(seq)
+        }
+        serde_value::Value::Map(map) => serde_value::Value::Map(
+            map.into_iter()
+                .map(|(k, v)| (normalize_lua_value(k), normalize_lua_value(v)))
+                .collect(),
+        ),
+        serde_value::Value::Seq(seq) => {
+            serde_value::Value::Seq(seq.into_iter().map(normalize_lua_value).collect())
         }
         other => other,
     }
@@ -137,7 +150,7 @@ where
     T: From<String>,
     T: Deserialize<'de>,
 {
-    let value = serde_value::Value::deserialize(deserializer)?;
+    let value = normalize_lua_value(serde_value::Value::deserialize(deserializer)?);
     if let serde_value::Value::String(str) = value {
         Ok(vec![T::from(str)])
     } else {

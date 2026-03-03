@@ -344,11 +344,24 @@ fn override_opt<T: Clone>(override_opt: &Option<T>, base: &Option<T>) -> Option<
 #[cfg(test)]
 mod tests {
 
-    use mlua::{Error, FromLua, Lua};
+    use piccolo::{Closure, Executor, Fuel, Lua};
+    use piccolo_util::serde::from_value;
 
     use crate::lua_rockspec::PlatformIdentifier;
 
     use super::*;
+
+    fn exec_lua<T: serde::de::DeserializeOwned>(
+        code: &str,
+        key: &'static str,
+    ) -> Result<T, piccolo::StaticError> {
+        Lua::core().try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, code.as_bytes())?;
+            let executor = Executor::start(ctx, closure.into(), ());
+            executor.step(ctx, &mut Fuel::with(i32::MAX));
+            from_value(ctx.globals().get(ctx, key)).map_err(piccolo::Error::from)
+        })
+    }
 
     #[tokio::test]
     pub async fn test_spec_from_lua() {
@@ -356,19 +369,14 @@ mod tests {
         test = {\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec = PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert!(matches!(test_spec.default, TestSpec::AutoDetect));
         let lua_content = "
         test = {\n
             type = 'busted',\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec: PerPlatform<TestSpec> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert_eq!(
             test_spec.default,
             TestSpec::Busted(BustedTestSpec::default())
@@ -379,10 +387,7 @@ mod tests {
             flags = { 'foo', 'bar' },\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec: PerPlatform<TestSpec> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert_eq!(
             test_spec.default,
             TestSpec::Busted(BustedTestSpec {
@@ -394,10 +399,7 @@ mod tests {
             type = 'command',\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let result: Result<PerPlatform<TestSpec>, Error> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua);
+        let result: Result<PerPlatform<TestSpec>, _> = exec_lua(lua_content, "test");
         let _err = result.unwrap_err();
         let lua_content = "
         test = {\n
@@ -406,10 +408,7 @@ mod tests {
             script = 'bar',\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let result: Result<PerPlatform<TestSpec>, Error> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua);
+        let result: Result<PerPlatform<TestSpec>, _> = exec_lua(lua_content, "test");
         let _err = result.unwrap_err();
         let lua_content = "
         test = {\n
@@ -418,10 +417,7 @@ mod tests {
             flags = { 'foo', 'bar' },\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec: PerPlatform<TestSpec> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert_eq!(
             test_spec.default,
             TestSpec::Command(CommandTestSpec {
@@ -436,10 +432,7 @@ mod tests {
             flags = { 'foo', 'bar' },\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec: PerPlatform<TestSpec> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert_eq!(
             test_spec.default,
             TestSpec::Script(LuaScriptTestSpec {
@@ -462,10 +455,7 @@ mod tests {
             },\n
         }\n
         ";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec: PerPlatform<TestSpec> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert_eq!(
             test_spec.default,
             TestSpec::Command(CommandTestSpec {
@@ -509,10 +499,7 @@ mod tests {
         test = {\n
             type = 'busted-nlua',\n
         }";
-        let lua = Lua::new();
-        lua.load(lua_content).exec().unwrap();
-        let test_spec: PerPlatform<TestSpec> =
-            PerPlatform::from_lua(lua.globals().get("test").unwrap(), &lua).unwrap();
+        let test_spec: PerPlatform<TestSpec> = exec_lua(lua_content, "test").unwrap();
         assert_eq!(
             test_spec.default,
             TestSpec::BustedNlua(BustedTestSpec { flags: Vec::new() })

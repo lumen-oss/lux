@@ -121,11 +121,24 @@ impl DisplayAsLuaKV for ExternalDependencies<'_> {
 
 #[cfg(test)]
 mod tests {
+    use piccolo::{Closure, Executor, Fuel, Lua, Value};
+    use piccolo_util::serde::from_value;
+
     use super::*;
+
+    fn eval_lua<T: serde::de::DeserializeOwned>(
+        code: &str,
+    ) -> Result<T, piccolo::StaticError> {
+        Lua::core().try_enter(|ctx| {
+            let closure = Closure::load(ctx, None, code.as_bytes())?;
+            let executor = Executor::start(ctx, closure.into(), ());
+            executor.step(ctx, &mut Fuel::with(i32::MAX));
+            from_value(executor.take_result::<Value<'_>>(ctx)??).map_err(piccolo::Error::from)
+        })
+    }
 
     #[test]
     fn test_external_dependency_spec_from_lua() {
-        let lua = mlua::Lua::new();
         let lua_code = r#"
             return {
                 foo = { header = "foo.h", library = "libfoo.so" },
@@ -133,8 +146,7 @@ mod tests {
                 baz = { library = "libbaz.so" },
             }
         "#;
-        let value = lua.load(lua_code).eval().unwrap();
-        let deps: HashMap<String, ExternalDependencySpec> = lua.from_value(value).unwrap();
+        let deps: HashMap<String, ExternalDependencySpec> = eval_lua(lua_code).unwrap();
         assert_eq!(deps.len(), 3);
         assert_eq!(
             deps["foo"].header.as_ref().unwrap().to_slash_lossy(),
