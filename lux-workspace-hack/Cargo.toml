@@ -45,7 +45,7 @@ libgit2-sys = { version = "0.18", default-features = false, features = ["https",
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
-miniz_oxide = { version = "0.8", features = ["simd"] }
+miniz_oxide = { version = "0.9", features = ["simd"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
