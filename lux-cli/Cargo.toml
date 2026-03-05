@@ -28,7 +28,7 @@ nucleo = "0.5"
 octocrab = "0.49"
 open = "5.3"
 spdx = "0.13"
-spinners = "4.2"
+spinners = { version = "4.2", features = ["osc-progress"] }
 termcolor = "1.4"
 termtree = "1.0"
 text_trees = "0.1"
