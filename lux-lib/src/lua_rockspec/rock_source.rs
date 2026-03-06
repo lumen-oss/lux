@@ -1,4 +1,3 @@
-
 use path_slash::PathBufExt;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};

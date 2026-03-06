@@ -102,18 +102,6 @@ impl HasVariables for RockLayout {
     }
 }
 
-impl mlua::UserData for RockLayout {
-    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("rock_path", |_, this| Ok(this.rock_path.clone()));
-        fields.add_field_method_get("etc", |_, this| Ok(this.etc.clone()));
-        fields.add_field_method_get("lib", |_, this| Ok(this.lib.clone()));
-        fields.add_field_method_get("src", |_, this| Ok(this.src.clone()));
-        fields.add_field_method_get("bin", |_, this| Ok(this.bin.clone()));
-        fields.add_field_method_get("conf", |_, this| Ok(this.conf.clone()));
-        fields.add_field_method_get("doc", |_, this| Ok(this.doc.clone()));
-    }
-}
-
 impl Tree {
     /// NOTE: This is exposed for use by the config module.
     /// Use `Config::tree()`

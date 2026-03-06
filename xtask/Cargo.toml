@@ -27,7 +27,6 @@ path = "../xtask-lua/"
 [target.'cfg(not(target_env = "msvc"))'.dependencies.lux-cli]
 path = "../lux-cli"
 default-features = false
-features = ["vendored-lua"]
 
 [target.'cfg(target_env = "msvc")'.dependencies.lux-cli]
 path = "../lux-cli"

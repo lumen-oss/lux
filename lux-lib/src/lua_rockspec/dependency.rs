@@ -1,6 +1,5 @@
 use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
-
 use path_slash::PathBufExt;
 use serde::Deserialize;
 
@@ -120,9 +119,7 @@ mod tests {
 
     use super::*;
 
-    fn eval_lua<T: serde::de::DeserializeOwned>(
-        code: &str,
-    ) -> Result<T, piccolo::StaticError> {
+    fn eval_lua<T: serde::de::DeserializeOwned>(code: &str) -> Result<T, piccolo::StaticError> {
         Lua::core().try_enter(|ctx| {
             let closure = Closure::load(ctx, None, code.as_bytes())?;
             let executor = Executor::start(ctx, closure.into(), ());
