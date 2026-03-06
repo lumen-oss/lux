@@ -147,16 +147,6 @@ impl<'de> Deserialize<'de> for LuaDependencySpec {
     }
 }
 
-impl mlua::UserData for LuaDependencySpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
-        methods.add_method("version_req", |_, this, ()| {
-            Ok(this.version_req().to_string())
-        });
-        methods.add_method("package_req", |_, this, ()| Ok(this.package_req().clone()));
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DependencyType<T> {

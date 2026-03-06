@@ -89,19 +89,6 @@ impl<'de> Deserialize<'de> for PackageSpec {
     }
 }
 
-impl mlua::UserData for PackageSpec {
-    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("name", |_, this| Ok(this.name.to_string()));
-        fields.add_field_method_get("version", |_, this| Ok(this.version.to_string()));
-    }
-
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("to_package_req", |_, this, ()| {
-            Ok(this.clone().into_package_req())
-        })
-    }
-}
-
 impl HasVariables for PackageSpec {
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(match input {
@@ -280,15 +267,6 @@ impl From<PackageName> for PackageReq {
             name,
             version_req: PackageVersionReq::any(),
         }
-    }
-}
-
-impl mlua::UserData for PackageReq {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| Ok(this.name.to_string()));
-        methods.add_method("version_req", |_, this, ()| {
-            Ok(this.version_req.to_string())
-        });
     }
 }
 

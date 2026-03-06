@@ -64,17 +64,9 @@ path = "../lux-lib/"
 features = ["clap"]
 
 [features]
-default = ["luau", "gpgme"]
-lua51 = ["lux-lib/lua51"]
-lua52 = ["lux-lib/lua52"]
-lua53 = ["lux-lib/lua53"]
-lua54 = ["lux-lib/lua54"]
-lua55 = ["lux-lib/lua55"]
-luajit = ["lux-lib/luajit"]
-luau = ["lux-lib/luau"]
+default = ["gpgme"]
 gpgme = ["lux-lib/gpgme"]
 vendored = ["lux-lib/vendored"]
-vendored-lua = ["lux-lib/vendored-lua"]
 ssh-tests = ["lux-lib/ssh-tests"]
 
 [lints.clippy]

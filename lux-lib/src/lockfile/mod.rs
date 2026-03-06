@@ -503,13 +503,6 @@ impl PartialOrd for LocalPackageHashes {
     }
 }
 
-impl mlua::UserData for LocalPackageHashes {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("rockspec", |_, this, ()| Ok(this.rockspec.to_hex().1));
-        methods.add_method("source", |_, this, ()| Ok(this.source.to_hex().1));
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub enum LockConstraint {
     #[default]

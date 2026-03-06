@@ -91,8 +91,6 @@ pub enum RockCheckError {
 pub enum UploadError {
     #[error("error parsing upload URL:\n{0}")]
     ParseError(#[from] url::ParseError),
-    #[error("Lua error while uploading:\n{0}")]
-    Lua(#[from] mlua::Error),
     #[error("HTPP request error while uploading:\n{0}")]
     Request(#[from] reqwest::Error),
     #[error("server {0} responded with error status: {1}")]
