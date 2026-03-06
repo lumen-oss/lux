@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
-use mlua::{FromLua, LuaSerdeExt};
+
 use path_slash::PathBufExt;
 use serde::Deserialize;
 
@@ -32,12 +32,6 @@ impl IntoLua for ExternalDependencySpec {
     }
 }
 */
-
-impl FromLua for ExternalDependencySpec {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
 
 impl PartialOverride for ExternalDependencySpec {
     type Err = Infallible;

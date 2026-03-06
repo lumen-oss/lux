@@ -6,7 +6,7 @@ use std::{
 
 use html_escape::decode_html_entities;
 use itertools::Itertools;
-use mlua::{FromLua, LuaSerdeExt};
+
 use nonempty::NonEmpty;
 use semver::{Comparator, Error, Op, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -172,15 +172,6 @@ impl<'de> Deserialize<'de> for PackageVersion {
     {
         let s = String::deserialize(deserializer)?;
         Self::from_str(&s).map_err(de::Error::custom)
-    }
-}
-
-impl FromLua for PackageVersion {
-    fn from_lua(
-        value: mlua::prelude::LuaValue,
-        lua: &mlua::prelude::Lua,
-    ) -> mlua::prelude::LuaResult<Self> {
-        lua.from_value(value)
     }
 }
 
@@ -506,31 +497,6 @@ pub enum PackageVersionReq {
     /// A PackageVersionReq that has no version constraint.
     Any,
 }
-
-impl FromLua for PackageVersionReq {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
-/*
-impl IntoLua for PackageVersionReq {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-
-        match self {
-            PackageVersionReq::SemVer(version_req) => {
-                table.set("semver", version_req.to_string())?
-            }
-            PackageVersionReq::DevVer(dev) => table.set("dev", dev)?,
-            PackageVersionReq::StringVer(dev) => table.set("stringver", dev)?,
-            PackageVersionReq::Any => table.set("any", true)?,
-        }
-
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
 
 impl PackageVersionReq {
     /// Returns a `PackageVersionReq` that matches any version.
