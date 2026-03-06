@@ -8,14 +8,8 @@ mod serde_util;
 mod test_spec;
 
 use std::{
-    collections::HashMap,
-    convert::Infallible,
-    fmt::Display,
-    io,
-    path::PathBuf,
-    str::FromStr,
+    collections::HashMap, convert::Infallible, fmt::Display, io, path::PathBuf, str::FromStr,
 };
-
 
 use piccolo::{Closure, Executor, Fuel};
 use piccolo_util::serde::from_value;
