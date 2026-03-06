@@ -1,7 +1,7 @@
 use directories::ProjectDirs;
 use external_deps::ExternalDependencySearchConfig;
 use itertools::Itertools;
-use mlua::{FromLua, LuaSerdeExt};
+
 use serde::{Deserialize, Serialize, Serializer};
 use std::env::current_exe;
 use std::path::Path;
@@ -44,20 +44,6 @@ pub enum LuaVersion {
     // TODO(vhyrro): Support luau?
     // LuaU,
 }
-
-impl FromLua for LuaVersion {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
-/*
-impl IntoLua for LuaVersion {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.to_string().into_lua(lua)
-    }
-}
-*/
 
 #[derive(Debug, Error)]
 pub enum LuaVersionError {
@@ -233,7 +219,7 @@ impl Display for LuaVersion {
 #[error("could not find a valid home directory")]
 pub struct NoValidHomeDirectory;
 
-#[derive(Debug, Clone, FromLua)]
+#[derive(Debug, Clone)]
 pub struct Config {
     enable_development_packages: bool,
     server: Url,

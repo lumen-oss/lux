@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::{FromLua, LuaSerdeExt};
+
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
@@ -86,15 +86,6 @@ impl<'de> Deserialize<'de> for PackageSpec {
     {
         let (name, version) = <_>::deserialize(deserializer)?;
         Self::parse(name, version).map_err(serde::de::Error::custom)
-    }
-}
-
-impl FromLua for PackageSpec {
-    fn from_lua(
-        value: mlua::prelude::LuaValue,
-        lua: &mlua::prelude::Lua,
-    ) -> mlua::prelude::LuaResult<Self> {
-        lua.from_value(value)
     }
 }
 
@@ -292,20 +283,11 @@ impl From<PackageName> for PackageReq {
     }
 }
 
-impl FromLua for PackageReq {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
 impl mlua::UserData for PackageReq {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("name", |_, this, ()| Ok(this.name.to_string()));
         methods.add_method("version_req", |_, this, ()| {
             Ok(this.version_req.to_string())
-        });
-        methods.add_method("matches", |_, this, package: PackageSpec| {
-            Ok(this.matches(&package))
         });
     }
 }
@@ -418,15 +400,6 @@ impl<'de> Deserialize<'de> for PackageName {
         D: serde::Deserializer<'de>,
     {
         Ok(PackageName::new(String::deserialize(deserializer)?))
-    }
-}
-
-impl FromLua for PackageName {
-    fn from_lua(
-        value: mlua::prelude::LuaValue,
-        lua: &mlua::prelude::Lua,
-    ) -> mlua::prelude::LuaResult<Self> {
-        lua.from_value(value)
     }
 }
 

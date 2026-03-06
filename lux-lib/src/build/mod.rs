@@ -34,7 +34,7 @@ use indicatif::style::TemplateError;
 use itertools::Itertools;
 use luarocks::LuarocksBuildError;
 use make::MakeError;
-use mlua::{FromLua, LuaSerdeExt};
+
 use patch::{Patch, PatchError};
 use rust_mlua::RustError;
 use serde::{Deserialize, Deserializer};
@@ -175,12 +175,6 @@ impl<'de> Deserialize<'de> for BuildBehaviour {
         D: Deserializer<'de>,
     {
         Ok(Self::from(bool::deserialize(deserializer)?))
-    }
-}
-
-impl FromLua for BuildBehaviour {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
     }
 }
 

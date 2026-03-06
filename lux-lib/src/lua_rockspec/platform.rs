@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::{DeserializeOptions, FromLua, IntoLuaMulti, Lua, LuaSerdeExt, UserData, Value};
+
 use std::{cmp::Ordering, collections::HashMap};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -54,12 +54,6 @@ impl PartialOrd for PlatformIdentifier {
             _ if self == other => Some(Ordering::Equal),
             _ => None,
         }
-    }
-}
-
-impl FromLua for PlatformIdentifier {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
     }
 }
 
@@ -477,37 +471,6 @@ where
 {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_any(PerPlatformVisitor(std::marker::PhantomData))
-    }
-}
-
-impl<T> FromLua for PerPlatform<T>
-where
-    T: PlatformOverridable,
-    T: PartialOverride,
-    T: DeserializeOwned,
-    T: Default,
-    T: Clone,
-{
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        lua.from_value_with::<PerPlatform<T>>(
-            value,
-            DeserializeOptions::new().detect_mixed_tables(true),
-        )
-    }
-}
-
-impl<T> UserData for PerPlatform<T>
-where
-    T: IntoLuaMulti + Clone,
-{
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        // TODO(mrcjkb): YAGNI?
-        // methods.add_method("current_platform", |_, this, _: ()| {
-        //     Ok(this.for_target_platform().clone())
-        // });
-        methods.add_method("get", |_, this, platform: PlatformIdentifier| {
-            Ok(this.get(&platform).clone())
-        });
     }
 }
 

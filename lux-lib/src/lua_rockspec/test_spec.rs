@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use mlua::{DeserializeOptions, FromLua, LuaSerdeExt};
+
 use path_slash::PathExt;
 use serde_enum_str::Serialize_enum_str;
 use std::{convert::Infallible, path::PathBuf};
@@ -208,15 +208,6 @@ impl<'de> Deserialize<'de> for PerPlatform<TestSpec> {
         D: Deserializer<'de>,
     {
         per_platform_from_intermediate::<_, TestSpecInternal, _>(deserializer)
-    }
-}
-
-impl FromLua for PerPlatform<TestSpec> {
-    fn from_lua(
-        value: mlua::prelude::LuaValue,
-        lua: &mlua::prelude::Lua,
-    ) -> mlua::prelude::LuaResult<Self> {
-        lua.from_value_with(value, DeserializeOptions::new().detect_mixed_tables(true))
     }
 }
 

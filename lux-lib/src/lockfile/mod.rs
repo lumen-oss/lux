@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 use std::{collections::HashMap, fs::File, io::ErrorKind, path::PathBuf};
 
 use itertools::Itertools;
-use mlua::{FromLua, LuaSerdeExt};
+
 use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
@@ -34,20 +34,6 @@ pub enum PinnedState {
     /// Pinned packages cannot be updated
     Pinned,
 }
-
-impl FromLua for PinnedState {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
-/*
-impl IntoLua for PinnedState {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.as_bool().into_lua(lua)
-    }
-}
-*/
 
 impl Display for PinnedState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -126,20 +112,6 @@ impl From<bool> for OptState {
     }
 }
 
-impl FromLua for OptState {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
-/*
-impl IntoLua for OptState {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.as_bool().into_lua(lua)
-    }
-}
-*/
-
 impl Display for OptState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
@@ -184,12 +156,6 @@ pub(crate) struct LocalPackageSpec {
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Clone)]
 pub struct LocalPackageId(String);
-
-impl FromLua for LocalPackageId {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
 
 impl LocalPackageId {
     pub fn new(
@@ -335,7 +301,7 @@ pub(crate) enum RemotePackageSourceUrl {
 }
 
 // TODO(vhyrro): Move to `package/local.rs`
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, FromLua)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalPackage {
     pub(crate) spec: LocalPackageSpec,
     pub(crate) source: RemotePackageSource,
@@ -574,12 +540,6 @@ impl<'de> Deserialize<'de> for LockConstraint {
                 str.parse().map_err(serde::de::Error::custom)?,
             )),
         }
-    }
-}
-
-impl FromLua for LockConstraint {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
     }
 }
 

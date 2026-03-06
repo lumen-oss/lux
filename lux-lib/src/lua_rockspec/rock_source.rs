@@ -1,4 +1,4 @@
-use mlua::{DeserializeOptions, FromLua, Lua, LuaSerdeExt, Value};
+
 use path_slash::PathBufExt;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
@@ -113,12 +113,6 @@ impl<'de> Deserialize<'de> for PerPlatform<RemoteRockSource> {
         D: Deserializer<'de>,
     {
         per_platform_from_intermediate::<_, RockSourceInternal, _>(deserializer)
-    }
-}
-
-impl FromLua for PerPlatform<RemoteRockSource> {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        lua.from_value_with(value, DeserializeOptions::new().detect_mixed_tables(true))
     }
 }
 

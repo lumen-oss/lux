@@ -18,7 +18,7 @@ use builtin::{
 
 use itertools::Itertools;
 
-use mlua::{DeserializeOptions, FromLua, Lua, LuaSerdeExt, Value};
+
 use std::{
     collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display,
     path::PathBuf, str::FromStr,
@@ -240,12 +240,6 @@ impl<'de> Deserialize<'de> for PerPlatform<BuildSpec> {
         D: Deserializer<'de>,
     {
         per_platform_from_intermediate::<_, BuildSpecInternal, _>(deserializer)
-    }
-}
-
-impl FromLua for PerPlatform<BuildSpec> {
-    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
-        lua.from_value_with(value, DeserializeOptions::new().detect_mixed_tables(true))
     }
 }
 
