@@ -5,7 +5,6 @@ use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer,
 };
-use thiserror::Error;
 
 /// A visitor and [`de::DeserializeSeed`] that collects a raw `serde_value::Value`
 /// from piccolo's deserializer, converting byte strings to Rust strings and

@@ -1,9 +1,9 @@
-use mlua::FromLua;
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Template configuration for a rock's tree layout
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, FromLua)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct RockLayoutConfig {
     /// The root of a packages `etc` directory.
     /// If unset (the default), the root is the package root.

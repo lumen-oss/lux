@@ -11,12 +11,12 @@ use std::{
     collections::HashMap,
     convert::Infallible,
     fmt::Display,
-    io::{self, Cursor},
+    io,
     path::PathBuf,
     str::FromStr,
 };
 
-use mlua::{FromLua, LuaSerdeExt};
+
 use piccolo::{Closure, Executor, Fuel};
 use piccolo_util::serde::from_value;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -774,23 +774,6 @@ impl FromStr for RockspecFormat {
         }
     }
 }
-
-impl FromLua for RockspecFormat {
-    fn from_lua(
-        value: mlua::prelude::LuaValue,
-        lua: &mlua::prelude::Lua,
-    ) -> mlua::prelude::LuaResult<Self> {
-        lua.from_value(value)
-    }
-}
-
-/*
-impl IntoLua for RockspecFormat {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<Value> {
-        self.to_string().into_lua(lua)
-    }
-}
-*/
 
 impl Display for RockspecFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

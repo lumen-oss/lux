@@ -9,10 +9,10 @@ use crate::{
     progress::{Progress, ProgressBar},
 };
 use itertools::Itertools;
-use mlua::FromLua;
+
 use thiserror::Error;
 
-#[derive(Clone, FromLua, Debug)]
+#[derive(Clone, Debug)]
 pub struct RemotePackageDB(Impl);
 
 #[derive(Clone, Debug)]

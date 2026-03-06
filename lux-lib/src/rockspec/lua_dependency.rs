@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::Infallible, fmt::Display, str::FromStr};
 
-use mlua::{FromLua, LuaSerdeExt};
-use serde::{de::DeserializeOwned, Deserialize, Deserializer};
+
+use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
 use crate::{
@@ -132,12 +132,6 @@ impl PlatformOverridable for Vec<LuaDependencySpec> {
     }
 }
 
-impl FromLua for LuaDependencySpec {
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
 impl<'de> Deserialize<'de> for LuaDependencySpec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -158,9 +152,6 @@ impl mlua::UserData for LuaDependencySpec {
         methods.add_method("name", |_, this, ()| Ok(this.name().to_string()));
         methods.add_method("version_req", |_, this, ()| {
             Ok(this.version_req().to_string())
-        });
-        methods.add_method("matches", |_, this, package: PackageSpec| {
-            Ok(this.matches(&package))
         });
         methods.add_method("package_req", |_, this, ()| Ok(this.package_req().clone()));
     }
@@ -203,16 +194,6 @@ where
 }
 */
 
-impl<T> FromLua for DependencyType<T>
-where
-    T: FromLua,
-    T: DeserializeOwned,
-{
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LuaDependencyType<T> {
@@ -245,16 +226,6 @@ where
     }
 }
 */
-
-impl<T> FromLua for LuaDependencyType<T>
-where
-    T: FromLua,
-    T: DeserializeOwned,
-{
-    fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
-        lua.from_value(value)
-    }
-}
 
 #[cfg(test)]
 mod test {
