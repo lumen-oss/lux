@@ -2,7 +2,7 @@
 members = [
   "lux-lib",
   "lux-cli",
-  # "lux-lua",
+  "lux-lua",
   "lux-workspace-hack",
   "xtask",
   "xtask-lua",
@@ -14,6 +14,7 @@ resolver = "2"
 version = "0.25.3"
 
 [workspace.dependencies]
+mlua = { version = "0.11", features = ["serialize", "macros", "error-send", "async"] }
 git-url-parse = "0.6"
 git2 = "0.20"
 ignore = "0.4"

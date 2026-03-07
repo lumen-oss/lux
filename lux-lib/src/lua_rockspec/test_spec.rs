@@ -211,16 +211,42 @@ pub struct BustedTestSpec {
     pub(crate) flags: Vec<String>,
 }
 
+impl BustedTestSpec {
+    pub fn flags(&self) -> &Vec<String> {
+        &self.flags
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandTestSpec {
     pub(crate) command: String,
     pub(crate) flags: Vec<String>,
 }
 
+impl CommandTestSpec {
+    pub fn flags(&self) -> &Vec<String> {
+        &self.flags
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct LuaScriptTestSpec {
     pub(crate) script: PathBuf,
     pub(crate) flags: Vec<String>,
+}
+
+impl LuaScriptTestSpec {
+    pub fn flags(&self) -> &Vec<String> {
+        &self.flags
+    }
+
+    pub fn script(&self) -> &PathBuf {
+        &self.script
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize_enum_str, PartialEq, Clone)]

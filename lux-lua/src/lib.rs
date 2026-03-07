@@ -4,6 +4,7 @@ use mlua::prelude::*;
 
 mod config;
 mod loader;
+pub mod lua_impls;
 mod operations;
 mod project;
 
