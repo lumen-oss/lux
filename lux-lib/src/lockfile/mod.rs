@@ -200,14 +200,6 @@ impl Display for LocalPackageId {
     }
 }
 
-/*
-impl mlua::IntoLua for LocalPackageId {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.0.into_lua(lua)
-    }
-}
-*/
-
 impl LocalPackageSpec {
     pub fn new(
         name: &PackageName,
@@ -308,28 +300,6 @@ pub struct LocalPackage {
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     hashes: LocalPackageHashes,
 }
-
-/*
-impl UserData for LocalPackage {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("id", |_, this, _: ()| Ok(this.id()));
-        methods.add_method("name", |_, this, _: ()| Ok(this.name().clone()));
-        methods.add_method("version", |_, this, _: ()| Ok(this.version().clone()));
-        methods.add_method("pinned", |_, this, _: ()| Ok(this.pinned()));
-        methods.add_method("dependencies", |_, this, _: ()| {
-            Ok(this.spec.dependencies.clone())
-        });
-        methods.add_method("constraint", |_, this, _: ()| {
-            Ok(this.spec.constraint.clone())
-        });
-        methods.add_method("hashes", |_, this, _: ()| Ok(this.hashes.clone()));
-        methods.add_method("to_package", |_, this, _: ()| Ok(this.to_package()));
-        methods.add_method("to_package_req", |_, this, _: ()| {
-            Ok(this.clone().into_package_req())
-        });
-    }
-}
-*/
 
 impl LocalPackage {
     pub fn into_package_spec(self) -> PackageSpec {
@@ -509,17 +479,6 @@ pub enum LockConstraint {
     Unconstrained,
     Constrained(PackageVersionReq),
 }
-
-/*
-impl IntoLua for LockConstraint {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        match self {
-            LockConstraint::Unconstrained => "*".into_lua(lua),
-            LockConstraint::Constrained(req) => req.into_lua(lua),
-        }
-    }
-}
-*/
 
 impl<'de> Deserialize<'de> for LockConstraint {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -815,23 +774,6 @@ pub(crate) struct PackageSyncSpec {
     pub to_add: Vec<LuaDependencySpec>,
     pub to_remove: Vec<LocalPackage>,
 }
-
-/*
-impl UserData for Lockfile<ReadOnly> {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("version", |_, this, _: ()| Ok(this.version().clone()));
-        methods.add_method("rocks", |_, this, _: ()| Ok(this.rocks().clone()));
-        methods.add_method("get", |_, this, id: LocalPackageId| {
-            Ok(this.get(&id).cloned())
-        });
-        methods.add_method("map_then_flush", |_, this, f: mlua::Function| {
-            let lockfile = this.clone().write_guard();
-            f.call::<()>(lockfile)?;
-            Ok(())
-        });
-    }
-}
-*/
 
 impl<P: LockfilePermissions> Lockfile<P> {
     pub fn version(&self) -> &String {
@@ -1257,18 +1199,6 @@ pub struct LockfileGuard(Lockfile<ReadWrite>);
 
 pub struct ProjectLockfileGuard(ProjectLockfile<ReadWrite>);
 
-/*
-impl UserData for LockfileGuard {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("version", |_, this, _: ()| Ok(this.version().clone()));
-        methods.add_method("rocks", |_, this, _: ()| Ok(this.rocks().clone()));
-        methods.add_method("get", |_, this, id: LocalPackageId| {
-            Ok(this.get(&id).cloned())
-        });
-    }
-}
-*/
-
 impl Serialize for LockfileGuard {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -1348,26 +1278,6 @@ impl Drop for ProjectLockfileGuard {
         let _ = self.flush();
     }
 }
-
-/*
-impl UserData for Lockfile<ReadWrite> {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("version", |_, this, ()| Ok(this.version().to_owned()));
-        methods.add_method("rocks", |_, this, ()| {
-            Ok(this
-                .rocks()
-                .iter()
-                .map(|(id, rock)| (id.0.clone(), rock.clone()))
-                .collect::<HashMap<String, LocalPackage>>())
-        });
-
-        methods.add_method("get", |_, this, id: String| {
-            Ok(this.get(&LocalPackageId(id)).cloned())
-        });
-        methods.add_method_mut("flush", |_, this, ()| this.flush().into_lua_err());
-    }
-}
-*/
 
 fn serialize_sorted_package_ids<S>(
     package_ids: &[LocalPackageId],

@@ -68,21 +68,6 @@ impl Default for BuildSpec {
     }
 }
 
-/*
-impl UserData for BuildSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("build_backend", |_, this, _: ()| {
-            Ok(this.build_backend.clone())
-        });
-        methods.add_method("install", |_, this, _: ()| Ok(this.install.clone()));
-        methods.add_method("copy_directories", |_, this, _: ()| {
-            Ok(this.copy_directories.clone())
-        });
-        methods.add_method("patches", |_, this, _: ()| Ok(this.patches.clone()));
-    }
-}
-*/
-
 #[derive(Error, Debug)]
 pub enum BuildSpecInternalError {
     #[error("'builtin' modules should not have list elements")]
@@ -282,41 +267,11 @@ impl BuildBackendSpec {
     }
 }
 
-/*
-impl IntoLua for BuildBackendSpec {
-    fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
-        match self {
-            BuildBackendSpec::Builtin(spec) => spec.into_lua(lua),
-            BuildBackendSpec::Make(spec) => lua.to_value(&spec),
-            BuildBackendSpec::CMake(spec) => spec.into_lua(lua),
-            BuildBackendSpec::Command(spec) => spec.into_lua(lua),
-            BuildBackendSpec::LuaRock(s) => s.into_lua(lua),
-            BuildBackendSpec::RustMlua(spec) => spec.into_lua(lua),
-            BuildBackendSpec::TreesitterParser(spec) => spec.into_lua(lua),
-            BuildBackendSpec::Source => "source".into_lua(lua),
-        }
-    }
-}
-*/
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct CommandBuildSpec {
     pub build_command: Option<String>,
     pub install_command: Option<String>,
 }
-
-/*
-impl UserData for CommandBuildSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("build_command", |_, this, _: ()| {
-            Ok(this.build_command.clone())
-        });
-        methods.add_method("install_command", |_, this, _: ()| {
-            Ok(this.install_command.clone())
-        });
-    }
-}
-*/
 
 #[derive(Clone, Debug)]
 struct LuaPathBufTable(HashMap<LuaTableKey, PathBuf>);
@@ -410,17 +365,6 @@ pub struct InstallSpec {
     #[serde(default, deserialize_with = "deserialize_file_name_path_map")]
     pub bin: HashMap<String, PathBuf>,
 }
-
-/*
-impl UserData for InstallSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("lua", |_, this, _: ()| Ok(this.lua.clone()));
-        methods.add_method("lib", |_, this, _: ()| Ok(this.lib.clone()));
-        methods.add_method("conf", |_, this, _: ()| Ok(this.conf.clone()));
-        methods.add_method("bin", |_, this, _: ()| Ok(this.bin.clone()));
-    }
-}
-*/
 
 fn deserialize_module_path_map<'de, D>(
     deserializer: D,

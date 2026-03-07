@@ -157,28 +157,6 @@ impl RemotePackageDB {
     }
 }
 
-/*
-impl UserData for RemotePackageDB {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("search", |_, this, package_req: PackageReq| {
-            Ok(this
-                .search(&package_req)
-                .into_iter()
-                .map(|(package_name, versions)| {
-                    (
-                        package_name.clone(),
-                        versions.into_iter().cloned().collect_vec(),
-                    )
-                })
-                .collect::<HashMap<_, _>>())
-        });
-        methods.add_method("latest_match", |_, this, package_req| {
-            Ok(this.latest_match(&package_req, None))
-        });
-    }
-}
-*/
-
 impl From<Manifest> for RemotePackageDB {
     fn from(manifest: Manifest) -> Self {
         Self(Impl::LuarocksManifests(vec![manifest]))

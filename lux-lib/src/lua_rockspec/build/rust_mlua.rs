@@ -17,20 +17,3 @@ pub struct RustMluaBuildSpec {
     /// Keys are the sources, values the destinations (relative to the `lua` directory).
     pub include: HashMap<PathBuf, PathBuf>,
 }
-
-/*
-impl UserData for RustMluaBuildSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("modules", |_, this, _: ()| Ok(this.modules.clone()));
-        methods.add_method("target_path", |_, this, _: ()| Ok(this.target_path.clone()));
-        methods.add_method("default_features", |_, this, _: ()| {
-            Ok(this.default_features)
-        });
-        methods.add_method("features", |_, this, _: ()| Ok(this.features.clone()));
-        methods.add_method("cargo_extra_args", |_, this, _: ()| {
-            Ok(this.cargo_extra_args.clone())
-        });
-        methods.add_method("include", |_, this, _: ()| Ok(this.include.clone()));
-    }
-}
-*/

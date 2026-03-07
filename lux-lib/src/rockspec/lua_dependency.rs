@@ -155,34 +155,6 @@ pub enum DependencyType<T> {
     External(HashMap<String, ExternalDependencySpec>),
 }
 
-/*
-impl<T> IntoLua for DependencyType<T>
-where
-    T: IntoLua,
-{
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-
-        match self {
-            DependencyType::Regular(deps) => {
-                table.set("regular", deps)?;
-            }
-            DependencyType::Build(deps) => {
-                table.set("build", deps)?;
-            }
-            DependencyType::Test(deps) => {
-                table.set("test", deps)?;
-            }
-            DependencyType::External(deps) => {
-                table.set("external", deps)?;
-            }
-        }
-
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LuaDependencyType<T> {
@@ -190,31 +162,6 @@ pub enum LuaDependencyType<T> {
     Build(Vec<T>),
     Test(Vec<T>),
 }
-
-/*
-impl<T> IntoLua for LuaDependencyType<T>
-where
-    T: IntoLua,
-{
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-
-        match self {
-            LuaDependencyType::Regular(deps) => {
-                table.set("regular", deps)?;
-            }
-            LuaDependencyType::Build(deps) => {
-                table.set("build", deps)?;
-            }
-            LuaDependencyType::Test(deps) => {
-                table.set("test", deps)?;
-            }
-        }
-
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
 
 #[cfg(test)]
 mod test {

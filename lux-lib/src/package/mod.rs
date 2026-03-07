@@ -358,14 +358,6 @@ impl<'de> Deserialize<'de> for PackageReq {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct PackageName(String);
 
-/*
-impl IntoLua for PackageName {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.0.into_lua(lua)
-    }
-}
-*/
-
 impl PackageName {
     pub fn new(name: String) -> Self {
         Self(name.to_lowercase())

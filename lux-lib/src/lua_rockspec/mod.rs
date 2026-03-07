@@ -115,41 +115,6 @@ pub struct LocalLuaRockspec {
     raw_content: String,
 }
 
-/*
-impl UserData for LocalLuaRockspec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, _: ()| Ok(this.package.clone()));
-        methods.add_method("version", |_, this, _: ()| Ok(this.version.clone()));
-        methods.add_method("description", |_, this, _: ()| Ok(this.description.clone()));
-        methods.add_method("supported_platforms", |_, this, _: ()| {
-            Ok(this.supported_platforms.clone())
-        });
-        methods.add_method("lua", |_, this, _: ()| Ok(this.lua.clone()));
-        methods.add_method("dependencies", |_, this, _: ()| {
-            Ok(this.dependencies.clone())
-        });
-        methods.add_method("build_dependencies", |_, this, _: ()| {
-            Ok(this.build_dependencies.clone())
-        });
-        methods.add_method("external_dependencies", |_, this, _: ()| {
-            Ok(this.external_dependencies.clone())
-        });
-        methods.add_method("test_dependencies", |_, this, _: ()| {
-            Ok(this.test_dependencies.clone())
-        });
-        methods.add_method("build", |_, this, _: ()| Ok(this.build.clone()));
-        methods.add_method("source", |_, this, _: ()| Ok(this.source.clone()));
-        methods.add_method("test", |_, this, _: ()| Ok(this.test.clone()));
-        methods.add_method("format", |_, this, _: ()| Ok(this.rockspec_format.clone()));
-
-        methods.add_method("to_lua_rockspec_string", |_, this, _: ()| {
-            this.to_lua_remote_rockspec_string()
-                .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
-        });
-    }
-}
-*/
-
 trait HasRockspecKey<'gc> {
     fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
@@ -398,45 +363,6 @@ pub struct RemoteLuaRockspec {
     local: LocalLuaRockspec,
     source: PerPlatform<RemoteRockSource>,
 }
-
-/*
-impl UserData for RemoteLuaRockspec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, _: ()| Ok(this.local.package.clone()));
-        methods.add_method("version", |_, this, _: ()| Ok(this.local.version.clone()));
-        methods.add_method("description", |_, this, _: ()| {
-            Ok(this.local.description.clone())
-        });
-        methods.add_method("supported_platforms", |_, this, _: ()| {
-            Ok(this.local.supported_platforms.clone())
-        });
-        methods.add_method("lua", |_, this, _: ()| Ok(this.local.lua.clone()));
-        methods.add_method("dependencies", |_, this, _: ()| {
-            Ok(this.local.dependencies.clone())
-        });
-        methods.add_method("build_dependencies", |_, this, _: ()| {
-            Ok(this.local.build_dependencies.clone())
-        });
-        methods.add_method("external_dependencies", |_, this, _: ()| {
-            Ok(this.local.external_dependencies.clone())
-        });
-        methods.add_method("test_dependencies", |_, this, _: ()| {
-            Ok(this.local.test_dependencies.clone())
-        });
-        methods.add_method("build", |_, this, _: ()| Ok(this.local.build.clone()));
-        methods.add_method("source", |_, this, _: ()| Ok(this.source.clone()));
-        methods.add_method("test", |_, this, _: ()| Ok(this.local.test.clone()));
-        methods.add_method("format", |_, this, _: ()| {
-            Ok(this.local.rockspec_format.clone())
-        });
-
-        methods.add_method("to_lua_rockspec_string", |_, this, _: ()| {
-            this.to_lua_remote_rockspec_string()
-                .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
-        });
-    }
-}
-*/
 
 impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
@@ -724,22 +650,6 @@ impl DisplayAsLuaKV for RockDescription {
         }
     }
 }
-
-/*
-impl UserData for RockDescription {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("summary", |_, this, _: ()| Ok(this.summary.clone()));
-        methods.add_method("detailed", |_, this, _: ()| Ok(this.detailed.clone()));
-        methods.add_method("license", |_, this, _: ()| Ok(this.license.clone()));
-        methods.add_method("homepage", |_, this, _: ()| {
-            Ok(this.homepage.clone().map(|url| url.to_string()))
-        });
-        methods.add_method("issues_url", |_, this, _: ()| Ok(this.issues_url.clone()));
-        methods.add_method("maintainer", |_, this, _: ()| Ok(this.maintainer.clone()));
-        methods.add_method("labels", |_, this, _: ()| Ok(this.labels.clone()));
-    }
-}
-*/
 
 #[derive(Error, Debug)]
 #[error("invalid rockspec format: {0}")]

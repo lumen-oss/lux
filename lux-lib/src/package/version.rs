@@ -136,14 +136,6 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
     }
 }
 
-/*
-impl IntoLua for PackageVersion {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.to_string().into_lua(lua)
-    }
-}
-*/
-
 #[derive(Error, Debug)]
 pub enum PackageVersionParseError {
     #[error(transparent)]
@@ -366,14 +358,6 @@ impl Display for DevVersion {
         }
     }
 }
-
-/*
-impl IntoLua for DevVersion {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.to_string().into_lua(lua)
-    }
-}
-*/
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct DevVer {

@@ -17,21 +17,6 @@ pub struct ExternalDependencySpec {
     pub(crate) library: Option<PathBuf>,
 }
 
-/*
-impl IntoLua for ExternalDependencySpec {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-        if let Some(path) = self.header {
-            table.set("header", path.to_slash_lossy().to_string())?;
-        }
-        if let Some(path) = self.library {
-            table.set("library", path.to_slash_lossy().to_string())?;
-        }
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
-
 impl PartialOverride for ExternalDependencySpec {
     type Err = Infallible;
 

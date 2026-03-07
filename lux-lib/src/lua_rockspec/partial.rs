@@ -29,8 +29,6 @@ pub struct PartialLuaRockspec {
     pub(crate) test: Option<TestSpecInternal>,
 }
 
-// impl UserData for PartialLuaRockspec {}
-
 #[derive(Debug, Error)]
 pub enum PartialRockspecError {
     // #[error("Lua error while parsing rockspec: {0}")]
