@@ -12,8 +12,8 @@ use zip::ZipArchive;
 
 #[tokio::test]
 async fn pack_project_with_etc_directories() {
-    let project_root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
+    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../lux-lib/resources/test/sample-projects/init/");
     let temp_dir = TempDir::new().unwrap();
     temp_dir.copy_from(&project_root, &["**"]).unwrap();
     let project_root = temp_dir.path();

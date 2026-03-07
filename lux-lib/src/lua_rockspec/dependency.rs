@@ -12,9 +12,9 @@ use super::{
 #[derive(Debug, PartialEq, Clone, Deserialize, Default)]
 pub struct ExternalDependencySpec {
     /// A header file, e.g. "foo.h"
-    pub(crate) header: Option<PathBuf>,
+    pub header: Option<PathBuf>,
     /// A library file, e.g. "libfoo.so"
-    pub(crate) library: Option<PathBuf>,
+    pub library: Option<PathBuf>,
 }
 
 impl PartialOverride for ExternalDependencySpec {

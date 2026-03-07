@@ -192,6 +192,10 @@ impl LocalPackageId {
     pub unsafe fn from_unchecked(str: String) -> Self {
         Self(str)
     }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
 }
 
 impl Display for LocalPackageId {
