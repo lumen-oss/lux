@@ -23,19 +23,6 @@ impl Default for CMakeBuildSpec {
     }
 }
 
-/*
-impl UserData for CMakeBuildSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("cmake_lists_content", |_, this, _: ()| {
-            Ok(this.cmake_lists_content.clone())
-        });
-        methods.add_method("build_pass", |_, this, _: ()| Ok(this.build_pass));
-        methods.add_method("install_pass", |_, this, _: ()| Ok(this.install_pass));
-        methods.add_method("variables", |_, this, _: ()| Ok(this.variables.clone()));
-    }
-}
-*/
-
 fn default_pass() -> bool {
     true
 }

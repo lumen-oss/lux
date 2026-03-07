@@ -57,14 +57,3 @@ impl Default for RockLayoutConfig {
         }
     }
 }
-
-/*
-impl UserData for RockLayoutConfig {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_function("new", |_, ()| Ok(RockLayoutConfig::default()));
-        methods.add_function("new_nvim_layout", |_, ()| {
-            Ok(RockLayoutConfig::new_nvim_layout())
-        });
-    }
-}
-*/

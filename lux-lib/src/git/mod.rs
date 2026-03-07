@@ -13,17 +13,6 @@ pub struct GitSource {
     pub checkout_ref: Option<String>,
 }
 
-/*
-impl UserData for GitSource {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("url", |_, this, _: ()| Ok(this.url.to_string()));
-        methods.add_method("checkout_ref", |_, this, _: ()| {
-            Ok(this.checkout_ref.clone())
-        });
-    }
-}
-*/
-
 impl DisplayAsLuaKV for GitSource {
     fn display_lua(&self) -> DisplayLuaKV {
         let mut source_tbl = Vec::new();

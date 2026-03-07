@@ -21,28 +21,6 @@ pub(crate) enum RemotePackageSource {
     Test,
 }
 
-/*
-impl IntoLua for RemotePackageSource {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-
-        match self {
-            RemotePackageSource::LuarocksRockspec(url) => table.set("rockspec", url.to_string())?,
-            RemotePackageSource::LuarocksSrcRock(url) => table.set("src_rock", url.to_string())?,
-            RemotePackageSource::LuarocksBinaryRock(url) => table.set("rock", url.to_string())?,
-            RemotePackageSource::RockspecContent(content) => {
-                table.set("rockspec_content", content)?
-            }
-            RemotePackageSource::Local => table.set("local", true)?,
-            #[cfg(test)]
-            RemotePackageSource::Test => unreachable!(),
-        };
-
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
-
 impl RemotePackageSource {
     pub(crate) fn url(self) -> Option<Url> {
         match self {

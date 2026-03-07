@@ -339,39 +339,6 @@ impl Tree {
     }
 }
 
-/*
-impl mlua::UserData for Tree {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("root", |_, this, ()| Ok(this.root()));
-        methods.add_method("root_for", |_, this, package: LocalPackage| {
-            Ok(this.root_for(&package))
-        });
-        methods.add_method("bin", |_, this, ()| Ok(this.bin()));
-        methods.add_method("match_rocks", |_, this, req: PackageReq| {
-            this.match_rocks(&req)
-                .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
-        });
-        methods.add_method(
-            "match_rock_and",
-            |_, this, (req, callback): (PackageReq, mlua::Function)| {
-                this.match_rocks_and(&req, |package: &LocalPackage| {
-                    callback.call(package.clone()).unwrap_or(false)
-                })
-                .into_lua_err()
-            },
-        );
-        methods.add_method("rock_layout", |_, this, package: LocalPackage| {
-            this.installed_rock_layout(&package)
-                .map_err(|err| mlua::Error::RuntimeError(err.to_string()))
-        });
-        methods.add_method("rock", |_, this, package: LocalPackage| {
-            this.dependency(&package).into_lua_err()
-        });
-        methods.add_method("lockfile", |_, this, ()| this.lockfile().into_lua_err());
-    }
-}
-*/
-
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub enum EntryType {
     Entrypoint,
@@ -397,27 +364,6 @@ impl RockMatches {
         matches!(self, Self::Single(_) | Self::Many(_))
     }
 }
-
-/*
-impl IntoLua for RockMatches {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-        let is_found = self.is_found();
-
-        table.set("is_found", lua.create_function(move |_, ()| Ok(is_found))?)?;
-
-        match self {
-            RockMatches::NotFound(package_req) => table.set("not_found", package_req)?,
-            RockMatches::Single(local_package_id) => table.set("single", local_package_id)?,
-            RockMatches::Many(local_package_ids) => {
-                table.set("many", local_package_ids.into_iter().collect_vec())?
-            }
-        }
-
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
 
 #[cfg(test)]
 mod tests {

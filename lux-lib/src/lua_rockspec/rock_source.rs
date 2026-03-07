@@ -38,20 +38,6 @@ impl From<RockSourceSpec> for RemoteRockSource {
     }
 }
 
-/*
-impl UserData for RemoteRockSource {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("source_spec", |_, this, _: ()| Ok(this.source_spec.clone()));
-        methods.add_method("archive_name", |_, this, _: ()| {
-            Ok(this.local.archive_name.clone())
-        });
-        methods.add_method("unpack_dir", |_, this, _: ()| {
-            Ok(this.local.unpack_dir.clone())
-        });
-    }
-}
-*/
-
 impl Deref for RemoteRockSource {
     type Target = LocalRockSource;
 
@@ -121,28 +107,6 @@ pub enum RockSourceSpec {
     File(PathBuf),
     Url(Url),
 }
-
-/*
-impl IntoLua for RockSourceSpec {
-    fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
-        let table = lua.create_table()?;
-
-        match self {
-            RockSourceSpec::Git(git) => {
-                table.set("git", git.into_lua(lua)?)?;
-            }
-            RockSourceSpec::File(path) => {
-                table.set("file", path.to_string_lossy().to_string())?;
-            }
-            RockSourceSpec::Url(url) => {
-                table.set("url", url.to_string())?;
-            }
-        };
-
-        Ok(Value::Table(table))
-    }
-}
-*/
 
 impl RockSourceSpec {
     fn default_from_source_url(url: SourceUrl) -> Self {

@@ -157,22 +157,6 @@ impl ValidatedTestSpec {
     }
 }
 
-/*
-impl IntoLua for TestSpec {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        let table = lua.create_table()?;
-        match self {
-            TestSpec::AutoDetect => table.set("auto_detect", true)?,
-            TestSpec::Busted(busted_test_spec) => table.set("busted", busted_test_spec)?,
-            TestSpec::BustedNlua(busted_test_spec) => table.set("busted-nlua", busted_test_spec)?,
-            TestSpec::Command(command_test_spec) => table.set("command", command_test_spec)?,
-            TestSpec::Script(script_test_spec) => table.set("script", script_test_spec)?,
-        }
-        Ok(mlua::Value::Table(table))
-    }
-}
-*/
-
 impl TryFrom<TestSpecInternal> for TestSpec {
     type Error = TestSpecDecodeError;
 
@@ -227,43 +211,17 @@ pub struct BustedTestSpec {
     pub(crate) flags: Vec<String>,
 }
 
-/*
-impl UserData for BustedTestSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("flags", |_, this, _: ()| Ok(this.flags.clone()));
-    }
-}
-*/
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandTestSpec {
     pub(crate) command: String,
     pub(crate) flags: Vec<String>,
 }
 
-/*
-impl UserData for CommandTestSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("command", |_, this, _: ()| Ok(this.command.clone()));
-        methods.add_method("flags", |_, this, _: ()| Ok(this.flags.clone()));
-    }
-}
-*/
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct LuaScriptTestSpec {
     pub(crate) script: PathBuf,
     pub(crate) flags: Vec<String>,
 }
-
-/*
-impl UserData for LuaScriptTestSpec {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("script", |_, this, _: ()| Ok(this.script.clone()));
-        methods.add_method("flags", |_, this, _: ()| Ok(this.flags.clone()));
-    }
-}
-*/
 
 #[derive(Debug, Deserialize, Serialize_enum_str, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]

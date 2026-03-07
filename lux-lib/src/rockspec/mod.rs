@@ -149,11 +149,3 @@ impl DerefMut for RockBinaries {
         &mut self.0
     }
 }
-
-/*
-impl IntoLua for RockBinaries {
-    fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
-        self.0.into_lua(lua)
-    }
-}
-*/
