@@ -99,7 +99,7 @@ The following table provides a brief comparison:
 | Generate a `.luarc` file with dependencies                                              | :white_check_mark:           | :x:                |
 | Git dependencies in local projects                                                      | :white_check_mark:           | :x:                |
 | Vendor sources for offline use                                                          | :white_check_mark:           | :x:                |
-| Load RockSpecs and LuaRocks manifests with [Luau sandboxing](https://luau.org/sandbox/) | :white_check_mark:[^4]       | :x:                |
+| Load RockSpecs and LuaRocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:       | :x:                |
 
 [^1]: Supported via a compatibility layer that uses LuaRocks as a backend.
 [^2]: Mostly compatible with the LuaRocks version parser,
@@ -107,7 +107,6 @@ The following table provides a brief comparison:
       To comply with SemVer, we treat anything after the third version component
       (except for the specrev) as a prerelease/build version.
 [^3]: [You Aren't Gonna Need It.](https://martinfowler.com/bliki/Yagni.html)
-[^4]: When built with the default `luau` feature enabled.
 
 ## :package: Packages
 
@@ -146,7 +145,6 @@ Dependencies:
 
 If building without the `vendored` feature:
 
-- `lua`, `luajit` or `luau`
 - `libgit2`
 - `openssl`
 
@@ -159,7 +157,7 @@ To link `gpgme` statically on Linux and macOS, set the environment variable
 `SYSTEM_DEPS_LINK=static`.
 
 We usually recommend building with the `vendored` feature enabled,
-to statically link `luau`, `libgit2` and `openssl`:
+to statically link `libgit2` and `openssl`:
 
 ```bash
 SYSTEM_DEPS_LINK="static" cargo build --locked --profile release --features vendored
@@ -174,7 +172,7 @@ cargo build --locked --profile release
 On Windows/MSVC, you must disable the `gpgme` feature:
 
 ```bash
-cargo build --locked --profile release --no-default-features --features luau,vendored
+cargo build --locked --profile release --no-default-features --features vendored
 ```
 
 You can build `lux-lua` for a given Lua version with:

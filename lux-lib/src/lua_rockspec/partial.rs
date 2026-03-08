@@ -31,8 +31,6 @@ pub struct PartialLuaRockspec {
 
 #[derive(Debug, Error)]
 pub enum PartialRockspecError {
-    // #[error("Lua error while parsing rockspec: {0}")]
-    // Lua(#[from] mlua::Error),
     #[error("rockspec execution exceeded fuel limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,
     #[error("field `{0}` should not be declared in extra.rockspec")]
