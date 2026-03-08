@@ -142,10 +142,7 @@
           ];
 
         buildInputs =
-          individualCrateArgs.buildInputs
-          ++ [
-            final.luau
-          ];
+          individualCrateArgs.buildInputs;
 
         cargoBuildCommand = "cargo build --profile ${buildType}";
         cargoExtraArgs = "-p lux-cli --locked";
