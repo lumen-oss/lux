@@ -47,12 +47,12 @@
           inherit
             xtask
             lux-cli
-            # lux-lua51
-            # lux-lua52
-            # lux-lua53
-            # lux-lua54
-            # lux-lua55
-            # lux-luajit
+            lux-lua51
+            lux-lua52
+            lux-lua53
+            lux-lua54
+            lux-lua55
+            lux-luajit
             ;
         };
 
@@ -125,7 +125,7 @@
             git-hooks-check
             ;
           tests = pkgs.lux-nextest;
-          # lua-tests = pkgs.lux-nextest-lua;
+          lua-tests = pkgs.lux-nextest-lua;
           clippy = pkgs.lux-clippy;
           workspace-hack = pkgs.lux-workspace-hack;
           taplo = pkgs.lux-taplo;
