@@ -1733,4 +1733,37 @@ mod tests {
         assert_eq!(rockspec2.local.version, "1.0.5".parse().unwrap());
         assert_eq!(rockspec2.local.source, PerPlatform::new(source_spec.into()));
     }
+
+    #[test]
+    pub fn regression_complex_source_field() {
+        let rockspec_content = r#"
+            package = "say"
+            local rock_version = "1.4.1"
+            local rock_release = "3"
+            local namespace = "lunarmodules"
+            local repository = package
+
+            version = ("%s-%s"):format(rock_version, rock_release)
+
+            source = {
+              url = ("git+https://github.com/%s/%s.git"):format(namespace, repository),
+              branch = rock_version == "scm" and "master" or nil,
+              tag = rock_version ~= "scm" and "v"..rock_version or nil,
+            }
+
+            description = {
+              summary = "Lua string hashing/indexing library",
+            }
+
+            dependencies = {
+              "lua >= 5.1",
+            }
+
+            build = {
+              type = "builtin",
+            }
+        "#
+        .to_string();
+        RemoteLuaRockspec::new(&rockspec_content).unwrap();
+    }
 }
