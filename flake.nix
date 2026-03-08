@@ -70,7 +70,6 @@
               buildInputs =
                 extra_pkgs
                 ++ (with pkgs; [
-                  luau # Needed for compilation
                   rust-analyzer
                   lspmux
                   cargo-nextest
