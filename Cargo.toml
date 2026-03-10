@@ -35,7 +35,7 @@ strum_macros = "0.28"
 stylua = { version = "2.3", features = ["fromstr", "lua52"] }
 target-lexicon = "0.13"
 tempfile = "3.26"
-toml = "0.9"
+toml = "1.0"
 tokio = { version = "1.50", features = ["full"] }
 walkdir = "2.5"
 which = "8.0"
