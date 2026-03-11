@@ -25,7 +25,7 @@ pub(crate) struct RockManifest {
 #[derive(Error, Debug)]
 pub enum RockManifestError {
     #[error("could not parse rock_manifest: {0}")]
-    Piccolo(#[from] piccolo::StaticError),
+    Piccolo(#[from] piccolo::ExternError),
     #[error("could not deserialize rock_manifest: {0}")]
     Serde(#[from] piccolo_util::serde::de::Error),
     #[error("rock_manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
@@ -40,10 +40,13 @@ impl RockManifest {
             .try_enter(|ctx| {
                 let closure = Closure::load(ctx, None, rock_manifest_content.as_bytes())?;
                 let executor = Executor::start(ctx, closure.into(), ());
-                if !executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT)) {
+                if !executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))? {
                     return Ok(Err(RockManifestError::FuelLimitExceeded));
                 }
-                Ok(from_value::<Option<Self>>(ctx.globals().get(ctx, "rock_manifest")).map(Ok)?)
+                Ok(
+                    from_value::<Option<Self>>(ctx.globals().get_value(ctx, "rock_manifest"))
+                        .map(Ok)?,
+                )
             })??
             .unwrap_or_default())
     }

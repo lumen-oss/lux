@@ -48,7 +48,7 @@ pub enum LuaRockspecError {
     )]
     ExecutionError {
         #[source]
-        cause: piccolo::StaticError,
+        cause: piccolo::ExternError,
         content: String,
     },
     #[error(
@@ -131,7 +131,7 @@ impl<'gc> HasRockspecKey<'gc> for piccolo::Table<'gc> {
         key: String,
         rockspec_content: &str,
     ) -> Result<V, LuaRockspecError> {
-        from_value(self.get(ctx, key.clone())).map_err(|cause| {
+        from_value(self.get_value(ctx, key.clone())).map_err(|cause| {
             LuaRockspecError::LuaKeyDeserializationFailure {
                 field: key,
                 content: rockspec_content.to_string(),
@@ -154,7 +154,7 @@ impl LocalLuaRockspec {
 
                 let executor = Executor::start(ctx, closure.into(), ());
 
-                let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT));
+                let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
                 if !output {
                     return Ok(Err(LuaRockspecError::FuelLimitExceeded));
@@ -190,7 +190,7 @@ impl LocalLuaRockspec {
                 let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
                     globals.get_rockspec_key(ctx, "test_dependencies".into(), rockspec_content)?;
 
-                let source: PerPlatform<RemoteRockSource> = match globals.get(ctx, "source") {
+                let source: PerPlatform<RemoteRockSource> = match globals.get_value(ctx, "source") {
                     piccolo::Value::Nil => {
                         PerPlatform::new(RockSourceSpec::File(project_root.to_path_buf()).into())
                     }
@@ -373,7 +373,7 @@ impl RemoteLuaRockspec {
 
             let executor = Executor::start(ctx, closure.into(), ());
 
-            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT));
+            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
             if !output {
                 return Ok(Err(LuaRockspecError::FuelLimitExceeded));
@@ -708,7 +708,7 @@ where
     T: Default,
     T: DeserializeOwned,
 {
-    let ret = match ctx.globals().get(ctx, lua_var_name.to_string()) {
+    let ret = match ctx.globals().get_value(ctx, lua_var_name.to_string()) {
         piccolo::Value::Nil => T::default(),
         value @ piccolo::Value::Table(_) => from_value(value)?,
         value => Err(LuaTableError::ParseError {

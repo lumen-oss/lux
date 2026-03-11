@@ -26,7 +26,7 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 #[derive(Error, Debug)]
 pub enum ManifestLuaError {
     #[error("failed to parse Lua manifest:\n{0}")]
-    ExecutionError(#[from] piccolo::StaticError),
+    ExecutionError(#[from] piccolo::ExternError),
     #[error("failed to deserialize Lua manifest:\n{0}")]
     DeserializationError(#[from] piccolo_util::serde::de::Error),
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
@@ -42,7 +42,7 @@ impl ManifestMetadata {
 
             let executor = Executor::start(ctx, closure.into(), ());
 
-            Ok(executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT)))
+            Ok(executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?)
         })?;
 
         if !success {
@@ -50,7 +50,7 @@ impl ManifestMetadata {
         }
 
         let intermediate = IntermediateManifest {
-            repository: lua.enter(|ctx| from_value(ctx.globals().get(ctx, "repository")))?,
+            repository: lua.enter(|ctx| from_value(ctx.globals().get_value(ctx, "repository")))?,
         };
 
         let manifest = Self::from_intermediate(intermediate);

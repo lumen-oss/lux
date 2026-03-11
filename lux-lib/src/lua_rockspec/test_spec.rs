@@ -329,12 +329,12 @@ mod tests {
     fn exec_lua<T: serde::de::DeserializeOwned>(
         code: &str,
         key: &'static str,
-    ) -> Result<T, piccolo::StaticError> {
+    ) -> Result<T, piccolo::ExternError> {
         Lua::core().try_enter(|ctx| {
             let closure = Closure::load(ctx, None, code.as_bytes())?;
             let executor = Executor::start(ctx, closure.into(), ());
-            executor.step(ctx, &mut Fuel::with(i32::MAX));
-            from_value(ctx.globals().get(ctx, key)).map_err(piccolo::Error::from)
+            executor.step(ctx, &mut Fuel::with(i32::MAX))?;
+            from_value(ctx.globals().get_value(ctx, key)).map_err(piccolo::Error::from)
         })
     }
 
