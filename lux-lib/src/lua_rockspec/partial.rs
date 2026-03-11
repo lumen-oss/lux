@@ -36,7 +36,7 @@ pub enum PartialRockspecError {
     #[error("field `{0}` should not be declared in extra.rockspec")]
     ExtraneousField(String),
     #[error("error while parsing rockspec: {0}")]
-    Lua(#[from] piccolo::StaticError),
+    Lua(#[from] piccolo::ExternError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -50,7 +50,7 @@ impl PartialLuaRockspec {
 
             let executor = Executor::start(ctx, closure.into(), ());
 
-            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT));
+            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
             if !output {
                 return Ok(Err(PartialRockspecError::FuelLimitExceeded));
@@ -58,34 +58,35 @@ impl PartialLuaRockspec {
 
             let globals = ctx.globals();
 
-            if !matches!(globals.get(ctx, "version"), piccolo::Value::Nil) {
+            if !matches!(globals.get_value(ctx, "version"), piccolo::Value::Nil) {
                 return Ok(Err(PartialRockspecError::ExtraneousField(
                     "version".to_string(),
                 )));
             }
-            if !matches!(globals.get(ctx, "source"), piccolo::Value::Nil) {
+            if !matches!(globals.get_value(ctx, "source"), piccolo::Value::Nil) {
                 return Ok(Err(PartialRockspecError::ExtraneousField(
                     "source".to_string(),
                 )));
             }
 
             let rockspec = PartialLuaRockspec {
-                rockspec_format: from_value(globals.get(ctx, "rockspec_format"))
+                rockspec_format: from_value(globals.get_value(ctx, "rockspec_format"))
                     .unwrap_or_default(),
-                package: from_value(globals.get(ctx, "package")).unwrap_or_default(),
+                package: from_value(globals.get_value(ctx, "package")).unwrap_or_default(),
                 description: parse_lua_tbl_or_default(ctx, "description").unwrap_or_default(),
                 supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")
                     .unwrap_or_default(),
-                dependencies: from_value(globals.get(ctx, "dependencies")).unwrap_or_default(),
-                build_dependencies: from_value(globals.get(ctx, "build_dependencies"))
+                dependencies: from_value(globals.get_value(ctx, "dependencies"))
                     .unwrap_or_default(),
-                test_dependencies: from_value(globals.get(ctx, "test_dependencies"))
+                build_dependencies: from_value(globals.get_value(ctx, "build_dependencies"))
                     .unwrap_or_default(),
-                external_dependencies: from_value(globals.get(ctx, "external_dependencies"))
+                test_dependencies: from_value(globals.get_value(ctx, "test_dependencies"))
                     .unwrap_or_default(),
-                build: from_value(globals.get(ctx, "build")).unwrap_or_default(),
-                test: from_value(globals.get(ctx, "test")).unwrap_or_default(),
-                deploy: from_value(globals.get(ctx, "deploy")).unwrap_or_default(),
+                external_dependencies: from_value(globals.get_value(ctx, "external_dependencies"))
+                    .unwrap_or_default(),
+                build: from_value(globals.get_value(ctx, "build")).unwrap_or_default(),
+                test: from_value(globals.get_value(ctx, "test")).unwrap_or_default(),
+                deploy: from_value(globals.get_value(ctx, "deploy")).unwrap_or_default(),
             };
 
             Ok(Ok(rockspec))

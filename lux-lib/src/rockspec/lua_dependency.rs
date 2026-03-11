@@ -172,11 +172,11 @@ mod test {
 
     use super::*;
 
-    fn eval_lua<T: serde::de::DeserializeOwned>(code: &str) -> Result<T, piccolo::StaticError> {
+    fn eval_lua<T: serde::de::DeserializeOwned>(code: &str) -> Result<T, piccolo::ExternError> {
         Lua::core().try_enter(|ctx| {
             let closure = Closure::load(ctx, None, code.as_bytes())?;
             let executor = Executor::start(ctx, closure.into(), ());
-            executor.step(ctx, &mut Fuel::with(i32::MAX));
+            executor.step(ctx, &mut Fuel::with(i32::MAX))?;
             from_value(executor.take_result::<Value<'_>>(ctx)??).map_err(piccolo::Error::from)
         })
     }
@@ -261,7 +261,7 @@ mod test {
             _ => panic!("Expected external dependencies"),
         }
 
-        let _err: piccolo::StaticError =
+        let _err: piccolo::ExternError =
             eval_lua::<DependencyType<ExternalDependencySpec>>("return {}").unwrap_err();
     }
 
