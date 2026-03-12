@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.26.0](https://github.com/lumen-oss/lux/compare/v0.25.3...v0.26.0) - 2026-03-12
+
+### Added
+- *(ui)* enable OSC native terminal progress bar support ([#1369](https://github.com/lumen-oss/lux/pull/1369))
+
+### Dependencies
+- *(deps)* bump spinners from 4.1.1 to 4.2.0 ([#1368](https://github.com/lumen-oss/lux/pull/1368))
+
+## `lux-lib` - [0.34.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.33.0...lux-lib-v0.34.0) - 2026-03-12
+
+### Added
+- port all mlua-specific code to lux-lua
+- unify deserialization system to accommodate piccolo
+- use `piccolo` for sandboxed evaluation of rockspecs
+- hotswap FromLua with Deserialize
+
+### Dependencies
+- *(deps)* bump toml and toml_edit ([#1373](https://github.com/lumen-oss/lux/pull/1373))
+- *(deps)* bump zip from 8.1.0 to 8.2.0 ([#1365](https://github.com/lumen-oss/lux/pull/1365))
+
+### Other
+- move to our fork of piccolo for proper versioning
+- update codebase to latest piccolo
+- update piccolo to our fork
+
 ## `lux-cli` - [0.25.3](https://github.com/lumen-oss/lux/compare/v0.25.2...v0.25.3) - 2026-02-23
 
 ### Dependencies
