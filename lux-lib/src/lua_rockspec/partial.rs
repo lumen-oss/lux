@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use piccolo::{Closure, Executor, Fuel};
-use piccolo_util::serde::from_value;
+use ottavino::{Closure, Executor, Fuel};
+use ottavino_util::serde::from_value;
 use thiserror::Error;
 
 use crate::{
@@ -36,14 +36,14 @@ pub enum PartialRockspecError {
     #[error("field `{0}` should not be declared in extra.rockspec")]
     ExtraneousField(String),
     #[error("error while parsing rockspec: {0}")]
-    Lua(#[from] piccolo::ExternError),
+    Lua(#[from] ottavino::ExternError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
 
 impl PartialLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, PartialRockspecError> {
-        let mut lua = piccolo::Lua::core();
+        let mut lua = ottavino::Lua::core();
 
         let rockspec = lua.try_enter(|ctx| {
             let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
@@ -58,12 +58,12 @@ impl PartialLuaRockspec {
 
             let globals = ctx.globals();
 
-            if !matches!(globals.get_value(ctx, "version"), piccolo::Value::Nil) {
+            if !matches!(globals.get_value(ctx, "version"), ottavino::Value::Nil) {
                 return Ok(Err(PartialRockspecError::ExtraneousField(
                     "version".to_string(),
                 )));
             }
-            if !matches!(globals.get_value(ctx, "source"), piccolo::Value::Nil) {
+            if !matches!(globals.get_value(ctx, "source"), ottavino::Value::Nil) {
                 return Ok(Err(PartialRockspecError::ExtraneousField(
                     "source".to_string(),
                 )));

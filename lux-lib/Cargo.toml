@@ -93,8 +93,8 @@ which = { workspace = true }
 
 
 gpgme = { version = "0.11", optional = true }
-piccolo = { git = "https://github.com/lumen-oss/piccolo" }
-piccolo-util = { git = "https://github.com/lumen-oss/piccolo" }
+ottavino = "0.4.0"
+ottavino-util = "0.4.0"
 serde-value = "0.7.0"
 
 [dev-dependencies]

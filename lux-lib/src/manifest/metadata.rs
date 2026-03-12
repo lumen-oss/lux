@@ -1,6 +1,6 @@
 use itertools::Itertools;
-use piccolo::{Closure, Executor, Fuel, Lua};
-use piccolo_util::serde::from_value;
+use ottavino::{Closure, Executor, Fuel, Lua};
+use ottavino_util::serde::from_value;
 use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
 
@@ -26,9 +26,9 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 #[derive(Error, Debug)]
 pub enum ManifestLuaError {
     #[error("failed to parse Lua manifest:\n{0}")]
-    ExecutionError(#[from] piccolo::ExternError),
+    ExecutionError(#[from] ottavino::ExternError),
     #[error("failed to deserialize Lua manifest:\n{0}")]
-    DeserializationError(#[from] piccolo_util::serde::de::Error),
+    DeserializationError(#[from] ottavino_util::serde::de::Error),
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,
 }

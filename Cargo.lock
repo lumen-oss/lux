@@ -1993,28 +1993,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gc-arena"
-version = "0.5.3"
-source = "git+https://github.com/kyren/gc-arena?rev=5a7534b883b703f23cfb8c3cfdf033460aa77ea9#5a7534b883b703f23cfb8c3cfdf033460aa77ea9"
-dependencies = [
- "allocator-api2",
- "gc-arena-derive",
- "hashbrown 0.14.5",
- "sptr",
-]
-
-[[package]]
-name = "gc-arena-derive"
-version = "0.5.3"
-source = "git+https://github.com/kyren/gc-arena?rev=5a7534b883b703f23cfb8c3cfdf033460aa77ea9#5a7534b883b703f23cfb8c3cfdf033460aa77ea9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.111",
- "synstructure",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3289,10 +3267,10 @@ dependencies = [
  "nix-nar",
  "nonempty",
  "openssl",
+ "ottavino",
+ "ottavino-util",
  "path-slash",
  "pathdiff",
- "piccolo",
- "piccolo-util",
  "pkg-config",
  "predicates",
  "proptest",
@@ -4008,6 +3986,57 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
 
 [[package]]
+name = "ottavino"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf44b7ea7d91f8e335a2c934c4c00484b64d774080afea9c43180dd19b845097"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+ "anyhow",
+ "hashbrown 0.14.5",
+ "ottavino-gc-arena",
+ "rand 0.8.5",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "ottavino-gc-arena"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d2cf1bdd1719f1d4c320733a94239b23ba7b91f25343220d05451fcfdc8e9b5"
+dependencies = [
+ "allocator-api2",
+ "hashbrown 0.14.5",
+ "ottavino-gc-arena-derive",
+ "sptr",
+]
+
+[[package]]
+name = "ottavino-gc-arena-derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "283ed19b8661ebb73c41523e8f39d331fdcc346e9829dc1904ed6e37675e38e8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.111",
+ "synstructure",
+]
+
+[[package]]
+name = "ottavino-util"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3da246d631ba2934fd0bbc786b743451c872d57c8e44fcde414a49d39f51582"
+dependencies = [
+ "ottavino",
+ "ottavino-gc-arena",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4172,31 +4201,6 @@ checksum = "bf1d70880e76bdc13ba52eafa6239ce793d85c8e43896507e43dd8984ff05b82"
 dependencies = [
  "pest",
  "sha2",
-]
-
-[[package]]
-name = "piccolo"
-version = "0.3.3"
-source = "git+https://github.com/lumen-oss/piccolo#62896c33d3a926ac30792a7223a4fe93281db321"
-dependencies = [
- "ahash",
- "allocator-api2",
- "anyhow",
- "gc-arena",
- "hashbrown 0.14.5",
- "rand 0.8.5",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "piccolo-util"
-version = "0.3.3"
-source = "git+https://github.com/lumen-oss/piccolo#62896c33d3a926ac30792a7223a4fe93281db321"
-dependencies = [
- "gc-arena",
- "piccolo",
- "serde",
- "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -7,8 +7,8 @@ use serde::{
 };
 
 /// A visitor and [`de::DeserializeSeed`] that collects a raw `serde_value::Value`
-/// from piccolo's deserializer, converting byte strings to Rust strings and
-/// preserving integer map keys (which piccolo emits for Lua sequences).
+/// from ottavino's deserializer, converting byte strings to Rust strings and
+/// preserving integer map keys (which ottavino emits for Lua sequences).
 pub(crate) struct LuaValueSeed;
 
 impl<'de> Visitor<'de> for LuaValueSeed {
@@ -89,7 +89,7 @@ impl<'de> de::DeserializeSeed<'de> for LuaValueSeed {
     }
 }
 
-/// Normalise a `serde_value::Value` that came from piccolo (our Lua runtime).
+/// Normalise a `serde_value::Value` that came from ottavino (our Lua runtime).
 ///
 /// Piccolo represents Lua sequences-with-holes (e.g. `{nil, nil, "foo"}`) as a
 /// `Value::Map` with integer keys rather than a `Value::Seq`. This function
@@ -97,7 +97,7 @@ impl<'de> de::DeserializeSeed<'de> for LuaValueSeed {
 /// index, leaving all other values untouched.
 pub(crate) fn normalize_lua_value(value: serde_value::Value) -> serde_value::Value {
     match value {
-        // piccolo_util serializes Lua strings as Bytes; convert to String
+        // ottavino_util serializes Lua strings as Bytes; convert to String
         serde_value::Value::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
             Ok(s) => serde_value::Value::String(s),
             Err(_) => serde_value::Value::Bytes(bytes),

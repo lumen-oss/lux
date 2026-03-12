@@ -720,9 +720,9 @@ async fn is_compatible_lua_script_fallback(
             .lua_binary_or_config_override(config)
             .is_some_and(|_| {
                 // Try to compile the content without executing it
-                piccolo::Lua::core()
+                ottavino::Lua::core()
                     .try_enter(|ctx| {
-                        piccolo::Closure::load(
+                        ottavino::Closure::load(
                             ctx,
                             None,
                             file_content_without_comments.as_bytes(),
