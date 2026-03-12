@@ -319,8 +319,8 @@ fn override_opt<T: Clone>(override_opt: &Option<T>, base: &Option<T>) -> Option<
 #[cfg(test)]
 mod tests {
 
-    use piccolo::{Closure, Executor, Fuel, Lua};
-    use piccolo_util::serde::from_value;
+    use ottavino::{Closure, Executor, Fuel, Lua};
+    use ottavino_util::serde::from_value;
 
     use crate::lua_rockspec::PlatformIdentifier;
 
@@ -329,12 +329,12 @@ mod tests {
     fn exec_lua<T: serde::de::DeserializeOwned>(
         code: &str,
         key: &'static str,
-    ) -> Result<T, piccolo::ExternError> {
+    ) -> Result<T, ottavino::ExternError> {
         Lua::core().try_enter(|ctx| {
             let closure = Closure::load(ctx, None, code.as_bytes())?;
             let executor = Executor::start(ctx, closure.into(), ());
             executor.step(ctx, &mut Fuel::with(i32::MAX))?;
-            from_value(ctx.globals().get_value(ctx, key)).map_err(piccolo::Error::from)
+            from_value(ctx.globals().get_value(ctx, key)).map_err(ottavino::Error::from)
         })
     }
 

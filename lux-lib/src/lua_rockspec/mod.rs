@@ -11,8 +11,8 @@ use std::{
     collections::HashMap, convert::Infallible, fmt::Display, io, path::PathBuf, str::FromStr,
 };
 
-use piccolo::{Closure, Executor, Fuel};
-use piccolo_util::serde::from_value;
+use ottavino::{Closure, Executor, Fuel};
+use ottavino_util::serde::from_value;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub use build::*;
@@ -48,7 +48,7 @@ pub enum LuaRockspecError {
     )]
     ExecutionError {
         #[source]
-        cause: piccolo::ExternError,
+        cause: ottavino::ExternError,
         content: String,
     },
     #[error(
@@ -66,7 +66,7 @@ pub enum LuaRockspecError {
         field: String,
         content: String,
         #[source]
-        cause: piccolo_util::serde::de::Error,
+        cause: ottavino_util::serde::de::Error,
     },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
@@ -118,16 +118,16 @@ pub struct LocalLuaRockspec {
 trait HasRockspecKey<'gc> {
     fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
-        ctx: piccolo::Context<'gc>,
+        ctx: ottavino::Context<'gc>,
         key: String,
         rockspec_content: &str,
     ) -> Result<V, LuaRockspecError>;
 }
 
-impl<'gc> HasRockspecKey<'gc> for piccolo::Table<'gc> {
+impl<'gc> HasRockspecKey<'gc> for ottavino::Table<'gc> {
     fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
-        ctx: piccolo::Context<'gc>,
+        ctx: ottavino::Context<'gc>,
         key: String,
         rockspec_content: &str,
     ) -> Result<V, LuaRockspecError> {
@@ -146,7 +146,7 @@ impl LocalLuaRockspec {
         rockspec_content: &str,
         project_root: ProjectRoot,
     ) -> Result<Self, LuaRockspecError> {
-        let mut lua = piccolo::Lua::core();
+        let mut lua = ottavino::Lua::core();
 
         let rockspec = lua
             .try_enter(|ctx| {
@@ -191,7 +191,7 @@ impl LocalLuaRockspec {
                     globals.get_rockspec_key(ctx, "test_dependencies".into(), rockspec_content)?;
 
                 let source: PerPlatform<RemoteRockSource> = match globals.get_value(ctx, "source") {
-                    piccolo::Value::Nil => {
+                    ottavino::Value::Nil => {
                         PerPlatform::new(RockSourceSpec::File(project_root.to_path_buf()).into())
                     }
                     value => from_value(value).map_err(|cause| {
@@ -366,7 +366,7 @@ pub struct RemoteLuaRockspec {
 
 impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
-        let mut lua = piccolo::Lua::core();
+        let mut lua = ottavino::Lua::core();
 
         lua.try_enter(|ctx| {
             let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
@@ -697,11 +697,11 @@ pub enum LuaTableError {
         invalid_type: String,
     },
     #[error(transparent)]
-    DeserializationError(#[from] piccolo_util::serde::de::Error),
+    DeserializationError(#[from] ottavino_util::serde::de::Error),
 }
 
 fn parse_lua_tbl_or_default<T>(
-    ctx: piccolo::Context<'_>,
+    ctx: ottavino::Context<'_>,
     lua_var_name: &str,
 ) -> Result<T, LuaTableError>
 where
@@ -709,8 +709,8 @@ where
     T: DeserializeOwned,
 {
     let ret = match ctx.globals().get_value(ctx, lua_var_name.to_string()) {
-        piccolo::Value::Nil => T::default(),
-        value @ piccolo::Value::Table(_) => from_value(value)?,
+        ottavino::Value::Nil => T::default(),
+        value @ ottavino::Value::Table(_) => from_value(value)?,
         value => Err(LuaTableError::ParseError {
             variable: lua_var_name.to_string(),
             invalid_type: value.type_name().to_string(),

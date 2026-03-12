@@ -166,18 +166,18 @@ pub enum LuaDependencyType<T> {
 #[cfg(test)]
 mod test {
 
+    use ottavino::{Closure, Executor, Fuel, Lua, Value};
+    use ottavino_util::serde::from_value;
     use path_slash::PathBufExt;
-    use piccolo::{Closure, Executor, Fuel, Lua, Value};
-    use piccolo_util::serde::from_value;
 
     use super::*;
 
-    fn eval_lua<T: serde::de::DeserializeOwned>(code: &str) -> Result<T, piccolo::ExternError> {
+    fn eval_lua<T: serde::de::DeserializeOwned>(code: &str) -> Result<T, ottavino::ExternError> {
         Lua::core().try_enter(|ctx| {
             let closure = Closure::load(ctx, None, code.as_bytes())?;
             let executor = Executor::start(ctx, closure.into(), ());
             executor.step(ctx, &mut Fuel::with(i32::MAX))?;
-            from_value(executor.take_result::<Value<'_>>(ctx)??).map_err(piccolo::Error::from)
+            from_value(executor.take_result::<Value<'_>>(ctx)??).map_err(ottavino::Error::from)
         })
     }
 
@@ -261,7 +261,7 @@ mod test {
             _ => panic!("Expected external dependencies"),
         }
 
-        let _err: piccolo::ExternError =
+        let _err: ottavino::ExternError =
             eval_lua::<DependencyType<ExternalDependencySpec>>("return {}").unwrap_err();
     }
 

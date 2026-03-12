@@ -1,7 +1,7 @@
 use itertools::Itertools;
+use ottavino::{Closure, Executor, Fuel};
+use ottavino_util::serde::from_value;
 use path_slash::PathBufExt;
-use piccolo::{Closure, Executor, Fuel};
-use piccolo_util::serde::from_value;
 use serde::{Deserialize, Deserializer};
 /// Compatibility layer/adapter for the luarocks client
 use std::{collections::HashMap, path::PathBuf};
@@ -25,16 +25,16 @@ pub(crate) struct RockManifest {
 #[derive(Error, Debug)]
 pub enum RockManifestError {
     #[error("could not parse rock_manifest: {0}")]
-    Piccolo(#[from] piccolo::ExternError),
+    Piccolo(#[from] ottavino::ExternError),
     #[error("could not deserialize rock_manifest: {0}")]
-    Serde(#[from] piccolo_util::serde::de::Error),
+    Serde(#[from] ottavino_util::serde::de::Error),
     #[error("rock_manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,
 }
 
 impl RockManifest {
     pub fn new(rock_manifest_content: &str) -> Result<Self, RockManifestError> {
-        let mut lua = piccolo::Lua::core();
+        let mut lua = ottavino::Lua::core();
 
         Ok(lua
             .try_enter(|ctx| {
