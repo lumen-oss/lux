@@ -85,12 +85,12 @@ The following table provides a brief comparison:
 | Custom build backends                                                                   | :white_check_mark:[^1]       | :white_check_mark: |
 | `rust-mlua` build spec                                                                  | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
 | `treesitter-parser` build spec                                                          | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
-| Install pre-built binary rocks                                                          | :white_check_mark:           | :white_check_mark: |
+| Install prebuilt binary rocks                                                          | :white_check_mark:           | :white_check_mark: |
 | Install multiple packages with a single command                                         | :white_check_mark:           | :x:                |
 | Install packages using version constraints                                              | :white_check_mark:           | :x:                |
 | Auto-detect external dependencies and Lua headers with `pkg-config`                     | :white_check_mark:           | :x:                |
 | Resolve multiple versions of the same dependency at runtime                             | :white_check_mark:           | :white_check_mark: |
-| Pack and upload pre-built binary rocks                                                  | :white_check_mark:           | :white_check_mark: |
+| Pack and upload prebuilt binary rocks                                                  | :white_check_mark:           | :white_check_mark: |
 | Luarocks.org manifest namespaces                                                        | :white_check_mark:           | :white_check_mark: |
 | Luarocks.org dev packages                                                               | :white_check_mark:           | :white_check_mark: |
 | Versioning                                                                              | SemVer[^2]                   | arbitrary          |
@@ -134,7 +134,7 @@ Lux includes the following packages and libraries:
 > Lux can detect a lux-lua installation using pkg-config
 > or via the `LUX_LIB_DIR` environment variable.
 >
-> Our [pre-built binary release artifacts](https://github.com/lumen-oss/lux/releases/latest)
+> Our [prebuilt binary release artifacts](https://github.com/lumen-oss/lux/releases/latest)
 > are bundled with `lux-lua`.
 
 ## :wrench: Building from source
