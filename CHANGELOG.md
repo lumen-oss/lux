@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.26.2](https://github.com/lumen-oss/lux/compare/v0.26.1...v0.26.2) - 2026-03-13
+
+### Dependencies
+- *(deps)* bump clap_complete from 4.5.61 to 4.6.0 ([#1384](https://github.com/lumen-oss/lux/pull/1384))
+
 ## `lux-cli` - [0.26.1](https://github.com/lumen-oss/lux/compare/v0.26.0...v0.26.1) - 2026-03-12
 
 ### Fixed
