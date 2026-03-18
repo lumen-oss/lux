@@ -72,7 +72,7 @@ toml_edit = { version = "0.22", default-features = false, features = ["display",
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
-winnow = { version = "0.7" }
+winnow = { version = "1.0" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [build-dependencies]
@@ -97,6 +97,6 @@ smallvec = { version = "1", default-features = false, features = ["const_new"] }
 syn = { version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
-winnow = { version = "0.7" }
+winnow = { version = "1.0" }
 
 ### END HAKARI SECTION
