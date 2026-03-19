@@ -887,6 +887,17 @@ impl DisplayAsLuaKV for BuildSpecInternal {
                 ),
             });
         }
+        if let Some(cargo_extra_args) = &self.cargo_extra_args {
+            result.push(DisplayLuaKV {
+                key: "cargo_extra_args".to_string(),
+                value: DisplayLuaValue::List(
+                    cargo_extra_args
+                        .iter()
+                        .map(|arg| DisplayLuaValue::String(arg.clone()))
+                        .collect(),
+                ),
+            })
+        }
         if let Some(features) = &self.features {
             result.push(DisplayLuaKV {
                 key: "features".to_string(),
