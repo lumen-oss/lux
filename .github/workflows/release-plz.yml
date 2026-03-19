@@ -26,7 +26,7 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
       - name: Setup cachix
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@v17
         with:
           name: neorocks
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
