@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-cli` - [0.26.2](https://github.com/lumen-oss/lux/compare/v0.26.1...v0.26.2) - 2026-03-19
+
+### Dependencies
+- *(deps)* bump clap from 4.5.60 to 4.6.0 ([#1386](https://github.com/lumen-oss/lux/pull/1386))
+- *(deps)* bump clap_complete from 4.5.61 to 4.6.0 ([#1384](https://github.com/lumen-oss/lux/pull/1384))
+
+## `lux-lib` - [0.34.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.34.1...lux-lib-v0.34.2) - 2026-03-19
+
+### Dependencies
+- *(deps)* bump clap from 4.5.60 to 4.6.0 ([#1386](https://github.com/lumen-oss/lux/pull/1386))
+
+### Fixed
+- add missing DisplayAsLuaKV implementation for `cargo_extra_args`
+
 ## `lux-cli` - [0.26.1](https://github.com/lumen-oss/lux/compare/v0.26.0...v0.26.1) - 2026-03-12
 
 ### Fixed
