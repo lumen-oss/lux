@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-lib` - [0.34.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.34.2...lux-lib-v0.34.3) - 2026-03-20
+
+### Added
+- convert `DisplayAsLuaKV` into a derive macro
+
 ## `lux-cli` - [0.26.3](https://github.com/lumen-oss/lux/compare/v0.26.2...v0.26.3) - 2026-03-20
 
 ### Other
