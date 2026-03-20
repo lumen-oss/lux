@@ -348,7 +348,8 @@ impl LibPathBufTable {
 /// to indicate which subdirectory the file should be copied to.
 /// For example, build.install.lua = {["foo.bar"] = {"src/bar.lua"}} will copy src/bar.lua
 /// to the foo directory under the rock's Lua files directory.
-#[derive(Debug, PartialEq, Default, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Default, Deserialize, Clone, lux_macros::DisplayAsLuaKV)]
+#[display_lua(key = "install")]
 pub struct InstallSpec {
     /// Lua modules written in Lua.
     #[serde(default, deserialize_with = "deserialize_module_path_map")]
@@ -410,73 +411,6 @@ where
     .map_err(de::Error::custom)
 }
 
-impl DisplayAsLuaKV for InstallSpec {
-    fn display_lua(&self) -> DisplayLuaKV {
-        let mut result = Vec::new();
-
-        let mut lua_entries = Vec::new();
-        self.lua.iter().for_each(|(key, value)| {
-            lua_entries.push(DisplayLuaKV {
-                key: key.to_string(),
-                value: DisplayLuaValue::String(value.to_slash_lossy().to_string()),
-            });
-        });
-        if !lua_entries.is_empty() {
-            result.push(DisplayLuaKV {
-                key: "lua".to_string(),
-                value: DisplayLuaValue::Table(lua_entries),
-            });
-        }
-
-        let mut lib_entries = Vec::new();
-        self.lib.iter().for_each(|(key, value)| {
-            lib_entries.push(DisplayLuaKV {
-                key: key.to_string(),
-                value: DisplayLuaValue::String(value.to_slash_lossy().to_string()),
-            });
-        });
-        if !lib_entries.is_empty() {
-            result.push(DisplayLuaKV {
-                key: "lib".to_string(),
-                value: DisplayLuaValue::Table(lib_entries),
-            });
-        }
-
-        let mut bin_entries = Vec::new();
-        self.bin.iter().for_each(|(key, value)| {
-            bin_entries.push(DisplayLuaKV {
-                key: key.clone(),
-                value: DisplayLuaValue::String(value.to_slash_lossy().to_string()),
-            });
-        });
-        if !bin_entries.is_empty() {
-            result.push(DisplayLuaKV {
-                key: "bin".to_string(),
-                value: DisplayLuaValue::Table(bin_entries),
-            });
-        }
-
-        let mut conf_entries = Vec::new();
-        self.conf.iter().for_each(|(key, value)| {
-            conf_entries.push(DisplayLuaKV {
-                key: key.clone(),
-                value: DisplayLuaValue::String(value.to_slash_lossy().to_string()),
-            });
-        });
-        if !conf_entries.is_empty() {
-            result.push(DisplayLuaKV {
-                key: "conf".to_string(),
-                value: DisplayLuaValue::Table(conf_entries),
-            });
-        }
-
-        DisplayLuaKV {
-            key: "install".to_string(),
-            value: DisplayLuaValue::Table(result),
-        }
-    }
-}
-
 /// Deserializes a map that may be represented as a sequence (integer-indexed Lua array).
 fn deserialize_map_or_seq<'de, D, V>(
     deserializer: D,
@@ -518,33 +452,81 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Default, Clone)]
+fn display_builtin_spec(spec: &HashMap<LuaTableKey, ModuleSpecInternal>) -> DisplayLuaValue {
+    DisplayLuaValue::Table(
+        spec.iter()
+            .map(|(key, value)| DisplayLuaKV {
+                key: match key {
+                    LuaTableKey::StringKey(s) => s.clone(),
+                    LuaTableKey::IntKey(_) => unreachable!("integer key in modules"),
+                },
+                value: value.display_lua_value(),
+            })
+            .collect(),
+    )
+}
+
+fn display_path_string_map(map: &HashMap<PathBuf, String>) -> DisplayLuaValue {
+    DisplayLuaValue::Table(
+        map.iter()
+            .map(|(k, v)| DisplayLuaKV {
+                key: k.to_slash_lossy().into_owned(),
+                value: DisplayLuaValue::String(v.clone()),
+            })
+            .collect(),
+    )
+}
+
+fn display_include(include: &HashMap<LuaTableKey, PathBuf>) -> DisplayLuaValue {
+    DisplayLuaValue::Table(
+        include
+            .iter()
+            .map(|(key, value)| DisplayLuaKV {
+                key: match key {
+                    LuaTableKey::StringKey(s) => s.clone(),
+                    LuaTableKey::IntKey(_) => unreachable!("integer key in include"),
+                },
+                value: DisplayLuaValue::String(value.to_slash_lossy().into_owned()),
+            })
+            .collect(),
+    )
+}
+
+#[derive(Debug, PartialEq, Deserialize, Default, Clone, lux_macros::DisplayAsLuaKV)]
+#[display_lua(key = "build")]
 pub(crate) struct BuildSpecInternal {
     #[serde(rename = "type", default)]
+    #[display_lua(rename = "type")]
     pub(crate) build_type: Option<BuildType>,
     #[serde(
         rename = "modules",
         default,
         deserialize_with = "deserialize_map_or_seq"
     )]
+    #[display_lua(rename = "modules", convert_with = "display_builtin_spec")]
     pub(crate) builtin_spec: Option<HashMap<LuaTableKey, ModuleSpecInternal>>,
     #[serde(default)]
     pub(crate) makefile: Option<PathBuf>,
     #[serde(rename = "build_target", default)]
+    #[display_lua(rename = "build_target")]
     pub(crate) make_build_target: Option<String>,
     #[serde(default)]
     pub(crate) build_pass: Option<bool>,
     #[serde(rename = "install_target", default)]
+    #[display_lua(rename = "install_target")]
     pub(crate) make_install_target: Option<String>,
     #[serde(default)]
     pub(crate) install_pass: Option<bool>,
     #[serde(rename = "build_variables", default)]
+    #[display_lua(rename = "build_variables")]
     pub(crate) make_build_variables: Option<HashMap<String, String>>,
     #[serde(rename = "install_variables", default)]
+    #[display_lua(rename = "install_variables")]
     pub(crate) make_install_variables: Option<HashMap<String, String>>,
     #[serde(default)]
     pub(crate) variables: Option<HashMap<String, String>>,
     #[serde(rename = "cmake", default)]
+    #[display_lua(rename = "cmake")]
     pub(crate) cmake_lists_content: Option<String>,
     #[serde(default)]
     pub(crate) build_command: Option<String>,
@@ -555,8 +537,8 @@ pub(crate) struct BuildSpecInternal {
     #[serde(default, deserialize_with = "deserialize_copy_directories")]
     pub(crate) copy_directories: Option<Vec<PathBuf>>,
     #[serde(default)]
+    #[display_lua(convert_with = "display_path_string_map")]
     pub(crate) patches: Option<HashMap<PathBuf, String>>,
-    // rust-mlua fields
     #[serde(default)]
     pub(crate) target_path: Option<PathBuf>,
     #[serde(default)]
@@ -565,8 +547,8 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) features: Option<Vec<String>>,
     pub(crate) cargo_extra_args: Option<Vec<String>>,
     #[serde(default, deserialize_with = "deserialize_map_or_seq")]
+    #[display_lua(convert_with = "display_include")]
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
-    // treesitter-parser fields
     #[serde(default)]
     pub(crate) lang: Option<String>,
     #[serde(default)]
@@ -576,6 +558,7 @@ pub(crate) struct BuildSpecInternal {
     #[serde(default)]
     pub(crate) location: Option<PathBuf>,
     #[serde(default)]
+    #[display_lua(convert_with = "display_path_string_map")]
     pub(crate) queries: Option<HashMap<PathBuf, String>>,
 }
 
@@ -711,250 +694,6 @@ where
     }
 }
 
-impl DisplayAsLuaKV for BuildSpecInternal {
-    fn display_lua(&self) -> DisplayLuaKV {
-        let mut result = Vec::new();
-
-        if let Some(build_type) = &self.build_type {
-            result.push(DisplayLuaKV {
-                key: "type".to_string(),
-                value: DisplayLuaValue::String(build_type.to_string()),
-            });
-        }
-        if let Some(builtin_spec) = &self.builtin_spec {
-            result.push(DisplayLuaKV {
-                key: "modules".to_string(),
-                value: DisplayLuaValue::Table(
-                    builtin_spec
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: match key {
-                                LuaTableKey::StringKey(s) => s.clone(),
-                                LuaTableKey::IntKey(_) => unreachable!("integer key in modules"),
-                            },
-                            value: value.display_lua_value(),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(makefile) = &self.makefile {
-            result.push(DisplayLuaKV {
-                key: "makefile".to_string(),
-                value: DisplayLuaValue::String(makefile.to_string_lossy().to_string()),
-            });
-        }
-        if let Some(make_build_target) = &self.make_build_target {
-            result.push(DisplayLuaKV {
-                key: "build_target".to_string(),
-                value: DisplayLuaValue::String(make_build_target.clone()),
-            });
-        }
-        if let Some(build_pass) = &self.build_pass {
-            result.push(DisplayLuaKV {
-                key: "build_pass".to_string(),
-                value: DisplayLuaValue::Boolean(*build_pass),
-            });
-        }
-        if let Some(make_install_target) = &self.make_install_target {
-            result.push(DisplayLuaKV {
-                key: "install_target".to_string(),
-                value: DisplayLuaValue::String(make_install_target.clone()),
-            });
-        }
-        if let Some(install_pass) = &self.install_pass {
-            result.push(DisplayLuaKV {
-                key: "install_pass".to_string(),
-                value: DisplayLuaValue::Boolean(*install_pass),
-            });
-        }
-        if let Some(make_build_variables) = &self.make_build_variables {
-            result.push(DisplayLuaKV {
-                key: "build_variables".to_string(),
-                value: DisplayLuaValue::Table(
-                    make_build_variables
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: key.clone(),
-                            value: DisplayLuaValue::String(value.clone()),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(make_install_variables) = &self.make_install_variables {
-            result.push(DisplayLuaKV {
-                key: "install_variables".to_string(),
-                value: DisplayLuaValue::Table(
-                    make_install_variables
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: key.clone(),
-                            value: DisplayLuaValue::String(value.clone()),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(variables) = &self.variables {
-            result.push(DisplayLuaKV {
-                key: "variables".to_string(),
-                value: DisplayLuaValue::Table(
-                    variables
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: key.clone(),
-                            value: DisplayLuaValue::String(value.clone()),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(cmake_lists_content) = &self.cmake_lists_content {
-            result.push(DisplayLuaKV {
-                key: "cmake".to_string(),
-                value: DisplayLuaValue::String(cmake_lists_content.clone()),
-            });
-        }
-        if let Some(build_command) = &self.build_command {
-            result.push(DisplayLuaKV {
-                key: "build_command".to_string(),
-                value: DisplayLuaValue::String(build_command.clone()),
-            });
-        }
-        if let Some(install_command) = &self.install_command {
-            result.push(DisplayLuaKV {
-                key: "install_command".to_string(),
-                value: DisplayLuaValue::String(install_command.clone()),
-            });
-        }
-        if let Some(install) = &self.install {
-            result.push(install.display_lua());
-        }
-        if let Some(copy_directories) = &self.copy_directories {
-            result.push(DisplayLuaKV {
-                key: "copy_directories".to_string(),
-                value: DisplayLuaValue::List(
-                    copy_directories
-                        .iter()
-                        .map(|path_buf| {
-                            DisplayLuaValue::String(path_buf.to_string_lossy().to_string())
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(patches) = &self.patches {
-            result.push(DisplayLuaKV {
-                key: "patches".to_string(),
-                value: DisplayLuaValue::Table(
-                    patches
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: key.to_string_lossy().to_string(),
-                            value: DisplayLuaValue::String(value.clone()),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(target_path) = &self.target_path {
-            result.push(DisplayLuaKV {
-                key: "target_path".to_string(),
-                value: DisplayLuaValue::String(target_path.to_string_lossy().to_string()),
-            });
-        }
-        if let Some(default_features) = &self.default_features {
-            result.push(DisplayLuaKV {
-                key: "default_features".to_string(),
-                value: DisplayLuaValue::Boolean(*default_features),
-            });
-        }
-        if let Some(include) = &self.include {
-            result.push(DisplayLuaKV {
-                key: "include".to_string(),
-                value: DisplayLuaValue::Table(
-                    include
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: match key {
-                                LuaTableKey::StringKey(s) => s.clone(),
-                                LuaTableKey::IntKey(_) => unreachable!("integer key in include"),
-                            },
-                            value: DisplayLuaValue::String(value.to_string_lossy().to_string()),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(cargo_extra_args) = &self.cargo_extra_args {
-            result.push(DisplayLuaKV {
-                key: "cargo_extra_args".to_string(),
-                value: DisplayLuaValue::List(
-                    cargo_extra_args
-                        .iter()
-                        .map(|arg| DisplayLuaValue::String(arg.clone()))
-                        .collect(),
-                ),
-            })
-        }
-        if let Some(features) = &self.features {
-            result.push(DisplayLuaKV {
-                key: "features".to_string(),
-                value: DisplayLuaValue::List(
-                    features
-                        .iter()
-                        .map(|feature| DisplayLuaValue::String(feature.clone()))
-                        .collect(),
-                ),
-            });
-        }
-        if let Some(lang) = &self.lang {
-            result.push(DisplayLuaKV {
-                key: "lang".to_string(),
-                value: DisplayLuaValue::String(lang.to_string()),
-            });
-        }
-        if let Some(parser) = &self.parser {
-            result.push(DisplayLuaKV {
-                key: "parser".to_string(),
-                value: DisplayLuaValue::Boolean(*parser),
-            });
-        }
-        if let Some(generate) = &self.generate {
-            result.push(DisplayLuaKV {
-                key: "generate".to_string(),
-                value: DisplayLuaValue::Boolean(*generate),
-            });
-        }
-        if let Some(location) = &self.location {
-            result.push(DisplayLuaKV {
-                key: "location".to_string(),
-                value: DisplayLuaValue::String(location.to_string_lossy().to_string()),
-            });
-        }
-        if let Some(queries) = &self.queries {
-            result.push(DisplayLuaKV {
-                key: "queries".to_string(),
-                value: DisplayLuaValue::Table(
-                    queries
-                        .iter()
-                        .map(|(key, value)| DisplayLuaKV {
-                            key: key.to_string_lossy().to_string(),
-                            value: DisplayLuaValue::String(value.to_string()),
-                        })
-                        .collect(),
-                ),
-            });
-        }
-
-        DisplayLuaKV {
-            key: "build".to_string(),
-            value: DisplayLuaValue::Table(result),
-        }
-    }
-}
-
 /// Maps `build.type` to an enum.
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "lowercase", remote = "BuildType")]
@@ -1040,10 +779,35 @@ impl Display for BuildType {
     }
 }
 
+impl DisplayAsLuaValue for BuildType {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::String(self.to_string())
+    }
+}
+
+impl DisplayAsLuaValue for InstallSpec {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        self.display_lua().value
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    fn eval_lua_global<T: serde::de::DeserializeOwned>(code: &str, key: &'static str) -> T {
+        use ottavino::{Closure, Executor, Fuel, Lua};
+        use ottavino_util::serde::from_value;
+        Lua::core()
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, code.as_bytes())?;
+                let executor = Executor::start(ctx, closure.into(), ());
+                executor.step(ctx, &mut Fuel::with(i32::MAX))?;
+                from_value(ctx.globals().get_value(ctx, key)).map_err(ottavino::Error::from)
+            })
+            .unwrap()
+    }
 
     #[tokio::test]
     pub async fn deserialize_build_type() {
@@ -1060,5 +824,75 @@ mod tests {
         );
         let build_type: BuildType = serde_json::from_str("\"rust-mlua\"").unwrap();
         assert_eq!(build_type, BuildType::RustMlua);
+    }
+
+    #[test]
+    pub fn install_spec_roundtrip() {
+        let spec = InstallSpec {
+            lua: HashMap::from([(
+                "mymod".parse::<LuaModule>().unwrap(),
+                "src/mymod.lua".into(),
+            )]),
+            lib: HashMap::from([("mylib".into(), "lib/mylib.so".into())]),
+            conf: HashMap::from([("myconf".into(), "conf/myconf.cfg".into())]),
+            bin: HashMap::from([("mybinary".into(), "bin/mybinary".into())]),
+        };
+        let lua = spec.display_lua().to_string();
+        let restored: InstallSpec = eval_lua_global(&lua, "install");
+        assert_eq!(spec, restored);
+    }
+
+    #[test]
+    pub fn install_spec_empty_roundtrip() {
+        let spec = InstallSpec::default();
+        let lua = spec.display_lua().to_string();
+        let lua = if lua.trim().is_empty() {
+            "install = {}".to_string()
+        } else {
+            lua
+        };
+        let restored: InstallSpec = eval_lua_global(&lua, "install");
+        assert_eq!(spec, restored);
+    }
+
+    #[test]
+    pub fn build_spec_internal_builtin_roundtrip() {
+        let spec = BuildSpecInternal {
+            build_type: Some(BuildType::Builtin),
+            builtin_spec: Some(HashMap::from([(
+                LuaTableKey::StringKey("mymod".into()),
+                ModuleSpecInternal::SourcePath("src/mymod.lua".into()),
+            )])),
+            install: Some(InstallSpec {
+                lua: HashMap::from([(
+                    "extra".parse::<LuaModule>().unwrap(),
+                    "src/extra.lua".into(),
+                )]),
+                bin: HashMap::from([("mytool".into(), "bin/mytool".into())]),
+                ..Default::default()
+            }),
+            copy_directories: Some(vec!["docs".into()]),
+            ..Default::default()
+        };
+        let lua = spec.display_lua().to_string();
+        let restored: BuildSpecInternal = eval_lua_global(&lua, "build");
+        assert_eq!(spec, restored);
+    }
+
+    #[test]
+    pub fn build_spec_internal_make_roundtrip() {
+        let spec = BuildSpecInternal {
+            build_type: Some(BuildType::Make),
+            makefile: Some("GNUmakefile".into()),
+            make_build_target: Some("all".into()),
+            make_install_target: Some("install".into()),
+            make_build_variables: Some(HashMap::from([("CFLAGS".into(), "-O2".into())])),
+            make_install_variables: Some(HashMap::from([("PREFIX".into(), "/usr/local".into())])),
+            variables: Some(HashMap::from([("LUA_LIBDIR".into(), "/usr/lib".into())])),
+            ..Default::default()
+        };
+        let lua = spec.display_lua().to_string();
+        let restored: BuildSpecInternal = eval_lua_global(&lua, "build");
+        assert_eq!(spec, restored);
     }
 }

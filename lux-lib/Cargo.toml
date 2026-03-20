@@ -78,6 +78,7 @@ ignore = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
 lux-workspace-hack = { workspace = true }
+lux-macros = { workspace = true }
 path-slash = { workspace = true }
 pathdiff = { workspace = true }
 serde_json = { workspace = true }

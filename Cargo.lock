@@ -3262,6 +3262,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "lets_find_up",
+ "lux-macros",
  "lux-workspace-hack",
  "md5 0.8.0",
  "nix-nar",
@@ -3325,6 +3326,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lux-macros"
+version = "0.1.0"
+dependencies = [
+ "lux-workspace-hack",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "lux-workspace-hack"
 version = "0.1.0"
 dependencies = [
@@ -3365,9 +3376,7 @@ dependencies = [
  "percent-encoding",
  "predicates",
  "proc-macro2",
- "quote",
  "regex-automata 0.4.13",
- "regex-syntax 0.8.8",
  "reqwest",
  "serde",
  "serde_core",

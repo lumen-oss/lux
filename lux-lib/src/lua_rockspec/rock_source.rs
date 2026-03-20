@@ -1,4 +1,3 @@
-use path_slash::PathBufExt;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
 use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
@@ -165,7 +164,8 @@ impl DisplayAsLuaKV for RockSourceSpec {
 
 /// Used as a helper for Deserialize,
 /// because the Rockspec schema allows invalid rockspecs (╯°□°)╯︵ ┻━┻
-#[derive(Debug, PartialEq, Deserialize, Clone, Default)]
+#[derive(Debug, PartialEq, Deserialize, Clone, Default, lux_macros::DisplayAsLuaKV)]
+#[display_lua(key = "source")]
 pub(crate) struct RockSourceInternal {
     #[serde(default)]
     pub(crate) url: Option<String>,
@@ -192,48 +192,6 @@ impl PartialOverride for RockSourceInternal {
                 _ => None,
             },
         })
-    }
-}
-
-impl DisplayAsLuaKV for RockSourceInternal {
-    fn display_lua(&self) -> DisplayLuaKV {
-        let mut result = Vec::new();
-
-        if let Some(url) = &self.url {
-            result.push(DisplayLuaKV {
-                key: "url".to_string(),
-                value: DisplayLuaValue::String(url.clone()),
-            });
-        }
-        if let Some(file) = &self.file {
-            result.push(DisplayLuaKV {
-                key: "file".to_string(),
-                value: DisplayLuaValue::String(file.to_slash_lossy().to_string()),
-            });
-        }
-        if let Some(dir) = &self.dir {
-            result.push(DisplayLuaKV {
-                key: "dir".to_string(),
-                value: DisplayLuaValue::String(dir.to_slash_lossy().to_string()),
-            });
-        }
-        if let Some(tag) = &self.tag {
-            result.push(DisplayLuaKV {
-                key: "tag".to_string(),
-                value: DisplayLuaValue::String(tag.clone()),
-            });
-        }
-        if let Some(branch) = &self.branch {
-            result.push(DisplayLuaKV {
-                key: "branch".to_string(),
-                value: DisplayLuaValue::String(branch.clone()),
-            });
-        }
-
-        DisplayLuaKV {
-            key: "source".to_string(),
-            value: DisplayLuaValue::Table(result),
-        }
     }
 }
 
@@ -345,6 +303,47 @@ mod tests {
     use assert_fs::TempDir;
 
     use super::*;
+
+    fn eval_lua_global<T: serde::de::DeserializeOwned>(code: &str, key: &'static str) -> T {
+        use ottavino::{Closure, Executor, Fuel, Lua};
+        use ottavino_util::serde::from_value;
+        Lua::core()
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, code.as_bytes())?;
+                let executor = Executor::start(ctx, closure.into(), ());
+                executor.step(ctx, &mut Fuel::with(i32::MAX))?;
+                from_value(ctx.globals().get_value(ctx, key)).map_err(ottavino::Error::from)
+            })
+            .unwrap()
+    }
+
+    #[test]
+    pub fn rock_source_internal_roundtrip() {
+        let source = RockSourceInternal {
+            url: Some("https://github.com/example/repo/archive/v1.0.tar.gz".into()),
+            file: Some("repo-1.0.tar.gz".into()),
+            dir: Some("repo-1.0".into()),
+            tag: Some("v1.0".into()),
+            branch: None,
+        };
+        let lua = source.display_lua().to_string();
+        let restored: RockSourceInternal = eval_lua_global(&lua, "source");
+        assert_eq!(source, restored);
+    }
+
+    #[test]
+    pub fn rock_source_internal_branch_roundtrip() {
+        let source = RockSourceInternal {
+            url: Some("git+https://github.com/example/repo.git".into()),
+            file: None,
+            dir: None,
+            tag: None,
+            branch: Some("main".into()),
+        };
+        let lua = source.display_lua().to_string();
+        let restored: RockSourceInternal = eval_lua_global(&lua, "source");
+        assert_eq!(source, restored);
+    }
 
     #[tokio::test]
     async fn parse_source_url() {
