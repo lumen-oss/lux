@@ -1,6 +1,7 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 use itertools::Itertools;
+use path_slash::PathBufExt as _;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer,
@@ -237,6 +238,66 @@ pub(crate) trait DisplayAsLuaKV {
 
 pub(crate) trait DisplayAsLuaValue {
     fn display_lua_value(&self) -> DisplayLuaValue;
+}
+
+impl DisplayAsLuaValue for String {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::String(self.clone())
+    }
+}
+
+impl DisplayAsLuaValue for bool {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::Boolean(*self)
+    }
+}
+
+impl DisplayAsLuaValue for PathBuf {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::String(self.to_slash_lossy().into_owned())
+    }
+}
+
+impl DisplayAsLuaValue for Vec<String> {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::List(self.iter().cloned().map(DisplayLuaValue::String).collect())
+    }
+}
+
+impl DisplayAsLuaValue for Vec<PathBuf> {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::List(
+            self.iter()
+                .map(|p| DisplayLuaValue::String(p.to_slash_lossy().into_owned()))
+                .collect(),
+        )
+    }
+}
+
+impl DisplayAsLuaValue for HashMap<String, String> {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::Table(
+            self.iter()
+                .map(|(k, v)| DisplayLuaKV {
+                    key: k.clone(),
+                    value: DisplayLuaValue::String(v.clone()),
+                })
+                .collect_vec(),
+        )
+    }
+}
+
+impl DisplayAsLuaValue for HashMap<String, PathBuf> {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::Table(
+            self.iter()
+                .map(|(k, v)| DisplayLuaKV {
+                    key: k.clone(),
+                    value: DisplayLuaValue::String(v.to_slash_lossy().into_owned()),
+                })
+                .collect_vec(),
+        )
+    }
 }
 
 #[cfg(test)]

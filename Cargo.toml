@@ -3,6 +3,7 @@ members = [
   "lux-lib",
   "lux-cli",
   "lux-lua",
+  "lux-macros",
   "lux-workspace-hack",
   "xtask",
   "xtask-lua",
@@ -26,6 +27,7 @@ ignore = "0.4"
 indicatif = "0.18"
 itertools = "0.14"
 lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
+lux-macros = { version = "0.1", path = "./lux-macros" }
 path-absolutize = "3.1"
 path-slash = "0.2"
 pathdiff = "0.2"

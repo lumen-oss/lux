@@ -26,7 +26,14 @@ pub use test_spec::*;
 use thiserror::Error;
 use url::Url;
 
+pub(crate) use lux_macros::DisplayAsLuaKV;
 pub(crate) use serde_util::*;
+
+impl DisplayAsLuaValue for Url {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::String(self.to_string())
+    }
+}
 
 use crate::{
     config::{LuaVersion, LuaVersionUnset},
@@ -562,7 +569,8 @@ impl HasIntegrity for RemoteLuaRockspec {
     }
 }
 
-#[derive(Clone, Deserialize, Debug, PartialEq, Default)]
+#[derive(Clone, Deserialize, Debug, PartialEq, Default, lux_macros::DisplayAsLuaKV)]
+#[display_lua(key = "description")]
 pub struct RockDescription {
     /// A one-line description of the package.
     pub summary: Option<String>,
@@ -589,66 +597,6 @@ where
     let s = Option::<String>::deserialize(deserializer)?;
     s.map(|s| Url::parse(&s).map_err(serde::de::Error::custom))
         .transpose()
-}
-
-impl DisplayAsLuaKV for RockDescription {
-    fn display_lua(&self) -> DisplayLuaKV {
-        let mut description = Vec::new();
-
-        if let Some(summary) = &self.summary {
-            description.push(DisplayLuaKV {
-                key: "summary".to_string(),
-                value: DisplayLuaValue::String(summary.clone()),
-            })
-        }
-        if let Some(detailed) = &self.detailed {
-            description.push(DisplayLuaKV {
-                key: "detailed".to_string(),
-                value: DisplayLuaValue::String(detailed.clone()),
-            })
-        }
-        if let Some(license) = &self.license {
-            description.push(DisplayLuaKV {
-                key: "license".to_string(),
-                value: DisplayLuaValue::String(license.clone()),
-            })
-        }
-        if let Some(homepage) = &self.homepage {
-            description.push(DisplayLuaKV {
-                key: "homepage".to_string(),
-                value: DisplayLuaValue::String(homepage.to_string()),
-            })
-        }
-        if let Some(issues_url) = &self.issues_url {
-            description.push(DisplayLuaKV {
-                key: "issues_url".to_string(),
-                value: DisplayLuaValue::String(issues_url.clone()),
-            })
-        }
-        if let Some(maintainer) = &self.maintainer {
-            description.push(DisplayLuaKV {
-                key: "maintainer".to_string(),
-                value: DisplayLuaValue::String(maintainer.clone()),
-            })
-        }
-        if !self.labels.is_empty() {
-            description.push(DisplayLuaKV {
-                key: "labels".to_string(),
-                value: DisplayLuaValue::List(
-                    self.labels
-                        .iter()
-                        .cloned()
-                        .map(DisplayLuaValue::String)
-                        .collect(),
-                ),
-            })
-        }
-
-        DisplayLuaKV {
-            key: "description".to_string(),
-            value: DisplayLuaValue::Table(description),
-        }
-    }
 }
 
 #[derive(Error, Debug)]
@@ -1765,5 +1713,48 @@ mod tests {
         "#
         .to_string();
         RemoteLuaRockspec::new(&rockspec_content).unwrap();
+    }
+
+    fn eval_lua_global<T: serde::de::DeserializeOwned>(code: &str, key: &'static str) -> T {
+        use ottavino::{Closure, Executor, Fuel, Lua};
+        use ottavino_util::serde::from_value;
+        Lua::core()
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, code.as_bytes())?;
+                let executor = Executor::start(ctx, closure.into(), ());
+                executor.step(ctx, &mut Fuel::with(i32::MAX))?;
+                from_value(ctx.globals().get_value(ctx, key)).map_err(ottavino::Error::from)
+            })
+            .unwrap()
+    }
+
+    #[test]
+    pub fn rock_description_roundtrip() {
+        let desc = RockDescription {
+            summary: Some("A great package".into()),
+            detailed: Some("Detailed description here".into()),
+            license: Some("MIT".into()),
+            homepage: Some("https://example.com".parse().unwrap()),
+            issues_url: Some("https://example.com/issues".into()),
+            maintainer: Some("Some Maintainer <maintainer@example.com>".into()),
+            labels: vec!["neovim".into(), "lua".into()],
+        };
+        let lua = desc.display_lua().to_string();
+        let restored: RockDescription = eval_lua_global(&lua, "description");
+        assert_eq!(desc, restored);
+    }
+
+    #[test]
+    pub fn rock_description_empty_roundtrip() {
+        let desc = RockDescription::default();
+        let lua = desc.display_lua().to_string();
+        // An empty description produces an empty assignment; restore from empty table.
+        let lua = if lua.trim().is_empty() {
+            "description = {}".to_string()
+        } else {
+            lua
+        };
+        let restored: RockDescription = eval_lua_global(&lua, "description");
+        assert_eq!(desc, restored);
     }
 }

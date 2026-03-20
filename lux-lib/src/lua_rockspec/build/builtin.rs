@@ -85,6 +85,26 @@ impl Display for LuaModule {
     }
 }
 
+impl DisplayAsLuaValue for LuaModule {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        DisplayLuaValue::String(self.to_string())
+    }
+}
+
+impl DisplayAsLuaValue for HashMap<LuaModule, PathBuf> {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        use path_slash::PathBufExt as _;
+        DisplayLuaValue::Table(
+            self.iter()
+                .map(|(k, v)| DisplayLuaKV {
+                    key: k.to_string(),
+                    value: DisplayLuaValue::String(v.to_slash_lossy().into_owned()),
+                })
+                .collect_vec(),
+        )
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSpec {
     /// Pathnames of Lua files or C sources, for modules based on a single source file.

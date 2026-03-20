@@ -2,14 +2,13 @@ use std::convert::Infallible;
 
 use serde::Deserialize;
 
-use crate::lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue};
-
 use super::{PartialOverride, PerPlatform, PlatformOverridable};
 
 /// An undocumented part of the rockspec format.
 ///
 /// Specifies additional install options
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, lux_macros::DisplayAsLuaKV)]
+#[display_lua(key = "deploy")]
 pub struct DeploySpec {
     /// Whether to wrap installed Lua bin scripts to be executed with
     /// the detected or configured Lua installation.
@@ -48,18 +47,46 @@ impl PlatformOverridable for DeploySpec {
     }
 }
 
-impl DisplayAsLuaKV for DeploySpec {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
-            key: "deploy".to_string(),
-            value: DisplayLuaValue::Table(vec![DisplayLuaKV {
-                key: "wrap_bin_scripts".to_string(),
-                value: DisplayLuaValue::Boolean(self.wrap_bin_scripts),
-            }]),
-        }
-    }
-}
-
 fn default_wrap_bin_scripts() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::lua_rockspec::DisplayAsLuaKV;
+
+    use super::*;
+
+    fn eval_lua_global<T: serde::de::DeserializeOwned>(code: &str, key: &'static str) -> T {
+        use ottavino::{Closure, Executor, Fuel, Lua};
+        use ottavino_util::serde::from_value;
+        Lua::core()
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, code.as_bytes())?;
+                let executor = Executor::start(ctx, closure.into(), ());
+                executor.step(ctx, &mut Fuel::with(i32::MAX))?;
+                from_value(ctx.globals().get_value(ctx, key)).map_err(ottavino::Error::from)
+            })
+            .unwrap()
+    }
+
+    #[test]
+    pub fn deploy_spec_roundtrip_true() {
+        let spec = DeploySpec {
+            wrap_bin_scripts: true,
+        };
+        let lua = spec.display_lua().to_string();
+        let restored: DeploySpec = eval_lua_global(&lua, "deploy");
+        assert_eq!(spec, restored);
+    }
+
+    #[test]
+    pub fn deploy_spec_roundtrip_false() {
+        let spec = DeploySpec {
+            wrap_bin_scripts: false,
+        };
+        let lua = spec.display_lua().to_string();
+        let restored: DeploySpec = eval_lua_global(&lua, "deploy");
+        assert_eq!(spec, restored);
+    }
 }
