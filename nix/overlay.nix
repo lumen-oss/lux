@@ -44,7 +44,7 @@
       # perl is needed to build openssl-sys
       nativeBuildInputs = commonArgs.nativeBuildInputs ++ [final.perl];
 
-      buildInputs = commonArgs.buildInputs ++ [final.lua5_4];
+      buildInputs = commonArgs.buildInputs;
     });
 
   individualCrateArgs =
