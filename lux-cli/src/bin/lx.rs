@@ -7,7 +7,7 @@ use lux_cli::{
     debug::Debug,
     doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
     install_rockspec, lint, list, outdated, pack, path, pin, project, purge, remove, run, run_lua,
-    search, shell, test, uninstall, unpack, update,
+    search, shell, sync, test, uninstall, unpack, update,
     upload::{self},
     vendor, which, Cli, Commands,
 };
@@ -108,6 +108,7 @@ async fn main() -> Result<()> {
         Commands::Run(run_args) => run::run(run_args, config).await?,
         Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data)?,
         Commands::Shell(data) => shell::shell(data, config).await?,
+        Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
     }
     Ok(())
 }

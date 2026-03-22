@@ -27,6 +27,7 @@ use run::Run;
 use run_lua::RunLua;
 use search::Search;
 use shell::Shell;
+use sync::SyncProject;
 use test::Test;
 use uninstall::Uninstall;
 use update::Update;
@@ -64,6 +65,7 @@ pub mod run;
 pub mod run_lua;
 pub mod search;
 pub mod shell;
+pub mod sync;
 pub mod test;
 pub mod uninstall;
 pub mod unpack;
@@ -326,6 +328,9 @@ pub enum Commands {
     Which(Which),
     /// Spawns an interactive shell with PATH, LUA_PATH, LUA_CPATH and LUA_INIT set.
     Shell(Shell),
+    /// Synchronize the project tree with the current lux.toml,{n}
+    /// ensuring all packages are installed correctly.
+    Sync(SyncProject),
 }
 
 /// Parse a key=value pair.

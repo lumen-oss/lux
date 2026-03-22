@@ -107,6 +107,15 @@ pub struct SyncReport {
     pub(crate) removed: Vec<LocalPackage>,
 }
 
+impl SyncReport {
+    pub fn added(&self) -> &[LocalPackage] {
+        &self.added
+    }
+    pub fn removed(&self) -> &[LocalPackage] {
+        &self.removed
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum SyncError {
     #[error(transparent)]
