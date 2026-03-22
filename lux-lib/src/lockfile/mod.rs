@@ -23,6 +23,7 @@ use crate::package::{
 use crate::remote_package_source::RemotePackageSource;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
+use crate::tree::Tree;
 
 const LOCKFILE_VERSION_STR: &str = "1.0.0";
 
@@ -647,11 +648,20 @@ impl LocalPackageLock {
 
     /// Synchronise a list of packages with this lock,
     /// producing a report of packages to add and packages to remove,
-    /// based on the version constraint.
+    /// based on the version constraint and the given [`SyncStrategy`].
     ///
     /// NOTE: The reason we produce a report and don't add/remove packages
     /// here is because packages need to be installed in order to be added.
-    pub(crate) fn package_sync_spec(&self, packages: &[LuaDependencySpec]) -> PackageSyncSpec {
+    pub(crate) fn package_sync_spec(
+        &self,
+        packages: &[LuaDependencySpec],
+        strategy: &SyncStrategy<'_>,
+    ) -> PackageSyncSpec {
+        let pkg_dir_exists = |pkg: &LocalPackage| match strategy {
+            SyncStrategy::LockfileOnly => true,
+            SyncStrategy::EnsureInstalled(tree) => tree.root_for(pkg).is_dir(),
+        };
+
         let entrypoints_to_keep: HashSet<LocalPackage> = self
             .entrypoints
             .iter()
@@ -673,7 +683,11 @@ impl LocalPackageLock {
 
         let to_add = packages
             .iter()
-            .filter(|pkg| self.has_rock_with_equal_constraint(pkg).is_none())
+            .filter(|pkg| {
+                self.has_rock_with_equal_constraint(pkg)
+                    .map(|local_pkg| !pkg_dir_exists(&local_pkg))
+                    .unwrap_or(true)
+            })
             .cloned()
             .collect_vec();
 
@@ -777,6 +791,15 @@ pub struct FlushLockfileError {
 pub(crate) struct PackageSyncSpec {
     pub to_add: Vec<LuaDependencySpec>,
     pub to_remove: Vec<LocalPackage>,
+}
+
+/// Controls how `package_sync_spec` determines whether a package exists.
+pub(crate) enum SyncStrategy<'a> {
+    /// Only check the lockfile for constraint matches.
+    LockfileOnly,
+    /// In addition to checking lockfile constraints, verify that each
+    /// package's installation directory exists in the given tree.
+    EnsureInstalled(&'a Tree),
 }
 
 impl<P: LockfilePermissions> Lockfile<P> {
@@ -938,11 +961,18 @@ impl<P: LockfilePermissions> ProjectLockfile<P> {
         &self,
         packages: &[LuaDependencySpec],
         deps: &LocalPackageLockType,
+        strategy: &SyncStrategy<'_>,
     ) -> PackageSyncSpec {
         match deps {
-            LocalPackageLockType::Regular => self.dependencies.package_sync_spec(packages),
-            LocalPackageLockType::Test => self.test_dependencies.package_sync_spec(packages),
-            LocalPackageLockType::Build => self.build_dependencies.package_sync_spec(packages),
+            LocalPackageLockType::Regular => {
+                self.dependencies.package_sync_spec(packages, strategy)
+            }
+            LocalPackageLockType::Test => {
+                self.test_dependencies.package_sync_spec(packages, strategy)
+            }
+            LocalPackageLockType::Build => self
+                .build_dependencies
+                .package_sync_spec(packages, strategy),
         }
     }
 
@@ -1446,7 +1476,9 @@ mod tests {
             PackageReq::parse("nonexistent").unwrap().into(),
         ];
 
-        let sync_spec = lockfile.lock.package_sync_spec(&packages);
+        let sync_spec = lockfile
+            .lock
+            .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
         assert_eq!(sync_spec.to_add.len(), 1);
 
@@ -1488,7 +1520,9 @@ mod tests {
             PackageReq::parse("nonexistent").unwrap().into(),
         ];
 
-        let sync_spec = lockfile.lock.package_sync_spec(&packages);
+        let sync_spec = lockfile
+            .lock
+            .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
         assert_eq!(sync_spec.to_add.len(), 1);
 
@@ -1533,7 +1567,9 @@ mod tests {
     fn test_sync_spec_empty() {
         let lockfile = get_test_lockfile();
         let packages = vec![];
-        let sync_spec = lockfile.lock.package_sync_spec(&packages);
+        let sync_spec = lockfile
+            .lock
+            .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
         // Should remove all packages
         assert!(sync_spec.to_add.is_empty());
@@ -1544,7 +1580,9 @@ mod tests {
     fn test_sync_spec_different_constraints() {
         let lockfile = get_test_lockfile();
         let packages = vec![PackageReq::parse("nvim-nio>=2.0.0").unwrap().into()];
-        let sync_spec = lockfile.lock.package_sync_spec(&packages);
+        let sync_spec = lockfile
+            .lock
+            .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
         let expected: PackageVersionReq = ">=2.0.0".parse().unwrap();
         assert!(sync_spec
@@ -1556,5 +1594,51 @@ mod tests {
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "nvim-nio"));
+    }
+
+    #[test]
+    fn test_sync_spec_ensure_installed() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.copy_from(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree"),
+            &["**"],
+        )
+        .unwrap();
+
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(temp.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config.user_tree(Lua51).unwrap();
+        let lockfile = tree.lockfile().unwrap();
+
+        let packages: Vec<LuaDependencySpec> = vec![
+            PackageReq::parse("neorg@8.8.1-1").unwrap().into(),
+            // This package isn't installed in the tree
+            PackageReq::parse("lua-cjson@2.1.0").unwrap().into(),
+            // And neither is this
+            PackageReq::parse("nonexistent").unwrap().into(),
+        ];
+
+        // Since lua-cjson is not present in the tree, it should get put into `to_add`
+        let sync_spec = lockfile
+            .lock
+            .package_sync_spec(&packages, &SyncStrategy::EnsureInstalled(&tree));
+
+        assert!(!sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "neorg"));
+
+        assert!(sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "lua-cjson"));
+
+        assert!(sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "nonexistent"));
     }
 }

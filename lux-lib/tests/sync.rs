@@ -17,6 +17,7 @@ async fn sync_test_dependencies_empty_project() {
 
     Sync::new(&project, &config)
         .validate_integrity(cfg!(not(target_os = "windows")))
+        .fast(true)
         .sync_test_dependencies()
         .await
         .unwrap();

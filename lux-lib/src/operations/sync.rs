@@ -3,7 +3,10 @@ use std::{io, sync::Arc};
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    lockfile::{FlushLockfileError, LocalPackage, LocalPackageLockType, LockfileIntegrityError},
+    lockfile::{
+        FlushLockfileError, LocalPackage, LocalPackageLockType, LockfileIntegrityError,
+        SyncStrategy,
+    },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError},
     package::{PackageName, PackageReq},
@@ -35,6 +38,9 @@ pub struct Sync<'a> {
     progress: Option<Arc<Progress<MultiProgress>>>,
     /// Whether to validate the integrity of installed packages.
     validate_integrity: Option<bool>,
+    /// When `true`, skip filesystem existence checks and rely on the install tree's lockfile
+    /// alone.
+    fast: Option<bool>,
 }
 
 impl<State> SyncBuilder<'_, State>
@@ -185,7 +191,12 @@ async fn do_sync(
     .chain(args.extra_packages.into_iter().map_into())
     .collect_vec();
 
-    let package_sync_spec = project_lockfile.package_sync_spec(&packages, lock_type);
+    let strategy = if args.fast.unwrap_or(false) {
+        SyncStrategy::LockfileOnly
+    } else {
+        SyncStrategy::EnsureInstalled(&tree)
+    };
+    let package_sync_spec = project_lockfile.package_sync_spec(&packages, lock_type, &strategy);
 
     package_sync_spec
         .to_remove
