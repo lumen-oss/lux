@@ -7,6 +7,8 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
 use itertools::Itertools;
 use mlua::prelude::*;
+use serde::{Deserialize, Serialize};
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use url::Url;
 
 use lux_lib::{
@@ -26,6 +28,7 @@ use lux_lib::{
         RustMluaBuildSpec, TestSpec, TreesitterParserBuildSpec,
     },
     lua_version::LuaVersion,
+    operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
     package::{PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, SpecRev},
     progress::{HasProgress, Progress, ProgressBar},
     project::{
@@ -37,7 +40,7 @@ use lux_lib::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         Rockspec,
     },
-    tree::{RockLayout, RockMatches, Tree},
+    tree::{EntryType, RockLayout, RockMatches, Tree},
 };
 
 macro_rules! impl_from_lua_userdata {
@@ -803,17 +806,6 @@ impl LuaUserData for RockDescriptionLua {
         methods.add_method("issues_url", |_, this, ()| Ok(this.0.issues_url.clone()));
         methods.add_method("maintainer", |_, this, ()| Ok(this.0.maintainer.clone()));
         methods.add_method("labels", |_, this, ()| Ok(this.0.labels.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BuildBehaviourLua(pub BuildBehaviour);
-
-impl FromLua for BuildBehaviourLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        Ok(BuildBehaviourLua(BuildBehaviour::from(bool::from_lua(
-            value, lua,
-        )?)))
     }
 }
 
@@ -1623,3 +1615,130 @@ fn map_dependency_type_names(deps: DependencyType<PackageNameLua>) -> Dependency
         DependencyType::External(m) => DependencyType::External(m),
     }
 }
+
+#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
+#[serde(rename_all = "snake_case")]
+enum EntryTypeLua {
+    #[default]
+    Entrypoint,
+    DependencyOnly,
+}
+
+impl Into<EntryType> for EntryTypeLua {
+    fn into(self) -> EntryType {
+        match self {
+            EntryTypeLua::Entrypoint => EntryType::Entrypoint,
+            EntryTypeLua::DependencyOnly => EntryType::DependencyOnly,
+        }
+    }
+}
+
+#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
+#[serde(rename_all = "snake_case")]
+enum BuildBehaviourLua {
+    #[default]
+    NoForce,
+    Force,
+}
+
+impl Into<BuildBehaviour> for BuildBehaviourLua {
+    fn into(self) -> BuildBehaviour {
+        match self {
+            Self::NoForce => BuildBehaviour::NoForce,
+            Self::Force => BuildBehaviour::Force,
+        }
+    }
+}
+
+/// Intermediate struct for deserialization. Takes on two variants:
+/// ```lua
+/// "say >= 1.3"
+///
+/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = false }
+/// ```
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PackageInstallSpecInput {
+    Simple(String),
+    Full {
+        package: String,
+        #[serde(default)]
+        entry_type: EntryTypeLua,
+        #[serde(default)]
+        pin: bool,
+        #[serde(default)]
+        opt: bool,
+        #[serde(default)]
+        build_behaviour: BuildBehaviourLua,
+    },
+}
+
+pub struct PackageInstallSpecLua(pub PackageInstallSpec);
+
+impl FromLua for PackageInstallSpecLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let input: PackageInstallSpecInput = lua.from_value(value)?;
+        let (package_str, entry_type, pin, opt, build_behaviour) = match input {
+            PackageInstallSpecInput::Simple(s) => (
+                s,
+                EntryType::Entrypoint,
+                false,
+                false,
+                BuildBehaviourLua::default(),
+            ),
+            PackageInstallSpecInput::Full {
+                package,
+                entry_type,
+                pin,
+                opt,
+                build_behaviour,
+            } => (package, entry_type.into(), pin, opt, build_behaviour),
+        };
+        let req = PackageReq::parse(&package_str).into_lua_err()?;
+        let spec = PackageInstallSpec::new(req, entry_type)
+            .pin(PinnedState::from(pin))
+            .opt(OptState::from(opt))
+            .build_behaviour(build_behaviour.into())
+            .build();
+        Ok(PackageInstallSpecLua(spec))
+    }
+}
+
+pub struct SyncReportLua(pub SyncReport);
+
+impl IntoLua for SyncReportLua {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        let table = lua.create_table()?;
+        table.set(
+            "added",
+            self.0
+                .added()
+                .iter()
+                .cloned()
+                .map(LocalPackageLua)
+                .collect::<Vec<_>>(),
+        )?;
+        table.set(
+            "removed",
+            self.0
+                .removed()
+                .iter()
+                .cloned()
+                .map(LocalPackageLua)
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(LuaValue::Table(table))
+    }
+}
+
+#[derive(Clone)]
+pub struct DownloadedRockspecLua(pub DownloadedRockspec);
+
+impl LuaUserData for DownloadedRockspecLua {
+    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("rockspec", |_, this, ()| {
+            Ok(RemoteLuaRockspecLua(this.0.rockspec.clone()))
+        });
+    }
+}
+impl_from_lua_userdata!(DownloadedRockspecLua);
