@@ -1,7 +1,6 @@
 use assert_fs::TempDir;
 use lux_lib::{
-    config::{ConfigBuilder, LuaVersion},
-    lua_installation::detect_installed_lua_version,
+    config::ConfigBuilder, lua_installation::detect_installed_lua_version, lua_version::LuaVersion,
 };
 use lux_lua::lua_impls::TreeLua;
 use mlua::{IntoLua, Lua};
