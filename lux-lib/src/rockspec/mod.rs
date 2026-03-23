@@ -11,11 +11,12 @@ use serde::{Deserialize, Serialize};
 pub mod lua_dependency;
 
 use crate::{
-    config::{Config, LuaVersion},
+    config::Config,
     lua_rockspec::{
         BuildSpec, DeploySpec, ExternalDependencySpec, LuaVersionError, PerPlatform,
         PlatformSupport, RemoteRockSource, RockDescription, RockspecFormat, TestSpec,
     },
+    lua_version::LuaVersion,
     package::{PackageName, PackageVersion, PackageVersionReq},
 };
 

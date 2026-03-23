@@ -1,10 +1,7 @@
 use clap::Args;
 use eyre::Result;
 use itertools::Itertools as _;
-use lux_lib::{
-    config::{Config, LuaVersion},
-    lockfile::PinnedState,
-};
+use lux_lib::{config::Config, lockfile::PinnedState, lua_version::LuaVersion};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 #[derive(Args)]

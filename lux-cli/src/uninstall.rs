@@ -4,8 +4,9 @@ use inquire::Confirm;
 use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
-    config::{Config, LuaVersion},
+    config::Config,
     lockfile::LocalPackageId,
+    lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageReq,
     progress::MultiProgress,

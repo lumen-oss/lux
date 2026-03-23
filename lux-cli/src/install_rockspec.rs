@@ -144,8 +144,8 @@ mod tests {
     };
 
     use lux_lib::{
-        config::{ConfigBuilder, LuaVersion},
-        lua_installation::detect_installed_lua_version,
+        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        lua_version::LuaVersion,
     };
 
     #[tokio::test]

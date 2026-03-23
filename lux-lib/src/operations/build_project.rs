@@ -213,9 +213,8 @@ mod tests {
     use super::*;
 
     use crate::{
-        config::{ConfigBuilder, LuaVersion},
-        lua_installation::detect_installed_lua_version,
-        project::Project,
+        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        lua_version::LuaVersion, project::Project,
     };
     use assert_fs::prelude::PathCopy;
     use std::path::PathBuf;

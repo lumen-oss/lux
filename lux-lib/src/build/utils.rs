@@ -771,9 +771,8 @@ mod tests {
     use tokio::process::Command;
 
     use crate::{
-        config::{ConfigBuilder, LuaVersion},
-        lua_installation::detect_installed_lua_version,
-        progress::MultiProgress,
+        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        lua_version::LuaVersion, progress::MultiProgress,
     };
 
     use super::*;

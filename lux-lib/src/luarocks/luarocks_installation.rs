@@ -11,8 +11,9 @@ use tokio::process::Command;
 
 use crate::{
     build::{self, BuildError},
-    config::{Config, LuaVersion, LuaVersionUnset},
+    config::Config,
     lua_installation::LuaInstallation,
+    lua_version::{LuaVersion, LuaVersionUnset},
     operations::UnpackError,
     path::{Paths, PathsError},
     progress::{Progress, ProgressBar},

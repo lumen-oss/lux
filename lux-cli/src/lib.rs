@@ -17,7 +17,7 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::config::LuaVersion;
+use lux_lib::lua_version::LuaVersion;
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;

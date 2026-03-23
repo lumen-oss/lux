@@ -279,8 +279,8 @@ mod tests {
     use std::path::Path;
 
     use crate::{
-        config::{ConfigBuilder, LuaVersion},
-        lua_installation::detect_installed_lua_version,
+        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        lua_version::LuaVersion,
     };
 
     use super::*;

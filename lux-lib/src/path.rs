@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     build::utils::c_dylib_extension,
-    config::LuaVersion,
+    lua_version::LuaVersion,
     tree::{Tree, TreeError},
 };
 

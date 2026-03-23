@@ -2,8 +2,9 @@ use std::io;
 use tokio::process::Command;
 
 use crate::{
-    config::{Config, LuaVersion, LuaVersionUnset},
+    config::Config,
     lua_rockspec::LuaVersionError,
+    lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildProject, BuildProjectError, Install},
     package::{PackageReq, PackageVersionReqError},
     path::{Paths, PathsError},

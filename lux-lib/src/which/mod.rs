@@ -5,8 +5,9 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use crate::{
-    config::{Config, LuaVersion, LuaVersionUnset},
+    config::Config,
     lua_rockspec::LuaModule,
+    lua_version::{LuaVersion, LuaVersionUnset},
     package::PackageReq,
     tree::TreeError,
 };
@@ -107,7 +108,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::config::{ConfigBuilder, LuaVersion};
+    use crate::config::ConfigBuilder;
     use assert_fs::prelude::PathCopy;
     use std::{path::PathBuf, str::FromStr};
 

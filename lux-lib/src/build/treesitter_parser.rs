@@ -1,6 +1,6 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
-use crate::config::LuaVersionUnset;
 use crate::lua_rockspec::TreesitterParserBuildSpec;
+use crate::lua_version::LuaVersionUnset;
 use std::io;
 use std::num::ParseIntError;
 use std::path::PathBuf;

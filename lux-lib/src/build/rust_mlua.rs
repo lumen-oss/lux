@@ -1,8 +1,8 @@
 use super::utils::c_dylib_extension;
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
-use crate::config::LuaVersionUnset;
+use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::progress::{Progress, ProgressBar};
-use crate::{config::LuaVersion, lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
+use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -12,8 +12,9 @@ use lux_cli::{
     vendor, which, Cli, Commands,
 };
 use lux_lib::{
-    config::{tree::RockLayoutConfig, ConfigBuilder, LuaVersion},
+    config::{tree::RockLayoutConfig, ConfigBuilder},
     lockfile::PinnedState::{Pinned, Unpinned},
+    lua_version::LuaVersion,
 };
 
 #[tokio::main(flavor = "multi_thread")]

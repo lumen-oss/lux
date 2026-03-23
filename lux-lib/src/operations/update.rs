@@ -5,11 +5,12 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use crate::{
-    config::{Config, LuaVersion, LuaVersionUnset},
+    config::Config,
     lockfile::{
         LocalPackage, LocalPackageLockType, Lockfile, PinnedState, ProjectLockfile, ReadOnly,
         ReadWrite,
     },
+    lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageReq, RockConstraintUnsatisfied},
     progress::{MultiProgress, Progress},
     project::{Project, ProjectError, ProjectTreeError},

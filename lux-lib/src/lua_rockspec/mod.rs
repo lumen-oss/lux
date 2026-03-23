@@ -36,8 +36,8 @@ impl DisplayAsLuaValue for Url {
 }
 
 use crate::{
-    config::{LuaVersion, LuaVersionUnset},
     hash::HasIntegrity,
+    lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageName, PackageSpec, PackageVersion, PackageVersionReq},
     project::{project_toml::ProjectTomlError, ProjectRoot},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},

@@ -2,8 +2,9 @@ use std::{str::FromStr, sync::Arc};
 
 use eyre::{Context, Result};
 use lux_lib::{
-    config::{Config, LuaVersion},
+    config::Config,
     git::shorthand::RemoteGitUrlShorthand,
+    lua_version::LuaVersion,
     operations::Sync,
     package::PackageReq,
     progress::{MultiProgress, Progress},

@@ -7,8 +7,9 @@ use clap::Args;
 use eyre::{eyre, Result};
 use itertools::Itertools;
 use lux_lib::{
-    config::{Config, LuaVersion},
+    config::Config,
     lua_installation::{LuaBinary, LuaInstallation},
+    lua_version::LuaVersion,
     operations,
     progress::MultiProgress,
     project::Project,

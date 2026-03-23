@@ -1,10 +1,10 @@
 #[cfg(not(target_env = "msvc"))]
-use lux_lib::{config::ConfigBuilder, operations::Exec};
+use lux_lib::{config::ConfigBuilder, lua_version::LuaVersion, operations::Exec};
 
 #[cfg(not(target_env = "msvc"))]
 #[tokio::test]
 async fn run_nlua() {
-    use lux_lib::{config::LuaVersion, lua_installation::detect_installed_lua_version};
+    use lux_lib::lua_installation::detect_installed_lua_version;
 
     let dir = assert_fs::TempDir::new().unwrap();
 

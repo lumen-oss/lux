@@ -7,8 +7,10 @@ use thiserror::Error;
 
 use serde::{Deserialize, Deserializer};
 
+use crate::lua_version::LuaVersion;
+
 use crate::{
-    config::{Config, ConfigBuilder, ConfigError, LuaVersion},
+    config::{Config, ConfigBuilder, ConfigError},
     lua_rockspec::per_platform_from_intermediate,
     package::PackageReq,
     project::{project_toml::LocalProjectTomlValidationError, Project},

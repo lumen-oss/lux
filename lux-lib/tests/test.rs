@@ -2,10 +2,8 @@ use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
 use lux_lib::{
-    config::{ConfigBuilder, LuaVersion},
-    lua_installation::detect_installed_lua_version,
-    operations::Test,
-    project::Project,
+    config::ConfigBuilder, lua_installation::detect_installed_lua_version, lua_version::LuaVersion,
+    operations::Test, project::Project,
 };
 use tokio::fs::remove_dir_all;
 
