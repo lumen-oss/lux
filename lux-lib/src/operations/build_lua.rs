@@ -7,8 +7,9 @@ use std::{
 
 use crate::{
     build::utils,
-    config::{Config, LuaVersion},
+    config::Config,
     hash::HasIntegrity,
+    lua_version::LuaVersion,
     operations::{self, UnpackError},
     progress::{Progress, ProgressBar},
 };

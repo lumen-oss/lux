@@ -4,12 +4,8 @@ use clap::Args;
 use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{
-    config::{Config, LuaVersion},
-    lockfile::LocalPackage,
-    package::PackageVersion,
-    progress::MultiProgress,
-    project::Project,
-    remote_package_db::RemotePackageDB,
+    config::Config, lockfile::LocalPackage, lua_version::LuaVersion, package::PackageVersion,
+    progress::MultiProgress, project::Project, remote_package_db::RemotePackageDB,
 };
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 

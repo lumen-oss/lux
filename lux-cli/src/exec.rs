@@ -2,12 +2,7 @@ use std::env;
 
 use clap::Args;
 use eyre::Result;
-use lux_lib::{
-    config::{Config, LuaVersion},
-    operations,
-    path::Paths,
-    project::Project,
-};
+use lux_lib::{config::Config, lua_version::LuaVersion, operations, path::Paths, project::Project};
 
 #[derive(Args)]
 pub struct Exec {

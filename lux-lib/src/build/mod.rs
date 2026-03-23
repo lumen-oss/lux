@@ -529,8 +529,9 @@ mod tests {
     };
 
     use crate::{
-        config::{ConfigBuilder, LuaVersion},
+        config::ConfigBuilder,
         lua_installation::{detect_installed_lua_version, LuaInstallation},
+        lua_version::LuaVersion,
         progress::MultiProgress,
         project::Project,
         tree::RockLayout,

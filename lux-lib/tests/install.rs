@@ -1,10 +1,11 @@
 use assert_fs::TempDir;
 use itertools::Itertools;
 use lux_lib::{
-    config::{ConfigBuilder, LuaVersion},
+    config::ConfigBuilder,
     git::GitSource,
     lua_installation::detect_installed_lua_version,
     lua_rockspec::RockSourceSpec,
+    lua_version::LuaVersion,
     operations::{Exec, Install, PackageInstallSpec},
     tree::EntryType,
 };

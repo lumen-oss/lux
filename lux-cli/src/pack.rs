@@ -5,9 +5,10 @@ use clap::Args;
 use eyre::{eyre, OptionExt, Result};
 use lux_lib::{
     build::{Build, BuildBehaviour},
-    config::{Config, LuaVersion},
+    config::Config,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
+    lua_version::LuaVersion,
     operations::{self, Install, PackageInstallSpec},
     package::PackageReq,
     progress::MultiProgress,

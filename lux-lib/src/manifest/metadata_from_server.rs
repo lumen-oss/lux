@@ -10,7 +10,8 @@ use tokio::{fs, io};
 use url::Url;
 use zip::ZipArchive;
 
-use crate::config::{Config, LuaVersion, LuaVersionUnset};
+use crate::config::Config;
+use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::progress::{Progress, ProgressBar};
 
 #[derive(Error, Debug)]
@@ -233,7 +234,7 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
-            .lua_version(Some(crate::config::LuaVersion::LuaJIT))
+            .lua_version(Some(LuaVersion::LuaJIT))
             .no_progress(Some(true))
             .build()
             .unwrap();
@@ -255,7 +256,7 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
-            .lua_version(Some(crate::config::LuaVersion::Lua51))
+            .lua_version(Some(LuaVersion::Lua51))
             .no_progress(Some(true))
             .build()
             .unwrap();
@@ -284,7 +285,7 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir.to_path_buf()))
-            .lua_version(Some(crate::config::LuaVersion::Lua51))
+            .lua_version(Some(LuaVersion::Lua51))
             .no_progress(Some(true))
             .build()
             .unwrap();

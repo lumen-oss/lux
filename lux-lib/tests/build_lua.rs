@@ -1,9 +1,6 @@
 use assert_fs::{assert::PathAssert, prelude::PathChild};
-use lux_lib::{
-    config::{ConfigBuilder, LuaVersion},
-    operations::BuildLua,
-    progress::MultiProgress,
-};
+use lux_lib::lua_version::LuaVersion;
+use lux_lib::{config::ConfigBuilder, operations::BuildLua, progress::MultiProgress};
 use predicates::prelude::predicate;
 
 #[tokio::test]

@@ -11,6 +11,7 @@ use crate::lua_rockspec::LocalRockSource;
 use crate::lua_rockspec::LuaRockspecError;
 use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::lua_rockspec::RockSourceSpec;
+use crate::lua_version::LuaVersion;
 use crate::operations::RunCommand;
 use crate::package::PackageNameList;
 use crate::package::SpecRev;
@@ -26,7 +27,7 @@ use ssri::Integrity;
 use thiserror::Error;
 
 use crate::{
-    config::{Config, LuaVersion},
+    config::Config,
     lua_rockspec::{
         BuildSpec, BuildSpecInternal, BuildSpecInternalError, DisplayAsLuaKV, ExternalDependencies,
         ExternalDependencySpec, LuaVersionError, PartialLuaRockspec, PerPlatform,

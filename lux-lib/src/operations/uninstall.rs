@@ -1,8 +1,8 @@
 use std::io;
 use std::sync::Arc;
 
-use crate::config::{LuaVersion, LuaVersionUnset};
 use crate::lockfile::{FlushLockfileError, LocalPackage, LocalPackageId};
+use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::progress::{MultiProgress, Progress, ProgressBar};
 use crate::tree::TreeError;
 use crate::{config::Config, tree::Tree};

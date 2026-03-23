@@ -3,9 +3,10 @@ use eyre::{eyre, Context, OptionExt, Result};
 use inquire::{Confirm, Select};
 use itertools::Itertools;
 use lux_lib::{
-    config::{Config, LuaVersion},
+    config::Config,
     lockfile::LocalPackage,
     lua_rockspec::RemoteLuaRockspec,
+    lua_version::LuaVersion,
     package::PackageReq,
     rockspec::Rockspec,
     tree::{RockMatches, Tree},

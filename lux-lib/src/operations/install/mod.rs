@@ -2,13 +2,14 @@ use std::{collections::HashMap, io, sync::Arc};
 
 use crate::{
     build::{Build, BuildBehaviour, BuildError, RemotePackageSourceSpec, SrcRockSource},
-    config::{Config, LuaVersionUnset},
+    config::Config,
     lockfile::{
         FlushLockfileError, LocalPackage, LocalPackageId, LockConstraint, Lockfile, OptState,
         PinnedState, ReadWrite,
     },
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_rockspec::BuildBackendSpec,
+    lua_version::LuaVersionUnset,
     luarocks::{
         install_binary_rock::{BinaryRockInstall, InstallBinaryRockError},
         luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},

@@ -4,10 +4,10 @@ use assert_fs::assert::PathAssert;
 use assert_fs::prelude::{PathChild, PathCopy};
 use assert_fs::TempDir;
 use lux_lib::lua_installation::detect_installed_lua_version;
+use lux_lib::lua_version::LuaVersion;
 use lux_lib::progress::{MultiProgress, ProgressBar};
 use lux_lib::{
-    config::{ConfigBuilder, LuaVersion},
-    lua_installation::LuaInstallation,
+    config::ConfigBuilder, lua_installation::LuaInstallation,
     luarocks::luarocks_installation::LuaRocksInstallation,
 };
 use predicates::prelude::predicate;

@@ -1,7 +1,8 @@
 use crate::{
     build::utils::format_path,
-    config::{tree::RockLayoutConfig, Config, LuaVersion},
+    config::{tree::RockLayoutConfig, Config},
     lockfile::{LocalPackage, LocalPackageId, Lockfile, LockfileError, OptState, ReadOnly},
+    lua_version::LuaVersion,
     package::PackageReq,
     variables::{GetVariableError, HasVariables},
 };
@@ -374,8 +375,9 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::{
-        config::{ConfigBuilder, LuaVersion},
+        config::ConfigBuilder,
         lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
+        lua_version::LuaVersion,
         package::{PackageName, PackageSpec, PackageVersion},
         remote_package_source::RemotePackageSource,
         rockspec::RockBinaries,

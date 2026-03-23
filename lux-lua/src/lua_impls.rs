@@ -11,7 +11,7 @@ use url::Url;
 
 use lux_lib::{
     build::BuildBehaviour,
-    config::{tree::RockLayoutConfig, Config, ConfigBuilder, LuaVersion},
+    config::{tree::RockLayoutConfig, Config, ConfigBuilder},
     git::GitSource,
     lockfile::{
         LocalPackage, LocalPackageHashes, LocalPackageId, LockConstraint, Lockfile, LockfileGuard,
@@ -25,6 +25,7 @@ use lux_lib::{
         RemoteLuaRockspec, RemoteRockSource, RockDescription, RockSourceSpec, RockspecFormat,
         RustMluaBuildSpec, TestSpec, TreesitterParserBuildSpec,
     },
+    lua_version::LuaVersion,
     package::{PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, SpecRev},
     progress::{HasProgress, Progress, ProgressBar},
     project::{

@@ -2,11 +2,12 @@ use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
+use lux_lib::lua_version::LuaVersion;
 use lux_lib::progress::MultiProgress;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::{
     build::{Build, BuildBehaviour::Force},
-    config::{ConfigBuilder, LuaVersion},
+    config::ConfigBuilder,
     lua_installation::{detect_installed_lua_version, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
     progress::Progress,

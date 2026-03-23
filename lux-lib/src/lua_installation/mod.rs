@@ -13,18 +13,15 @@ use crate::build::external_dependency::to_lib_name;
 use crate::build::external_dependency::ExternalDependencyInfo;
 use crate::build::utils::{c_lib_extension, format_path};
 use crate::config::external_deps::ExternalDependencySearchConfig;
-use crate::config::LuaVersionUnset;
 use crate::lua_rockspec::ExternalDependencySpec;
+use crate::lua_version::LuaVersion;
+use crate::lua_version::LuaVersionUnset;
 use crate::operations;
 use crate::operations::BuildLuaError;
 use crate::progress::Progress;
 use crate::progress::ProgressBar;
 use crate::variables::GetVariableError;
-use crate::{
-    config::{Config, LuaVersion},
-    package::PackageVersion,
-    variables::HasVariables,
-};
+use crate::{config::Config, package::PackageVersion, variables::HasVariables};
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
 
@@ -83,7 +80,7 @@ pub enum DetectLuaVersionError {
     #[error(transparent)]
     PackageVersionParse(#[from] crate::package::PackageVersionParseError),
     #[error(transparent)]
-    LuaVersion(#[from] crate::config::LuaVersionError),
+    LuaVersion(#[from] crate::lua_version::LuaVersionError),
 }
 
 #[derive(Error, Debug)]

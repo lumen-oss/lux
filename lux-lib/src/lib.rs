@@ -6,6 +6,7 @@ pub mod lockfile;
 pub mod lua;
 pub mod lua_installation;
 pub mod lua_rockspec;
+pub mod lua_version;
 pub mod luarocks;
 pub mod manifest;
 pub mod operations;

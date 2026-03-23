@@ -1,7 +1,8 @@
 use eyre::Result;
 use inquire::Confirm;
 use lux_lib::{
-    config::{Config, LuaVersion},
+    config::Config,
+    lua_version::LuaVersion,
     progress::{MultiProgress, ProgressBar},
 };
 

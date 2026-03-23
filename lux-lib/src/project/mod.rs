@@ -15,7 +15,7 @@ use toml_edit::{DocumentMut, Item};
 
 use crate::{
     build,
-    config::{Config, LuaVersion},
+    config::Config,
     git::{
         self,
         shorthand::RemoteGitUrlShorthand,
@@ -27,6 +27,7 @@ use crate::{
         LocalLuaRockspec, LuaRockspecError, LuaVersionError, PartialLuaRockspec,
         PartialRockspecError, RemoteLuaRockspec,
     },
+    lua_version::LuaVersion,
     package::SpecRev,
     remote_package_db::RemotePackageDB,
     rockspec::{
