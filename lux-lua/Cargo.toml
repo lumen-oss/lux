@@ -17,7 +17,7 @@ ssri = "9.2"
 url = "2.5"
 
 [dependencies.lux-lib]
-version = "0.34.3"
+version = "0.34.4"
 path = "../lux-lib"
 default-features = false
 
