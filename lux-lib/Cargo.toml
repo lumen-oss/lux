@@ -70,7 +70,7 @@ tree-sitter-generate = { version = "0.26", default-features = false, features = 
 tree-sitter-loader = "0.26"
 url = "2.5"
 vfs = "0.13"
-zip = "8.3"
+zip = "8.4"
 
 git-url-parse = { workspace = true }
 git2 = { workspace = true }
