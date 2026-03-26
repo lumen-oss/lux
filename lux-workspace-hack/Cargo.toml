@@ -58,7 +58,7 @@ reqwest = { version = "0.13", default-features = false, features = ["charset", "
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
-sha2 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.11", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
@@ -117,7 +117,7 @@ reqwest = { version = "0.13", default-features = false, features = ["charset", "
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
-sha2 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.11", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
