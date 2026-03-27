@@ -60,6 +60,7 @@ serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
 sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
+slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
@@ -71,7 +72,10 @@ toml_edit = { version = "0.22", default-features = false, features = ["display",
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
-winnow = { version = "0.7" }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+url = { version = "2", features = ["serde"] }
+winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
+winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
 zeroize = { version = "1" }
 
 [build-dependencies]
@@ -119,6 +123,7 @@ serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
 sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
+slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
 syn = { version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -131,7 +136,10 @@ toml_edit = { version = "0.22", default-features = false, features = ["display",
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
-winnow = { version = "0.7" }
+typenum = { version = "1", default-features = false, features = ["const-generics"] }
+url = { version = "2", features = ["serde"] }
+winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
+winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
 zeroize = { version = "1" }
 
 ### END HAKARI SECTION
