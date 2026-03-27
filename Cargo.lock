@@ -3319,6 +3319,8 @@ dependencies = [
  "mlua",
  "path-absolutize",
  "path-slash",
+ "serde",
+ "serde-enum-str",
  "ssri",
  "tokio",
  "url",

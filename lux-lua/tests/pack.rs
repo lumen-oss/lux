@@ -2,8 +2,9 @@ use std::{fs::File, io::Read, path::PathBuf};
 
 use assert_fs::{prelude::PathCopy, TempDir};
 use lux_lib::{
-    config::{ConfigBuilder, LuaVersion},
+    config::ConfigBuilder,
     lua_installation::detect_installed_lua_version,
+    lua_version::LuaVersion,
     operations::{BuildProject, Pack},
     project::Project,
 };
