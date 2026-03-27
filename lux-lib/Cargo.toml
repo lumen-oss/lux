@@ -103,7 +103,7 @@ httptest = { version = "0.16" }
 serial_test = { version = "3.4" }
 proptest = "1.11"
 dir-diff = "0.3"
-insta = { version = "1.46", features = ["redactions", "yaml", "json"] }
+insta = { version = "1.47", features = ["redactions", "yaml", "json"] }
 assert_fs = "1.1"
 predicates = "3.1"
 
