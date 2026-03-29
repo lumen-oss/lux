@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `lux-lib` - [0.35.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.34.4...lux-lib-v0.35.0) - 2026-03-29
+
+### Dependencies
+- *(deps)* bump insta from 1.46.0 to 1.47.0 ([#1417](https://github.com/lumen-oss/lux/pull/1417))
+- *(deps)* bump proptest from 1.10.0 to 1.11.0 ([#1412](https://github.com/lumen-oss/lux/pull/1412))
+
 ## `lux-cli` - [0.26.4](https://github.com/lumen-oss/lux/compare/v0.26.3...v0.26.4) - 2026-03-24
 
 ### Added
