@@ -1654,7 +1654,7 @@ impl Into<BuildBehaviour> for BuildBehaviourLua {
 /// ```lua
 /// "say >= 1.3"
 ///
-/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = false }
+/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "no_force" }
 /// ```
 #[derive(Deserialize)]
 #[serde(untagged)]
