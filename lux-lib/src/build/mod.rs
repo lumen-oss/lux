@@ -37,7 +37,6 @@ use make::MakeError;
 
 use patch::{Patch, PatchError};
 use rust_mlua::RustError;
-use serde::{Deserialize, Deserializer};
 use source::SourceBuildError;
 use ssri::Integrity;
 use thiserror::Error;
@@ -167,25 +166,6 @@ pub enum BuildBehaviour {
     NoForce,
     /// Force a rebuild if the package is already installed
     Force,
-}
-
-impl<'de> Deserialize<'de> for BuildBehaviour {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Self::from(bool::deserialize(deserializer)?))
-    }
-}
-
-impl From<bool> for BuildBehaviour {
-    fn from(value: bool) -> Self {
-        if value {
-            Self::Force
-        } else {
-            Self::NoForce
-        }
-    }
 }
 
 async fn run_build<R: Rockspec + HasIntegrity>(
