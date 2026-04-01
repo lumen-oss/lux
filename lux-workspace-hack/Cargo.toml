@@ -21,8 +21,8 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 bstr = { version = "1" }
 camino = { version = "1", default-features = false, features = ["serde1"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
-clap = { version = "4", features = ["derive", "env", "wrap_help"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "env", "std", "suggestions", "usage", "wrap_help"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 crossbeam-utils = { version = "0.8" }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
@@ -84,8 +84,8 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 bstr = { version = "1" }
 camino = { version = "1", default-features = false, features = ["serde1"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
-clap = { version = "4", features = ["derive", "env", "wrap_help"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "env", "std", "suggestions", "usage", "wrap_help"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 crossbeam-utils = { version = "0.8" }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }

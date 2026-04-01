@@ -10,7 +10,7 @@ cargo-packager = { version = "0.11", default-features = false, features = [
 ] }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-clap_mangen = "0.2"
+clap_mangen = "0.3"
 lux-workspace-hack = { version = "0.1", path = "../lux-workspace-hack" }
 serde = { version = "1", default-features = false }
 
