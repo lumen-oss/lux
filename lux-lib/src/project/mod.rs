@@ -96,9 +96,9 @@ pub enum ProjectEditError {
     #[error("unable to query latest version for {0}")]
     LatestVersionNotFound(PackageName),
     #[error("expected field to be a value, but got {0}")]
-    ExpectedValue(toml_edit::Item),
+    ExpectedValue(Box<toml_edit::Item>),
     #[error("expected string, but got {0}")]
-    ExpectedString(toml_edit::Value),
+    ExpectedString(Box<toml_edit::Value>),
     #[error(transparent)]
     GitUrlShorthandParse(#[from] git::shorthand::ParseError),
 }
@@ -527,12 +527,14 @@ impl Project {
                         Item::Table(tbl) => {
                             match tbl.get("git") {
                                 Some(git_item) => {
-                                    let git_value = git_item
-                                        .clone()
-                                        .into_value()
-                                        .map_err(ProjectEditError::ExpectedValue)?;
+                                    let git_value =
+                                        git_item.clone().into_value().map_err(|err| {
+                                            ProjectEditError::ExpectedValue(Box::new(err))
+                                        })?;
                                     let git_url_str = git_value.as_str().ok_or(
-                                        ProjectEditError::ExpectedString(git_value.clone()),
+                                        ProjectEditError::ExpectedString(Box::new(
+                                            git_value.clone(),
+                                        )),
                                     )?;
                                     let shorthand: RemoteGitUrlShorthand = git_url_str.parse()?;
                                     match git::utils::latest_semver_tag_or_commit_sha(
