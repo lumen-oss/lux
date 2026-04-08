@@ -3,6 +3,7 @@ use crate::{
     lua_installation::LuaInstallation,
     lua_rockspec::{DeploySpec, LuaModule, ModulePaths},
     path::{Paths, PathsError},
+    project::project_files,
     tree::{RockLayout, Tree},
     variables::{self, Environment, VariableSubstitutionError},
 };
@@ -55,18 +56,6 @@ pub(crate) fn copy_lua_to_module_path(
     })?;
 
     Ok(())
-}
-
-/// Get the files that Lux treats as project files
-/// This respects ignore files and excludes hidden files and directories.
-pub(crate) fn project_files(src: &PathBuf) -> Vec<PathBuf> {
-    ignore::WalkBuilder::new(src)
-        .follow_links(false)
-        .build()
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
-        .map(|entry| entry.into_path())
-        .collect_vec()
 }
 
 /// Recursively copy a directory.

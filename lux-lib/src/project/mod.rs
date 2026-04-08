@@ -14,7 +14,6 @@ use thiserror::Error;
 use toml_edit::{DocumentMut, Item};
 
 use crate::{
-    build,
     config::Config,
     git::{
         self,
@@ -698,8 +697,20 @@ impl Project {
     }
 
     pub fn project_files(&self) -> Vec<PathBuf> {
-        build::utils::project_files(&self.root().0)
+        project_files(&self.root().0)
     }
+}
+
+/// Get the files that Lux treats as project files
+/// This respects ignore files and excludes hidden files and directories.
+pub(crate) fn project_files(src: &Path) -> Vec<PathBuf> {
+    ignore::WalkBuilder::new(src)
+        .follow_links(false)
+        .build()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
+        .map(|entry| entry.into_path())
+        .collect_vec()
 }
 
 fn prepare_dependency_tables(project_toml: &mut DocumentMut) {
