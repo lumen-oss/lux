@@ -20,6 +20,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(deps)* bump zip from 8.4.0 to 8.5.0 ([#1431](https://github.com/lumen-oss/lux/pull/1431))
 - *(deps)* bulk update ([#1420](https://github.com/lumen-oss/lux/pull/1420))
 
+## `lux-cli` - [0.28.0](https://github.com/lumen-oss/lux/compare/v0.27.0...v0.28.0) - 2026-04-08
+
+### Added
+- [**breaking**] remove From<bool> for BuildBehaviour ([#1425](https://github.com/lumen-oss/lux/pull/1425))
+
+## `lux-lib` - [0.36.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.35.0...lux-lib-v0.36.0) - 2026-04-08
+
+### Added
+- *(build)* include `.cargo` directory in project files ([#1436](https://github.com/lumen-oss/lux/pull/1436))
+- [**breaking**] reduce `ProjectEditError` enum variant size by boxing ([#1435](https://github.com/lumen-oss/lux/pull/1435))
+- [**breaking**] remove From<bool> for BuildBehaviour ([#1425](https://github.com/lumen-oss/lux/pull/1425))
+
+### Dependencies
+- *(deps)* bump zip from 8.4.0 to 8.5.0 ([#1431](https://github.com/lumen-oss/lux/pull/1431))
+- *(deps)* bulk update ([#1420](https://github.com/lumen-oss/lux/pull/1420))
+
 ## `lux-lib` - [0.35.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.34.4...lux-lib-v0.35.0) - 2026-03-29
 
 ### Dependencies
