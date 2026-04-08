@@ -14,7 +14,6 @@ use thiserror::Error;
 use toml_edit::{DocumentMut, Item};
 
 use crate::{
-    build,
     config::Config,
     git::{
         self,
@@ -698,8 +697,21 @@ impl Project {
     }
 
     pub fn project_files(&self) -> Vec<PathBuf> {
-        build::utils::project_files(&self.root().0)
+        project_files(&self.root().0)
     }
+}
+
+/// Get the files that Lux treats as project files
+/// This respects ignore files and excludes hidden files and directories.
+pub(crate) fn project_files(src: &Path) -> Vec<PathBuf> {
+    ignore::WalkBuilder::new(src)
+        .add(src.join(".cargo"))
+        .follow_links(false)
+        .build()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
+        .map(|entry| entry.into_path())
+        .collect_vec()
 }
 
 fn prepare_dependency_tables(project_toml: &mut DocumentMut) {
@@ -734,7 +746,7 @@ fn prepare_dependency_tables(project_toml: &mut DocumentMut) {
 mod tests {
     use std::collections::HashMap;
 
-    use assert_fs::prelude::PathCopy;
+    use assert_fs::prelude::{PathChild, PathCopy, PathCreateDir};
     use url::Url;
 
     use super::*;
@@ -907,5 +919,16 @@ mod tests {
         // check again after reloading lux.toml
         let reloaded_project = Project::from(&project_root).unwrap().unwrap();
         check(&reloaded_project);
+    }
+
+    #[tokio::test]
+    async fn project_files_includes_cargo_directory() {
+        let project_root = assert_fs::TempDir::new().unwrap();
+        let cargo_dir = project_root.child(".cargo");
+        cargo_dir.create_dir_all().unwrap();
+        let cargo_config = cargo_dir.join("config.toml");
+        tokio::fs::write(&cargo_config, "").await.unwrap();
+        let project_files = project_files(&project_root);
+        assert!(project_files.contains(&cargo_config.to_path_buf()));
     }
 }
