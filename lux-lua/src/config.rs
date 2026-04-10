@@ -73,7 +73,7 @@ mod tests {
                 :timeout(10)
                 :cache_dir(cache)
                 :data_dir(data)
-                -- :entrypoint_layout("rockspec")
+                :entrypoint_layout({ layout = "nvim" })
                 :build()
 
             assert(full_config, "default config should not be nil")
@@ -90,7 +90,7 @@ mod tests {
             assert(full_config:timeout() == 10, "timeout should be 10")
             assert(full_config:cache_dir() == cache, "cache_dir should be /cache")
             assert(full_config:data_dir() == data, "data_dir should be /data")
-            -- assert(full_config.entrypoint_layout() == ...)
+            assert(full_config:entrypoint_layout(), "entrypoint_layout should be not nil")
             "#,
         )
         .exec()
