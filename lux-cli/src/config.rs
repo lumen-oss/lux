@@ -30,7 +30,7 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
     match cmd {
         ConfigCmd::Init(init) => {
             let config_file = ConfigBuilder::config_file()?;
-            if !config_file.is_file()
+            if !config_file.is_file() && !config.no_prompt()
                 || Confirm::new("Config already exists. Overwrite?")
                     .with_default(false)
                     .prompt()

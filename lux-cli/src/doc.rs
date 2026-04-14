@@ -46,7 +46,7 @@ Please specify an exact package (<name>@<version>) or narrow the version require
     if args.online {
         open_homepage(pkg, &tree).await
     } else {
-        open_local_docs(pkg, &tree).await
+        open_local_docs(pkg, &tree, &config).await
     }
 }
 
@@ -69,7 +69,7 @@ fn get_homepage(pkg: &LocalPackage, tree: &Tree) -> Result<Option<Url>> {
     Ok(rockspec.description().homepage.clone())
 }
 
-async fn open_local_docs(pkg: LocalPackage, tree: &Tree) -> Result<()> {
+async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Result<()> {
     let layout = tree.installed_rock_layout(&pkg)?;
     let files: Vec<String> = WalkDir::new(&layout.doc)
         .into_iter()
@@ -104,7 +104,12 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree) -> Result<()> {
                 pkg.into_package_spec()
             )),
             Some(homepage) => {
-                if Confirm::new("No local documentation found. Open homepage?")
+                if config.no_prompt() {
+                    return Err(eyre!(
+                        "No local documentation found for package {}",
+                        pkg.into_package_spec()
+                    ));
+                } else if Confirm::new("No local documentation found. Open homepage?")
                     .with_default(false)
                     .prompt()
                     .wrap_err("error prompting to open homepage")?

@@ -52,7 +52,8 @@ async fn main() -> Result<()> {
                 .map(|variables| variables.into_iter().collect()),
         )
         .verbose(Some(cli.verbose))
-        .no_progress(Some(cli.no_progress));
+        .no_progress(Some(cli.no_progress))
+        .no_prompt(Some(cli.no_prompt));
 
     if cli.nvim {
         config_builder = config_builder.entrypoint_layout(RockLayoutConfig::new_nvim_layout());
@@ -75,7 +76,9 @@ async fn main() -> Result<()> {
             Debug::UnpackRemote(unpack_data) => unpack::unpack_remote(unpack_data, config).await?,
             Debug::Project(debug_project) => project::debug_project(debug_project)?,
         },
-        Commands::New(project_data) => project::write_project_rockspec(project_data).await?,
+        Commands::New(project_data) => {
+            project::write_project_rockspec(project_data, config).await?
+        }
         Commands::Build(build_data) => {
             build::build(build_data, config).await?;
         }
