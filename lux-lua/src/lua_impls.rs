@@ -537,6 +537,9 @@ impl LuaUserData for ConfigBuilderLua {
         methods.add_method("no_progress", |_, this, no_progress: Option<bool>| {
             Ok(ConfigBuilderLua(this.0.clone().no_progress(no_progress)))
         });
+        methods.add_method("no_prompt", |_, this, no_prompt: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().no_prompt(no_prompt)))
+        });
         methods.add_method("timeout", |_, this, timeout: Option<u64>| {
             Ok(ConfigBuilderLua(
                 this.0.clone().timeout(timeout.map(Duration::from_secs)),

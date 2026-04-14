@@ -12,9 +12,10 @@ pub async fn purge(config: Config) -> Result<()> {
 
     let len = tree.list()?.len();
 
-    if Confirm::new(&format!("Are you sure you want to purge all {len} rocks?"))
-        .with_default(false)
-        .prompt()?
+    if !config.no_prompt()
+        && Confirm::new(&format!("Are you sure you want to purge all {len} rocks?"))
+            .with_default(false)
+            .prompt()?
     {
         let root_dir = tree.root();
 

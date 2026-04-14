@@ -35,6 +35,8 @@ pub struct Config {
     verbose: bool,
     /// Don't display progress bars
     no_progress: bool,
+    /// Skip prompts (choosing the default choice)
+    no_prompt: bool,
     timeout: Duration,
     max_jobs: usize,
     variables: HashMap<String, String>,
@@ -127,6 +129,10 @@ impl Config {
 
     pub fn no_progress(&self) -> bool {
         self.no_progress
+    }
+
+    pub fn no_prompt(&self) -> bool {
+        self.no_prompt
     }
 
     pub fn timeout(&self) -> &Duration {
@@ -225,6 +231,7 @@ pub struct ConfigBuilder {
     enable_development_packages: Option<bool>,
     verbose: Option<bool>,
     no_progress: Option<bool>,
+    no_prompt: Option<bool>,
     timeout: Option<Duration>,
     max_jobs: Option<usize>,
     variables: Option<HashMap<String, String>>,
@@ -334,6 +341,13 @@ impl ConfigBuilder {
         }
     }
 
+    pub fn no_prompt(self, no_prompt: Option<bool>) -> Self {
+        Self {
+            no_prompt: no_prompt.or(self.no_prompt),
+            ..self
+        }
+    }
+
     pub fn timeout(self, timeout: Option<Duration>) -> Self {
         Self {
             timeout: timeout.or(self.timeout),
@@ -405,6 +419,7 @@ impl ConfigBuilder {
             user_tree,
             verbose: self.verbose.unwrap_or(false),
             no_progress: self.no_progress.unwrap_or(false),
+            no_prompt: self.no_prompt.unwrap_or(false),
             timeout: self.timeout.unwrap_or_else(|| Duration::from_secs(30)),
             max_jobs: match self.max_jobs.unwrap_or(usize::MAX) {
                 0 => usize::MAX,
@@ -437,6 +452,7 @@ impl From<Config> for ConfigBuilder {
             user_tree: Some(value.user_tree),
             verbose: Some(value.verbose),
             no_progress: Some(value.no_progress),
+            no_prompt: Some(value.no_prompt),
             timeout: Some(value.timeout),
             max_jobs: if value.max_jobs == usize::MAX {
                 None

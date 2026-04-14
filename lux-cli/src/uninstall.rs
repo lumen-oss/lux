@@ -121,10 +121,11 @@ Reinstall?
             ",
             )
         };
-        if Confirm::new(&prompt)
-            .with_default(false)
-            .prompt()
-            .wrap_err("Error prompting for reinstall")?
+        if !config.no_prompt()
+            && Confirm::new(&prompt)
+                .with_default(false)
+                .prompt()
+                .wrap_err("Error prompting for reinstall")?
         {
             operations::Uninstall::new()
                 .config(&config)

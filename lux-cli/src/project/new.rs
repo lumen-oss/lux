@@ -13,6 +13,7 @@ use spinners::{Spinner, Spinners};
 
 use crate::utils::github_metadata::{self, RepoMetadata};
 use lux_lib::{
+    config::Config,
     package::PackageReq,
     project::{Project, PROJECT_TOML},
 };
@@ -134,14 +135,14 @@ fn validate_license(input: &str) -> std::result::Result<Validation, Box<dyn Erro
     )
 }
 
-pub async fn write_project_rockspec(cli_flags: NewProject) -> Result<()> {
+pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Result<()> {
     let project = Project::from_exact(cli_flags.target.clone())?;
     let render_config = RenderConfig::default_colored()
         .with_prompt_prefix(Styled::new(">").with_fg(inquire::ui::Color::LightGreen));
 
     // If the project already exists then ask for override confirmation
-    if project.is_some()
-        && !Confirm::new("Target directory already has a project, write anyway?")
+    if project.is_some() && config.no_prompt()
+        || !Confirm::new("Target directory already has a project, write anyway?")
             .with_default(false)
             .with_help_message(&format!("This may overwrite your existing {PROJECT_TOML}",))
             .with_render_config(render_config)

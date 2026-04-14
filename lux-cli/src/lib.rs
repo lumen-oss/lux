@@ -141,6 +141,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_progress: bool,
 
+    /// Skip prompts, selecting the default option.
+    #[arg(long)]
+    pub no_prompt: bool,
+
     /// Configure lux for installing Neovim packages.
     #[arg(long)]
     pub nvim: bool,

@@ -5,6 +5,7 @@ use inquire::Confirm;
 use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
+    config::Config,
     lockfile::{LocalPackageId, OptState, PinnedState},
     operations::install::PackageInstallSpec,
     package::PackageReq,
@@ -16,6 +17,7 @@ pub fn apply_build_behaviour(
     pin: PinnedState,
     force: bool,
     tree: &Tree,
+    config: &Config,
 ) -> Result<Vec<PackageInstallSpec>> {
     let lockfile = tree.lockfile()?;
     Ok(package_reqs
@@ -39,10 +41,11 @@ pub fn apply_build_behaviour(
                 } else {
                     BuildBehaviour::NoForce
                 })
-            } else if Confirm::new(&format!("Package {req} already exists. Overwrite?"))
-                .with_default(false)
-                .prompt()
-                .is_ok_and(|is_overwrite_confirmed| is_overwrite_confirmed)
+            } else if !config.no_prompt()
+                && Confirm::new(&format!("Package {req} already exists. Overwrite?"))
+                    .with_default(false)
+                    .prompt()
+                    .is_ok_and(|is_overwrite_confirmed| is_overwrite_confirmed)
             {
                 Some(BuildBehaviour::Force)
             } else {
