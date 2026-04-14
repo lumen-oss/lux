@@ -14,6 +14,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 - `no_prompt` option ([#1441](https://github.com/lumen-oss/lux/pull/1441))
 
+## `lux-cli` - [0.28.1](https://github.com/lumen-oss/lux/compare/v0.28.0...v0.28.1) - 2026-04-14
+
+### Added
+- `no_prompt` option ([#1441](https://github.com/lumen-oss/lux/pull/1441))
+
+## `lux-lib` - [0.36.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.36.0...lux-lib-v0.36.1) - 2026-04-14
+
+### Added
+- `no_prompt` option ([#1441](https://github.com/lumen-oss/lux/pull/1441))
+
 ## `lux-cli` - [0.28.0](https://github.com/lumen-oss/lux/compare/v0.27.0...v0.28.0) - 2026-04-08
 
 ### Added
