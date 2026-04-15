@@ -21,7 +21,7 @@ jobs:
   dist-package:
     name: ${{ matrix.target }}
     if: github.repository_owner == 'lumen-oss' && (
-      ( github.event_name == 'release' && startsWith(github.event.release.name, 'v')) ||
+      ( github.event_name == 'release' && (startsWith(github.event.release.name, 'v') || startsWith(github.event.release.name, 'lux-lua-v'))) ||
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'pull_request'
       )
@@ -172,7 +172,7 @@ jobs:
 
       - name: Upload .deb package to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.deb
@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload AppImage to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.AppImage
@@ -192,7 +192,7 @@ jobs:
 
       - name: Upload PKGBUILD to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu') && github.event_name == 'release'
+        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/PKGBUILD
@@ -202,7 +202,7 @@ jobs:
 
       - name: Upload tar archive to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu') && github.event_name == 'release'
+        if: startsWith(matrix.target, 'x86_64-unknown-linux-gnu') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.tar.gz
@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload dmg archive to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'macos') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.dmg
@@ -222,7 +222,7 @@ jobs:
 
       - name: Upload msi installer to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'windows') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'windows') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*.msi
@@ -232,7 +232,7 @@ jobs:
 
       - name: Upload exe installer to release
         uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'windows') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'windows') && github.event_name == 'release' && startsWith(github.event.release.name, 'v')
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/dist/*-setup.exe
