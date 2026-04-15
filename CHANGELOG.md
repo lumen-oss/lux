@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.2](https://github.com/lumen-oss/lux/compare/v0.28.1...v0.28.2) `lux-cli` - 2026-04-15
+
+### Dependencies
+- *(deps)* bulk update ([#1446](https://github.com/lumen-oss/lux/pull/1446))
+
+## [0.36.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.36.1...lux-lib-v0.36.2) `lux-lib` - 2026-04-15
+
+### Fixed
+- *(build/rust-mlua)* drop lib prefix on Windows
+
 ## `lux-cli` - [0.28.1](https://github.com/lumen-oss/lux/compare/v0.28.0...v0.28.1) - 2026-04-14
 
 ### Added
