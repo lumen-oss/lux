@@ -19,8 +19,8 @@ use builtin::{
 use itertools::Itertools;
 
 use std::{
-    collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, fmt::Display,
-    path::PathBuf, str::FromStr,
+    collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, env::consts::DLL_PREFIX,
+    fmt::Display, path::PathBuf, str::FromStr,
 };
 use thiserror::Error;
 
@@ -145,7 +145,8 @@ impl BuildSpec {
                     .into_iter()
                     .map(|(key, value)| match (key, value) {
                         (LuaTableKey::IntKey(_), ModuleSpecInternal::SourcePath(module)) => {
-                            let mut rust_lib: PathBuf = format!("lib{}", module.display()).into();
+                            let mut rust_lib: PathBuf =
+                                format!("{DLL_PREFIX}{}", module.display()).into();
                             rust_lib.set_extension(DLL_EXTENSION);
                             Ok((module.to_string_lossy().to_string(), rust_lib))
                         }
@@ -153,7 +154,8 @@ impl BuildSpec {
                             LuaTableKey::StringKey(module_name),
                             ModuleSpecInternal::SourcePath(module),
                         ) => {
-                            let mut rust_lib: PathBuf = format!("lib{}", module.display()).into();
+                            let mut rust_lib: PathBuf =
+                                format!("{DLL_PREFIX}{}", module.display()).into();
                             rust_lib.set_extension(DLL_EXTENSION);
                             Ok((module_name, rust_lib))
                         }

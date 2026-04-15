@@ -7,6 +7,7 @@ use lux_lib::{
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
     operations::{Exec, Install, PackageInstallSpec},
+    package::PackageReq,
     tree::EntryType,
 };
 use std::path::PathBuf;
@@ -45,11 +46,17 @@ async fn install_http_package() {
 
 #[tokio::test]
 async fn install_and_use_luafilesystem() {
-    let install_spec = PackageInstallSpec::new(
-        "luafilesystem@1.9.0".parse().unwrap(),
-        EntryType::Entrypoint,
-    )
-    .build();
+    install_and_use("luafilesystem@1.9.0".parse().unwrap(), "lfs").await
+}
+
+#[tokio::test]
+async fn install_and_use_toml_edit() {
+    install_and_use("toml-edit@0.7.0".parse().unwrap(), "toml_edit").await
+}
+
+#[cfg(test)]
+async fn install_and_use(package: PackageReq, module_name: &str) {
+    let install_spec = PackageInstallSpec::new(package, EntryType::Entrypoint).build();
     let dir = TempDir::new().unwrap();
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -73,7 +80,7 @@ async fn install_and_use_luafilesystem() {
 
     Exec::new("lua", None, &config)
         .arg("-e")
-        .arg("require('lfs')")
+        .arg(format!("require('{module_name}')"))
         .exec()
         .await
         .unwrap()
