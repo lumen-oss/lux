@@ -39,7 +39,7 @@ git2 = { version = "0.20", features = ["vendored-libgit2"] }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
-indexmap = { version = "1", default-features = false, features = ["std"] }
+indexmap = { version = "2", default-features = false, features = ["std"] }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libgit2-sys = { version = "0.18", default-features = false, features = ["https", "ssh", "vendored"] }
 lock_api = { version = "0.4", features = ["arc_lock"] }
@@ -102,7 +102,7 @@ git2 = { version = "0.20", features = ["vendored-libgit2"] }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
-indexmap = { version = "1", default-features = false, features = ["std"] }
+indexmap = { version = "2", default-features = false, features = ["std"] }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libgit2-sys = { version = "0.18", default-features = false, features = ["https", "ssh", "vendored"] }
 lock_api = { version = "0.4", features = ["arc_lock"] }
