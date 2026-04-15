@@ -21,6 +21,7 @@ mlua = { version = "0.11", features = [
   "error-send",
   "async",
 ] }
+mlua-extras = { git = "https://github.com/Tired-Fox/mlua-extras", features = ["mlua", "derive", "async"] }
 git-url-parse = "0.6"
 git2 = { version = "0.21", features = ["ssh", "https"] }
 ignore = "0.4"
