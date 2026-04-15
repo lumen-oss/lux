@@ -38,7 +38,7 @@ stylua = { version = "2.3", features = ["fromstr", "lua52"] }
 target-lexicon = "0.13"
 tempfile = "3.27"
 toml = "1.0"
-tokio = { version = "1.51", features = ["full"] }
+tokio = { version = "1.52", features = ["full"] }
 walkdir = "2.5"
 which = "8.0"
 
