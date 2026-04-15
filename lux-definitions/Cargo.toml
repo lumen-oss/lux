@@ -1,0 +1,13 @@
+[package]
+name = "lux-definitions"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "lux-definitions"
+path = "src/main.rs"
+
+[dependencies]
+lux-lua = { path = "../lux-lua", features = ["definitions", "test"] }
+mlua-extras = { workspace = true }

@@ -1,32 +1,49 @@
 use lux_lib::config::ConfigBuilder;
-use mlua::{ExternalResult, Lua, Table};
+use mlua::ExternalResult;
+use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::{ConfigBuilderLua, ConfigLua};
 
 const DEFAULT_USER_AGENT: &str = concat!("lux-lua/", env!("CARGO_PKG_VERSION"));
 
-pub fn config(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+#[derive(Clone, mlua_extras::UserData)]
+pub(crate) struct ConfigModule;
 
-    table.set(
-        "default",
-        lua.create_function(|_, ()| {
+impl Typed for ConfigModule {
+    fn ty() -> Type {
+        Type::named("ConfigModule")
+    }
+}
+
+impl TypedUserData for ConfigModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("default", |_, ()| {
             ConfigBuilder::default()
                 .user_agent(Some(DEFAULT_USER_AGENT.into()))
                 .build()
                 .map(ConfigLua)
                 .into_lua_err()
-        })?,
-    )?;
-
-    table.set(
-        "builder",
-        lua.create_function(|_, ()| Ok(ConfigBuilderLua(ConfigBuilder::default())))?,
-    )?;
-
-    Ok(table)
+        });
+        methods.add_function("builder", |_, ()| {
+            Ok(ConfigBuilderLua(ConfigBuilder::default()))
+        });
+    }
 }
 
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::ConfigModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "ConfigModule",
+            build: || Type::class(TypedClassBuilder::new::<ConfigModule>()),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use mlua::prelude::*;

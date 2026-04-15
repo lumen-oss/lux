@@ -1,35 +1,47 @@
-use std::path::PathBuf;
-
 use lux_lib::workspace::Workspace;
-use mlua::{ExternalResult, Lua, Table};
+use mlua::ExternalResult;
+use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::WorkspaceLua;
 
-pub fn workspace(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+#[derive(Clone, mlua_extras::UserData)]
+pub(crate) struct WorkspaceModule;
 
-    table.set(
-        "current",
-        lua.create_function(|_, ()| Ok(Workspace::current().into_lua_err()?.map(WorkspaceLua)))?,
-    )?;
+impl Typed for WorkspaceModule {
+    fn ty() -> Type {
+        Type::named("WorkspaceModule")
+    }
+}
 
-    table.set(
-        "new",
-        lua.create_function(|_, path: PathBuf| {
+impl TypedUserData for WorkspaceModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("current", |_, ()| {
+            Ok(Workspace::current().into_lua_err()?.map(WorkspaceLua))
+        });
+        methods.add_function("new", |_, path: String| {
             Ok(Workspace::from_exact(path)
                 .into_lua_err()?
                 .map(WorkspaceLua))
-        })?,
-    )?;
-
-    table.set(
-        "new_fuzzy",
-        lua.create_function(|_, path: PathBuf| {
+        });
+        methods.add_function("new_fuzzy", |_, path: String| {
             Ok(Workspace::from(path).into_lua_err()?.map(WorkspaceLua))
-        })?,
-    )?;
+        });
+    }
+}
 
-    Ok(table)
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::WorkspaceModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "WorkspaceModule",
+            build: || Type::class(TypedClassBuilder::new::<WorkspaceModule>()),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -44,6 +44,7 @@ fn try_main() -> Result<(), DynError> {
             release: true,
             vendored: false,
         })?,
+        Some("gen-definitions") => gen_definitions()?,
         _ => print_help(),
     }
 
@@ -59,6 +60,7 @@ dist-man            builds man pages
 dist-completions    builds shell completions
 dist-package        builds binary package distribution(s) for the current platform
 dist                builds everything, equivalent to build + dist-man + dist-completions
+gen-definitions     generates Lua/Luau type definition files into definitions/
 
 LUA_LIB_DIR         when set, overrides the path to the directory containing the compiled lux-lua libraries
 "
@@ -332,6 +334,25 @@ fn dist_package() -> Result<(), DynError> {
     println!("building binary package...");
     cargo_packager::package_and_sign(config_builder.config(), &signing_config)
         .inspect_err(|err| eprintln!("failed to package lux:\n{err:?}"))?;
+    Ok(())
+}
+
+fn gen_definitions() -> Result<(), DynError> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let output_dir = project_root().join("definitions");
+    let status = Command::new(cargo)
+        .current_dir(project_root())
+        .args([
+            "run",
+            "--package",
+            "lux-definitions",
+            "--",
+            output_dir.to_string_lossy().as_ref(),
+        ])
+        .status()?;
+    if !status.success() {
+        Err("lux-definitions failed")?;
+    }
     Ok(())
 }
 
