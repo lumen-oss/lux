@@ -7,7 +7,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
 use itertools::Itertools;
 use mlua::prelude::*;
-use mlua_extras::typed::{Type, TypedDataFields, TypedDataMethods, TypedUserData, Typed};
+use mlua_extras::typed::{Type, Typed, TypedDataFields, TypedDataMethods, TypedUserData};
 use serde::{Deserialize, Serialize};
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use url::Url;
@@ -1042,10 +1042,7 @@ impl TypedUserData for ConfigLua {
         });
         methods.add_method("namespace", |_, this, ()| Ok(this.0.namespace().cloned()));
         methods.add_method("lua_dir", |_, this, ()| {
-            Ok(this
-                .0
-                .lua_dir()
-                .map(|p| p.to_string_lossy().into_owned()))
+            Ok(this.0.lua_dir().map(|p| p.to_string_lossy().into_owned()))
         });
         methods.add_method("user_tree", |_, this, lua_version: LuaVersionLua| {
             this.0.user_tree(lua_version.0).map(TreeLua).into_lua_err()
@@ -2256,6 +2253,78 @@ impl TypedUserData for DownloadedRockspecLua {
         methods.add_method("rockspec", |_, this, ()| {
             Ok(RemoteLuaRockspecLua(this.0.rockspec.clone()))
         });
+    }
+}
+// Definition registrations
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::{
+        BuildSpecLua, BustedTestSpecLua, CMakeBuildSpecLua, CommandBuildSpecLua,
+        CommandTestSpecLua, ConfigBuilderLua, ConfigLua, DownloadedRockspecLua, GitSourceLua,
+        InstallSpecLua, LocalLuaRockspecLua, LocalPackageHashesLua, LocalPackageLua,
+        LocalProjectTomlLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
+        LuaDependencySpecLua, LuaScriptTestSpecLua, MakeBuildSpecLua, ModulePathsLua,
+        PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
+        PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
+        RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutConfigLua,
+        RockLayoutLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua,
+    };
+    use crate::definitions::LuxDefinition;
+
+    macro_rules! submit_definitions {
+        ($($name:literal => $ty:ty),+ $(,)?) => {
+            $(
+                inventory::submit! {
+                    LuxDefinition {
+                        name: $name,
+                        build: || Type::class(TypedClassBuilder::new::<$ty>()),
+                    }
+                }
+            )+
+        };
+    }
+
+    submit_definitions! {
+        "PackageSpec" => PackageSpecLua,
+        "PackageReq" => PackageReqLua,
+        "LocalPackageHashes" => LocalPackageHashesLua,
+        "LocalPackage" => LocalPackageLua,
+        "RockLayout" => RockLayoutLua,
+        "Tree" => TreeLua,
+        "RockLayoutConfig" => RockLayoutConfigLua,
+        "Config" => ConfigLua,
+        "ConfigBuilder" => ConfigBuilderLua,
+        "LuaDependencySpec" => LuaDependencySpecLua,
+        "PlatformSupport" => PlatformSupportLua,
+        "RockDescription" => RockDescriptionLua,
+        "GitSource" => GitSourceLua,
+        "RemoteRockSource" => RemoteRockSourceLua,
+        "BustedTestSpec" => BustedTestSpecLua,
+        "CommandTestSpec" => CommandTestSpecLua,
+        "LuaScriptTestSpec" => LuaScriptTestSpecLua,
+        "ModulePaths" => ModulePathsLua,
+        "CMakeBuildSpec" => CMakeBuildSpecLua,
+        "MakeBuildSpec" => MakeBuildSpecLua,
+        "TreesitterParserBuildSpec" => TreesitterParserBuildSpecLua,
+        "RustMluaBuildSpec" => RustMluaBuildSpecLua,
+        "CommandBuildSpec" => CommandBuildSpecLua,
+        "InstallSpec" => InstallSpecLua,
+        "BuildSpec" => BuildSpecLua,
+        "LocalLuaRockspec" => LocalLuaRockspecLua,
+        "RemoteLuaRockspec" => RemoteLuaRockspecLua,
+        "PartialLuaRockspec" => PartialLuaRockspecLua,
+        "PartialProjectToml" => PartialProjectTomlLua,
+        "LocalProjectToml" => LocalProjectTomlLua,
+        "RemoteProjectToml" => RemoteProjectTomlLua,
+        "RemotePackageDB" => RemotePackageDBLua,
+        "LockfileReadOnly" => LockfileReadOnlyLua,
+        "LockfileGuard" => LockfileGuardLua,
+        "LockfileReadWrite" => LockfileReadWriteLua,
+        "Project" => ProjectLua,
+        "DownloadedRockspec" => DownloadedRockspecLua,
     }
 }
 

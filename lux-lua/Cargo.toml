@@ -18,6 +18,7 @@ serde = { version = "1", features = ["derive"] }
 ssri = "9.2"
 url = "2.5"
 serde-enum-str = "0.5.0"
+inventory = { version = "0.3", optional = true }
 
 [dependencies.lux-lib]
 version = "0.38.3"
@@ -40,6 +41,7 @@ vendored = ["lux-lib/vendored-openssl", "lux-lib/vendored-libgit2"]
 # Run tests without module mode so we can link against Lua and run the tests.
 test = ["mlua/vendored", "mlua/lua51", "mlua-extras/lua51", "mlua-extras/vendored"]
 ssh-tests = ["lux-lib/ssh-tests"]
+definitions = ["dep:inventory"]
 
 [lints.clippy]
 panic = "warn"

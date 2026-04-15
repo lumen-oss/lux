@@ -1,35 +1,52 @@
 use std::path::PathBuf;
 
 use lux_lib::project::Project;
-use mlua::{ExternalResult, Lua, Table};
+use mlua::ExternalResult;
+use mlua_extras::typed::{Type, Typed, TypedClassBuilder, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::ProjectLua;
 
-pub fn project(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+#[derive(Clone, mlua_extras::UserData)]
+pub(crate) struct ProjectModule;
 
-    table.set(
-        "current",
-        lua.create_function(|_, ()| Ok(Project::current().into_lua_err()?.map(ProjectLua)))?,
-    )?;
-
-    table.set(
-        "new",
-        lua.create_function(|_, path: PathBuf| {
-            Ok(Project::from_exact(path).into_lua_err()?.map(ProjectLua))
-        })?,
-    )?;
-
-    table.set(
-        "new_fuzzy",
-        lua.create_function(|_, path: PathBuf| {
-            Ok(Project::from(path).into_lua_err()?.map(ProjectLua))
-        })?,
-    )?;
-
-    Ok(table)
+impl Typed for ProjectModule {
+    fn ty() -> Type {
+        Type::named("ProjectModule")
+    }
 }
 
+impl TypedUserData for ProjectModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("current", |_, ()| {
+            Ok(Project::current().into_lua_err()?.map(ProjectLua))
+        });
+        methods.add_function("new", |_, path: String| {
+            Ok(Project::from_exact(PathBuf::from(path))
+                .into_lua_err()?
+                .map(ProjectLua))
+        });
+        methods.add_function("new_fuzzy", |_, path: String| {
+            Ok(Project::from(PathBuf::from(path))
+                .into_lua_err()?
+                .map(ProjectLua))
+        });
+    }
+}
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::ProjectModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "ProjectModule",
+            build: || Type::class(TypedClassBuilder::new::<ProjectModule>()),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use assert_fs::{assert::PathAssert, prelude::PathChild, TempDir};
