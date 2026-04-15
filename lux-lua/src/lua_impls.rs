@@ -417,6 +417,19 @@ impl LuaUserData for TreeLua {
 }
 impl_from_lua_userdata!(TreeLua);
 
+#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
+#[serde(rename_all = "snake_case")]
+enum RockLayoutVariant {
+    #[default]
+    Default,
+    Nvim,
+}
+
+#[derive(Deserialize)]
+struct RockLayoutConfigInput {
+    layout: RockLayoutVariant,
+}
+
 #[derive(Debug, Clone)]
 pub struct RockLayoutConfigLua(pub RockLayoutConfig);
 
@@ -430,7 +443,16 @@ impl LuaUserData for RockLayoutConfigLua {
         });
     }
 }
-impl_from_lua_userdata!(RockLayoutConfigLua);
+
+impl FromLua for RockLayoutConfigLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let input: RockLayoutConfigInput = lua.from_value(value)?;
+        Ok(match input.layout {
+            RockLayoutVariant::Default => RockLayoutConfigLua(RockLayoutConfig::default()),
+            RockLayoutVariant::Nvim => RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()),
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ConfigLua(pub Config);
@@ -1264,9 +1286,27 @@ impl LuaUserData for RemoteLuaRockspecLua {
     }
 }
 
+impl FromLua for RemoteLuaRockspecLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let content = String::from_lua(value, lua)?;
+        RemoteLuaRockspec::new(&content)
+            .map(RemoteLuaRockspecLua)
+            .into_lua_err()
+    }
+}
+
 pub struct PartialLuaRockspecLua(pub PartialLuaRockspec);
 
 impl LuaUserData for PartialLuaRockspecLua {}
+
+impl FromLua for PartialLuaRockspecLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let content = String::from_lua(value, lua)?;
+        PartialLuaRockspec::new(&content)
+            .map(PartialLuaRockspecLua)
+            .into_lua_err()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PartialProjectTomlLua(pub PartialProjectToml);
