@@ -36,7 +36,7 @@ is_executable = "1.0"
 lazy_static = "1.5"
 lets_find_up = "0.0"
 md5 = "0.8"
-nix-nar = "0.3"
+nix-nar = "0.4"
 nonempty = { version = "0.12", features = ["serialize"] }
 openssl = "0.10"
 pkg-config = "0.3"
