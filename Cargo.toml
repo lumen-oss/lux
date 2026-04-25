@@ -34,7 +34,15 @@ pathdiff = "0.2"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 strum = { version = "0.28" }
 strum_macros = "0.28"
-stylua = { version = "2.3", features = ["fromstr", "lua52"] }
+stylua = { version = "2.3", features = [
+  "fromstr",
+  "luau",
+  "lua52",
+  "lua53",
+  "lua54",
+  "luajit",
+  "editorconfig",
+] }
 target-lexicon = "0.13"
 tempfile = "3.27"
 toml = "1.0"
