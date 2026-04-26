@@ -36,8 +36,8 @@ pub fn format(args: Fmt) -> Result<()> {
 
     let workspace_or_file = args
         .workspace_or_file
-        .map(|path| std::path::absolute(path).ok())
-        .flatten();
+        .map(|path| std::path::absolute(path))
+        .transpose()?;
 
     WalkDir::new(project.root().join("src"))
         .into_iter()
