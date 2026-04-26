@@ -35,6 +35,11 @@ pub fn format(args: Fmt) -> Result<()> {
         .or_else(|_| stylua_lib::editorconfig::parse(Config::new(), &project.root().join("*.lua")))
         .unwrap_or_default();
 
+    let workspace_or_file = args
+        .workspace_or_file
+        .map(std::path::absolute)
+        .transpose()?;
+
     WalkDir::new(project.root().join("src"))
         .into_iter()
         .chain(WalkDir::new(project.root().join("lua")))
@@ -44,11 +49,9 @@ pub fn format(args: Fmt) -> Result<()> {
         .chain(WalkDir::new(project.root().join("tests")))
         .filter_map(Result::ok)
         .filter(|file| {
-            args.workspace_or_file
+            workspace_or_file
                 .as_ref()
-                .is_none_or(|workspace_or_file| {
-                    file.path().to_path_buf().starts_with(workspace_or_file)
-                })
+                .is_none_or(|workspace_or_file| file.path().starts_with(workspace_or_file))
         })
         .try_for_each(|file| {
             if PathBuf::from(file.file_name())
