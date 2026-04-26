@@ -32,6 +32,8 @@ pub fn format(args: Fmt) -> Result<()> {
     let config: Config = std::fs::read_to_string("stylua.toml")
         .or_else(|_| std::fs::read_to_string(".stylua.toml"))
         .map(|config: String| toml::from_str(&config).unwrap_or_default())
+        // Since stylua allows prefixing some `editorconfig` keys with `stylua_`, the config
+        // has to be parsed by the lib and cannot be serialized directly from the toml file.
         .or_else(|_| stylua_lib::editorconfig::parse(Config::new(), &project.root().join("*.lua")))
         .unwrap_or_default();
 
