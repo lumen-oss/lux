@@ -36,7 +36,6 @@ pub fn format(args: Fmt) -> Result<()> {
 
     let workspace_or_file = args
         .workspace_or_file
-        .as_ref()
         .map(|path| std::path::absolute(path).ok())
         .flatten();
 
