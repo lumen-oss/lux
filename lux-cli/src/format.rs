@@ -32,6 +32,7 @@ pub fn format(args: Fmt) -> Result<()> {
     let config: Config = std::fs::read_to_string("stylua.toml")
         .or_else(|_| std::fs::read_to_string(".stylua.toml"))
         .map(|config: String| toml::from_str(&config).unwrap_or_default())
+        .or_else(|_| stylua_lib::editorconfig::parse(Config::new(), &project.root().join("*.lua")))
         .unwrap_or_default();
 
     WalkDir::new(project.root().join("src"))
