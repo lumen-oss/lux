@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.6](https://github.com/lumen-oss/lux/compare/v0.28.5...v0.28.6) `lux-cli` - 2026-04-26
+
+### Added
+- *(fmt)* source editorconfig for stylua ([#1472](https://github.com/lumen-oss/lux/pull/1472))
+
+### Fixed
+- *(fmt)* allow specifying relative paths ([#1473](https://github.com/lumen-oss/lux/pull/1473))
+
 ## [0.28.5](https://github.com/lumen-oss/lux/compare/v0.28.4...v0.28.5) `lux-cli` - 2026-04-25
 
 ### Other
