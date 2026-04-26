@@ -36,7 +36,7 @@ pub fn format(args: Fmt) -> Result<()> {
 
     let workspace_or_file = args
         .workspace_or_file
-        .map(|path| std::path::absolute(path))
+        .map(std::path::absolute)
         .transpose()?;
 
     WalkDir::new(project.root().join("src"))
