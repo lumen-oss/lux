@@ -26,7 +26,7 @@ default-features = false
 [dev-dependencies]
 assert_fs = "1.1"
 tokio = { workspace = true }
-zip = "8.5"
+zip = "8.6"
 
 [features]
 lua51 = ["mlua/module", "mlua/lua51"]
