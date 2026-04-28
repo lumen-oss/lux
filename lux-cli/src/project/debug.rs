@@ -1,6 +1,6 @@
 use clap::Args;
 use eyre::Result;
-use lux_lib::project::Project;
+use lux_lib::workspace::Workspace;
 
 use crate::utils::file_tree::term_tree_from_paths;
 
@@ -15,23 +15,25 @@ pub struct DebugProject {
 }
 
 pub fn debug_project(args: DebugProject) -> Result<()> {
-    let project = Project::current()?;
+    let workspace = Workspace::current()?;
 
-    if let Some(project) = project {
-        let toml = project.toml();
+    if let Some(workspace) = workspace {
+        for project in workspace.members() {
+            let toml = project.toml();
 
-        println!("Project name: {}", toml.package());
-        println!("Project version: {}", toml.version()?);
+            println!("Project name: {}", toml.package());
+            println!("Project version: {}", toml.version()?);
 
-        println!("Project location: {}", project.root().display());
+            println!("Project location: {}", project.root().display());
 
-        if args.list_files {
-            let project_files = project.project_files();
-            if project_files.is_empty() {
-                println!("\nNo included project files detected.");
-            } else {
-                let project_tree = term_tree_from_paths(&project_files);
-                println!("\nIncluded project files:\n\n{project_tree}.");
+            if args.list_files {
+                let project_files = project.project_files();
+                if project_files.is_empty() {
+                    println!("\nNo included project files detected.");
+                } else {
+                    let project_tree = term_tree_from_paths(&project_files);
+                    println!("\nIncluded project files:\n\n{project_tree}.");
+                }
             }
         }
     } else {

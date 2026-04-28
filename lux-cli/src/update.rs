@@ -1,11 +1,11 @@
 use clap::Args;
-use eyre::{eyre, Context, OptionExt, Result};
+use eyre::{eyre, Context, Result};
 use itertools::Itertools;
 use lux_lib::package::{PackageName, PackageReq};
 use lux_lib::progress::{MultiProgress, ProgressBar};
-use lux_lib::project::Project;
 use lux_lib::remote_package_db::RemotePackageDB;
 use lux_lib::rockspec::lua_dependency;
+use lux_lib::workspace::Workspace;
 use lux_lib::{config::Config, operations};
 
 #[derive(Args)]
@@ -32,6 +32,10 @@ pub struct Update {
     /// When used with the --toml flag in a project, these must be package names.
     #[arg(short, long)]
     test: Option<Vec<PackageReq>>,
+
+    /// Project to modify.
+    #[arg(short, long, visible_short_alias = 'p')]
+    package: Option<PackageName>,
 }
 
 pub async fn update(args: Update, config: Config) -> Result<()> {
@@ -39,7 +43,13 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
     progress.map(|p| p.add(ProgressBar::from("🔎 Looking for updates...".to_string())));
 
     if args.toml {
-        let mut project = Project::current()?.ok_or_eyre("No project found")?;
+        let mut workspace = Workspace::current_or_err()?;
+
+        if args.package.is_none() && workspace.members().len() > 1 {
+            return Err(eyre!(
+                "the project to modify must be specified with `--package`"
+            ));
+        }
 
         let progress = MultiProgress::new(&config);
         let bar = progress.map(|progress| progress.new_bar());
@@ -48,26 +58,43 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
         let mut upgrade_all = true;
         if let Some(packages) = package_names {
             upgrade_all = false;
-            project
-                .upgrade(lua_dependency::LuaDependencyType::Regular(packages), &db)
-                .await?;
+            for project in workspace.try_members_mut(&args.package)? {
+                project
+                    .upgrade(
+                        lua_dependency::LuaDependencyType::Regular(packages.iter().collect()),
+                        &db,
+                    )
+                    .await?;
+            }
         }
         let build_package_names = to_package_names(args.build.as_ref())?;
         if let Some(packages) = build_package_names {
             upgrade_all = false;
-            project
-                .upgrade(lua_dependency::LuaDependencyType::Build(packages), &db)
-                .await?;
+            for project in workspace.try_members_mut(&args.package)? {
+                project
+                    .upgrade(
+                        lua_dependency::LuaDependencyType::Build(packages.iter().collect()),
+                        &db,
+                    )
+                    .await?;
+            }
         }
         let test_package_names = to_package_names(args.test.as_ref())?;
         if let Some(packages) = test_package_names {
             upgrade_all = false;
-            project
-                .upgrade(lua_dependency::LuaDependencyType::Test(packages), &db)
-                .await?;
+            for project in workspace.try_members_mut(&args.package)? {
+                project
+                    .upgrade(
+                        lua_dependency::LuaDependencyType::Test(packages.iter().collect()),
+                        &db,
+                    )
+                    .await?;
+            }
         }
         if upgrade_all {
-            project.upgrade_all(&db).await?;
+            for project in workspace.try_members_mut(&args.package)? {
+                project.upgrade_all(&db).await?;
+            }
         }
     }
 

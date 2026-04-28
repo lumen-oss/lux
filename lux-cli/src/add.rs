@@ -1,14 +1,15 @@
-use eyre::{OptionExt, Result};
+use eyre::{eyre, Result};
 use itertools::{Either, Itertools};
 use lux_lib::{
     config::Config,
+    package::PackageName,
     progress::MultiProgress,
-    project::Project,
     remote_package_db::RemotePackageDB,
     rockspec::lua_dependency::{self},
+    workspace::Workspace,
 };
 
-use crate::utils::project::{
+use crate::workspace::{
     sync_build_dependencies_if_locked, sync_dependencies_if_locked,
     sync_test_dependencies_if_locked, PackageReqOrGitShorthand,
 };
@@ -38,11 +39,19 @@ pub struct Add {
     /// Install the package as a test dependency.
     #[arg(short, long, visible_short_alias = 't')]
     test: Option<Vec<PackageReqOrGitShorthand>>,
+
+    /// Project to modify.
+    #[arg(short, long, visible_short_alias = 'p')]
+    package: Option<PackageName>,
 }
 
 pub async fn add(data: Add, config: Config) -> Result<()> {
-    let mut project = Project::current()?.ok_or_eyre("No project found")?;
-
+    let mut workspace = Workspace::current_or_err()?;
+    if data.package.is_none() && workspace.members().len() > 1 {
+        return Err(eyre!(
+            "the project to modify must be specified with `--package`"
+        ));
+    }
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);
     let db = RemotePackageDB::from_config(&config, &bar).await?;
@@ -56,13 +65,20 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
         });
 
     if !data.package_req.is_empty() {
-        project
-            .add(lua_dependency::DependencyType::Regular(dependencies), &db)
-            .await?;
-        project
-            .add_git(lua_dependency::LuaDependencyType::Regular(git_dependencies))
-            .await?;
-        sync_dependencies_if_locked(&project, progress.clone(), &config).await?;
+        for project in workspace.try_members_mut(&data.package)? {
+            project
+                .add(
+                    lua_dependency::DependencyType::Regular(dependencies.iter().collect()),
+                    &db,
+                )
+                .await?;
+            project
+                .add_git(lua_dependency::LuaDependencyType::Regular(
+                    git_dependencies.iter().collect(),
+                ))
+                .await?;
+        }
+        sync_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
     }
 
     let build_packages = data.build.unwrap_or_default();
@@ -72,13 +88,20 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
                 PackageReqOrGitShorthand::PackageReq(req) => Either::Left(req.clone()),
                 PackageReqOrGitShorthand::GitShorthand(url) => Either::Right(url.clone()),
             });
-        project
-            .add(lua_dependency::DependencyType::Build(dependencies), &db)
-            .await?;
-        project
-            .add_git(lua_dependency::LuaDependencyType::Build(git_dependencies))
-            .await?;
-        sync_build_dependencies_if_locked(&project, progress.clone(), &config).await?;
+        for project in workspace.try_members_mut(&data.package)? {
+            project
+                .add(
+                    lua_dependency::DependencyType::Build(dependencies.iter().collect()),
+                    &db,
+                )
+                .await?;
+            project
+                .add_git(lua_dependency::LuaDependencyType::Build(
+                    git_dependencies.iter().collect(),
+                ))
+                .await?;
+        }
+        sync_build_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
     }
 
     let test_packages = data.test.unwrap_or_default();
@@ -88,13 +111,20 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
                 PackageReqOrGitShorthand::PackageReq(req) => Either::Left(req.clone()),
                 PackageReqOrGitShorthand::GitShorthand(url) => Either::Right(url.clone()),
             });
-        project
-            .add(lua_dependency::DependencyType::Test(dependencies), &db)
-            .await?;
-        project
-            .add_git(lua_dependency::LuaDependencyType::Test(git_dependencies))
-            .await?;
-        sync_test_dependencies_if_locked(&project, progress.clone(), &config).await?;
+        for project in workspace.try_members_mut(&data.package)? {
+            project
+                .add(
+                    lua_dependency::DependencyType::Test(dependencies.iter().collect()),
+                    &db,
+                )
+                .await?;
+            project
+                .add_git(lua_dependency::LuaDependencyType::Test(
+                    git_dependencies.iter().collect(),
+                ))
+                .await?;
+        }
+        sync_test_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
     }
 
     Ok(())
@@ -123,6 +153,7 @@ mod test {
         std::env::set_current_dir(&project_root).unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let args = Add {
+            package: None,
             package_req: vec!["penlight@1.5".parse().unwrap()],
             force: false,
             build: Option::None,
@@ -136,6 +167,7 @@ mod test {
         assert!(lockfile_content.contains("luafilesystem")); // dependency
 
         let args = Add {
+            package: None,
             package_req: vec!["md5".parse().unwrap()],
             force: false,
             build: Option::None,
@@ -166,6 +198,7 @@ mod test {
         std::env::set_current_dir(&project_root).unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let args = Add {
+            package: None,
             package_req: Vec::new(),
             force: false,
             build: Option::Some(vec!["penlight@1.5".parse().unwrap()]),
@@ -179,6 +212,7 @@ mod test {
         assert!(lockfile_content.contains("luafilesystem")); // dependency
 
         let args = Add {
+            package: None,
             package_req: Vec::new(),
             force: false,
             build: Option::Some(vec!["md5".parse().unwrap()]),
@@ -209,6 +243,7 @@ mod test {
         std::env::set_current_dir(&project_root).unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let args = Add {
+            package: None,
             package_req: Vec::new(),
             force: false,
             build: Option::None,
@@ -222,6 +257,7 @@ mod test {
         assert!(lockfile_content.contains("luafilesystem")); // dependency
 
         let args = Add {
+            package: None,
             package_req: Vec::new(),
             force: false,
             build: Option::None,

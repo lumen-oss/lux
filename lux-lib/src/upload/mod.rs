@@ -27,7 +27,7 @@ use std::io::Read;
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct ProjectUpload<'a> {
-    project: Project,
+    project: &'a Project,
     api_key: Option<ApiKey>,
     #[cfg(feature = "gpgme")]
     sign_protocol: SignatureProtocol,
@@ -227,7 +227,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     helpers::ensure_user_exists(&client, &api_key, config.server()).await?;
 
     let (rockspec, rockspec_content) =
-        helpers::generate_rockspec(&project, &client, &api_key, config, progress, package_db)
+        helpers::generate_rockspec(project, &client, &api_key, config, progress, package_db)
             .await?;
 
     #[cfg(not(feature = "gpgme"))]

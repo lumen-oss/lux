@@ -2,7 +2,9 @@ use std::env;
 
 use clap::Args;
 use eyre::Result;
-use lux_lib::{config::Config, lua_version::LuaVersion, operations, path::Paths, project::Project};
+use lux_lib::{
+    config::Config, lua_version::LuaVersion, operations, path::Paths, workspace::Workspace,
+};
 
 #[derive(Args)]
 pub struct Exec {
@@ -21,8 +23,8 @@ pub struct Exec {
 }
 
 pub async fn exec(run: Exec, config: Config) -> Result<()> {
-    let project = Project::current()?;
-    let tree = match &project {
+    let workspace = Workspace::current()?;
+    let tree = match &workspace {
         Some(project) => project.tree(&config)?,
         None => {
             let lua_version = LuaVersion::from(&config)?.clone();
@@ -35,7 +37,7 @@ pub async fn exec(run: Exec, config: Config) -> Result<()> {
         // safe as long as this is single-threaded
         env::set_var("PATH", paths.path_prepended().joined());
     }
-    operations::Exec::new(&run.command, project.as_ref(), &config)
+    operations::Exec::new(&run.command, workspace.as_ref(), &config)
         .args(run.args.unwrap_or_default())
         .disable_loader(run.no_loader)
         .exec()

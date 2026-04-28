@@ -550,7 +550,7 @@ mod tests {
         let lua = LuaInstallation::new(lua_version, &config, &bar)
             .await
             .unwrap();
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
         let progress = MultiProgress::new(&config);
         run_build(

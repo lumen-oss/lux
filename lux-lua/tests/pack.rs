@@ -5,7 +5,7 @@ use lux_lib::{
     config::ConfigBuilder,
     lua_installation::detect_installed_lua_version,
     lua_version::LuaVersion,
-    operations::{BuildProject, Pack},
+    operations::{BuildWorkspace, Pack},
     project::Project,
 };
 use mlua::Lua;
@@ -62,7 +62,7 @@ url = "https://github.com/lumen-oss/luarocks-stub"
     let temp_dir = TempDir::new().unwrap();
     let dest_dir = temp_dir.to_path_buf();
 
-    let package = BuildProject::new(&project, &config)
+    let package = BuildWorkspace::new(&project, &config)
         .no_lock(false)
         .only_deps(false)
         .build()
