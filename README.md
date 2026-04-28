@@ -101,6 +101,7 @@ The following table provides a brief comparison:
 | Generate a `.luarc` file with dependencies                                              | :white_check_mark:           | :x:                |
 | Git dependencies in local projects                                                      | :white_check_mark:           | :x:                |
 | Vendor sources for offline use                                                          | :white_check_mark:           | :x:                |
+| Multiple projects in a single workspace                                                 | :white_check_mark:           | :x:                |
 | Load RockSpecs and LuaRocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:       | :x:                |
 
 [^1]: Supported via a compatibility layer that uses LuaRocks as a backend.
