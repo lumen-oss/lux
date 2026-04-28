@@ -1,0 +1,11 @@
+package = "foo"
+version = "1.0.0"
+lua = ">=5.1"
+
+[description]
+summary = ""
+maintainer = "lumen-labs"
+labels = [""]
+
+[run]
+args = ["src/main.lua"]
