@@ -35,7 +35,7 @@ pub fn format(args: Fmt) -> Result<()> {
         .or_else(|_| stylua_lib::editorconfig::parse(Config::new(), &project.root().join("*.lua")))
         .unwrap_or_default();
 
-    let emmylua_config = std::path::absolute(".editorconfig");
+    let emmylua_config = project.root().join(".editorconfig");
 
     let workspace_or_file = args
         .workspace_or_file
@@ -72,8 +72,11 @@ pub fn format(args: Fmt) -> Result<()> {
                     .context(format!("error formatting {} with stylua.", file.display()))?,
                     FmtBackend::EmmyluaCodestyle => {
                         let uri = file.to_slash_lossy().to_string();
-                        if let Ok(config) = &emmylua_config {
-                            emmylua_codestyle::update_code_style(&uri, &config.to_slash_lossy());
+                        if emmylua_config.is_file() {
+                            emmylua_codestyle::update_code_style(
+                                &uri,
+                                &emmylua_config.to_slash_lossy(),
+                            );
                         }
                         emmylua_codestyle::reformat_code(
                             &unformatted_code,
@@ -104,9 +107,9 @@ pub fn format(args: Fmt) -> Result<()> {
             )?,
             FmtBackend::EmmyluaCodestyle => {
                 let uri = rockspec.to_slash_lossy().to_string();
-                if let Ok(config) = &emmylua_config {
-                    emmylua_codestyle::update_code_style(&uri, &config.to_slash_lossy());
-                };
+                if emmylua_config.is_file() {
+                    emmylua_codestyle::update_code_style(&uri, &emmylua_config.to_slash_lossy());
+                }
                 emmylua_codestyle::reformat_code(
                     &unformatted_code,
                     &uri,
