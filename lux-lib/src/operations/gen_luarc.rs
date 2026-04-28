@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::lockfile::LocalPackageLockType;
-use crate::project::Project;
-use crate::project::ProjectError;
-use crate::project::ProjectTreeError;
-use crate::project::LUX_DIR_NAME;
+use crate::workspace::Workspace;
+use crate::workspace::WorkspaceError;
+use crate::workspace::WorkspaceTreeError;
+use crate::workspace::LUX_DIR_NAME;
 use bon::Builder;
 use itertools::Itertools;
 use path_slash::PathBufExt;
@@ -18,9 +18,9 @@ use tokio::fs;
 #[derive(Error, Debug)]
 pub enum GenLuaRcError {
     #[error(transparent)]
-    Project(#[from] ProjectError),
+    Workspace(#[from] WorkspaceError),
     #[error(transparent)]
-    ProjectTree(#[from] ProjectTreeError),
+    WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("failed to serialize luarc content:\n{0}")]
     Serialize(String),
     #[error("failed to deserialize luarc content:\n{0}")]
@@ -33,7 +33,7 @@ pub enum GenLuaRcError {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub(crate) struct GenLuaRc<'a> {
     config: &'a Config,
-    project: &'a Project,
+    workspace: &'a Workspace,
 }
 
 impl<State> GenLuaRcBuilder<'_, State>
@@ -52,11 +52,11 @@ struct LuaRC {
     other: BTreeMap<String, serde_json::Value>,
 
     #[serde(default)]
-    workspace: Workspace,
+    workspace: LuaRcWorkspace,
 }
 
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
-struct Workspace {
+struct LuaRcWorkspace {
     #[serde(flatten)] // <-- capture any unknown keys here
     other: BTreeMap<String, serde_json::Value>,
 
@@ -69,16 +69,16 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
     if !config.generate_luarc() {
         return Ok(());
     }
-    let project = args.project;
-    let lockfile = project.lockfile()?;
-    let luarc_path = project.luarc_path();
+    let workspace = args.workspace;
+    let lockfile = workspace.lockfile()?;
+    let luarc_path = workspace.luarc_path();
 
     // read the existing .luarc file or initialise a new one if it doesn't exist
     let luarc_content = fs::read_to_string(&luarc_path)
         .await
         .unwrap_or_else(|_| "{}".into());
 
-    let dependency_tree = project.tree(config)?;
+    let dependency_tree = workspace.tree(config)?;
     let dependency_dirs = lockfile
         .local_pkg_lock(&LocalPackageLockType::Regular)
         .rocks()
@@ -87,9 +87,9 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .filter_map(Result::ok)
         .map(|rock_layout| rock_layout.src)
         .filter(|dir| dir.is_dir())
-        .filter_map(|dependency_dir| diff_paths(dependency_dir, project.root()));
+        .filter_map(|dependency_dir| diff_paths(dependency_dir, workspace.root()));
 
-    let test_dependency_tree = project.test_tree(config)?;
+    let test_dependency_tree = workspace.test_tree(config)?;
     let test_dependency_dirs = lockfile
         .local_pkg_lock(&LocalPackageLockType::Test)
         .rocks()
@@ -98,7 +98,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .filter_map(Result::ok)
         .map(|rock_layout| rock_layout.src)
         .filter(|dir| dir.is_dir())
-        .filter_map(|test_dependency_dir| diff_paths(test_dependency_dir, project.root()));
+        .filter_map(|test_dependency_dir| diff_paths(test_dependency_dir, workspace.root()));
 
     let library_dirs = dependency_dirs
         .chain(test_dependency_dirs)

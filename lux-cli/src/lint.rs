@@ -1,10 +1,10 @@
 use clap::Args;
 use eyre::Result;
 use itertools::Itertools;
-use lux_lib::{config::Config, operations::Exec, project::Project};
+use lux_lib::{config::Config, operations::Exec, workspace::Workspace};
 use path_slash::PathBufExt;
 
-use crate::project::top_level_ignored_files;
+use crate::workspace::top_level_ignored_files;
 
 #[derive(Args)]
 pub struct Lint {
@@ -19,9 +19,9 @@ pub struct Lint {
 }
 
 pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
-    let project = Project::current()?;
-    let root_dir = match &project {
-        Some(project) => project.root().to_slash_lossy().to_string(),
+    let workspace = Workspace::current()?;
+    let root_dir = match &workspace {
+        Some(workspace) => workspace.root().to_slash_lossy().to_string(),
         None => std::env::current_dir()?.to_slash_lossy().to_string(),
     };
 
@@ -29,8 +29,8 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
         Some(args) => args,
         None if lint_args.no_ignore => Vec::new(),
         None => {
-            let ignored_files = project.iter().flat_map(|project| {
-                top_level_ignored_files(project)
+            let ignored_files = workspace.iter().flat_map(|workspace| {
+                top_level_ignored_files(workspace)
                     .into_iter()
                     .map(|file| file.to_slash_lossy().to_string())
             });

@@ -7,16 +7,16 @@ use thiserror::Error;
 use crate::{
     config::Config,
     lockfile::{
-        LocalPackage, LocalPackageLockType, Lockfile, PinnedState, ProjectLockfile, ReadOnly,
-        ReadWrite,
+        LocalPackage, LocalPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
+        WorkspaceLockfile,
     },
     lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageReq, RockConstraintUnsatisfied},
     progress::{MultiProgress, Progress},
-    project::{Project, ProjectError, ProjectTreeError},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     remote_package_source::RemotePackageSource,
     tree::{self, Tree, TreeError},
+    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
 use super::{Install, InstallError, PackageInstallSpec, RemoveError, SyncError, Uninstall};
@@ -31,17 +31,17 @@ pub enum UpdateError {
     Remove(#[from] RemoveError),
     #[error("error initialising remote package DB:\n{0}")]
     RemotePackageDB(#[from] RemotePackageDBError),
-    #[error("error loading project: {0}")]
-    Project(#[from] ProjectError),
+    #[error("error loading the workspace:\n{0}")]
+    Workspace(#[from] WorkspaceError),
     #[error(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
     Tree(#[from] TreeError),
-    #[error("error initialising project tree: {0}")]
-    ProjectTree(#[from] ProjectTreeError),
-    #[error("error syncing the project tree: {0}")]
+    #[error("error initialising the workspace install tree:\n{0}")]
+    WorkspaceTree(#[from] WorkspaceTreeError),
+    #[error("error syncing the workspace install tree:\n{0}")]
     Sync(#[from] SyncError),
 }
 
@@ -120,23 +120,23 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
             }
         };
 
-        match Project::current()? {
-            Some(project) => update_project(project, args, package_db, progress).await,
+        match Workspace::current()? {
+            Some(workspace) => update_workspace(workspace, args, package_db, progress).await,
             None => update_install_tree(args, package_db, progress).await,
         }
     }
 }
 
-async fn update_project(
-    project: Project,
+async fn update_workspace(
+    workspace: Workspace,
     args: Update<'_>,
     package_db: RemotePackageDB,
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<Vec<LocalPackage>, UpdateError> {
-    let mut project_lockfile = project.lockfile()?.write_guard();
-    let tree = project.tree(args.config)?;
+    let mut project_lockfile = workspace.lockfile()?.write_guard();
+    let tree = workspace.tree(args.config)?;
 
-    let dep_report = super::Sync::new(&project, args.config)
+    let dep_report = super::Sync::new(&workspace, args.config)
         .validate_integrity(args.validate_integrity.unwrap_or(false))
         .sync_dependencies()
         .await?;
@@ -155,8 +155,8 @@ async fn update_project(
     .chain(dep_report.added)
     .chain(dep_report.removed);
 
-    let test_tree = project.test_tree(args.config)?;
-    let dep_report = super::Sync::new(&project, args.config)
+    let test_tree = workspace.test_tree(args.config)?;
+    let dep_report = super::Sync::new(&workspace, args.config)
         .validate_integrity(false)
         .sync_test_dependencies()
         .await?;
@@ -174,9 +174,9 @@ async fn update_project(
     .chain(dep_report.added)
     .chain(dep_report.removed);
 
-    let build_tree = project.build_tree(args.config)?;
+    let build_tree = workspace.build_tree(args.config)?;
 
-    let dep_report = super::Sync::new(&project, args.config)
+    let dep_report = super::Sync::new(&workspace, args.config)
         .validate_integrity(false)
         .sync_build_dependencies()
         .await?;
@@ -203,7 +203,7 @@ async fn update_project(
 
 async fn update_dependency_tree(
     tree: Tree,
-    project_lockfile: &mut ProjectLockfile<ReadWrite>,
+    project_lockfile: &mut WorkspaceLockfile<ReadWrite>,
     lock_type: LocalPackageLockType,
     package_db: RemotePackageDB,
     config: &Config,

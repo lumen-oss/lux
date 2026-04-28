@@ -741,7 +741,7 @@ pub enum LocalPackageLockType {
 
 /// A lockfile for a Lua project
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ProjectLockfile<P: LockfilePermissions> {
+pub struct WorkspaceLockfile<P: LockfilePermissions> {
     #[serde(skip)]
     filepath: PathBuf,
     #[serde(skip)]
@@ -921,7 +921,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     }
 }
 
-impl<P: LockfilePermissions> ProjectLockfile<P> {
+impl<P: LockfilePermissions> WorkspaceLockfile<P> {
     pub(crate) fn rocks(
         &self,
         deps: &LocalPackageLockType,
@@ -1095,13 +1095,13 @@ impl Lockfile<ReadOnly> {
     //}
 }
 
-impl ProjectLockfile<ReadOnly> {
+impl WorkspaceLockfile<ReadOnly> {
     /// Create a new `ProjectLockfile`, writing an empty file if none exists.
-    pub fn new(filepath: PathBuf) -> Result<ProjectLockfile<ReadOnly>, LockfileError> {
+    pub fn new(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         // Ensure that the lockfile exists
         match File::options().create_new(true).write(true).open(&filepath) {
             Ok(mut file) => {
-                let empty_lockfile: ProjectLockfile<ReadOnly> = ProjectLockfile {
+                let empty_lockfile: WorkspaceLockfile<ReadOnly> = WorkspaceLockfile {
                     filepath: filepath.clone(),
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
@@ -1121,9 +1121,9 @@ impl ProjectLockfile<ReadOnly> {
     }
 
     /// Load a `ProjectLockfile`, failing if none exists.
-    pub fn load(filepath: PathBuf) -> Result<ProjectLockfile<ReadOnly>, LockfileError> {
+    pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         let content = std::fs::read_to_string(&filepath).map_err(LockfileError::Load)?;
-        let mut lockfile: ProjectLockfile<ReadOnly> =
+        let mut lockfile: WorkspaceLockfile<ReadOnly> =
             serde_json::from_str(&content).map_err(LockfileError::ParseJson)?;
 
         lockfile.filepath = filepath;
@@ -1132,8 +1132,8 @@ impl ProjectLockfile<ReadOnly> {
     }
 
     /// Creates a temporary, writeable project lockfile which can never flush.
-    fn into_temporary(self) -> ProjectLockfile<ReadWrite> {
-        ProjectLockfile::<ReadWrite> {
+    fn into_temporary(self) -> WorkspaceLockfile<ReadWrite> {
+        WorkspaceLockfile::<ReadWrite> {
             _marker: PhantomData,
             filepath: self.filepath,
             version: self.version,
@@ -1205,7 +1205,7 @@ impl Lockfile<ReadWrite> {
     // TODO: `fn entrypoints() -> Vec<LockedRock>`
 }
 
-impl ProjectLockfile<ReadWrite> {
+impl WorkspaceLockfile<ReadWrite> {
     pub(crate) fn remove(&mut self, target: &LocalPackage, deps: &LocalPackageLockType) {
         match deps {
             LocalPackageLockType::Regular => self.dependencies.remove(target),
@@ -1231,7 +1231,7 @@ impl ProjectLockfile<ReadWrite> {
 
 pub struct LockfileGuard(Lockfile<ReadWrite>);
 
-pub struct ProjectLockfileGuard(ProjectLockfile<ReadWrite>);
+pub struct ProjectLockfileGuard(WorkspaceLockfile<ReadWrite>);
 
 impl Serialize for LockfileGuard {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1268,7 +1268,7 @@ impl<'de> Deserialize<'de> for ProjectLockfileGuard {
         D: serde::Deserializer<'de>,
     {
         Ok(ProjectLockfileGuard(
-            ProjectLockfile::<ReadWrite>::deserialize(deserializer)?,
+            WorkspaceLockfile::<ReadWrite>::deserialize(deserializer)?,
         ))
     }
 }
@@ -1282,7 +1282,7 @@ impl Deref for LockfileGuard {
 }
 
 impl Deref for ProjectLockfileGuard {
-    type Target = ProjectLockfile<ReadWrite>;
+    type Target = WorkspaceLockfile<ReadWrite>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

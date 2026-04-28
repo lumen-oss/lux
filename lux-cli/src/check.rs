@@ -2,9 +2,9 @@ use clap::{Args, ValueEnum};
 use emmylua_check::OutputDestination;
 use eyre::{eyre, Result};
 use itertools::Itertools;
-use lux_lib::{config::Config, progress::MultiProgress, project::Project};
+use lux_lib::{config::Config, progress::MultiProgress, workspace::Workspace};
 
-use crate::utils::project::{sync_dependencies_if_locked, sync_test_dependencies_if_locked};
+use crate::workspace::{sync_dependencies_if_locked, sync_test_dependencies_if_locked};
 
 #[derive(Args)]
 pub struct Check {
@@ -44,33 +44,37 @@ impl From<OutputFormat> for emmylua_check::OutputFormat {
 }
 
 pub async fn check(args: Check, config: Config) -> Result<()> {
-    let project = Project::current_or_err()?;
+    let workspace = Workspace::current_or_err()?;
 
     let progress = MultiProgress::new_arc(&config);
-    sync_dependencies_if_locked(&project, progress.clone(), &config).await?;
-    sync_test_dependencies_if_locked(&project, progress, &config).await?;
+    sync_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+    sync_test_dependencies_if_locked(&workspace, progress, &config).await?;
 
-    let project_root = project.root();
-    let workspace = vec![
-        project_root.join("src"),
-        project_root.join("lua"),
-        // For now, we don't include tests
-        // because they require LLS_Addons definitions for busted
+    let workspace_dirs = workspace
+        .members()
+        .iter()
+        .map(|project| project.root())
+        .flat_map(|project_root| {
+            vec![
+                project_root.join("src"),
+                project_root.join("lua"),
+                // For now, we don't include tests
+                // because they require LLS_Addons definitions for busted
 
-        // project_root.join("test"),
-        // project_root.join("tests"),
-        // project_root.join("spec"),
-    ]
-    .into_iter()
-    .filter(|dir| dir.is_dir())
-    .collect_vec();
+                // project_root.join("test"),
+                // project_root.join("tests"),
+                // project_root.join("spec"),
+            ]
+        })
+        .filter(|dir| dir.is_dir())
+        .collect_vec();
 
-    if workspace.is_empty() {
+    if workspace_dirs.is_empty() {
         println!("Nothing to check!");
         return Ok(());
     }
 
-    let luarc_path = project.luarc_path();
+    let luarc_path = workspace.luarc_path();
     let rc_files = if luarc_path.is_file() {
         Some(vec![luarc_path])
     } else {
@@ -78,7 +82,7 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
     };
     let emmylua_check_args = emmylua_check::CmdArgs {
         config: rc_files,
-        workspace,
+        workspace: workspace_dirs,
         ignore: args.ignore,
         output_format: args.output_format.into(),
         output: args.output,

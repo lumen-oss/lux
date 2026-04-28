@@ -25,15 +25,16 @@ use crate::{
     },
     package::PackageReq,
     progress::{MultiProgress, Progress, ProgressBar},
-    project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
+    project::project_toml::LocalProjectTomlValidationError,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::EntryType,
+    workspace::{Workspace, WorkspaceError},
 };
 
 pub enum VendorTarget {
-    /// Vendor dependencies of a Lux project
-    Project(Project),
+    /// Vendor dependencies of a Lux workspace
+    Workspace(Workspace),
     /// Vendor dependencies of a Lua RockSpec
     Rockspec(RemoteLuaRockspec),
 }
@@ -64,7 +65,7 @@ pub struct Vendor<'a> {
 #[derive(Error, Debug)]
 pub enum VendorError {
     #[error(transparent)]
-    Project(#[from] ProjectError),
+    Workspace(#[from] WorkspaceError),
     #[error("project validation failed:\n{0}")]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("error initialising remote package DB:\n{0}")]
@@ -147,26 +148,29 @@ async fn mk_resolve_args(
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<(RemotePackageDB, Vec<PackageInstallSpec>), VendorError> {
     match &target {
-        VendorTarget::Project(project) => {
-            let toml = project.toml().into_local()?;
-            let lockfile = project.lockfile()?;
+        VendorTarget::Workspace(workspace) => {
+            let lockfile = workspace.lockfile()?;
             let package_db = if !no_lock {
                 lockfile.local_pkg_lock(&lock_type).clone().into()
             } else {
                 let bar = progress.map(|p| p.new_bar());
                 RemotePackageDB::from_config(config, &bar).await?
             };
-            let mut install_specs = mk_dependencies_vec(&lock_type, &toml)?;
-            if lock_type == LocalPackageLockType::Test {
-                for test_spec_dependency in toml
-                    .test()
-                    .current_platform()
-                    .test_dependencies(project)
-                    .iter()
-                    .cloned()
-                    .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
-                {
-                    install_specs.push(test_spec_dependency);
+            let mut install_specs = Vec::new();
+            for project in workspace.members() {
+                let toml = project.toml().into_local()?;
+                push_dependencies(&lock_type, &toml, &mut install_specs)?;
+                if lock_type == LocalPackageLockType::Test {
+                    for test_spec_dependency in toml
+                        .test()
+                        .current_platform()
+                        .test_dependencies(project)
+                        .iter()
+                        .cloned()
+                        .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
+                    {
+                        install_specs.push(test_spec_dependency);
+                    }
                 }
             }
             Ok((package_db, install_specs))
@@ -174,16 +178,18 @@ async fn mk_resolve_args(
         VendorTarget::Rockspec(remote_lua_rockspec) => {
             let bar = progress.map(|p| p.new_bar());
             let package_db = RemotePackageDB::from_config(config, &bar).await?;
-            let install_specs = mk_dependencies_vec(&lock_type, remote_lua_rockspec)?;
+            let mut install_specs = Vec::new();
+            push_dependencies(&lock_type, remote_lua_rockspec, &mut install_specs)?;
             Ok((package_db, install_specs))
         }
     }
 }
 
-fn mk_dependencies_vec<R: Rockspec>(
+fn push_dependencies<R: Rockspec>(
     lock_type: &LocalPackageLockType,
     rockspec: &R,
-) -> Result<Vec<PackageInstallSpec>, LocalProjectTomlValidationError> {
+    install_specs: &mut Vec<PackageInstallSpec>,
+) -> Result<(), LocalProjectTomlValidationError> {
     let dependencies: Vec<&PackageReq> = match lock_type {
         LocalPackageLockType::Regular => rockspec
             .dependencies()
@@ -204,13 +210,15 @@ fn mk_dependencies_vec<R: Rockspec>(
             .map(|dep| dep.package_req())
             .collect_vec(),
     };
-
-    Ok(dependencies
-        .into_iter()
-        .unique()
-        .cloned()
-        .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
-        .collect_vec())
+    install_specs.extend(
+        dependencies
+            .into_iter()
+            .unique()
+            .cloned()
+            .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
+            .collect_vec(),
+    );
+    Ok(())
 }
 
 async fn vendor_sources(

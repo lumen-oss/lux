@@ -1,7 +1,7 @@
 #![allow(ambiguous_glob_reexports)]
 
 mod build_lua;
-mod build_project;
+mod build_workspace;
 mod download;
 mod exec;
 mod fetch;
@@ -21,7 +21,7 @@ mod update;
 mod vendor;
 
 pub use build_lua::*;
-pub use build_project::*;
+pub use build_workspace::*;
 pub use download::*;
 pub use exec::*;
 pub use fetch::*;

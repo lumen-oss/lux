@@ -17,10 +17,10 @@ use crate::{
     operations::resolve::{Resolve, ResolveDependenciesError},
     package::{PackageName, PackageNameList},
     progress::{MultiProgress, Progress, ProgressBar},
-    project::{Project, ProjectTreeError},
     remote_package_db::{RemotePackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
     rockspec::Rockspec,
     tree::{self, Tree, TreeError},
+    workspace::{Workspace, WorkspaceTreeError},
 };
 
 pub use crate::operations::install::spec::PackageInstallSpec;
@@ -62,15 +62,15 @@ where
         self._tree(tree)
     }
 
-    pub fn project(
+    pub fn workspace(
         self,
-        project: &'a Project,
-    ) -> Result<InstallBuilder<'a, install_builder::SetTree<State>>, ProjectTreeError>
+        workspace: &'a Workspace,
+    ) -> Result<InstallBuilder<'a, install_builder::SetTree<State>>, WorkspaceTreeError>
     where
         State::Tree: install_builder::IsUnset,
     {
         let config = self.config;
-        Ok(self._tree(project.tree(config)?))
+        Ok(self._tree(workspace.tree(config)?))
     }
 
     pub fn packages(self, packages: Vec<PackageInstallSpec>) -> Self {
@@ -149,22 +149,22 @@ pub enum InstallError {
     FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
     Tree(#[from] TreeError),
+    #[error(transparent)]
+    WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("error instantiating LuaRocks compatibility layer:\n{0}")]
-    LuaRocksError(#[from] LuaRocksError),
+    LuaRocks(#[from] LuaRocksError),
     #[error("error installing LuaRocks compatibility layer:\n{0}")]
-    LuaRocksInstallError(#[from] LuaRocksInstallError),
+    LuaRocksInstall(#[from] LuaRocksInstallError),
     #[error("failed to build {0}: {1}")]
-    BuildError(PackageName, BuildError),
+    Build(PackageName, BuildError),
     #[error("failed to install build depencency {0}:\n{1}")]
-    BuildDependencyError(PackageName, BuildError),
+    BuildDependency(PackageName, BuildError),
     #[error("error initialising remote package DB:\n{0}")]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to install pre-built rock {0}:\n{1}")]
-    InstallBinaryRockError(PackageName, InstallBinaryRockError),
+    InstallBinaryRock(PackageName, InstallBinaryRockError),
     #[error("integrity error for package {0}:\n{1}")]
     Integrity(PackageName, RemotePackageDbIntegrityError),
-    #[error(transparent)]
-    ProjectTreeError(#[from] ProjectTreeError),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
 }
@@ -227,7 +227,7 @@ async fn install_impl(
             .behaviour(build_dep_spec.build_behaviour)
             .build()
             .await
-            .map_err(|err| InstallError::BuildDependencyError(package, err))?;
+            .map_err(|err| InstallError::BuildDependency(package, err))?;
         build_lockfile.add_entrypoint(&pkg);
     }
 
@@ -411,7 +411,7 @@ async fn install_rockspec(
         .source_spec(source_spec)
         .build()
         .await
-        .map_err(|err| InstallError::BuildError(package, err))?;
+        .map_err(|err| InstallError::Build(package, err))?;
 
     bar.map(|b| b.finish_and_clear());
 
@@ -455,7 +455,7 @@ async fn install_binary_rock(
     .behaviour(behaviour)
     .install()
     .await
-    .map_err(|err| InstallError::InstallBinaryRockError(package, err))?;
+    .map_err(|err| InstallError::InstallBinaryRock(package, err))?;
 
     bar.map(|b| b.finish_and_clear());
 

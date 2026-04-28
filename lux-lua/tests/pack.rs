@@ -5,8 +5,9 @@ use lux_lib::{
     config::ConfigBuilder,
     lua_installation::detect_installed_lua_version,
     lua_version::LuaVersion,
-    operations::{BuildProject, Pack},
+    operations::{BuildWorkspace, Pack},
     project::Project,
+    workspace::Workspace,
 };
 use mlua::Lua;
 use zip::ZipArchive;
@@ -17,24 +18,24 @@ async fn pack_project_with_etc_directories() {
         .join("../lux-lib/resources/test/sample-projects/init/");
     let temp_dir = TempDir::new().unwrap();
     temp_dir.copy_from(&project_root, &["**"]).unwrap();
-    let project_root = temp_dir.path();
-    let foo_module_dir = project_root.join("src").join("foo");
+    let workspace_root = temp_dir.path();
+    let foo_module_dir = workspace_root.join("src").join("foo");
     tokio::fs::create_dir_all(&foo_module_dir).await.unwrap();
     let bar_module_file = foo_module_dir.join("bar.lua");
     tokio::fs::write(&bar_module_file, "print('foo.bar')")
         .await
         .unwrap();
-    let plugin_dir = project_root.join("plugin");
+    let plugin_dir = workspace_root.join("plugin");
     tokio::fs::create_dir_all(&plugin_dir).await.unwrap();
     let plugin_script = plugin_dir.join("foo.lua");
     tokio::fs::write(&plugin_script, "print('foo')")
         .await
         .unwrap();
-    let config_file = project_root.join("cfg.toml");
+    let config_file = workspace_root.join("cfg.toml");
     tokio::fs::write(&config_file, "enable = true")
         .await
         .unwrap();
-    let project_toml_file = project_root.join("lux.toml");
+    let project_toml_file = workspace_root.join("lux.toml");
     let project_toml_content = tokio::fs::read_to_string(&project_toml_file).await.unwrap();
     let project_toml_content = format!(
         r#"{project_toml_content}
@@ -57,17 +58,19 @@ url = "https://github.com/lumen-oss/luarocks-stub"
         .lua_version(lua_version)
         .build()
         .unwrap();
-    let project = Project::from_exact(project_root).unwrap().unwrap();
-    let tree = project.tree(&config).unwrap();
+    let workspace = Workspace::from_exact(workspace_root).unwrap().unwrap();
+    let tree = workspace.tree(&config).unwrap();
     let temp_dir = TempDir::new().unwrap();
     let dest_dir = temp_dir.to_path_buf();
 
-    let package = BuildProject::new(&project, &config)
+    let package = BuildWorkspace::new(&workspace, &config)
         .no_lock(false)
         .only_deps(false)
         .build()
         .await
         .unwrap()
+        .first()
+        .cloned()
         .unwrap();
     let archive_path = Pack::new(dest_dir, tree, package).pack().await.unwrap();
     let archive_file = File::open(&archive_path).unwrap();

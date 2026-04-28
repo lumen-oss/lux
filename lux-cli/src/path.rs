@@ -8,7 +8,7 @@ use strum_macros::{Display, EnumString, VariantNames};
 
 use clap::{Args, ValueEnum};
 
-use crate::utils::project::current_project_or_user_tree;
+use crate::workspace::current_workspace_or_user_tree;
 
 #[derive(Args)]
 pub struct Path {
@@ -78,7 +78,7 @@ enum Shell {
 }
 
 pub async fn path(path_data: Path, config: Config) -> Result<()> {
-    let tree = current_project_or_user_tree(&config)?;
+    let tree = current_workspace_or_user_tree(&config)?;
     let paths = Paths::new(&tree)?;
     let cmd = path_data.cmd.unwrap_or_default();
     let prepend = path_data.prepend;
