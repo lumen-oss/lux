@@ -238,7 +238,7 @@ async fn do_fetch_src<R: Rockspec>(
         RockSourceSpec::Url(url) => {
             progress.map(|p| p.set_message(format!("📥 Downloading {}", url.to_owned())));
 
-            let response = reqwest::Client::new()
+            let response = crate::http_client()
                 .get(url.clone())
                 .send()
                 .await?

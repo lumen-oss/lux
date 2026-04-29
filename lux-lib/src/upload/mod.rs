@@ -6,8 +6,8 @@ use crate::progress::{Progress, ProgressBar};
 use crate::project::project_toml::RemoteProjectTomlValidationError;
 use crate::remote_package_db::RemotePackageDB;
 use crate::rockspec::Rockspec;
-use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
+use crate::{TOOL_VERSION, USER_AGENT};
 
 use bon::Builder;
 use reqwest::StatusCode;
@@ -224,7 +224,10 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     let progress = args.progress;
     let package_db = args.package_db;
 
-    let client = Client::builder().https_only(true).build()?;
+    let client = Client::builder()
+        .https_only(true)
+        .user_agent(USER_AGENT)
+        .build()?;
 
     helpers::ensure_tool_version(&client, config.server()).await?;
     helpers::ensure_user_exists(&client, &api_key, config.server()).await?;
