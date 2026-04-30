@@ -3,6 +3,8 @@ use mlua::{ExternalResult, Lua, Table};
 
 use crate::lua_impls::{ConfigBuilderLua, ConfigLua};
 
+const DEFAULT_USER_AGENT: &str = concat!("lux-lua/", env!("CARGO_PKG_VERSION"));
+
 pub fn config(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
 
@@ -10,6 +12,7 @@ pub fn config(lua: &Lua) -> mlua::Result<Table> {
         "default",
         lua.create_function(|_, ()| {
             ConfigBuilder::default()
+                .user_agent(Some(DEFAULT_USER_AGENT.into()))
                 .build()
                 .map(ConfigLua)
                 .into_lua_err()

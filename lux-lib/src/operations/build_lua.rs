@@ -394,7 +394,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 
     progress.map(|p| p.set_message(format!("📥 Downloading {}", &source_url)));
 
-    let response = reqwest::Client::new()
+    let response = crate::reqwest::new_https_client(args.config)?
         .get(source_url)
         .send()
         .await?

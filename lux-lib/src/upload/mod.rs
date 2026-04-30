@@ -10,11 +10,8 @@ use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
 
 use bon::Builder;
+use reqwest::multipart::{Form, Part};
 use reqwest::StatusCode;
-use reqwest::{
-    multipart::{Form, Part},
-    Client,
-};
 use serde::Deserialize;
 use serde_enum_str::Serialize_enum_str;
 use thiserror::Error;
@@ -224,7 +221,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     let progress = args.progress;
     let package_db = args.package_db;
 
-    let client = Client::builder().https_only(true).build()?;
+    let client = crate::reqwest::new_https_client(args.config)?;
 
     helpers::ensure_tool_version(&client, config.server()).await?;
     helpers::ensure_user_exists(&client, &api_key, config.server()).await?;

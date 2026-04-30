@@ -17,6 +17,8 @@ use lux_lib::{
     lua_version::LuaVersion,
 };
 
+const DEFAULT_USER_AGENT: &str = concat!("lux/", env!("CARGO_PKG_VERSION"));
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -53,7 +55,8 @@ async fn main() -> Result<()> {
         )
         .verbose(Some(cli.verbose))
         .no_progress(Some(cli.no_progress))
-        .no_prompt(Some(cli.no_prompt));
+        .no_prompt(Some(cli.no_prompt))
+        .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())));
 
     if cli.nvim {
         config_builder = config_builder.entrypoint_layout(RockLayoutConfig::new_nvim_layout());

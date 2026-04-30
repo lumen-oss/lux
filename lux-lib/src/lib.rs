@@ -21,6 +21,7 @@ pub mod upload;
 pub mod which;
 
 pub(crate) mod remote_package_source;
+pub(crate) mod reqwest;
 pub(crate) mod variables;
 
 /// An internal string describing the server-side API version that we support.

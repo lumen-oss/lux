@@ -164,6 +164,11 @@ pub struct Cli {
     #[arg(long)]
     pub no_luarc: bool,
 
+    /// The user agent to set when making web requests.
+    /// Default is "lux/<version>"
+    #[arg(long)]
+    pub user_agent: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
