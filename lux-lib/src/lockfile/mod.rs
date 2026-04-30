@@ -868,38 +868,38 @@ impl<P: LockfilePermissions> Lockfile<P> {
     /// Validate the integrity of an installed package with the entry in this lockfile.
     pub(crate) fn validate_integrity(
         &self,
-        package: &LocalPackage,
+        expected_package: &LocalPackage,
     ) -> Result<(), LockfileIntegrityError> {
         // NOTE: We can't query by ID, because when installing from a lockfile (e.g. during sync),
         // the constraint is always `==`.
-        match self.list().get(package.name()) {
-            None => Err(integrity_err_not_found(package)),
+        match self.list().get(expected_package.name()) {
+            None => Err(integrity_err_not_found(expected_package)),
             Some(rocks) => match rocks
                 .iter()
-                .find(|rock| rock.version() == package.version())
+                .find(|rock| rock.version() == expected_package.version())
             {
-                None => Err(integrity_err_not_found(package)),
-                Some(expected_package) => {
-                    if package
+                None => Err(integrity_err_not_found(expected_package)),
+                Some(installed_package) => {
+                    if expected_package
                         .hashes
                         .rockspec
-                        .matches(&expected_package.hashes.rockspec)
+                        .matches(&installed_package.hashes.rockspec)
                         .is_none()
                     {
                         return Err(LockfileIntegrityError::RockspecIntegrityMismatch {
                             expected: expected_package.hashes.rockspec.clone(),
-                            got: package.hashes.rockspec.clone(),
+                            got: installed_package.hashes.rockspec.clone(),
                         });
                     }
-                    if package
+                    if expected_package
                         .hashes
                         .source
-                        .matches(&expected_package.hashes.source)
+                        .matches(&installed_package.hashes.source)
                         .is_none()
                     {
                         return Err(LockfileIntegrityError::SourceIntegrityMismatch {
                             expected: expected_package.hashes.source.clone(),
-                            got: package.hashes.source.clone(),
+                            got: installed_package.hashes.source.clone(),
                         });
                     }
                     Ok(())
