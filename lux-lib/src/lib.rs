@@ -26,7 +26,7 @@ pub(crate) mod variables;
 /// An internal string describing the server-side API version that we support.
 /// Whenever we connect to a server (like `luarocks.org`), we ensure that these
 /// two versions match (meaning we can safely communicate with the server).
-pub const TOOL_VERSION: &str = "1.0.0";
+pub(crate) const TOOL_VERSION: &str = "1.0.0";
 
 // The largest known files (Lua manifests) use up roughly ~500k steps.
-pub const ROCKSPEC_FUEL_LIMIT: i32 = 1_000_000;
+pub(crate) const ROCKSPEC_FUEL_LIMIT: i32 = 1_000_000;
