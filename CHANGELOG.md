@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.7](https://github.com/lumen-oss/lux/compare/v0.28.6...v0.28.7) `lux-cli` - 2026-05-04
+
+### Added
+- *(fmt)* source editorconfig for emmylua-codestyle ([#1483](https://github.com/lumen-oss/lux/pull/1483))
+
+## [0.37.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.36.4...lux-lib-v0.37.0) `lux-lib` - 2026-05-04
+
+### Dependencies
+- *(deps)* bump diffy from 0.4.2 to 0.5.0 ([#1478](https://github.com/lumen-oss/lux/pull/1478))
+- *(deps)* bump zip from 8.5.1 to 8.6.0 ([#1476](https://github.com/lumen-oss/lux/pull/1476))
+
+### Fixed
+- *(sync)* flipped expected/got in integrity mismatch error
+
 ## [0.28.6](https://github.com/lumen-oss/lux/compare/v0.28.5...v0.28.6) `lux-cli` - 2026-04-26
 
 ### Added
