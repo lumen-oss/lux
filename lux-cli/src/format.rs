@@ -29,11 +29,13 @@ pub fn format(args: Fmt) -> Result<()> {
         "`lx fmt` can only be executed in a lux project! Run `lx new` to create one.",
     )?;
 
-    let config: Config = std::fs::read_to_string("stylua.toml")
+    let stylua_config: Config = std::fs::read_to_string("stylua.toml")
         .or_else(|_| std::fs::read_to_string(".stylua.toml"))
         .map(|config: String| toml::from_str(&config).unwrap_or_default())
         .or_else(|_| stylua_lib::editorconfig::parse(Config::new(), &project.root().join("*.lua")))
         .unwrap_or_default();
+
+    let emmylua_config = std::path::absolute(".editorconfig");
 
     let workspace_or_file = args
         .workspace_or_file
@@ -63,13 +65,16 @@ pub fn format(args: Fmt) -> Result<()> {
                 let formatted_code = match args.backend {
                     FmtBackend::Stylua => stylua_lib::format_code(
                         &unformatted_code,
-                        config,
+                        stylua_config,
                         None,
                         stylua_lib::OutputVerification::Full,
                     )
                     .context(format!("error formatting {} with stylua.", file.display()))?,
                     FmtBackend::EmmyluaCodestyle => {
                         let uri = file.to_slash_lossy().to_string();
+                        if let Ok(config) = &emmylua_config {
+                            emmylua_codestyle::update_code_style(&uri, &config.to_slash_lossy());
+                        }
                         emmylua_codestyle::reformat_code(
                             &unformatted_code,
                             &uri,
@@ -93,12 +98,15 @@ pub fn format(args: Fmt) -> Result<()> {
         let formatted_code = match args.backend {
             FmtBackend::Stylua => stylua_lib::format_code(
                 &unformatted_code,
-                config,
+                stylua_config,
                 None,
                 stylua_lib::OutputVerification::Full,
             )?,
             FmtBackend::EmmyluaCodestyle => {
                 let uri = rockspec.to_slash_lossy().to_string();
+                if let Ok(config) = &emmylua_config {
+                    emmylua_codestyle::update_code_style(&uri, &config.to_slash_lossy());
+                };
                 emmylua_codestyle::reformat_code(
                     &unformatted_code,
                     &uri,
