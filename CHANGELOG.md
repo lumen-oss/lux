@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.8](https://github.com/lumen-oss/lux/compare/v0.28.7...v0.28.8) `lux-cli` - 2026-05-05
+
+### Dependencies
+- *(deps)* bump octocrab from 0.49.7 to 0.50.0 ([#1486](https://github.com/lumen-oss/lux/pull/1486))
+
+## [0.37.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.37.0...lux-lib-v0.37.1) `lux-lib` - 2026-05-05
+
+### Added
+- *(rockspec)* support non-lua file extensions in `install.lua` ([#1487](https://github.com/lumen-oss/lux/pull/1487))
+
 ## [0.28.7](https://github.com/lumen-oss/lux/compare/v0.28.6...v0.28.7) `lux-cli` - 2026-05-04
 
 ### Added
