@@ -39,7 +39,7 @@ impl LuaModule {
         PathBuf::from(self.0.replace('.', std::path::MAIN_SEPARATOR_STR))
     }
 
-    fn to_file_path(&self, extension: &str) -> PathBuf {
+    pub(crate) fn to_file_path(&self, extension: &str) -> PathBuf {
         PathBuf::from(self.0.replace('.', std::path::MAIN_SEPARATOR_STR) + extension)
     }
 

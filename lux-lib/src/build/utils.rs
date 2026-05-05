@@ -34,7 +34,12 @@ pub(crate) fn copy_lua_to_module_path(
     target_module: &LuaModule,
     target_dir: &Path,
 ) -> io::Result<()> {
-    let target = target_dir.join(target_module.to_lua_path());
+    // Some rockspecs abuse `install.lua` to install non-lua files, such as teal (`.tl`) files.
+    let target_module_path = source
+        .extension()
+        .map(|ext| target_module.to_file_path(&format!(".{}", ext.to_string_lossy().as_ref())))
+        .unwrap_or_else(|| target_module.to_lua_path());
+    let target = target_dir.join(target_module_path);
 
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent).map_err(|err| {
