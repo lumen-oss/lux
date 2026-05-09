@@ -101,7 +101,11 @@ pub(crate) async fn manifest_from_cache_or_server(
     // needing to pull it from the luarocks servers each time).
     let cache = mk_manifest_cache(&url, config).await?;
 
-    let client = Client::new();
+    #[cfg(not(test))]
+    let client = crate::reqwest::new_https_client(config)?;
+
+    #[cfg(test)]
+    let client = crate::reqwest::new_http_client(config)?;
 
     // Read the metadata of the local cache and attempt to get the last modified date.
     if let Ok(metadata) = fs::metadata(&cache).await {
@@ -152,7 +156,7 @@ pub(crate) async fn manifest_from_server_only(
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     let cache = mk_manifest_cache(&url, config).await?;
-    let client = Client::new();
+    let client = crate::reqwest::new_https_client(config)?;
     bar.map(|bar| bar.set_message(format!("📥 Downloading manifest from {}", &url)));
     get_manifest(url, manifest_version.clone(), &cache, &client).await
 }

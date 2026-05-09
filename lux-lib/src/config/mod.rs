@@ -17,6 +17,7 @@ pub mod external_deps;
 pub mod tree;
 
 const DEV_PATH: &str = "dev/";
+const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Error, Debug)]
 #[error("could not find a valid home directory")]
@@ -48,6 +49,10 @@ pub struct Config {
     cache_dir: PathBuf,
     data_dir: PathBuf,
     vendor_dir: Option<PathBuf>,
+
+    /// The user agent to set when making web requests.
+    /// Default: "lux-lib/<version>".
+    user_agent: String,
 
     generate_luarc: bool,
 }
@@ -181,6 +186,10 @@ impl Config {
         self.vendor_dir.as_ref()
     }
 
+    pub fn user_agent(&self) -> &str {
+        &self.user_agent
+    }
+
     pub fn generate_luarc(&self) -> bool {
         self.generate_luarc
     }
@@ -241,6 +250,7 @@ pub struct ConfigBuilder {
     /// Does not affect existing install trees.
     #[serde(default)]
     entrypoint_layout: RockLayoutConfig,
+    user_agent: Option<String>,
     generate_luarc: Option<bool>,
 }
 
@@ -390,6 +400,13 @@ impl ConfigBuilder {
         }
     }
 
+    pub fn user_agent(self, user_agent: Option<String>) -> Self {
+        Self {
+            user_agent: user_agent.or(self.user_agent),
+            ..self
+        }
+    }
+
     pub fn generate_luarc(self, generate: Option<bool>) -> Self {
         Self {
             generate_luarc: generate.or(self.generate_luarc),
@@ -433,6 +450,7 @@ impl ConfigBuilder {
             cache_dir,
             data_dir,
             vendor_dir: self.vendor_dir,
+            user_agent: self.user_agent.unwrap_or(DEFAULT_USER_AGENT.into()),
             generate_luarc: self.generate_luarc.unwrap_or(true),
         })
     }
@@ -465,6 +483,7 @@ impl From<Config> for ConfigBuilder {
             vendor_dir: value.vendor_dir,
             external_deps: value.external_deps,
             entrypoint_layout: value.entrypoint_layout,
+            user_agent: Some(value.user_agent),
             generate_luarc: Some(value.generate_luarc),
         }
     }

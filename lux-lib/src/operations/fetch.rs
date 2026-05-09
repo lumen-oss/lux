@@ -238,7 +238,9 @@ async fn do_fetch_src<R: Rockspec>(
         RockSourceSpec::Url(url) => {
             progress.map(|p| p.set_message(format!("📥 Downloading {}", url.to_owned())));
 
-            let response = reqwest::Client::new()
+            // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
+            // have HTTP URLs in `source.url`.
+            let response = crate::reqwest::new_http_client(config)?
                 .get(url.clone())
                 .send()
                 .await?
@@ -329,7 +331,8 @@ async fn do_fetch_src_rock(
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
     let progress = fetch.progress;
-    let src_rock = operations::download_src_rock(package, config.server(), progress).await?;
+    let src_rock =
+        operations::download_src_rock(package, config.server(), progress, fetch.config).await?;
     let hash = src_rock.bytes.hash()?;
     let cursor = Cursor::new(src_rock.bytes);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
