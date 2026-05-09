@@ -78,7 +78,7 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 url = { version = "2", features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
 winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
-zeroize = { version = "1" }
+zeroize = { version = "1", features = ["derive"] }
 
 [build-dependencies]
 aho-corasick = { version = "1" }
@@ -146,6 +146,6 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 url = { version = "2", features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
 winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
-zeroize = { version = "1" }
+zeroize = { version = "1", features = ["derive"] }
 
 ### END HAKARI SECTION
