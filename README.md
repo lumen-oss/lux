@@ -85,16 +85,17 @@ The following table provides a brief comparison:
 | Custom build backends                                                                   | :white_check_mark:[^1]       | :white_check_mark: |
 | `rust-mlua` build spec                                                                  | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
 | `treesitter-parser` build spec                                                          | :white_check_mark: (builtin) | :white_check_mark: (external build backend) |
-| Install prebuilt binary rocks                                                          | :white_check_mark:           | :white_check_mark: |
+| Install prebuilt binary rocks                                                           | :white_check_mark:           | :white_check_mark: |
 | Install multiple packages with a single command                                         | :white_check_mark:           | :x:                |
 | Install packages using version constraints                                              | :white_check_mark:           | :x:                |
 | Auto-detect external dependencies and Lua headers with `pkg-config`                     | :white_check_mark:           | :x:                |
 | Resolve multiple versions of the same dependency at runtime                             | :white_check_mark:           | :white_check_mark: |
-| Pack and upload prebuilt binary rocks                                                  | :white_check_mark:           | :white_check_mark: |
+| Pack and upload prebuilt binary rocks                                                   | :white_check_mark:           | :white_check_mark: |
 | Luarocks.org manifest namespaces                                                        | :white_check_mark:           | :white_check_mark: |
 | Luarocks.org dev packages                                                               | :white_check_mark:           | :white_check_mark: |
 | Versioning                                                                              | SemVer[^2]                   | arbitrary          |
 | Rockspecs with CVS/Mercurial/SVN/SSCM sources                                           | :x: (YAGNI[^3])              | :white_check_mark: |
+| Load installed packages from multiple install trees                                     | :x: ([#1493](https://github.com/lumen-oss/lux/issues/1493)) | :white_check_mark: |
 | Static type checking                                                                    | :white_check_mark:           | :x:                |
 | Generate a `.luarc` file with dependencies                                              | :white_check_mark:           | :x:                |
 | Git dependencies in local projects                                                      | :white_check_mark:           | :x:                |
