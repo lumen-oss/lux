@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0](https://github.com/lumen-oss/lux/compare/v0.28.9...v0.29.0) `lux-cli` - 2026-05-09
+
+### Added
+- [**breaking**] set user agent header for web requests ([#1481](https://github.com/lumen-oss/lux/pull/1481))
+
+## [0.38.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.37.2...lux-lib-v0.38.0) `lux-lib` - 2026-05-09
+
+### Added
+- [**breaking**] set user agent header for web requests ([#1481](https://github.com/lumen-oss/lux/pull/1481))
+
 ## [0.28.9](https://github.com/lumen-oss/lux/compare/v0.28.8...v0.28.9) `lux-cli` - 2026-05-06
 
 ### Other
