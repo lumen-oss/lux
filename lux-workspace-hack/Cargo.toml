@@ -78,7 +78,7 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 url = { version = "2", features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
 winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
-zeroize = { version = "1" }
+zeroize = { version = "1", features = ["derive"] }
 
 [build-dependencies]
 aho-corasick = { version = "1" }
@@ -90,8 +90,6 @@ cc = { version = "1", default-features = false, features = ["parallel"] }
 clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 crossbeam-utils = { version = "0.8" }
-darling = { version = "0.23" }
-darling_core = { version = "0.23", default-features = false, features = ["suggestions"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
 flate2 = { version = "1", features = ["zlib-rs"] }
@@ -146,6 +144,6 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 url = { version = "2", features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
 winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
-zeroize = { version = "1" }
+zeroize = { version = "1", features = ["derive"] }
 
 ### END HAKARI SECTION
