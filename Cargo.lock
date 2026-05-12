@@ -1534,9 +1534,9 @@ dependencies = [
 
 [[package]]
 name = "emmylua_check"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3eecc56a63157f8aa089674537becf1210c3a9fd7d541ceb08190a7d67befaa"
+checksum = "c519395e3077deaeae1c29356d4b72bcfdea7b5dd5848b1f88a3e0c2b8476834"
 dependencies = [
  "ansi_term",
  "clap 4.6.1",
@@ -1556,18 +1556,17 @@ dependencies = [
 
 [[package]]
 name = "emmylua_code_analysis"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b57ecdbb4f1a189d112b6a4ccf4066e8995c50e40b0a6cef2bfebdcf71e645b"
+checksum = "8fb3046fabe84e123eb5d03f6460daf555d5f43bafae9a94e69e75ed883b1f0f"
 dependencies = [
  "dirs",
  "emmy_lsp_types",
- "emmylua_codestyle",
  "emmylua_diagnostic_macro",
  "emmylua_parser",
  "encoding_rs",
  "flagset",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
  "include_dir",
  "internment",
  "itertools 0.14.0",
@@ -1613,10 +1612,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "emmylua_parser"
-version = "0.25.0"
+name = "emmylua_formatter"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bdd4206633acffe91a2ff2dd696980b2bde9c09a2b9a645f9b46022c8065ec0"
+checksum = "38cceb540808c80cedb2a3fb4d9d0a769a0f4697ed9e5ed840ca122fa46f62c4"
+dependencies = [
+ "clap 4.6.1",
+ "emmylua_parser",
+ "glob",
+ "hashbrown 0.17.0",
+ "mimalloc",
+ "rowan",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "similar",
+ "smol_str",
+ "toml_edit 0.22.27",
+ "walkdir",
+]
+
+[[package]]
+name = "emmylua_parser"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4238868e8f8772e1b255cc446ba80a12df68095d4a9e40e70c777c1b8f28b37"
 dependencies = [
  "rowan",
  "rust-i18n",
@@ -2275,21 +2295,12 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
-dependencies = [
- "allocator-api2",
- "equivalent",
- "foldhash 0.2.0",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.2.0",
 ]
 
@@ -3086,12 +3097,11 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libmimalloc-sys"
-version = "0.1.44"
+version = "0.1.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "667f4fec20f29dfc6bc7357c582d91796c169ad7e2fce709468aefeb2c099870"
+checksum = "2d1eacfa31c33ec25e873c136ba5669f00f9866d0688bea7be4d3f7e43067df6"
 dependencies = [
  "cc",
- "libc",
 ]
 
 [[package]]
@@ -3118,6 +3128,16 @@ dependencies = [
  "openssl-sys",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "libyml"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3302702afa434ffa30847a83305f0a69d6abd74293b6554c18ec85c7ef30c980"
+dependencies = [
+ "anyhow",
+ "version_check",
 ]
 
 [[package]]
@@ -3237,9 +3257,9 @@ dependencies = [
 
 [[package]]
 name = "luars"
-version = "0.17.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e48e2f276047ed2b75edf7fd051634d693c0b4ad747c37b9b267133be05f767"
+checksum = "c683445fe41a97d41580a0994d82446d4dcf014283a693bb4f242cdc9dc53a7c"
 dependencies = [
  "ahash",
  "chrono",
@@ -3252,9 +3272,9 @@ dependencies = [
 
 [[package]]
 name = "luars-derive"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c1ccef6c678ea324ae6afa818f077c9883f6695e2df61199604b30bc6981e0"
+checksum = "c72a649276cb0d9349bd29ae2695662aa6d4a1c6cc2ecf4f060e0e292eac291f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3271,6 +3291,7 @@ dependencies = [
  "edit",
  "emmylua_check",
  "emmylua_codestyle",
+ "emmylua_formatter",
  "eyre",
  "git-url-parse",
  "git2",
@@ -3418,6 +3439,7 @@ name = "lux-workspace-hack"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "allocator-api2",
  "bitflags 2.11.1",
  "bstr",
  "camino",
@@ -3559,9 +3581,9 @@ dependencies = [
 
 [[package]]
 name = "mimalloc"
-version = "0.1.48"
+version = "0.1.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8"
+checksum = "b3627c4272df786b9260cabaa46aec1d59c93ede723d4c3ef646c503816b0640"
 dependencies = [
  "libmimalloc-sys",
 ]
@@ -5558,6 +5580,21 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "serde_yml"
+version = "0.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59e2dd588bf1597a252c3b920e0143eb99b0f76e4e082f4c92ce34fbc9e71ddd"
+dependencies = [
+ "indexmap 2.14.0",
+ "itoa",
+ "libyml",
+ "memchr",
+ "ryu",
+ "serde",
+ "version_check",
 ]
 
 [[package]]
