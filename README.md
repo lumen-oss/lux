@@ -31,7 +31,8 @@
 * Automatic generation of rockspecs
   - Say goodbye to managing 10 different rockspec files in your source code :tada:
 * Integrated code formatting via `lx fmt`
-  - Powered by [`stylua`](https://github.com/JohnnyMorganz/StyLua)
+  - Powered by [`stylua`](https://github.com/JohnnyMorganz/StyLua),
+    [`emmylua_formatter`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/tree/main/crates/emmylua_formatter#emmylua-formatter),
     or [`emmylua_codestyle`](https://github.com/CppCXY/EmmyLuaCodeStyle).
 * Easily specify compatible Lua versions
   - Lux will take care of Lua header installation automatically
@@ -79,7 +80,7 @@ The following table provides a brief comparison:
 | Proper lockfile support with integrity checks                                           | :white_check_mark:           | :x: (basic, dependency versions only) |
 | Run tests with busted                                                                   | :white_check_mark:           | :white_check_mark: |
 | Linting with luacheck                                                                   | :white_check_mark:           | :x:                |
-| Code formatting with stylua                                                             | :white_check_mark:           | :x:                |
+| Code formatting with stylua, luafmt, or emmylua_codestyle                               | :white_check_mark:           | :x:                |
 | Automatic lua detection/installation                                                    | :white_check_mark:           | :x:                |
 | Default build specs                                                                     | :white_check_mark:           | :white_check_mark: |
 | Custom build backends                                                                   | :white_check_mark:[^1]       | :white_check_mark: |

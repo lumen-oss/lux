@@ -17,6 +17,7 @@ license = "LGPL-3.0+"
 ### BEGIN HAKARI SECTION
 [dependencies]
 aho-corasick = { version = "1" }
+allocator-api2 = { version = "0.2" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bstr = { version = "1" }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -36,7 +37,7 @@ generic-array = { version = "0.14", default-features = false, features = ["more_
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["js", "std"] }
 git2 = { version = "0.20", features = ["vendored-libgit2"] }
-hashbrown = { version = "0.17", default-features = false, features = ["default-hasher"] }
+hashbrown = { version = "0.17" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
@@ -69,7 +70,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
 toml = { version = "0.8" }
 toml_datetime = { version = "1", features = ["serde"] }
-toml_edit = { version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
+toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
@@ -81,6 +82,7 @@ zeroize = { version = "1" }
 
 [build-dependencies]
 aho-corasick = { version = "1" }
+allocator-api2 = { version = "0.2" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bstr = { version = "1" }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -100,7 +102,7 @@ generic-array = { version = "0.14", default-features = false, features = ["more_
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["js", "std"] }
 git2 = { version = "0.20", features = ["vendored-libgit2"] }
-hashbrown = { version = "0.17", default-features = false, features = ["default-hasher"] }
+hashbrown = { version = "0.17" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
@@ -134,7 +136,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
 toml = { version = "0.8" }
 toml_datetime = { version = "1", features = ["serde"] }
-toml_edit = { version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
+toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
