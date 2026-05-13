@@ -14,6 +14,13 @@ name = "lux-lib"
 semver_check = true
 
 [[package]]
+name = "lux-lua"
+git_tag_name = "lux-lua-v{{ version }}"
+git_release_name = "lux-lua v{{ version }}"
+semver_check = false
+git_only = true
+
+[[package]]
 name = "lux-workspace-hack"
 changelog_update = false
 release = false
