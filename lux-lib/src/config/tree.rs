@@ -4,6 +4,10 @@ use std::path::PathBuf;
 /// Template configuration for a rock's tree layout
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct RockLayoutConfig {
+    /// The directory in which to install a packages Lua source files.
+    pub(crate) src: Option<PathBuf>,
+    /// The directory in which to install a packages Lua library files.
+    pub(crate) lib: Option<PathBuf>,
     /// The root of a packages `etc` directory.
     /// If unset (the default), the root is the package root.
     /// If set, it is a directory relative to the given Lua version's install tree root.
@@ -28,11 +32,15 @@ pub struct RockLayoutConfig {
 
 impl RockLayoutConfig {
     /// Creates a `RockLayoutConfig` for use with Neovim
+    /// - `lua`: `lua`
+    /// - `lib`: `lua`
     /// - `etc_root`: `site/pack/lux`
     /// - `etc`: `start`
     /// - `opt_etc`: `opt`
     pub fn new_nvim_layout() -> Self {
         Self {
+            src: Some("lua".into()),
+            lib: Some("lua".into()),
             etc_root: Some("site/pack/lux".into()),
             etc: "start".into(),
             opt_etc: "opt".into(),
@@ -49,6 +57,8 @@ impl RockLayoutConfig {
 impl Default for RockLayoutConfig {
     fn default() -> Self {
         Self {
+            src: None,
+            lib: None,
             etc_root: None,
             etc: "etc".into(),
             opt_etc: "etc".into(),

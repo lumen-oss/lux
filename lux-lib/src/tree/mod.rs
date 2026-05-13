@@ -269,8 +269,8 @@ impl Tree {
         if layout_config.etc_root.is_some() {
             etc = etc.join(format!("{}", package.name()));
         }
-        let lib = rock_path.join("lib");
-        let src = rock_path.join("src");
+        let lib = rock_path.join(layout_config.lib.as_ref().cloned().unwrap_or("lib".into()));
+        let src = rock_path.join(layout_config.src.as_ref().cloned().unwrap_or("src".into()));
         let conf = etc.join(&layout_config.conf);
         let doc = etc.join(&layout_config.doc);
 
