@@ -17,7 +17,7 @@ license = "LGPL-3.0+"
 ### BEGIN HAKARI SECTION
 [dependencies]
 aho-corasick = { version = "1" }
-allocator-api2 = { version = "0.2" }
+allocator-api2 = { version = "0.4" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bstr = { version = "1" }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -82,7 +82,7 @@ zeroize = { version = "1" }
 
 [build-dependencies]
 aho-corasick = { version = "1" }
-allocator-api2 = { version = "0.2" }
+allocator-api2 = { version = "0.4" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bstr = { version = "1" }
 camino = { version = "1", default-features = false, features = ["serde1"] }

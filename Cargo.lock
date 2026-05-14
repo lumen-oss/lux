@@ -66,6 +66,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "allocator-api2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c880a97d28a3681c0267bd29cff89621202715b065127cd445fa0f0fe0aa2880"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2279,7 +2285,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
  "ahash",
- "allocator-api2",
+ "allocator-api2 0.2.21",
 ]
 
 [[package]]
@@ -2288,7 +2294,7 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
- "allocator-api2",
+ "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.1.5",
 ]
@@ -2299,7 +2305,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 dependencies = [
- "allocator-api2",
+ "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.2.0",
 ]
@@ -3439,7 +3445,7 @@ name = "lux-workspace-hack"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "allocator-api2",
+ "allocator-api2 0.4.0",
  "bitflags 2.11.1",
  "bstr",
  "camino",
@@ -4127,7 +4133,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf44b7ea7d91f8e335a2c934c4c00484b64d774080afea9c43180dd19b845097"
 dependencies = [
  "ahash",
- "allocator-api2",
+ "allocator-api2 0.2.21",
  "anyhow",
  "hashbrown 0.14.5",
  "ottavino-gc-arena",
@@ -4141,7 +4147,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d2cf1bdd1719f1d4c320733a94239b23ba7b91f25343220d05451fcfdc8e9b5"
 dependencies = [
- "allocator-api2",
+ "allocator-api2 0.2.21",
  "hashbrown 0.14.5",
  "ottavino-gc-arena-derive",
  "sptr",
