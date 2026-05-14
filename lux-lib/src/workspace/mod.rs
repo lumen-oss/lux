@@ -17,7 +17,10 @@ use crate::{
     package::PackageName,
     project::{Project, ProjectError, PROJECT_TOML},
     tree::{Tree, TreeError},
+    workspace::workspace_toml::WorkspaceToml,
 };
+
+pub mod workspace_toml;
 
 pub const WORKSPACE_TOML: &str = PROJECT_TOML;
 pub(crate) const LUX_DIR_NAME: &str = ".lux";
@@ -52,10 +55,14 @@ pub enum WorkspaceError {
     ReadLuxTOML(String, io::Error),
     #[error("error deserializing workspace TOML:\n{0}")]
     TOML(String),
+    #[error("no project found at `{0}`")]
+    ProjectNotFound(PathBuf),
     #[error("error deserializing project TOML:\n{0}")]
     Project(#[from] ProjectError),
     #[error("no project or workspace found")]
     NoWorkspaceOrProject,
+    #[error("empty workspace at `{0}`")]
+    EmptyWorkspace(PathBuf),
     #[error(transparent)]
     Lockfile(#[from] LockfileError),
     #[error("not in a lux project or workspace directory")]
@@ -250,9 +257,8 @@ where {
                 WorkspaceError::ReadLuxTOML(toml_path.to_string_lossy().to_string(), err)
             })?;
             let root = start.as_ref();
-
             if toml_content.contains("[workspace]") {
-                unimplemented!("multi-project workspaces")
+                Ok(Some(Self::from_toml(&toml_content, root)?))
             } else {
                 let project =
                     Project::from_exact(root)?.ok_or(WorkspaceError::NoWorkspaceOrProject)?;
@@ -283,7 +289,7 @@ where {
                         WorkspaceError::ReadLuxTOML(path.to_string_lossy().to_string(), err)
                     })?;
                     if toml_content.contains("[workspace]") {
-                        unimplemented!("multi-project workspaces")
+                        Ok(Some(Self::from_toml(&toml_content, root)?))
                     } else {
                         if let Some(parent) = root.parent() {
                             match Self::from(parent)? {
@@ -306,9 +312,29 @@ where {
                 }
             }
             // NOTE: If we hit a read error, it could be because we haven't found a PROJECT_TOML
-            // and have started searching too far upwards.
+            // or WORKSPACE_TOML and have started searching too far upwards.
             // See for example https://github.com/lumen-oss/lux/issues/532
             _ => Ok(None),
+        }
+    }
+
+    fn from_toml(toml_content: &str, root: &Path) -> Result<Self, WorkspaceError> {
+        let toml = WorkspaceToml::new(toml_content)
+            .map_err(|err| WorkspaceError::TOML(err.to_string()))?;
+        let mut members = Vec::new();
+        for relative_project_path in toml.workspace.members {
+            let project_path = root.join(relative_project_path);
+            match Project::from_exact(&project_path)? {
+                Some(project) => members.push(project),
+                None => return Err(WorkspaceError::ProjectNotFound(project_path)),
+            }
+        }
+        match NonEmpty::from_vec(members) {
+            Some(members) => Ok(Workspace {
+                root: WorkspaceRoot(root.to_path_buf()),
+                members,
+            }),
+            None => Err(WorkspaceError::EmptyWorkspace(root.to_path_buf())),
         }
     }
 }
@@ -330,6 +356,28 @@ mod tests {
         assert_eq!(workspace.members.len(), 1);
         let project = workspace.members.first();
         assert_eq!(project.root().to_path_buf(), project_root.to_path_buf());
+    }
+
+    #[tokio::test]
+    async fn find_multi_project_workspace() {
+        let sample_workspace: PathBuf = "resources/test/sample-projects/multi-project/".into();
+        let workspace_root = assert_fs::TempDir::new().unwrap();
+        workspace_root
+            .copy_from(&sample_workspace, &["**"])
+            .unwrap();
+        let work_dir: PathBuf = workspace_root.join("projects");
+        let workspace = Workspace::from(&work_dir).unwrap().unwrap();
+        assert_eq!(workspace.members.len(), 2);
+        let foo = workspace.try_member(&Some("foo".into())).unwrap();
+        assert_eq!(
+            foo.root().to_path_buf(),
+            workspace_root.join("projects/foo").to_path_buf()
+        );
+        let bar = workspace.try_member(&Some("bar".into())).unwrap();
+        assert_eq!(
+            bar.root().to_path_buf(),
+            workspace_root.join("projects/bar").to_path_buf()
+        );
     }
 
     #[tokio::test]
