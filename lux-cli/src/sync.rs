@@ -1,8 +1,8 @@
 use clap::Args;
-use eyre::{OptionExt, Result};
+use eyre::Result;
 use lux_lib::{
     config::Config, lockfile::LocalPackage, operations::Sync, progress::MultiProgress,
-    project::Project,
+    workspace::Workspace,
 };
 
 #[derive(Args)]
@@ -14,22 +14,22 @@ pub struct SyncProject {
 
 /// Sync the current project's installed packages with its lux.toml.
 pub async fn sync(args: SyncProject, config: Config) -> Result<()> {
-    let project = Project::current()?.ok_or_eyre("No project found")?;
+    let workspace = Workspace::current_or_err()?;
     let progress = MultiProgress::new_arc(&config);
 
-    let dep_report = Sync::new(&project, &config)
+    let dep_report = Sync::new(&workspace, &config)
         .progress(progress.clone())
         .validate_integrity(!args.no_integrity_check)
         .sync_dependencies()
         .await?;
 
-    let build_report = Sync::new(&project, &config)
+    let build_report = Sync::new(&workspace, &config)
         .progress(progress.clone())
         .validate_integrity(false)
         .sync_build_dependencies()
         .await?;
 
-    let test_report = Sync::new(&project, &config)
+    let test_report = Sync::new(&workspace, &config)
         .progress(progress.clone())
         .validate_integrity(false)
         .sync_test_dependencies()

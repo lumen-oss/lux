@@ -187,7 +187,7 @@ pub enum RemoteProjectTomlValidationError {
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
 }
 
-/// The `lux.toml` file.
+/// The `lux.toml` file for a project.
 /// The only required fields are `package` and `build`, which are required to build a project using `lux build`.
 /// The rest of the fields are optional, but are required to build a rockspec.
 #[derive(Clone, Debug, Deserialize)]
@@ -1533,7 +1533,7 @@ mod tests {
     fn test_git_project_generate_dev_source() {
         let project_root = assert_fs::TempDir::new().unwrap();
         init_sample_project_repo(&project_root);
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
@@ -1553,7 +1553,7 @@ mod tests {
         let repo = init_sample_project_repo(&project_root);
         let tag_name = "bla";
         create_tag(&repo, tag_name);
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
@@ -1574,7 +1574,7 @@ mod tests {
         let tag_name = "v1.0.0";
         create_tag(&repo, "bla");
         create_tag(&repo, tag_name);
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
@@ -1595,7 +1595,7 @@ mod tests {
         create_tag(&repo, "bla");
         let tag_name = "1.0.0";
         create_tag(&repo, tag_name);
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
@@ -1634,7 +1634,7 @@ mod tests {
         create_tag(&repo, "bla");
         let tag_name = "1.0.0";
         create_tag(&repo, tag_name);
-        let project = Project::from(&project_dir).unwrap().unwrap();
+        let project = Project::from_exact(&project_dir).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;

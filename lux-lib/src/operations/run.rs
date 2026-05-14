@@ -12,8 +12,10 @@ use crate::{
     lua_installation::LuaBinary,
     lua_rockspec::LuaVersionError,
     operations::run_lua::RunLua,
+    package::PackageName,
     path::{Paths, PathsError},
-    project::{project_toml::LocalProjectTomlValidationError, Project, ProjectTreeError},
+    project::project_toml::LocalProjectTomlValidationError,
+    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
 use super::RunLuaError;
@@ -66,7 +68,8 @@ pub enum RunError {
     RunCommand(#[from] RunCommandError),
     LuaVersion(#[from] LuaVersionError),
     RunLua(#[from] RunLuaError),
-    ProjectTree(#[from] ProjectTreeError),
+    WorkspaceError(#[from] WorkspaceError),
+    WorkspaceTree(#[from] WorkspaceTreeError),
     Io(#[from] std::io::Error),
     Paths(#[from] PathsError),
     #[error("No `run` field found in `lux.toml`")]
@@ -76,7 +79,8 @@ pub enum RunError {
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Run<'a> {
-    project: &'a Project,
+    workspace: &'a Workspace,
+    package: Option<PackageName>,
     dir: Option<PathBuf>,
     args: &'a [String],
     config: &'a Config,
@@ -89,9 +93,10 @@ where
 {
     pub async fn run(self) -> Result<(), RunError> {
         let run = self._build();
-        let project = run.project;
+        let workspace = run.workspace;
         let config = run.config;
         let extra_args = run.args;
+        let project = workspace.try_member(&run.package)?;
         let toml = project.toml().into_local()?;
 
         let run_spec = toml
@@ -108,27 +113,27 @@ where
         let disable_loader = run.disable_loader.unwrap_or(false);
         match &run_spec.command {
             Some(command) => {
-                run_with_command(project, command, run.dir, disable_loader, &args, config).await
+                run_with_command(workspace, command, run.dir, disable_loader, &args, config).await
             }
-            None => run_with_local_lua(project, run.dir, disable_loader, &args, config).await,
+            None => run_with_local_lua(workspace, run.dir, disable_loader, &args, config).await,
         }
     }
 }
 
 async fn run_with_local_lua(
-    project: &Project,
+    workspace: &Workspace,
     root_dir: Option<PathBuf>,
     disable_loader: bool,
     args: &NonEmpty<String>,
     config: &Config,
 ) -> Result<(), RunError> {
-    let version = project.lua_version(config)?;
+    let version = workspace.lua_version(config)?;
 
-    let tree = project.tree(config)?;
+    let tree = workspace.tree(config)?;
     let args = &args.into_iter().cloned().collect();
 
     RunLua::new()
-        .root(&root_dir.unwrap_or(project.root().to_path_buf()))
+        .root(&root_dir.unwrap_or(workspace.root().to_path_buf()))
         .tree(&tree)
         .config(config)
         .lua_cmd(LuaBinary::new(version, config))
@@ -141,14 +146,14 @@ async fn run_with_local_lua(
 }
 
 async fn run_with_command(
-    project: &Project,
+    workspace: &Workspace,
     command: &RunCommand,
     root_dir: Option<PathBuf>,
     disable_loader: bool,
     args: &NonEmpty<String>,
     config: &Config,
 ) -> Result<(), RunError> {
-    let tree = project.tree(config)?;
+    let tree = workspace.tree(config)?;
     let paths = Paths::new(&tree)?;
 
     let lua_init = if disable_loader {
@@ -169,7 +174,7 @@ async fn run_with_command(
     if let Some(dir) = root_dir {
         cmd.current_dir(dir);
     } else {
-        cmd.current_dir(project.root());
+        cmd.current_dir(workspace.root());
     }
     match cmd
         .args(args.into_iter().cloned().collect_vec())

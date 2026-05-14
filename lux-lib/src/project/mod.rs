@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use lets_find_up::{find_up_with, FindUpKind, FindUpOptions};
 use path_slash::PathBufExt;
 use project_toml::{
     LocalProjectTomlValidationError, PartialProjectToml, RemoteProjectTomlValidationError,
@@ -21,7 +20,6 @@ use crate::{
         url::RemoteGitUrl,
         utils::{GitError, SemVerTagOrSha},
     },
-    lockfile::{LockfileError, ProjectLockfile, ReadOnly},
     lua_rockspec::{
         LocalLuaRockspec, LuaRockspecError, LuaVersionError, PartialLuaRockspec,
         PartialRockspecError, RemoteLuaRockspec,
@@ -33,7 +31,6 @@ use crate::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         LuaVersionCompatibility,
     },
-    tree::{Tree, TreeError},
 };
 use crate::{
     lockfile::PinnedState,
@@ -46,26 +43,18 @@ pub mod project_toml;
 pub use project_toml::PROJECT_TOML;
 
 pub const EXTRA_ROCKSPEC: &str = "extra.rockspec";
-pub(crate) const LUX_DIR_NAME: &str = ".lux";
-const LUARC: &str = ".luarc.json";
-const EMMYRC: &str = ".emmyrc.json";
 
 #[derive(Error, Debug)]
 #[error(transparent)]
 pub enum ProjectError {
-    #[error("cannot get current directory: {0}")]
-    GetCwd(io::Error),
     #[error("error reading project TOML at {0}:\n{1}")]
     ReadProjectTOML(String, io::Error),
     #[error("error creating project root at {0}:\n{1}")]
     CreateProjectRoot(String, io::Error),
-    Lockfile(#[from] LockfileError),
     Project(#[from] LocalProjectTomlValidationError),
     Toml(#[from] toml::de::Error),
     #[error("error when parsing `extra.rockspec`: {0}")]
     Rockspec(#[from] PartialRockspecError),
-    #[error("not in a lux project directory")]
-    NotAProjectDir,
 }
 
 #[derive(Error, Debug)]
@@ -88,7 +77,7 @@ pub enum ProjectEditError {
     Io(#[from] tokio::io::Error),
     #[error(transparent)]
     Toml(#[from] toml_edit::TomlError),
-    #[error("error parsing lux.toml after edit. This is probably a bug.")]
+    #[error("error parsing {PROJECT_TOML} after edit. This is probably a bug.")]
     TomlDe(#[from] toml::de::Error),
     #[error(transparent)]
     Git(#[from] GitError),
@@ -100,13 +89,6 @@ pub enum ProjectEditError {
     ExpectedString(Box<toml_edit::Value>),
     #[error(transparent)]
     GitUrlShorthandParse(#[from] git::shorthand::ParseError),
-}
-
-#[derive(Error, Debug)]
-#[error(transparent)]
-pub enum ProjectTreeError {
-    Tree(#[from] TreeError),
-    LuaVersionError(#[from] LuaVersionError),
 }
 
 #[derive(Error, Debug)]
@@ -161,15 +143,6 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn current() -> Result<Option<Self>, ProjectError> {
-        let cwd = std::env::current_dir().map_err(ProjectError::GetCwd)?;
-        Self::from(&cwd)
-    }
-
-    pub fn current_or_err() -> Result<Self, ProjectError> {
-        Self::current()?.ok_or(ProjectError::NotAProjectDir)
-    }
-
     pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, ProjectError> {
         if !start.as_ref().exists() {
             return Ok(None);
@@ -197,95 +170,14 @@ impl Project {
         }
     }
 
-    pub fn from(start: impl AsRef<Path>) -> Result<Option<Self>, ProjectError> {
-        if !start.as_ref().exists() {
-            return Ok(None);
-        }
-
-        match find_up_with(
-            PROJECT_TOML,
-            FindUpOptions {
-                cwd: start.as_ref(),
-                kind: FindUpKind::File,
-            },
-        ) {
-            Ok(Some(path)) => {
-                if let Some(root) = path.parent() {
-                    let toml_content = std::fs::read_to_string(&path).map_err(|err| {
-                        ProjectError::ReadProjectTOML(path.to_string_lossy().to_string(), err)
-                    })?;
-
-                    let mut project = Project {
-                        root: ProjectRoot(root.to_path_buf()),
-                        toml: PartialProjectToml::new(
-                            &toml_content,
-                            ProjectRoot(root.to_path_buf()),
-                        )?,
-                    };
-
-                    if let Some(extra_rockspec) = project.extra_rockspec()? {
-                        project.toml = project.toml.merge(extra_rockspec);
-                    }
-
-                    std::fs::create_dir_all(root).map_err(|err| {
-                        ProjectError::CreateProjectRoot(root.to_string_lossy().to_string(), err)
-                    })?;
-
-                    Ok(Some(project))
-                } else {
-                    Ok(None)
-                }
-            }
-            // NOTE: If we hit a read error, it could be because we haven't found a PROJECT_TOML
-            // and have started searching too far upwards.
-            // See for example https://github.com/lumen-oss/lux/issues/532
-            _ => Ok(None),
-        }
-    }
-
     /// Get the `lux.toml` path.
     pub fn toml_path(&self) -> PathBuf {
         self.root.join(PROJECT_TOML)
     }
 
-    /// Get the `.luarc.json` or `.emmyrc.json` path.
-    pub fn luarc_path(&self) -> PathBuf {
-        let luarc_path = self.root.join(LUARC);
-        if luarc_path.is_file() {
-            luarc_path
-        } else {
-            let emmy_path = self.root.join(EMMYRC);
-            if emmy_path.is_file() {
-                emmy_path
-            } else {
-                luarc_path
-            }
-        }
-    }
-
     /// Get the `extra.rockspec` path.
     pub fn extra_rockspec_path(&self) -> PathBuf {
         self.root.join(EXTRA_ROCKSPEC)
-    }
-
-    /// Get the `lux.lock` lockfile path.
-    pub fn lockfile_path(&self) -> PathBuf {
-        self.root.join("lux.lock")
-    }
-
-    /// Get the `lux.lock` lockfile in the project root.
-    pub fn lockfile(&self) -> Result<ProjectLockfile<ReadOnly>, ProjectError> {
-        Ok(ProjectLockfile::new(self.lockfile_path())?)
-    }
-
-    /// Get the `lux.lock` lockfile in the project root, if present.
-    pub fn try_lockfile(&self) -> Result<Option<ProjectLockfile<ReadOnly>>, ProjectError> {
-        let path = self.lockfile_path();
-        if path.is_file() {
-            Ok(Some(ProjectLockfile::load(path)?))
-        } else {
-            Ok(None)
-        }
     }
 
     pub fn root(&self) -> &ProjectRoot {
@@ -317,41 +209,13 @@ impl Project {
         }
     }
 
-    pub(crate) fn default_tree_root_dir(&self) -> PathBuf {
-        self.root.join(LUX_DIR_NAME)
-    }
-
-    pub fn tree(&self, config: &Config) -> Result<Tree, ProjectTreeError> {
-        self.lua_version_tree(self.lua_version(config)?, config)
-    }
-
-    pub(crate) fn lua_version_tree(
-        &self,
-        lua_version: LuaVersion,
-        config: &Config,
-    ) -> Result<Tree, ProjectTreeError> {
-        Ok(Tree::new(
-            self.default_tree_root_dir(),
-            lua_version,
-            config,
-        )?)
-    }
-
-    pub fn test_tree(&self, config: &Config) -> Result<Tree, ProjectTreeError> {
-        Ok(self.tree(config)?.test_tree(config)?)
-    }
-
-    pub fn build_tree(&self, config: &Config) -> Result<Tree, ProjectTreeError> {
-        Ok(self.tree(config)?.build_tree(config)?)
-    }
-
     pub fn lua_version(&self, config: &Config) -> Result<LuaVersion, LuaVersionError> {
         self.toml().lua_version_matches(config)
     }
 
     pub async fn add(
         &mut self,
-        dependencies: DependencyType<PackageReq>,
+        dependencies: DependencyType<&PackageReq>,
         package_db: &RemotePackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
@@ -403,7 +267,7 @@ impl Project {
 
     pub async fn add_git(
         &mut self,
-        dependencies: LuaDependencyType<RemoteGitUrlShorthand>,
+        dependencies: LuaDependencyType<&RemoteGitUrlShorthand>,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
@@ -416,9 +280,9 @@ impl Project {
         };
 
         match dependencies {
-            LuaDependencyType::Regular(ref urls)
-            | LuaDependencyType::Build(ref urls)
-            | LuaDependencyType::Test(ref urls) => {
+            LuaDependencyType::Regular(urls)
+            | LuaDependencyType::Build(urls)
+            | LuaDependencyType::Test(urls) => {
                 for url in urls {
                     let git_url: RemoteGitUrl = url.clone().into();
                     let mut dep_entry = toml_edit::table();
@@ -450,7 +314,7 @@ impl Project {
 
     pub async fn remove(
         &mut self,
-        dependencies: DependencyType<PackageName>,
+        dependencies: DependencyType<&PackageName>,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
@@ -492,7 +356,7 @@ impl Project {
 
     pub async fn upgrade(
         &mut self,
-        dependencies: LuaDependencyType<PackageName>,
+        dependencies: LuaDependencyType<&PackageName>,
         package_db: &RemotePackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
@@ -506,9 +370,9 @@ impl Project {
         };
 
         match dependencies {
-            LuaDependencyType::Regular(ref deps)
-            | LuaDependencyType::Build(ref deps)
-            | LuaDependencyType::Test(ref deps) => {
+            LuaDependencyType::Regular(deps)
+            | LuaDependencyType::Build(deps)
+            | LuaDependencyType::Test(deps) => {
                 let latest_rock_version_str =
                     |dep: &PackageName| -> Result<String, ProjectEditError> {
                         Ok(package_db
@@ -586,8 +450,11 @@ impl Project {
                 .map(|dep| dep.name())
                 .cloned()
                 .collect_vec();
-            self.upgrade(LuaDependencyType::Regular(packages), package_db)
-                .await?;
+            self.upgrade(
+                LuaDependencyType::Regular(packages.iter().collect()),
+                package_db,
+            )
+            .await?;
         }
         if let Some(dependencies) = &self.toml().build_dependencies {
             let packages = dependencies
@@ -595,8 +462,11 @@ impl Project {
                 .map(|dep| dep.name())
                 .cloned()
                 .collect_vec();
-            self.upgrade(LuaDependencyType::Build(packages), package_db)
-                .await?;
+            self.upgrade(
+                LuaDependencyType::Build(packages.iter().collect()),
+                package_db,
+            )
+            .await?;
         }
         if let Some(dependencies) = &self.toml().test_dependencies {
             let packages = dependencies
@@ -604,15 +474,18 @@ impl Project {
                 .map(|dep| dep.name())
                 .cloned()
                 .collect_vec();
-            self.upgrade(LuaDependencyType::Test(packages), package_db)
-                .await?;
+            self.upgrade(
+                LuaDependencyType::Test(packages.iter().collect()),
+                package_db,
+            )
+            .await?;
         }
         Ok(())
     }
 
     pub async fn set_pinned_state(
         &mut self,
-        dependencies: LuaDependencyType<PackageName>,
+        dependencies: LuaDependencyType<&PackageName>,
         pin: PinnedState,
     ) -> Result<(), PinError> {
         let mut project_toml =
@@ -763,9 +636,8 @@ mod tests {
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
-        let mut project = Project::from(&project_root).unwrap().unwrap();
-        let add_dependencies =
-            vec![PackageReq::new("busted".into(), Some(">= 1.0.0".into())).unwrap()];
+        let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+        let add_dependencies = [PackageReq::new("busted".into(), Some(">= 1.0.0".into())).unwrap()];
         let expected_dependencies = vec![PackageReq::new("busted".into(), Some(">= 1.0.0".into()))
             .unwrap()
             .into()];
@@ -778,18 +650,24 @@ mod tests {
 
         project
             .add(
-                DependencyType::Regular(add_dependencies.clone()),
+                DependencyType::Regular(add_dependencies.iter().collect_vec()),
                 &package_db,
             )
             .await
             .unwrap();
 
         project
-            .add(DependencyType::Build(add_dependencies.clone()), &package_db)
+            .add(
+                DependencyType::Build(add_dependencies.iter().collect_vec()),
+                &package_db,
+            )
             .await
             .unwrap();
         project
-            .add(DependencyType::Test(add_dependencies.clone()), &package_db)
+            .add(
+                DependencyType::Test(add_dependencies.iter().collect_vec()),
+                &package_db,
+            )
             .await
             .unwrap();
 
@@ -809,7 +687,7 @@ mod tests {
 
         // Reparse the lux.toml (not usually necessary, but we want to test that the file was
         // written correctly)
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let validated_toml = project.toml().into_remote(None).unwrap();
 
         assert_eq!(
@@ -843,8 +721,10 @@ mod tests {
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
-        let mut project = Project::from(&project_root).unwrap().unwrap();
-        let remove_dependencies = vec!["lua-cjson".into(), "plenary.nvim".into()];
+        let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+        let lua_cjson = "lua-cjson".into();
+        let plenary_nvim = "plenary.nvim".into();
+        let remove_dependencies = vec![&lua_cjson, &plenary_nvim];
         project
             .remove(DependencyType::Regular(remove_dependencies.clone()))
             .await
@@ -857,12 +737,12 @@ mod tests {
                     .clone()
                     .unwrap_or_default()
                     .iter()
-                    .any(|dep| dep.name() == name));
+                    .any(|dep| &dep.name() == name));
             }
         };
         check(&project);
         // check again after reloading lux.toml
-        let reloaded_project = Project::from(&project_root).unwrap().unwrap();
+        let reloaded_project = Project::from_exact(&project_root).unwrap().unwrap();
         check(&reloaded_project);
     }
 
@@ -872,7 +752,7 @@ mod tests {
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
-        let project = Project::from(project_root).unwrap().unwrap();
+        let project = Project::from_exact(project_root).unwrap().unwrap();
 
         let extra_rockspec = project.extra_rockspec().unwrap();
 
@@ -898,8 +778,10 @@ mod tests {
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
-        let mut project = Project::from(&project_root).unwrap().unwrap();
-        let pin_dependencies = vec!["lua-cjson".into(), "plenary.nvim".into()];
+        let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+        let lua_cjson = "lua-cjson".into();
+        let plenary_nvim = "plenary.nvim".into();
+        let pin_dependencies = vec![&lua_cjson, &plenary_nvim];
         project
             .set_pinned_state(LuaDependencyType::Regular(pin_dependencies.clone()), pin)
             .await
@@ -912,12 +794,12 @@ mod tests {
                     .clone()
                     .unwrap_or_default()
                     .iter()
-                    .any(|dep| dep.name() == name && dep.pin == pin));
+                    .any(|dep| &dep.name() == name && dep.pin == pin));
             }
         };
         check(&project);
         // check again after reloading lux.toml
-        let reloaded_project = Project::from(&project_root).unwrap().unwrap();
+        let reloaded_project = Project::from_exact(&project_root).unwrap().unwrap();
         check(&reloaded_project);
     }
 

@@ -1,5 +1,6 @@
 use std::{io, ops::Deref, path::PathBuf, process::Command, sync::Arc};
 
+use crate::workspace::{WorkspaceError, WorkspaceTreeError};
 use crate::{
     build::BuildBehaviour,
     config::{Config, ConfigError},
@@ -8,11 +9,10 @@ use crate::{
     package::{PackageName, PackageVersionReqError},
     path::{Paths, PathsError},
     progress::{MultiProgress, Progress},
-    project::{
-        project_toml::LocalProjectTomlValidationError, Project, ProjectError, ProjectTreeError,
-    },
+    project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
     rockspec::Rockspec,
     tree::{self, TreeError},
+    workspace::Workspace,
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -20,7 +20,7 @@ use path_slash::PathBufExt;
 use thiserror::Error;
 
 use super::{
-    BuildProject, BuildProjectError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
+    BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
 };
 
 #[cfg(target_family = "unix")]
@@ -32,12 +32,15 @@ const BUSTED_EXE: &str = "busted.bat";
 #[builder(start_fn = new, finish_fn(name = _run, vis = ""))]
 pub struct Test<'a> {
     #[builder(start_fn)]
-    project: Project,
+    workspace: Workspace,
     #[builder(start_fn)]
     config: &'a Config,
 
     #[builder(field)]
     args: Vec<String>,
+
+    /// Package to run tests for
+    package: Option<PackageName>,
 
     no_lock: Option<bool>,
 
@@ -82,7 +85,7 @@ pub enum RunTestsError {
     #[error(transparent)]
     InstallTestDependencies(#[from] InstallTestDependenciesError),
     #[error("error building project:\n{0}")]
-    BuildProject(#[from] BuildProjectError),
+    BuildProject(#[from] BuildWorkspaceError),
     #[error("tests failed!")]
     TestFailure,
     #[error("failed to execute `{0}`: {1}")]
@@ -94,7 +97,9 @@ pub enum RunTestsError {
     #[error(transparent)]
     Paths(#[from] PathsError),
     #[error(transparent)]
-    Tree(#[from] ProjectTreeError),
+    Workspace(#[from] WorkspaceError),
+    #[error(transparent)]
+    Tree(#[from] WorkspaceTreeError),
     #[error(transparent)]
     ProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("failed to sync dependencies: {0}")]
@@ -108,94 +113,102 @@ pub enum RunTestsError {
 }
 
 async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
-    let rocks = test.project.toml().into_local()?;
-
-    let test_spec = rocks
-        .test()
-        .current_platform()
-        .to_validated(&test.project)?;
-
-    let config = test_spec.test_config(test.config)?;
-
+    let workspace = test.workspace;
     let no_lock = test.no_lock.unwrap_or(false);
+    let config = test.config;
 
     let progress = test
         .progress
-        .unwrap_or_else(|| MultiProgress::new_arc(&config));
+        .unwrap_or_else(|| MultiProgress::new_arc(config));
 
-    if no_lock {
-        ensure_test_dependencies(&test.project, &rocks, &config, progress).await?;
-    } else {
-        Sync::new(&test.project, &config)
-            .progress(progress.clone())
-            .sync_test_dependencies()
+    for project in workspace.try_members(&test.package)? {
+        let rocks = project.toml().into_local()?;
+        let test_spec = rocks.test().current_platform().to_validated(project)?;
+        let test_config = test_spec.test_config(test.config)?;
+
+        if no_lock {
+            let rockspec = project.toml().into_local()?;
+            ensure_test_dependencies(
+                &workspace,
+                project,
+                rockspec,
+                &test_config,
+                progress.clone(),
+            )
             .await?;
-    }
-
-    BuildProject::new(&test.project, &config)
-        .no_lock(no_lock)
-        .only_deps(false)
-        .build()
-        .await?;
-
-    let project_tree = test.project.tree(&config)?;
-    let test_tree = test.project.test_tree(&config)?;
-    let mut paths = Paths::new(&project_tree)?;
-    let test_tree_paths = Paths::new(&test_tree)?;
-    paths.prepend(&test_tree_paths);
-
-    let test_executable = match &test_spec {
-        ValidatedTestSpec::Busted(_) => BUSTED_EXE.to_string(),
-        ValidatedTestSpec::BustedNlua(_) => BUSTED_EXE.to_string(),
-        ValidatedTestSpec::Command(spec) => spec.command.to_string(),
-        ValidatedTestSpec::LuaScript(_) => {
-            let lua_version = test.project.lua_version(&config)?;
-            let lua_binary = LuaBinary::new(lua_version, &config);
-            let lua_bin_path: PathBuf = lua_binary.try_into()?;
-            lua_bin_path.to_slash_lossy().to_string()
+        } else {
+            Sync::new(&workspace, &test_config)
+                .progress(progress.clone())
+                .sync_test_dependencies()
+                .await?;
         }
-    };
-    let mut command = Command::new(&test_executable);
-    let mut command = command
-        .current_dir(test.project.root().deref())
-        .args(test_spec.args())
-        .args(test.args)
-        .env("PATH", paths.path_prepended().joined())
-        .env("LUA_PATH", paths.package_path().joined())
-        .env("LUA_CPATH", paths.package_cpath().joined());
-    if let TestEnv::Pure = test.env {
-        // isolate the test runner from the user's own config/data files
-        // by initialising empty HOME and XDG base directory paths
-        let home = test_tree.root().join("home");
-        let xdg = home.join("xdg");
-        let _ = tokio::fs::remove_dir_all(&home).await;
-        let xdg_config_home = xdg.join("config");
-        std::fs::create_dir_all(&xdg_config_home)?;
-        let xdg_state_home = xdg.join("local").join("state");
-        std::fs::create_dir_all(&xdg_state_home)?;
-        let xdg_data_home = xdg.join("local").join("share");
-        std::fs::create_dir_all(&xdg_data_home)?;
-        command = command
-            .env("HOME", home)
-            .env("XDG_CONFIG_HOME", xdg_config_home)
-            .env("XDG_STATE_HOME", xdg_state_home)
-            .env("XDG_DATA_HOME", xdg_data_home);
+
+        BuildWorkspace::new(&workspace, &test_config)
+            .package(project.toml().package().clone())
+            .no_lock(no_lock)
+            .only_deps(false)
+            .build()
+            .await?;
+
+        let lua_version = project.lua_version(&test_config)?;
+        let project_tree = workspace.lua_version_tree(lua_version, &test_config)?;
+        let test_tree = workspace.test_tree(&test_config)?;
+        let mut paths = Paths::new(&project_tree)?;
+        let test_tree_paths = Paths::new(&test_tree)?;
+        paths.prepend(&test_tree_paths);
+
+        let test_executable = match &test_spec {
+            ValidatedTestSpec::Busted(_) => BUSTED_EXE.to_string(),
+            ValidatedTestSpec::BustedNlua(_) => BUSTED_EXE.to_string(),
+            ValidatedTestSpec::Command(spec) => spec.command.to_string(),
+            ValidatedTestSpec::LuaScript(_) => {
+                let lua_version = project.lua_version(&test_config)?;
+                let lua_binary = LuaBinary::new(lua_version, &test_config);
+                let lua_bin_path: PathBuf = lua_binary.try_into()?;
+                lua_bin_path.to_slash_lossy().to_string()
+            }
+        };
+        let mut command = Command::new(&test_executable);
+        let mut command = command
+            .current_dir(project.root().deref())
+            .args(test_spec.args())
+            .args(test.args.clone())
+            .env("PATH", paths.path_prepended().joined())
+            .env("LUA_PATH", paths.package_path().joined())
+            .env("LUA_CPATH", paths.package_cpath().joined());
+        if let TestEnv::Pure = test.env {
+            // isolate the test runner from the user's own config/data files
+            // by initialising empty HOME and XDG base directory paths
+            let home = test_tree.root().join("home");
+            let xdg = home.join("xdg");
+            let _ = tokio::fs::remove_dir_all(&home).await;
+            let xdg_config_home = xdg.join("config");
+            tokio::fs::create_dir_all(&xdg_config_home).await?;
+            let xdg_state_home = xdg.join("local").join("state");
+            tokio::fs::create_dir_all(&xdg_state_home).await?;
+            let xdg_data_home = xdg.join("local").join("share");
+            tokio::fs::create_dir_all(&xdg_data_home).await?;
+            command = command
+                .env("HOME", home)
+                .env("XDG_CONFIG_HOME", xdg_config_home)
+                .env("XDG_STATE_HOME", xdg_state_home)
+                .env("XDG_DATA_HOME", xdg_data_home);
+        }
+        let status = match command.status() {
+            Ok(status) => Ok(status),
+            Err(err) => Err(RunTestsError::RunCommandFailure(test_executable, err)),
+        }?;
+        if !status.success() {
+            return Err(RunTestsError::TestFailure);
+        }
     }
-    let status = match command.status() {
-        Ok(status) => Ok(status),
-        Err(err) => Err(RunTestsError::RunCommandFailure(test_executable, err)),
-    }?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(RunTestsError::TestFailure)
-    }
+    Ok(())
 }
 
 #[derive(Error, Debug)]
 #[error("error installing test dependencies: {0}")]
 pub enum InstallTestDependenciesError {
-    ProjectTree(#[from] ProjectTreeError),
+    WorkspaceTree(#[from] WorkspaceTreeError),
     Tree(#[from] TreeError),
     Install(#[from] InstallError),
     PackageVersionReq(#[from] PackageVersionReqError),
@@ -204,12 +217,13 @@ pub enum InstallTestDependenciesError {
 /// Ensure test dependencies are installed
 /// This defaults to the local project tree if cwd is a project root.
 async fn ensure_test_dependencies(
+    workspace: &Workspace,
     project: &Project,
-    rockspec: &impl Rockspec,
+    rockspec: impl Rockspec,
     config: &Config,
     progress: Arc<Progress<MultiProgress>>,
 ) -> Result<(), InstallTestDependenciesError> {
-    let test_tree = project.test_tree(config)?;
+    let test_tree = workspace.test_tree(config)?;
     let rockspec_dependencies = rockspec.test_dependencies().current_platform();
     let test_dependencies = rockspec
         .test()
@@ -303,9 +317,9 @@ mod tests {
     async fn run_test(project_root: &Path) {
         let temp_dir = TempDir::new().unwrap();
         temp_dir.copy_from(project_root, &["**"]).unwrap();
-        let project_root = temp_dir.path();
-        let project: Project = Project::from(project_root).unwrap().unwrap();
-        let tree_root = project.root().to_path_buf().join(".lux");
+        let workspace_root = temp_dir.path();
+        let workspace = Workspace::from(workspace_root).unwrap().unwrap();
+        let tree_root = workspace.root().to_path_buf().join(".lux");
         let _ = tokio::fs::remove_dir_all(&tree_root).await;
 
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
@@ -317,6 +331,6 @@ mod tests {
             .build()
             .unwrap();
 
-        Test::new(project, &config).run().await.unwrap();
+        Test::new(workspace, &config).run().await.unwrap();
     }
 }

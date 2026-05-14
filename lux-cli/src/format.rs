@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use clap::Args;
 use emmylua_formatter as luafmt;
-use eyre::{Context, OptionExt, Result};
-use lux_lib::{config::Config, lua_version::LuaVersion, project::Project};
+use eyre::{Context, Result};
+use lux_lib::{
+    config::Config, lua_version::LuaVersion, package::PackageName, project::Project,
+    workspace::Workspace,
+};
 use path_slash::PathExt;
 use walkdir::WalkDir;
 
@@ -15,6 +18,10 @@ pub struct Fmt {
     #[clap(default_value = "stylua")]
     #[arg(long)]
     backend: FmtBackend,
+
+    /// Package to format.
+    #[arg(short, long, visible_short_alias = 'p')]
+    package: Option<PackageName>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -30,33 +37,42 @@ enum FmtBackend {
 }
 
 pub fn format(args: Fmt, config: Config) -> Result<()> {
-    let project = Project::current()?.ok_or_eyre(
-        "`lx fmt` can only be executed in a lux project! Run `lx new` to create one.",
-    )?;
+    let workspace = Workspace::current_or_err()?;
+    for project in workspace.try_members(&args.package)? {
+        format_project(&args, &workspace, project, &config)?;
+    }
+    Ok(())
+}
 
-    let stylua_config: stylua_lib::Config = std::fs::read_to_string("stylua.toml")
-        .or_else(|_| std::fs::read_to_string(".stylua.toml"))
+fn format_project(
+    args: &Fmt,
+    workspace: &Workspace,
+    project: &Project,
+    config: &Config,
+) -> Result<()> {
+    let root = workspace.root();
+
+    let stylua_config: stylua_lib::Config = std::fs::read_to_string(root.join("stylua.toml"))
+        .or_else(|_| std::fs::read_to_string(root.join(".stylua.toml")))
         .map(|config: String| toml::from_str(&config).unwrap_or_default())
         .or_else(|_| {
-            stylua_lib::editorconfig::parse(
-                stylua_lib::Config::new(),
-                &project.root().join("*.lua"),
-            )
+            stylua_lib::editorconfig::parse(stylua_lib::Config::new(), &root.join("*.lua"))
         })
         .unwrap_or_default();
 
-    let luafmt_config = luafmt::resolve_config_for_path(Some(project.root().as_ref()), None)
+    let luafmt_config = luafmt::resolve_config_for_path(Some(root.as_ref()), None)
         .map(|resolved| resolved.config)
         .unwrap_or_default();
-    let luafmt_syntax_level = project
-        .lua_version(&config)
+    let luafmt_syntax_level = workspace
+        .lua_version(config)
         .map(lua_version_to_luafmt_syntax_level)
         .unwrap_or(luafmt_config.syntax.level);
 
-    let emmylua_config = project.root().join(".editorconfig");
+    let emmylua_config = root.join(".editorconfig");
 
     let workspace_or_file = args
         .workspace_or_file
+        .as_ref()
         .map(std::path::absolute)
         .transpose()?;
 
@@ -154,7 +170,6 @@ pub fn format(args: Fmt, config: Config) -> Result<()> {
 
         std::fs::write(rockspec, formatted_code)?;
     }
-
     Ok(())
 }
 

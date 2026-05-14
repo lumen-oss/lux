@@ -12,8 +12,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations,
     progress::MultiProgress,
-    project::Project,
-    rockspec::LuaVersionCompatibility,
+    workspace::Workspace,
 };
 
 use crate::build::{self, Build};
@@ -52,17 +51,21 @@ pub struct RunLua {
 }
 
 pub async fn run_lua(run_lua: RunLua, config: Config) -> Result<()> {
-    let project = Project::current()?;
-    let (lua_version, root, tree, mut welcome_message) = match &project {
-        Some(project) => (
-            project.toml().lua_version_matches(&config)?,
-            project.root().to_path_buf(),
-            project.tree(&config)?,
-            format!(
-                "Welcome to the lux Lua repl for {}.",
-                project.toml().package()
-            ),
-        ),
+    let workspace = Workspace::current()?;
+    let (lua_version, root, tree, mut welcome_message) = match &workspace {
+        Some(workspace) => {
+            let package_names = workspace
+                .members()
+                .iter()
+                .map(|project| project.toml().package())
+                .join(",");
+            (
+                workspace.lua_version(&config)?,
+                workspace.root().to_path_buf(),
+                workspace.tree(&config)?,
+                format!("Welcome to the lux Lua repl for {package_names}.",),
+            )
+        }
         None => {
             let version = LuaVersion::from(&config)?.clone();
             (
@@ -101,7 +104,7 @@ To exit type 'exit()' or <C-d>.
         return print_lua_help(&lua_cmd).await;
     }
 
-    if project.is_some() {
+    if workspace.is_some() {
         build::build(run_lua.build_args, config.clone()).await?;
     }
 

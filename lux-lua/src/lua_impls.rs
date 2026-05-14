@@ -41,6 +41,7 @@ use lux_lib::{
         Rockspec,
     },
     tree::{EntryType, RockLayout, RockMatches, Tree},
+    workspace::Workspace,
 };
 
 macro_rules! impl_from_lua_userdata {
@@ -194,7 +195,6 @@ impl LuaUserData for PackageSpecLua {
     }
 }
 
-#[derive(Debug, Clone)]
 pub struct PackageReqLua(pub PackageReq);
 
 impl FromLua for PackageReqLua {
@@ -1560,17 +1560,75 @@ impl LuaUserData for LockfileReadWriteLua {
 }
 
 #[derive(Debug, Clone)]
+pub struct WorkspaceLua(pub Workspace);
+
+impl LuaUserData for WorkspaceLua {
+    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("root", |_, this, ()| Ok(this.0.root().as_ref().to_owned()));
+        methods.add_method("members", |_, this, ()| {
+            Ok(this
+                .0
+                .members()
+                .iter()
+                .map(|project| ProjectLua(project.to_owned()))
+                .collect_vec()
+                .to_owned())
+        });
+        methods.add_method("try_members", |_, this, name: Option<PackageNameLua>| {
+            Ok(this
+                .0
+                .try_members(&name.map(|name| name.0))
+                .map(|members| {
+                    members
+                        .iter()
+                        .cloned()
+                        .map(|project| ProjectLua(project.to_owned()))
+                        .collect_vec()
+                        .to_owned()
+                })
+                .map_err(|err| LuaError::RuntimeError(err.to_string()))?)
+        });
+        methods.add_method("try_member", |_, this, name: Option<PackageNameLua>| {
+            Ok(this
+                .0
+                .try_member(&name.map(|name| name.0))
+                .map(|project| ProjectLua(project.to_owned()))
+                .map_err(|err| LuaError::RuntimeError(err.to_string()))?)
+        });
+        methods.add_method("lockfile_path", |_, this, ()| Ok(this.0.lockfile_path()));
+        methods.add_method("tree", |_, this, config: ConfigLua| {
+            this.0.tree(&config.0).map(TreeLua).into_lua_err()
+        });
+        methods.add_method("test_tree", |_, this, config: ConfigLua| {
+            this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
+        });
+        methods.add_method("luarc_path", |_, this, ()| Ok(this.0.luarc_path()));
+    }
+}
+
+impl FromLua for WorkspaceLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<WorkspaceLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "WorkspaceLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ProjectLua(pub Project);
 
 impl LuaUserData for ProjectLua {
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("root", |_, this, ()| Ok(this.0.root().as_ref().to_owned()));
         methods.add_method("toml_path", |_, this, ()| Ok(this.0.toml_path()));
-        methods.add_method("luarc_path", |_, this, ()| Ok(this.0.luarc_path()));
         methods.add_method("extra_rockspec_path", |_, this, ()| {
             Ok(this.0.extra_rockspec_path())
         });
-        methods.add_method("lockfile_path", |_, this, ()| Ok(this.0.lockfile_path()));
-        methods.add_method("root", |_, this, ()| Ok(this.0.root().as_ref().to_owned()));
         methods.add_method("toml", |_, this, ()| {
             Ok(PartialProjectTomlLua(this.0.toml().clone()))
         });
@@ -1585,12 +1643,6 @@ impl LuaUserData for ProjectLua {
                 .remote_rockspec(specrev.map(|s| s.0))
                 .map(RemoteLuaRockspecLua)
                 .into_lua_err()
-        });
-        methods.add_method("tree", |_, this, config: ConfigLua| {
-            this.0.tree(&config.0).map(TreeLua).into_lua_err()
-        });
-        methods.add_method("test_tree", |_, this, config: ConfigLua| {
-            this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
         });
         methods.add_method("lua_version", |_, this, config: ConfigLua| {
             this.0
@@ -1613,7 +1665,7 @@ impl LuaUserData for ProjectLua {
                     RemotePackageDB::from_config(&config.0, &Progress::<ProgressBar>::no_progress())
                         .await
                         .into_lua_err()?;
-                this.0.add(deps, &package_db).await.into_lua_err()
+                this.0.add(deps.as_ref(), &package_db).await.into_lua_err()
             },
         );
         methods.add_async_method_mut(
@@ -1621,7 +1673,7 @@ impl LuaUserData for ProjectLua {
             |_, mut this, deps: DependencyTypeLua<PackageNameLua>| async move {
                 let _guard = lux_lib::lua::lua_runtime().enter();
                 let deps = map_dependency_type_names(deps.0);
-                this.0.remove(deps).await.into_lua_err()
+                this.0.remove(deps.as_ref()).await.into_lua_err()
             },
         );
         methods.add_method("project_files", |_, this, ()| Ok(this.0.project_files()));

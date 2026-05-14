@@ -3,9 +3,10 @@
 
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use lux_lib::{
     lua::lua_runtime,
-    operations::{set_pinned_state, BuildProject, Download, Install, Sync, Uninstall, Update},
+    operations::{set_pinned_state, BuildWorkspace, Download, Install, Sync, Uninstall, Update},
     progress::{Progress, ProgressBar},
     remote_package_db::RemotePackageDB,
 };
@@ -13,7 +14,7 @@ use mlua::prelude::*;
 
 use crate::lua_impls::{
     ConfigLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua, PackageInstallSpecLua,
-    PinnedStateLua, ProjectLua, SyncReportLua, TreeLua,
+    PinnedStateLua, ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
@@ -75,28 +76,32 @@ pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
 
     table.set(
         "sync",
-        lua.create_async_function(|_, (project, config): (ProjectLua, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            Sync::new(&project.0, &config.0)
-                .sync_dependencies()
-                .await
-                .into_lua_err()
-                .map(SyncReportLua)
-        })?,
+        lua.create_async_function(
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                Sync::new(&workspace.0, &config.0)
+                    .sync_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)
+            },
+        )?,
     )?;
 
     table.set(
         "build",
-        lua.create_async_function(|_, (project, config): (ProjectLua, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            BuildProject::new(&project.0, &config.0)
-                .no_lock(false)
-                .only_deps(false)
-                .build()
-                .await
-                .into_lua_err()
-                .map(|opt: Option<_>| opt.map(LocalPackageLua))
-        })?,
+        lua.create_async_function(
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                BuildWorkspace::new(&workspace.0, &config.0)
+                    .no_lock(false)
+                    .only_deps(false)
+                    .build()
+                    .await
+                    .into_lua_err()
+                    .map(|packages: Vec<_>| packages.into_iter().map(LocalPackageLua).collect_vec())
+            },
+        )?,
     )?;
 
     table.set(

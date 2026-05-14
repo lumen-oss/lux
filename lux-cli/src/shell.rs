@@ -8,7 +8,7 @@ use which::which;
 use std::{env, path::PathBuf};
 use tokio::process::Command;
 
-use super::utils::project::current_project_or_user_tree;
+use super::workspace::current_workspace_or_user_tree;
 
 #[derive(Args)]
 pub struct Shell {
@@ -33,7 +33,7 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
         return Err(eyre!("Already in a Lux shell."));
     }
 
-    let tree = current_project_or_user_tree(&config)?;
+    let tree = current_workspace_or_user_tree(&config)?;
 
     let path = if data.build {
         let build_tree_path = tree.build_tree(&config)?;

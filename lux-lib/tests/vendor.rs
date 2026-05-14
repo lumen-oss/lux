@@ -7,7 +7,7 @@ use assert_fs::{
 use lux_lib::{
     config::ConfigBuilder,
     operations::{Vendor, VendorTarget},
-    project::Project,
+    workspace::Workspace,
 };
 use predicates::prelude::predicate;
 
@@ -18,12 +18,12 @@ async fn vendor_dependencies() {
     let _ = tokio::fs::remove_dir_all(sample_project_dir.join(".lux")).await;
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
-    let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+    let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
     let config = ConfigBuilder::new().unwrap().build().unwrap();
     let vendor_dir = assert_fs::TempDir::new().unwrap();
 
     Vendor::new()
-        .target(VendorTarget::Project(project))
+        .target(VendorTarget::Workspace(workspace))
         .vendor_dir(vendor_dir.to_path_buf())
         .config(&config)
         .vendor_dependencies()
