@@ -67,6 +67,8 @@ struct DependencyTableEntry {
     #[serde(default)]
     git: Option<RemoteGitUrlShorthand>,
     #[serde(default)]
+    path: Option<PathBuf>,
+    #[serde(default)]
     rev: Option<String>,
 }
 
@@ -89,17 +91,17 @@ where
                         Ok(PackageReq { name, version_req }.into())
                     }
                     DependencyEntry::Detailed(entry) => {
-                        let source = match (entry.git, entry.rev) {
-                            (None, None) => Ok(None),
-                            (None, Some(_)) => Err(de::Error::custom(format!(
+                        let source = match (entry.git, entry.rev, entry.path) {
+                            (None, None, None) => Ok(None),
+                            (None, Some(_), None) => Err(de::Error::custom(format!(
                                 "dependency {} specifies a 'rev', but missing a 'git' field",
                                 &name
                             ))),
-                            (Some(git), Some(rev)) => Ok(Some(RockSourceSpec::Git(GitSource {
+                            (Some(git), Some(rev), None) => Ok(Some(RockSourceSpec::Git(GitSource {
                                 url: git.into(),
                                 checkout_ref: Some(rev),
                             }))),
-                            (Some(git), None) => Ok(Some(RockSourceSpec::Git(GitSource {
+                            (Some(git), None, None) => Ok(Some(RockSourceSpec::Git(GitSource {
                                 url: git.into(),
                                 checkout_ref: Some(
                                     entry
@@ -110,6 +112,11 @@ where
                                         .to_string(),
                                 ),
                             }))),
+                            (None, None, Some(path)) => Ok(Some(RockSourceSpec::File(path))),
+                            (_, _, Some(_)) => Err(de::Error::custom(format!(
+                                "dependency '{}' specifies a 'path', which cannot be combined with 'git' or 'rev'",
+                                &name
+                            ))),
                         }?;
                         Ok(LuaDependencySpec {
                             package_req: PackageReq {
@@ -315,14 +322,33 @@ impl PartialProjectToml {
             )?,
             // Merge dependencies internally with lua version
             // so the output of `dependencies()` is consistent
-            dependencies: PerPlatform::new(project_toml.dependencies.unwrap_or_default()),
+            dependencies: PerPlatform::new(
+                project_toml
+                    .dependencies
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|dep| self.resolve_lua_dependency_spec(dep))
+                    .collect_vec(),
+            ),
+            test_dependencies: PerPlatform::new(
+                project_toml
+                    .test_dependencies
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|dep| self.resolve_lua_dependency_spec(dep))
+                    .collect_vec(),
+            ),
             build_dependencies: PerPlatform::new(
-                project_toml.build_dependencies.unwrap_or_default(),
+                project_toml
+                    .build_dependencies
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|dep| self.resolve_lua_dependency_spec(dep))
+                    .collect_vec(),
             ),
             external_dependencies: PerPlatform::new(
                 project_toml.external_dependencies.unwrap_or_default(),
             ),
-            test_dependencies: PerPlatform::new(project_toml.test_dependencies.unwrap_or_default()),
             test: PerPlatform::new(TestSpec::try_from(
                 project_toml.test.clone().unwrap_or_default(),
             )?),
@@ -446,6 +472,17 @@ impl PartialProjectToml {
 
             // Keep the project root the same, as it is not part of the lua rockspec
             project_root: self.project_root,
+        }
+    }
+
+    fn resolve_lua_dependency_spec(&self, dep: LuaDependencySpec) -> LuaDependencySpec {
+        match &dep.source {
+            Some(RockSourceSpec::File(path)) if path.is_dir() => dep,
+            Some(RockSourceSpec::File(path)) => LuaDependencySpec {
+                source: Some(RockSourceSpec::File(self.project_root.join(path))),
+                ..dep
+            },
+            _ => dep,
         }
     }
 }
