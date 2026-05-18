@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.2](https://github.com/lumen-oss/lux/compare/v0.29.1...v0.29.2) `lux-cli` - 2026-05-18
+
+### Dependencies
+- *(deps)* bump octocrab from 0.50.0 to 0.51.0 ([#1511](https://github.com/lumen-oss/lux/pull/1511))
+
+## [0.38.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.38.1...lux-lib-v0.38.2) `lux-lib` - 2026-05-18
+
+### Dependencies
+- *(deps)* bump shlex from 1.3.0 to 2.0.1 ([#1512](https://github.com/lumen-oss/lux/pull/1512))
+
 ## [0.29.1](https://github.com/lumen-oss/lux/compare/v0.29.0...v0.29.1) `lux-cli` - 2026-05-14
 
 ### Added
