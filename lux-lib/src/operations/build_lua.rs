@@ -440,8 +440,6 @@ async fn do_build_lua_unix(
     let progress = args.progress;
     let install_dir = args.install_dir;
 
-    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", pkg_version)));
-
     let build_target = if cfg!(target_os = "linux") {
         // only lua 5.4 has a specific `linux-readline` target
         if matches!(&lua_version, LuaVersion::Lua54) {
@@ -457,6 +455,13 @@ async fn do_build_lua_unix(
         "generic"
     };
 
+    progress.map(|p| {
+        p.set_message(format!(
+            "🛠️ Building Lua {} ({})",
+            pkg_version, build_target
+        ))
+    });
+
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
         .stdout(Stdio::piped())
@@ -466,6 +471,43 @@ async fn do_build_lua_unix(
         .await
     {
         Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        // The lua build may fail for some platform specific reason.
+        // Typically, the `readline` headers cannot be found. In these
+        // cases, try the build again with the `generic` platform target.
+        Ok(output) if build_target != "generic" => {
+            utils::log_command_output(&output, config);
+            progress.map(|p| {
+                p.println(format!(
+                    "Could not build for platform {build_target}. Attempting a generic platform build.\n{}",
+                    "Some functionality may be limited, including dynamic module loading and REPL history.",
+                ))
+            });
+            match Command::new(config.make_cmd())
+                .current_dir(build_dir)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .arg("generic")
+                .output()
+                .await
+            {
+                Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+                Ok(output) => {
+                    return Err(BuildLuaError::CommandFailure {
+                        name: "build".into(),
+                        status: output.status,
+                        stdout: String::from_utf8_lossy(&output.stdout).into(),
+                        stderr: String::from_utf8_lossy(&output.stderr).into(),
+                    });
+                }
+                Err(err) => {
+                    return Err(BuildLuaError::Io(io::Error::other(format!(
+                        "Failed to run `{} build`:\n{}",
+                        config.make_cmd(),
+                        err,
+                    ))))
+                }
+            }
+        }
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "build".into(),
