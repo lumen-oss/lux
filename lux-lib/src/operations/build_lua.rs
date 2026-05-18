@@ -440,12 +440,19 @@ async fn do_build_lua_unix(
     let progress = args.progress;
     let install_dir = args.install_dir;
 
-    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", pkg_version)));
 
-    let build_target = if cfg!(target_os = "linux") && matches!(&lua_version, LuaVersion::Lua54) {
-        "linux"
+    let build_target = if cfg!(target_os = "linux") {
+        if matches!(&lua_version, LuaVersion::Lua54) {
+            "linux"
+        } else {
+            "linux-readline"
+        }
+    } else if cfg!(target_os = "macos") {
+        "macosx"
+    } else if cfg!(target_os = "freebsd") {
+        "freebsd"
     } else {
-        // For other lua versions, the "linux" target uses readline.
         "generic"
     };
 
