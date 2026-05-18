@@ -84,7 +84,6 @@
                   cmakeMinimal
                   zlib
                   gnum4
-                  readline
                 ])
                 ++ (lib.optional (!isDarwin) self.checks.${system}.git-hooks-check.enabledPackages)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "lua" pkg.name)) pkgs.lux-cli.buildInputs)
