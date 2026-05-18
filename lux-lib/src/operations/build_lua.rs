@@ -443,10 +443,11 @@ async fn do_build_lua_unix(
     progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", pkg_version)));
 
     let build_target = if cfg!(target_os = "linux") {
+        // only lua 5.4 has a specific `linux-readline` target
         if matches!(&lua_version, LuaVersion::Lua54) {
-            "linux"
-        } else {
             "linux-readline"
+        } else {
+            "linux"
         }
     } else if cfg!(target_os = "macos") {
         "macosx"
