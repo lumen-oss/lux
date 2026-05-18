@@ -405,7 +405,7 @@ version = "3.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "519bd3116aeeb42d5372c29d982d16d0170d3d4a5ed85fc7dd91642ffff3c67c"
 dependencies = [
- "darling 0.20.11",
+ "darling 0.23.0",
  "ident_case",
  "prettyplease",
  "proc-macro2",
@@ -5813,7 +5813,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -5995,9 +5995,9 @@ dependencies = [
 
 [[package]]
 name = "stylua"
-version = "2.4.1"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a97a38ecd09e9fcc909b19582ad4cba6df0ea595eaec7facb4f4bb958bc9ce8f"
+checksum = "de1ff8ec275ef3a0d44845d727368c47ee6f6a04e078bd8bb21c3f8409763d6f"
 dependencies = [
  "anyhow",
  "cfg-if",
