@@ -159,7 +159,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         _ => {}
     }
     let compiler_path = which::which(&compiler_path)
-        .map_err(|err| io::Error::other(format!("cannot find {}:\n{}", &compiler_path, err)))?;
+        .map_err(|err| io::Error::other(format!("cannot find {}:\n{}", compiler_path, err)))?;
     let compiler_path = compiler_path.to_slash_lossy().to_string();
     let compiler_args = compiler.cflags_env();
     let compiler_args = compiler_args.to_string_lossy();
@@ -392,7 +392,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .unwrap_unchecked()
     };
 
-    progress.map(|p| p.set_message(format!("📥 Downloading {}", &source_url)));
+    progress.map(|p| p.set_message(format!("📥 Downloading {}", source_url)));
 
     let response = crate::reqwest::new_https_client(args.config)?
         .get(source_url)
@@ -482,7 +482,7 @@ async fn do_build_lua_unix(
         }
     };
 
-    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
 
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
@@ -524,7 +524,7 @@ async fn do_build_lua_msvc(
     let progress = args.progress;
     let install_dir = args.install_dir;
 
-    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", pkg_version)));
 
     let lib_dir = install_dir.join("lib");
     fs::create_dir_all(&lib_dir).await.map_err(|err| {
@@ -604,7 +604,7 @@ async fn do_build_lua_msvc(
         .out_dir(&src_dir)
         .try_compile_intermediates()?;
 
-    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
 
     let target = host.to_string();
     let link =
