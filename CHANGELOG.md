@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.38.2...lux-lib-v0.38.3) `lux-lib` - 2026-05-19
+
+### Added
+- *(lua)* restore platform build targets and add freebsd support ([#1514](https://github.com/lumen-oss/lux/pull/1514))
+
 ## [0.29.3](https://github.com/lumen-oss/lux/compare/v0.29.2...v0.29.3) `lux-cli` - 2026-05-19
 
 ### Other
