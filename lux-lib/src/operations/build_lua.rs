@@ -159,7 +159,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         _ => {}
     }
     let compiler_path = which::which(&compiler_path)
-        .map_err(|err| io::Error::other(format!("cannot find {}:\n{}", &compiler_path, err)))?;
+        .map_err(|err| io::Error::other(format!("cannot find {}:\n{}", compiler_path, err)))?;
     let compiler_path = compiler_path.to_slash_lossy().to_string();
     let compiler_args = compiler.cflags_env();
     let compiler_args = compiler_args.to_string_lossy();
@@ -392,7 +392,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .unwrap_unchecked()
     };
 
-    progress.map(|p| p.set_message(format!("📥 Downloading {}", &source_url)));
+    progress.map(|p| p.set_message(format!("📥 Downloading {}", source_url)));
 
     let response = crate::reqwest::new_https_client(args.config)?
         .get(source_url)
@@ -440,14 +440,27 @@ async fn do_build_lua_unix(
     let progress = args.progress;
     let install_dir = args.install_dir;
 
-    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", &pkg_version)));
-
-    let build_target = if cfg!(target_os = "linux") && matches!(&lua_version, LuaVersion::Lua54) {
-        "linux"
+    let build_target = if cfg!(target_os = "linux") {
+        // only lua 5.4 has a specific `linux-readline` target
+        if matches!(&lua_version, LuaVersion::Lua54) {
+            "linux-readline"
+        } else {
+            "linux"
+        }
+    } else if cfg!(target_os = "macos") {
+        "macosx"
+    } else if cfg!(target_os = "freebsd") {
+        "freebsd"
     } else {
-        // For other lua versions, the "linux" target uses readline.
         "generic"
     };
+
+    progress.map(|p| {
+        p.set_message(format!(
+            "🛠️ Building Lua {} ({})",
+            pkg_version, build_target
+        ))
+    });
 
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
@@ -458,6 +471,47 @@ async fn do_build_lua_unix(
         .await
     {
         Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        // The lua build may fail for some platform specific reason.
+        // Typically, the `readline` headers cannot be found. In these
+        // cases, try the build again with the `generic` platform target.
+        Ok(output) if build_target != "generic" => {
+            progress.map(|p| {
+                p.println(format!(
+                    r#"⚠️ WARNING: Could not build Lua target '{build_target}'. Attempting a 'generic' Lua target build.
+Some functionality may be limited, including dynamic module loading and REPL history.
+    
+stderr:
+{}
+"#,
+                    String::from_utf8_lossy(&output.stderr)
+                ))
+            });
+            match Command::new(config.make_cmd())
+                .current_dir(build_dir)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .arg("generic")
+                .output()
+                .await
+            {
+                Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+                Ok(output) => {
+                    return Err(BuildLuaError::CommandFailure {
+                        name: "build".into(),
+                        status: output.status,
+                        stdout: String::from_utf8_lossy(&output.stdout).into(),
+                        stderr: String::from_utf8_lossy(&output.stderr).into(),
+                    });
+                }
+                Err(err) => {
+                    return Err(BuildLuaError::Io(io::Error::other(format!(
+                        "Failed to run `{} build`:\n{}",
+                        config.make_cmd(),
+                        err,
+                    ))))
+                }
+            }
+        }
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "build".into(),
@@ -475,7 +529,7 @@ async fn do_build_lua_unix(
         }
     };
 
-    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
 
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
@@ -517,7 +571,7 @@ async fn do_build_lua_msvc(
     let progress = args.progress;
     let install_dir = args.install_dir;
 
-    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", pkg_version)));
 
     let lib_dir = install_dir.join("lib");
     fs::create_dir_all(&lib_dir).await.map_err(|err| {
@@ -597,7 +651,7 @@ async fn do_build_lua_msvc(
         .out_dir(&src_dir)
         .try_compile_intermediates()?;
 
-    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", &pkg_version)));
+    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
 
     let target = host.to_string();
     let link =
