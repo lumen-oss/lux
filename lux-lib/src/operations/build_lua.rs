@@ -475,11 +475,15 @@ async fn do_build_lua_unix(
         // Typically, the `readline` headers cannot be found. In these
         // cases, try the build again with the `generic` platform target.
         Ok(output) if build_target != "generic" => {
-            utils::log_command_output(&output, config);
             progress.map(|p| {
                 p.println(format!(
-                    "Could not build for platform {build_target}. Attempting a generic platform build.\n{}",
-                    "Some functionality may be limited, including dynamic module loading and REPL history.",
+                    r#"⚠️ WARNING: Could not build for platform '{build_target}'. Attempting a 'generic' platform build.
+Some functionality may be limited, including dynamic module loading and REPL history.
+    
+stderr:
+{}
+"#,
+                    String::from_utf8_lossy(&output.stderr)
                 ))
             });
             match Command::new(config.make_cmd())
