@@ -470,63 +470,31 @@ async fn do_build_lua_unix(
         .output()
         .await
     {
-        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
         // The lua build may fail for some platform specific reason.
         // Typically, the `readline` headers cannot be found. In these
         // cases, try the build again with the `generic` platform target.
-        Ok(output) if build_target != "generic" => {
+        Ok(output) if !output.status.success() && build_target != "generic" => {
             progress.map(|p| {
                 p.println(format!(
                     r#"⚠️ WARNING: Could not build Lua target '{build_target}'. Attempting a 'generic' Lua target build.
 Some functionality may be limited, including dynamic module loading and REPL history.
-    
+
 stderr:
 {}
 "#,
                     String::from_utf8_lossy(&output.stderr)
                 ))
             });
-            match Command::new(config.make_cmd())
+            let fallback_output = Command::new(config.make_cmd())
                 .current_dir(build_dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .arg("generic")
                 .output()
-                .await
-            {
-                Ok(output) if output.status.success() => utils::log_command_output(&output, config),
-                Ok(output) => {
-                    return Err(BuildLuaError::CommandFailure {
-                        name: "build".into(),
-                        status: output.status,
-                        stdout: String::from_utf8_lossy(&output.stdout).into(),
-                        stderr: String::from_utf8_lossy(&output.stderr).into(),
-                    });
-                }
-                Err(err) => {
-                    return Err(BuildLuaError::Io(io::Error::other(format!(
-                        "Failed to run `{} build`:\n{}",
-                        config.make_cmd(),
-                        err,
-                    ))))
-                }
-            }
+                .await;
+            guard_success(fallback_output, config)?;
         }
-        Ok(output) => {
-            return Err(BuildLuaError::CommandFailure {
-                name: "build".into(),
-                status: output.status,
-                stdout: String::from_utf8_lossy(&output.stdout).into(),
-                stderr: String::from_utf8_lossy(&output.stderr).into(),
-            });
-        }
-        Err(err) => {
-            return Err(BuildLuaError::Io(io::Error::other(format!(
-                "Failed to run `{} build`:\n{}",
-                config.make_cmd(),
-                err,
-            ))))
-        }
+        output => guard_success(output, config)?,
     };
 
     progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
@@ -559,6 +527,29 @@ stderr:
     };
 
     Ok(())
+}
+
+fn guard_success(
+    output: io::Result<std::process::Output>,
+    config: &Config,
+) -> Result<(), BuildLuaError> {
+    match output {
+        Ok(output) if output.status.success() => {
+            utils::log_command_output(&output, config);
+            Ok(())
+        }
+        Ok(output) => Err(BuildLuaError::CommandFailure {
+            name: "build".into(),
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).into(),
+            stderr: String::from_utf8_lossy(&output.stderr).into(),
+        }),
+        Err(err) => Err(BuildLuaError::Io(io::Error::other(format!(
+            "Failed to run `{} build`:\n{}",
+            config.make_cmd(),
+            err,
+        )))),
+    }
 }
 
 async fn do_build_lua_msvc(
