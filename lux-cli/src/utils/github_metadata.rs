@@ -43,7 +43,7 @@ pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<Repo
     };
 
     // NOTE(vhyrro): Temporary value is required. Thank the borrow checker.
-    let ret = if let Some(remote) = repo.find_remote("origin")?.url() {
+    let ret = if let Ok(remote) = repo.find_remote("origin")?.url() {
         let parsed_url = GitUrl::parse(remote)?;
         let provider: GenericProvider = parsed_url.provider_info()?;
 
