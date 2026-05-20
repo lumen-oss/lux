@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use bon::Builder;
 use itertools::Itertools;
+use std::sync::Arc;
 use thiserror::Error;
 
 use crate::{
@@ -12,9 +11,12 @@ use crate::{
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     package::PackageName,
     progress::{MultiProgress, Progress},
-    project::{project_toml::LocalProjectTomlValidationError, Project},
+    project::{
+        project_toml::{LocalProjectToml, LocalProjectTomlValidationError},
+        Project,
+    },
     rockspec::Rockspec,
-    tree::{self, TreeError},
+    tree::{self, Tree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
@@ -75,22 +77,92 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
     /// Returns `Some` if the `only_deps` option is set to `false`.
     pub async fn build(self) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
         let args = self._build();
+        let config = args.config;
         let workspace = args.workspace;
-        let mut packages = Vec::new();
+        let workspace_tree = workspace.tree(config)?;
+        let build_tree = workspace.build_tree(config)?;
         let progress_arc = args
             .progress
             .clone()
             .unwrap_or_else(|| MultiProgress::new_arc(args.config));
-        if let Some(package) = &args.package {
-            let project = workspace.select_member(package)?;
-            let progress = Arc::clone(&progress_arc);
-            if let Some(pkg) = build_project(project, &args, progress).await? {
-                packages.push(pkg);
-            }
+        let lua = LuaInstallation::new_from_config(
+            config,
+            &progress_arc.map(|progress| progress.new_bar()),
+        )
+        .await?;
+        if !args.no_lock {
+            Sync::new(workspace, config)
+                .progress(progress_arc.clone())
+                .sync_dependencies()
+                .await
+                .map_err(BuildWorkspaceError::SyncDependencies)?;
+
+            Sync::new(workspace, config)
+                .progress(progress_arc.clone())
+                .sync_build_dependencies()
+                .await
+                .map_err(BuildWorkspaceError::SyncBuildDependencies)?;
         } else {
-            for project in workspace.members() {
-                let progress = Arc::clone(&progress_arc);
-                if let Some(pkg) = build_project(project, &args, progress).await? {
+            let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
+            let mut dependencies_to_install = Vec::new();
+            let mut build_dependencies_to_install = Vec::new();
+            if let Some(package) = &args.package {
+                let project = workspace.select_member(package)?;
+                let project_toml = project.toml().into_local()?;
+                prepare_dependencies(
+                    &project_toml,
+                    &workspace_tree,
+                    &mut dependencies_to_install,
+                    &mut build_dependencies_to_install,
+                );
+            } else {
+                for project in workspace.members() {
+                    let project_toml = project.toml().into_local()?;
+                    prepare_dependencies(
+                        &project_toml,
+                        &workspace_tree,
+                        &mut dependencies_to_install,
+                        &mut build_dependencies_to_install,
+                    );
+                }
+            }
+
+            if !build_dependencies_to_install.is_empty() {
+                let bar = progress_arc.map(|p| p.new_bar());
+                luarocks.ensure_installed(&lua, &bar).await?;
+                Install::new(config)
+                    .packages(
+                        build_dependencies_to_install
+                            .into_iter()
+                            .unique()
+                            .collect_vec(),
+                    )
+                    .tree(build_tree.clone())
+                    .progress(progress_arc.clone())
+                    .install()
+                    .await
+                    .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
+            }
+            // for some reason, cargo can't infer the type
+            let res: Result<Vec<LocalPackage>, InstallError> = Install::new(config)
+                .packages(dependencies_to_install.into_iter().unique().collect_vec())
+                .workspace(workspace)?
+                .progress(progress_arc.clone())
+                .install()
+                .await;
+            res.map_err(BuildWorkspaceError::InstallDependencies)?;
+        }
+        let mut packages = Vec::new();
+        if !args.only_deps {
+            if let Some(package) = &args.package {
+                let project = workspace.select_member(package)?;
+                let pkg =
+                    build_project(project, workspace, &lua, config, progress_arc.clone()).await?;
+                packages.push(pkg);
+            } else {
+                for project in workspace.members() {
+                    let pkg = build_project(project, workspace, &lua, config, progress_arc.clone())
+                        .await?;
                     packages.push(pkg);
                 }
             }
@@ -99,16 +171,12 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
     }
 }
 
-async fn build_project(
-    project: &Project,
-    args: &BuildWorkspace<'_>,
-    progress: Arc<Progress<MultiProgress>>,
-) -> Result<Option<LocalPackage>, BuildWorkspaceError> {
-    let config = args.config;
-    let workspace = args.workspace;
-    let workspace_tree = workspace.tree(args.config)?;
-    let project_toml = project.toml().into_local()?;
-
+fn prepare_dependencies(
+    project_toml: &LocalProjectToml,
+    workspace_tree: &Tree,
+    dependencies_to_install: &mut Vec<PackageInstallSpec>,
+    build_dependencies_to_install: &mut Vec<PackageInstallSpec>,
+) {
     let dependencies = project_toml
         .dependencies()
         .current_platform()
@@ -122,116 +190,82 @@ async fn build_project(
         .iter()
         .cloned()
         .collect_vec();
+    dependencies
+        .into_iter()
+        .filter(|dep| {
+            workspace_tree
+                .match_rocks(dep.package_req())
+                .is_ok_and(|rock_match| !rock_match.is_found())
+        })
+        .map(|dep| {
+            PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
+                .pin(*dep.pin())
+                .opt(*dep.opt())
+                .maybe_source(dep.source().clone())
+                .build()
+        })
+        .for_each(|dep| dependencies_to_install.push(dep));
 
-    let build_tree = workspace.build_tree(config)?;
-    let lua =
-        LuaInstallation::new_from_config(config, &progress.map(|progress| progress.new_bar()))
-            .await?;
-    let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
-
-    if args.no_lock {
-        let dependencies_to_install = dependencies
-            .into_iter()
-            .filter(|dep| {
-                workspace_tree
-                    .match_rocks(dep.package_req())
-                    .is_ok_and(|rock_match| !rock_match.is_found())
-            })
-            .map(|dep| {
-                PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
-                    .pin(*dep.pin())
-                    .opt(*dep.opt())
-                    .maybe_source(dep.source().clone())
-                    .build()
-            })
-            .collect();
-
-        // for some reason, cargo can't infer the type
-        let res: Result<Vec<LocalPackage>, InstallError> = Install::new(config)
-            .packages(dependencies_to_install)
-            .workspace(workspace)?
-            .progress(progress.clone())
-            .install()
-            .await;
-        res.map_err(BuildWorkspaceError::InstallDependencies)?;
-
-        let build_dependencies_to_install = build_dependencies
-            .into_iter()
-            .filter(|dep| {
-                workspace_tree
-                    .match_rocks(dep.package_req())
-                    .is_ok_and(|rock_match| !rock_match.is_found())
-            })
-            .map(|dep| {
-                PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
-                    .pin(*dep.pin())
-                    .opt(*dep.opt())
-                    .maybe_source(dep.source().clone())
-                    .build()
-            })
-            .collect_vec();
-
-        if !build_dependencies_to_install.is_empty() {
-            let bar = progress.map(|p| p.new_bar());
-            luarocks.ensure_installed(&lua, &bar).await?;
-            Install::new(config)
-                .packages(build_dependencies_to_install)
-                .tree(build_tree)
-                .progress(progress.clone())
-                .install()
-                .await
-                .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
-        }
-    } else {
-        Sync::new(workspace, config)
-            .progress(progress.clone())
-            .sync_dependencies()
-            .await
-            .map_err(BuildWorkspaceError::SyncDependencies)?;
-
-        Sync::new(workspace, config)
-            .progress(progress.clone())
-            .sync_build_dependencies()
-            .await
-            .map_err(BuildWorkspaceError::SyncBuildDependencies)?;
-    }
-
-    if !args.only_deps {
-        let package = Build::new()
-            .rockspec(&project_toml)
-            .lua(&lua)
-            .tree(&workspace_tree)
-            .entry_type(tree::EntryType::Entrypoint)
-            .config(config)
-            .progress(&progress.map(|p| p.new_bar()))
-            .behaviour(BuildBehaviour::Force)
-            .build()
-            .await?;
-
-        let lockfile = workspace_tree.lockfile()?;
-        let dependencies = lockfile
-            .rocks()
-            .iter()
-            .filter_map(|(pkg_id, value)| {
-                if lockfile.is_entrypoint(pkg_id) {
-                    Some(value)
-                } else {
-                    None
-                }
-            })
-            .cloned()
-            .collect_vec();
-        let mut lockfile = lockfile.write_guard();
-        lockfile.add_entrypoint(&package);
-        for dep in dependencies {
-            lockfile.add_dependency(&package, &dep);
-            lockfile.remove_entrypoint(&dep);
-        }
-        Ok(Some(package))
-    } else {
-        Ok(None)
-    }
+    build_dependencies
+        .into_iter()
+        .filter(|dep| {
+            workspace_tree
+                .match_rocks(dep.package_req())
+                .is_ok_and(|rock_match| !rock_match.is_found())
+        })
+        .map(|dep| {
+            PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
+                .pin(*dep.pin())
+                .opt(*dep.opt())
+                .maybe_source(dep.source().clone())
+                .build()
+        })
+        .for_each(|dep| build_dependencies_to_install.push(dep));
 }
+
+async fn build_project(
+    project: &Project,
+    workspace: &Workspace,
+    lua: &LuaInstallation,
+    config: &Config,
+    progress: Arc<Progress<MultiProgress>>,
+) -> Result<LocalPackage, BuildWorkspaceError> {
+    let workspace_tree = workspace.tree(config)?;
+    let project_toml = project.toml().into_local()?;
+
+    let package = Build::new()
+        .rockspec(&project_toml)
+        .lua(lua)
+        .tree(&workspace_tree)
+        .entry_type(tree::EntryType::Entrypoint)
+        .config(config)
+        .progress(&progress.map(|p| p.new_bar()))
+        .behaviour(BuildBehaviour::Force)
+        .build()
+        .await?;
+
+    let lockfile = workspace_tree.lockfile()?;
+    let dependencies = lockfile
+        .rocks()
+        .iter()
+        .filter_map(|(pkg_id, value)| {
+            if lockfile.is_entrypoint(pkg_id) {
+                Some(value)
+            } else {
+                None
+            }
+        })
+        .cloned()
+        .collect_vec();
+    let mut lockfile = lockfile.write_guard();
+    lockfile.add_entrypoint(&package);
+    for dep in dependencies {
+        lockfile.add_dependency(&package, &dep);
+        lockfile.remove_entrypoint(&dep);
+    }
+    Ok(package)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

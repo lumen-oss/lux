@@ -159,7 +159,7 @@ pub enum BuildError {
     LuaInstallation(#[from] LuaInstallationError),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub enum BuildBehaviour {
     /// Don't force a rebuild if the package is already installed
     #[default]

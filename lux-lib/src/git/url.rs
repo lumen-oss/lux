@@ -7,7 +7,7 @@ use thiserror::Error;
 // via our API.
 
 /// GitUrl represents an input url that is a url used by git
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct RemoteGitUrl {
     /// The fully qualified domain name (FQDN) or IP of the repo
     pub(crate) host: String,

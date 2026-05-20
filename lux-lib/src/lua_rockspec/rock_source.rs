@@ -100,7 +100,7 @@ impl<'de> Deserialize<'de> for PerPlatform<RemoteRockSource> {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum RockSourceSpec {
     Git(GitSource),
     File(PathBuf),
