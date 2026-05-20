@@ -36,7 +36,7 @@ futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["js", "std"] }
-git2 = { version = "0.20", features = ["vendored-libgit2"] }
+git2 = { version = "0.21", features = ["https", "ssh", "vendored-libgit2"] }
 hashbrown = { version = "0.17" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
@@ -101,7 +101,7 @@ futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["js", "std"] }
-git2 = { version = "0.20", features = ["vendored-libgit2"] }
+git2 = { version = "0.21", features = ["https", "ssh", "vendored-libgit2"] }
 hashbrown = { version = "0.17" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
