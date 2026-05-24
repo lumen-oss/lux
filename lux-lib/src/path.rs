@@ -44,11 +44,11 @@ impl Paths {
     pub fn new(tree: &Tree) -> Result<Self, PathsError> {
         let mut paths = tree
             .list()?
-            .into_iter()
-            .flat_map(|(_, packages)| {
+            .values()
+            .flat_map(|packages| {
                 packages
-                    .into_iter()
-                    .map(|package| tree.installed_rock_layout(&package))
+                    .iter()
+                    .map(|package| tree.installed_rock_layout(package))
                     .collect_vec()
             })
             .try_fold(Self::default(tree), |mut paths, package| {

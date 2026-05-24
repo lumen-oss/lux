@@ -123,8 +123,8 @@ impl RemotePackageDB {
                 .collect(),
             Impl::Lock(lockfile) => lockfile
                 .rocks()
-                .iter()
-                .filter_map(|(_, package)| {
+                .values()
+                .filter_map(|package| {
                     // NOTE: This doesn't group packages by name, but we don't care for now,
                     // as we shouldn't need to use this function with a lockfile.
                     let name = package.name();
