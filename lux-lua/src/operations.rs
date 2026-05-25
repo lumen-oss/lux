@@ -10,26 +10,34 @@ use lux_lib::{
     remote_package_db::RemotePackageDB,
 };
 use mlua::prelude::*;
+use mlua_extras::typed::{Type, Typed, TypedClassBuilder, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::{
     ConfigLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua, PackageInstallSpecLua,
     PinnedStateLua, ProjectLua, SyncReportLua, TreeLua,
 };
 
-pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
-    let table = lua.create_table()?;
+#[derive(Clone, mlua_extras::UserData)]
+pub(crate) struct OperationsModule;
 
-    table.set(
-        "search",
-        lua.create_async_function(|_, (query, config): (String, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            search(query, config).await
-        })?,
-    )?;
+impl Typed for OperationsModule {
+    fn ty() -> Type {
+        Type::named("OperationsModule")
+    }
+}
 
-    table.set(
-        "install",
-        lua.create_async_function(
+impl TypedUserData for OperationsModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_async_function(
+            "search",
+            |_, (query, config): (String, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                search(query, config).await
+            },
+        );
+
+        methods.add_async_function(
+            "install",
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
@@ -41,12 +49,10 @@ pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
                     .into_lua_err()
                     .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
             },
-        )?,
-    )?;
+        );
 
-    table.set(
-        "uninstall",
-        lua.create_async_function(
+        methods.add_async_function(
+            "uninstall",
             |_, (packages, tree, config): (Vec<LocalPackageIdLua>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
@@ -58,71 +64,79 @@ pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
                     .await
                     .into_lua_err()
             },
-        )?,
-    )?;
+        );
 
-    table.set(
-        "update",
-        lua.create_async_function(|_, config: ConfigLua| async move {
+        methods.add_async_function("update", |_, config: ConfigLua| async move {
             let _runtime = lua_runtime().enter();
             Update::new(&config.0)
                 .update()
                 .await
                 .into_lua_err()
                 .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
-        })?,
-    )?;
+        });
 
-    table.set(
-        "sync",
-        lua.create_async_function(|_, (project, config): (ProjectLua, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            Sync::new(&project.0, &config.0)
-                .sync_dependencies()
-                .await
-                .into_lua_err()
-                .map(SyncReportLua)
-        })?,
-    )?;
+        methods.add_async_function(
+            "sync",
+            |_, (project, config): (ProjectLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                Sync::new(&project.0, &config.0)
+                    .sync_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)
+            },
+        );
 
-    table.set(
-        "build",
-        lua.create_async_function(|_, (project, config): (ProjectLua, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            BuildProject::new(&project.0, &config.0)
-                .no_lock(false)
-                .only_deps(false)
-                .build()
-                .await
-                .into_lua_err()
-                .map(|opt: Option<_>| opt.map(LocalPackageLua))
-        })?,
-    )?;
+        methods.add_async_function(
+            "build",
+            |_, (project, config): (ProjectLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                BuildProject::new(&project.0, &config.0)
+                    .no_lock(false)
+                    .only_deps(false)
+                    .build()
+                    .await
+                    .into_lua_err()
+                    .map(|opt: Option<_>| opt.map(LocalPackageLua))
+            },
+        );
 
-    table.set(
-        "download",
-        lua.create_async_function(|_, (package_req, config): (String, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            let req = package_req.parse().into_lua_err()?;
-            let progress = Progress::<ProgressBar>::no_progress();
-            Download::new(&req, &config.0, &progress)
-                .download_rockspec()
-                .await
-                .into_lua_err()
-                .map(DownloadedRockspecLua)
-        })?,
-    )?;
+        methods.add_async_function(
+            "download",
+            |_, (package_req, config): (String, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                let req = package_req.parse().into_lua_err()?;
+                let progress = Progress::<ProgressBar>::no_progress();
+                Download::new(&req, &config.0, &progress)
+                    .download_rockspec()
+                    .await
+                    .into_lua_err()
+                    .map(DownloadedRockspecLua)
+            },
+        );
 
-    table.set(
-        "pin",
-        lua.create_function(
+        methods.add_function(
+            "pin",
             |_, (package_id, tree, pin_state): (LocalPackageIdLua, TreeLua, PinnedStateLua)| {
                 set_pinned_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
             },
-        )?,
-    )?;
+        );
+    }
+}
 
-    Ok(table)
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::OperationsModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "OperationsModule",
+            build: || Type::class(TypedClassBuilder::new::<OperationsModule>()),
+        }
+    }
 }
 
 async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String, Vec<String>>> {

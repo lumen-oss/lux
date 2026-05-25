@@ -30,3 +30,6 @@
 /src
 
 .pre-commit-config.yaml
+
+# Generated definitions by lux-definitions
+/definitions
