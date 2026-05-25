@@ -172,14 +172,8 @@ Reinstall?
         let lockfile = tree.lockfile()?;
         let dangling_rocks = lockfile
             .rocks()
-            .iter()
-            .filter_map(|(pkg_id, _)| {
-                if lockfile.is_entrypoint(pkg_id) || lockfile.is_dependency(pkg_id) {
-                    None
-                } else {
-                    Some(pkg_id)
-                }
-            })
+            .keys()
+            .filter(|pkg_id| !lockfile.is_entrypoint(pkg_id) && !lockfile.is_dependency(pkg_id))
             .cloned()
             .collect_vec();
         if dangling_rocks.is_empty() {

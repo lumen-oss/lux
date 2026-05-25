@@ -156,8 +156,8 @@ pub(crate) async fn compile_c_files(
         .includes(lua.includes())
         .includes(
             external_dependencies
-                .iter()
-                .filter_map(|(_, dep)| dep.include_dir.as_ref()),
+                .values()
+                .filter_map(|dep| dep.include_dir.as_ref()),
         )
         .opt_level(3)
         .out_dir(intermediate_dir);
@@ -335,8 +335,8 @@ pub(crate) async fn compile_c_modules(
         .map(|dir| dir.map(|dir| source_dir.join(dir)))
         .chain(
             external_dependencies
-                .iter()
-                .filter_map(|(_, dep)| dep.include_dir.clone())
+                .values()
+                .filter_map(|dep| dep.include_dir.clone())
                 .map(Result::Ok),
         )
         .try_collect::<_, Vec<_>, _>()?
@@ -357,8 +357,8 @@ pub(crate) async fn compile_c_modules(
         .includes(lua.includes())
         .includes(
             external_dependencies
-                .iter()
-                .filter_map(|(_, dep)| dep.include_dir.as_ref()),
+                .values()
+                .filter_map(|dep| dep.include_dir.as_ref()),
         )
         .opt_level(3)
         .out_dir(intermediate_dir);
@@ -485,8 +485,8 @@ async fn link_c_artifacts(
             .args(lua.lib_link_args(&compiler))
             .args(
                 external_dependencies
-                    .iter()
-                    .flat_map(|(_, dep)| dep.lib_link_args(&compiler)),
+                    .values()
+                    .flat_map(|dep| dep.lib_link_args(&compiler)),
             )
             .args(libdir_args)
             .args(library_args)
@@ -498,8 +498,8 @@ async fn link_c_artifacts(
             .args(lua.lib_link_args(&build.try_get_compiler()?))
             .args(
                 external_dependencies
-                    .iter()
-                    .flat_map(|(_, dep)| dep.lib_link_args(&compiler)),
+                    .values()
+                    .flat_map(|dep| dep.lib_link_args(&compiler)),
             )
             .args(&objects)
             .args(libdir_args)

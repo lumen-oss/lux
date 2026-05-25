@@ -140,8 +140,8 @@ impl BuildBackend for BuiltinBuildSpec {
 
 fn source_paths(build_dir: &Path, modules: &HashMap<LuaModule, ModuleSpec>) -> HashSet<PathBuf> {
     modules
-        .iter()
-        .flat_map(|(_, spec)| match spec {
+        .values()
+        .flat_map(|spec| match spec {
             ModuleSpec::SourcePath(path_buf) => vec![path_buf],
             ModuleSpec::SourcePaths(vec) => vec.iter().collect_vec(),
             ModuleSpec::ModulePaths(module_paths) => module_paths.sources.iter().collect_vec(),

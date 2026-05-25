@@ -64,11 +64,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
     let tree = config.user_tree(lua_version.clone())?;
     let lockfile = tree.lockfile()?;
     let local_packages = if which.packages.is_empty() {
-        lockfile
-            .list()
-            .into_iter()
-            .flat_map(|(_, pkgs)| pkgs)
-            .collect_vec()
+        lockfile.list().into_values().flatten().collect_vec()
     } else {
         which
             .packages

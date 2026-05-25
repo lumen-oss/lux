@@ -562,8 +562,8 @@ impl LocalProjectToml {
         if let Some(dep) = self
             .dependencies()
             .per_platform
-            .iter()
-            .filter_map(|(_, deps)| deps.iter().find(|dep| dep.source().is_some()))
+            .values()
+            .filter_map(|deps| deps.iter().find(|dep| dep.source().is_some()))
             .collect_vec()
             .first()
         {
@@ -572,8 +572,8 @@ impl LocalProjectToml {
         if let Some(dep) = self
             .build_dependencies()
             .per_platform
-            .iter()
-            .filter_map(|(_, deps)| deps.iter().find(|dep| dep.source().is_some()))
+            .values()
+            .filter_map(|deps| deps.iter().find(|dep| dep.source().is_some()))
             .collect_vec()
             .first()
         {
@@ -582,8 +582,8 @@ impl LocalProjectToml {
         if let Some(dep) = self
             .test_dependencies()
             .per_platform
-            .iter()
-            .filter_map(|(_, deps)| deps.iter().find(|dep| dep.source().is_some()))
+            .values()
+            .filter_map(|deps| deps.iter().find(|dep| dep.source().is_some()))
             .collect_vec()
             .first()
         {
