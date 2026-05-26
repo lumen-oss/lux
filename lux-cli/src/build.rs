@@ -20,7 +20,7 @@ pub struct Build {
 
     /// Package to build.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 }
 
 /// Returns `Some` if the `only_deps` arg is set to `false`.
