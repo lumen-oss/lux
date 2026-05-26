@@ -1,0 +1,15 @@
+package = "bar"
+version = "1.0.0"
+lua = ">=5.1"
+
+[description]
+summary = ""
+maintainer = "lumen-labs"
+labels = [""]
+
+[dependencies.foo]
+path = "../foo"
+version = "1.0.0"
+
+[run]
+args = ["src/main.lua"]

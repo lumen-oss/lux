@@ -375,12 +375,12 @@ mod tests {
         let work_dir: PathBuf = workspace_root.join("projects");
         let workspace = Workspace::from(&work_dir).unwrap().unwrap();
         assert_eq!(workspace.members.len(), 2);
-        let foo = workspace.try_member(&Some("foo".into())).unwrap();
+        let foo = workspace.select_member(&"foo".into()).unwrap();
         assert_eq!(
             foo.root().to_path_buf(),
             workspace_root.join("projects/foo").to_path_buf()
         );
-        let bar = workspace.try_member(&Some("bar".into())).unwrap();
+        let bar = workspace.select_member(&"bar".into()).unwrap();
         assert_eq!(
             bar.root().to_path_buf(),
             workspace_root.join("projects/bar").to_path_buf()
