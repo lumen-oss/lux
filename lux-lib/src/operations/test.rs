@@ -178,8 +178,8 @@ async fn run_project_tests(
     paths.prepend(&test_tree_paths);
 
     let test_executable = match &test_spec {
-        ValidatedTestSpec::Busted(_) => BUSTED_EXE.to_string(),
-        ValidatedTestSpec::BustedNlua(_) => BUSTED_EXE.to_string(),
+        ValidatedTestSpec::Busted { .. } => BUSTED_EXE.to_string(),
+        ValidatedTestSpec::BustedNlua { .. } => BUSTED_EXE.to_string(),
         ValidatedTestSpec::Command(spec) => spec.command.to_string(),
         ValidatedTestSpec::LuaScript(_) => {
             let lua_version = project.lua_version(&test_config)?;

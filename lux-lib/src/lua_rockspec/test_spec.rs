@@ -52,8 +52,14 @@ pub enum TestSpec {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ValidatedTestSpec {
-    Busted(BustedTestSpec),
-    BustedNlua(BustedTestSpec),
+    Busted {
+        spec: BustedTestSpec,
+        dependencies: Vec<PackageReq>,
+    },
+    BustedNlua {
+        spec: BustedTestSpec,
+        dependencies: Vec<PackageReq>,
+    },
     Command(CommandTestSpec),
     LuaScript(LuaScriptTestSpec),
 }
@@ -74,23 +80,41 @@ impl TestSpec {
         let project_root = project.root();
         let toml = project.toml().into_local()?;
         let test_dependencies = toml.test_dependencies().current_platform();
-        let is_busted = project_root.join(".busted").is_file()
-            || test_dependencies
-                .iter()
-                .any(|dep| dep.name().to_string() == "busted");
+        let busted_dependency = test_dependencies
+            .iter()
+            .find(|dep| dep.name().to_string() == "busted");
+        let busted = busted_dependency
+            .map(|dep| dep.package_req.clone())
+            .unwrap_or_else(|| unsafe { PackageReq::new_unchecked("busted".into(), None) });
+        let nlua_dependency = test_dependencies
+            .iter()
+            .find(|dep| dep.name().to_string() == "nlua");
+        let nlua = nlua_dependency
+            .map(|dep| dep.package_req.clone())
+            .unwrap_or_else(|| unsafe { PackageReq::new_unchecked("nlua".into(), None) });
+        let is_busted = project_root.join(".busted").is_file() || busted_dependency.is_some();
         match self {
             Self::AutoDetect if is_busted => {
-                if test_dependencies
-                    .iter()
-                    .any(|dep| dep.name().to_string() == "nlua")
-                {
-                    Ok(ValidatedTestSpec::BustedNlua(BustedTestSpec::default()))
+                if nlua_dependency.is_some() {
+                    Ok(ValidatedTestSpec::BustedNlua {
+                        spec: BustedTestSpec::default(),
+                        dependencies: vec![busted, nlua],
+                    })
                 } else {
-                    Ok(ValidatedTestSpec::Busted(BustedTestSpec::default()))
+                    Ok(ValidatedTestSpec::Busted {
+                        spec: BustedTestSpec::default(),
+                        dependencies: vec![busted],
+                    })
                 }
             }
-            Self::Busted(spec) => Ok(ValidatedTestSpec::Busted(spec.clone())),
-            Self::BustedNlua(spec) => Ok(ValidatedTestSpec::BustedNlua(spec.clone())),
+            Self::Busted(spec) => Ok(ValidatedTestSpec::Busted {
+                spec: spec.clone(),
+                dependencies: vec![busted],
+            }),
+            Self::BustedNlua(spec) => Ok(ValidatedTestSpec::BustedNlua {
+                spec: spec.clone(),
+                dependencies: vec![busted, nlua],
+            }),
             Self::Command(spec) => Ok(ValidatedTestSpec::Command(spec.clone())),
             Self::Script(spec) => Ok(ValidatedTestSpec::LuaScript(spec.clone())),
             Self::AutoDetect => Err(TestSpecError::NoTestSpecDetected),
@@ -101,8 +125,14 @@ impl TestSpec {
 impl ValidatedTestSpec {
     pub fn args(&self) -> Vec<String> {
         match self {
-            Self::Busted(spec) => spec.flags.clone(),
-            Self::BustedNlua(spec) => {
+            Self::Busted {
+                spec,
+                dependencies: _,
+            } => spec.flags.clone(),
+            Self::BustedNlua {
+                spec,
+                dependencies: _,
+            } => {
                 let mut flags = spec.flags.clone();
                 // If there's a .busted config file which has lua set to "nlua",
                 // we tell busted to ignore it, because we set the correct
@@ -119,7 +149,7 @@ impl ValidatedTestSpec {
 
     pub(crate) fn test_config(&self, config: &Config) -> Result<Config, ConfigError> {
         match self {
-            Self::BustedNlua(_) => {
+            Self::BustedNlua { .. } => {
                 let config_builder: ConfigBuilder = config.clone().into();
 
                 // XXX: On macos and msvc, Neovim and LuaJIT segfault when
@@ -146,13 +176,14 @@ impl ValidatedTestSpec {
 
     fn test_dependencies(&self) -> Vec<PackageReq> {
         match self {
-            Self::Busted(_) => unsafe { vec![PackageReq::new_unchecked("busted".into(), None)] },
-            Self::BustedNlua(_) => unsafe {
-                vec![
-                    PackageReq::new_unchecked("busted".into(), None),
-                    PackageReq::new_unchecked("nlua".into(), None),
-                ]
-            },
+            Self::Busted {
+                spec: _,
+                dependencies,
+            } => dependencies.clone(),
+            Self::BustedNlua {
+                spec: _,
+                dependencies,
+            } => dependencies.clone(),
             Self::Command(_) => Vec::new(),
             Self::LuaScript(_) => Vec::new(),
         }
