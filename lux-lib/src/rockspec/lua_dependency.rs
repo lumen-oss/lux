@@ -155,6 +155,17 @@ pub enum DependencyType<T> {
     External(HashMap<String, ExternalDependencySpec>),
 }
 
+impl<T> DependencyType<T> {
+    pub fn as_ref(&self) -> DependencyType<&T> {
+        match *self {
+            Self::Regular(ref x) => DependencyType::Regular(x.iter().collect()),
+            Self::Build(ref x) => DependencyType::Build(x.iter().collect()),
+            Self::Test(ref x) => DependencyType::Test(x.iter().collect()),
+            Self::External(ref x) => DependencyType::External(x.clone()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LuaDependencyType<T> {

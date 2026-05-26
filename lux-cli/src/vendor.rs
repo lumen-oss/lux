@@ -4,7 +4,7 @@ use lux_lib::{
     config::Config,
     lua_rockspec::RemoteLuaRockspec,
     operations::{self, VendorTarget},
-    project::Project,
+    workspace::Workspace,
 };
 use std::path::PathBuf;
 
@@ -48,8 +48,8 @@ pub async fn vendor(data: Vendor, config: Config) -> Result<()> {
                 }?;
                 VendorTarget::Rockspec(rockspec)
             }
-            None => VendorTarget::Project(Project::current_or_err().context(
-                "`lx vendor` must be run in a project root or with a rockspec argument.",
+            None => VendorTarget::Workspace(Workspace::current_or_err().context(
+                "`lx vendor` must be run in a workspace root or with a rockspec argument.",
             )?),
         };
 

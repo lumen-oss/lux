@@ -9,21 +9,9 @@ pub fn project(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
 
     table.set(
-        "current",
-        lua.create_function(|_, ()| Ok(Project::current().into_lua_err()?.map(ProjectLua)))?,
-    )?;
-
-    table.set(
         "new",
         lua.create_function(|_, path: PathBuf| {
             Ok(Project::from_exact(path).into_lua_err()?.map(ProjectLua))
-        })?,
-    )?;
-
-    table.set(
-        "new_fuzzy",
-        lua.create_function(|_, path: PathBuf| {
-            Ok(Project::from(path).into_lua_err()?.map(ProjectLua))
         })?,
     )?;
 
@@ -70,25 +58,6 @@ type = "builtin"
     }
 
     #[test]
-    fn lua_api_test_current_project() {
-        let (project, lua) = create_fake_project();
-
-        let old_cwd = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&project).unwrap();
-
-        lua.load(
-            r#"
-            local project = lux.project.current()
-            assert(project, "project should not be nil")
-            "#,
-        )
-        .exec()
-        .unwrap();
-
-        std::env::set_current_dir(old_cwd).unwrap();
-    }
-
-    #[test]
     fn lua_api_test_project() {
         let (project, lua) = create_fake_project();
 
@@ -104,15 +73,12 @@ type = "builtin"
 
             assert(project:toml_path() == project_location .. "/lux.toml", "project.toml_path should be correct")
             assert(project:extra_rockspec_path() == project_location .. "/extra.rockspec", "project.extra_rockspec_path should be correct")
-            assert(project:lockfile_path() == project_location .. "/lux.lock", "project.lockfile_path should be correct")
             assert(project:root() == project_location, "project.root should be correct")
             assert(project:lua_version(config) == "5.1", "project.lua_version should be correct")
             assert(project:toml(), "project.toml should not be nil")
             assert(project:local_rockspec(), "project.local_rockspec should not be nil")
             assert(project:remote_rockspec(), "project.remote_rockspec should not be nil")
             assert(not project:extra_rockspec(), "project.extra_rockspec should be nil")
-            assert(project:tree(config), "project.tree should not be nil")
-            assert(project:test_tree(config), "project.test_tree should not be nil")
 
             project = lux.project.new(project_location .. "/nonexistent")
             assert(not project, "project should be nil")

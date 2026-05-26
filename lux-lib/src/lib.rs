@@ -19,6 +19,7 @@ pub mod rockspec;
 pub mod tree;
 pub mod upload;
 pub mod which;
+pub mod workspace;
 
 pub(crate) mod remote_package_source;
 pub(crate) mod reqwest;

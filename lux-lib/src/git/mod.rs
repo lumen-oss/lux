@@ -13,7 +13,7 @@ impl DisplayAsLuaValue for RemoteGitUrl {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, lux_macros::DisplayAsLuaKV)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, lux_macros::DisplayAsLuaKV)]
 #[display_lua(key = "source")]
 pub struct GitSource {
     pub url: RemoteGitUrl,

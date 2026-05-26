@@ -159,7 +159,7 @@ pub enum BuildError {
     LuaInstallation(#[from] LuaInstallationError),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub enum BuildBehaviour {
     /// Don't force a rebuild if the package is already installed
     #[default]
@@ -550,7 +550,7 @@ mod tests {
         let lua = LuaInstallation::new(lua_version, &config, &bar)
             .await
             .unwrap();
-        let project = Project::from(&project_root).unwrap().unwrap();
+        let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
         let progress = MultiProgress::new(&config);
         run_build(

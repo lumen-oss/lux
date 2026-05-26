@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use lux_lib::{
     config::ConfigBuilder, lua_installation::detect_installed_lua_version, lua_version::LuaVersion,
-    operations::Test, project::Project,
+    operations::Test, workspace::Workspace,
 };
 use tokio::fs::remove_dir_all;
 
@@ -13,9 +13,9 @@ async fn run_busted_test() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/busted/");
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(&project_root, &["**"]).unwrap();
-    let project_root = temp_dir.path();
-    let project: Project = Project::from(project_root).unwrap().unwrap();
-    let tree_root = project.root().to_path_buf().join(".lux");
+    let workspace_root = temp_dir.path();
+    let workspace = Workspace::from_exact(workspace_root).unwrap().unwrap();
+    let tree_root = workspace.root().to_path_buf().join(".lux");
     let _ = remove_dir_all(&tree_root).await;
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
@@ -27,7 +27,7 @@ async fn run_busted_test() {
         .build()
         .unwrap();
 
-    Test::new(project, &config).run().await.unwrap();
+    Test::new(workspace, &config).run().await.unwrap();
 }
 
 #[tokio::test]
@@ -36,9 +36,9 @@ async fn run_busted_test_no_lock() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/busted/");
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(&project_root, &["**"]).unwrap();
-    let project_root = temp_dir.path();
-    let project: Project = Project::from(project_root).unwrap().unwrap();
-    let tree_root = project.root().to_path_buf().join(".lux");
+    let workspace_root = temp_dir.path();
+    let workspace = Workspace::from_exact(workspace_root).unwrap().unwrap();
+    let tree_root = workspace.root().to_path_buf().join(".lux");
     let _ = remove_dir_all(&tree_root).await;
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
@@ -50,7 +50,7 @@ async fn run_busted_test_no_lock() {
         .build()
         .unwrap();
 
-    Test::new(project, &config)
+    Test::new(workspace, &config)
         .no_lock(true)
         .run()
         .await
@@ -65,7 +65,7 @@ async fn non_regression_lockfile_corruption() {
     let _ = remove_dir_all(sample_project_dir.join(".lux")).await;
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
-    let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+    let project = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
     let config = ConfigBuilder::new().unwrap().build().unwrap();
 
     let lockfile_before_test =
@@ -77,9 +77,9 @@ async fn non_regression_lockfile_corruption() {
         .await
         .unwrap();
 
-    let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+    let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
     let lockfile_after_test =
-        String::from_utf8(tokio::fs::read(project.lockfile_path()).await.unwrap());
+        String::from_utf8(tokio::fs::read(workspace.lockfile_path()).await.unwrap());
     assert_eq!(lockfile_before_test, lockfile_after_test);
 }
 
@@ -102,9 +102,9 @@ async fn run_busted_nlua_test_impl(no_lock: bool) {
         .join("resources/test/sample-projects/busted-nlua/");
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(&project_root, &["**"]).unwrap();
-    let project_root = temp_dir.path();
-    let project: Project = Project::from(project_root).unwrap().unwrap();
-    let tree_root = project.root().to_path_buf().join(".lux");
+    let workspace_root = temp_dir.path();
+    let workspace = Workspace::from_exact(workspace_root).unwrap().unwrap();
+    let tree_root = workspace.root().to_path_buf().join(".lux");
     let _ = remove_dir_all(&tree_root).await;
 
     let config = ConfigBuilder::new()
@@ -112,7 +112,7 @@ async fn run_busted_nlua_test_impl(no_lock: bool) {
         .user_tree(Some(tree_root))
         .build()
         .unwrap();
-    Test::new(project, &config)
+    Test::new(workspace, &config)
         .no_lock(no_lock)
         .run()
         .await

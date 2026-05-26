@@ -74,6 +74,7 @@ pub mod upload;
 pub mod utils;
 pub mod vendor;
 pub mod which;
+pub mod workspace;
 
 /// A luxurious package manager for Lua.
 #[derive(Parser)]

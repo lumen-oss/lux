@@ -7,6 +7,7 @@ mod loader;
 pub mod lua_impls;
 mod operations;
 mod project;
+mod workspace;
 
 #[cfg_attr(not(feature = "test"), mlua::lua_module)]
 fn lux(lua: &Lua) -> LuaResult<LuaTable> {
@@ -33,6 +34,7 @@ fn lux(lua: &Lua) -> LuaResult<LuaTable> {
         lua.create_function(|lua, ()| loader::load_loader(lua))?,
     )?;
     exports.set("config", config::config(lua)?)?;
+    exports.set("workspace", workspace::workspace(lua)?)?;
     exports.set("project", project::project(lua)?)?;
     exports.set("operations", operations::operations(lua)?)?;
 

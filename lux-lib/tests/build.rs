@@ -5,13 +5,13 @@ use assert_fs::TempDir;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::progress::MultiProgress;
 use lux_lib::rockspec::Rockspec;
+use lux_lib::workspace::Workspace;
 use lux_lib::{
     build::{Build, BuildBehaviour::Force},
     config::ConfigBuilder,
     lua_installation::{detect_installed_lua_version, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
     progress::Progress,
-    project::Project,
     tree,
 };
 use tokio::runtime::Builder;
@@ -205,11 +205,11 @@ async fn treesitter_parser_build() {
 #[tokio::test]
 async fn test_build_local_project_no_source() {
     let sample_project: PathBuf = "resources/test/sample-projects/no-source/".into();
-    let project_root = TempDir::new().unwrap();
-    project_root.copy_from(&sample_project, &["**"]).unwrap();
+    let workspace_root = TempDir::new().unwrap();
+    workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
-    let project = Project::from(&project_root).unwrap().unwrap();
-    let project_toml = project.toml().into_local().unwrap();
+    let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
+    let project_toml = workspace.members().first().toml().into_local().unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -219,7 +219,7 @@ async fn test_build_local_project_no_source() {
         .build()
         .unwrap();
 
-    let tree = project.tree(&config).unwrap();
+    let tree = workspace.tree(&config).unwrap();
     let bar = Progress::no_progress();
 
     let lua = LuaInstallation::new_from_config(&config, &bar)
@@ -249,11 +249,11 @@ async fn test_build_local_project_no_source() {
 #[tokio::test]
 async fn test_build_local_project_only_src() {
     let sample_project: PathBuf = "resources/test/sample-projects/only-src/".into();
-    let project_root = assert_fs::TempDir::new().unwrap();
-    project_root.copy_from(&sample_project, &["**"]).unwrap();
+    let workspace_root = assert_fs::TempDir::new().unwrap();
+    workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
-    let project = Project::from(&project_root).unwrap().unwrap();
-    let project_toml = project.toml().into_local().unwrap();
+    let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
+    let project_toml = workspace.members().first().toml().into_local().unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -263,7 +263,7 @@ async fn test_build_local_project_only_src() {
         .build()
         .unwrap();
 
-    let tree = project.tree(&config).unwrap();
+    let tree = workspace.tree(&config).unwrap();
     let bar = Progress::no_progress();
 
     let lua = LuaInstallation::new_from_config(&config, &bar)
@@ -350,11 +350,11 @@ fn test_build_multiple_treesitter_parsers() {
 #[tokio::test]
 async fn build_project_with_git_dependency() {
     let sample_project: PathBuf = "resources/test/sample-projects/git-dependency/".into();
-    let project_root = assert_fs::TempDir::new().unwrap();
-    project_root.copy_from(&sample_project, &["**"]).unwrap();
+    let workspace_root = assert_fs::TempDir::new().unwrap();
+    workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
-    let project = Project::from(&project_root).unwrap().unwrap();
-    let project_toml = project.toml().into_local().unwrap();
+    let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
+    let project_toml = workspace.members().first().toml().into_local().unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -364,7 +364,7 @@ async fn build_project_with_git_dependency() {
         .build()
         .unwrap();
 
-    let tree = project.tree(&config).unwrap();
+    let tree = workspace.tree(&config).unwrap();
     let bar = Progress::no_progress();
 
     let lua = LuaInstallation::new_from_config(&config, &bar)
@@ -388,10 +388,10 @@ async fn build_project_with_git_dependency() {
 #[tokio::test]
 async fn test_multiline_command_build() {
     let sample_project: PathBuf = "resources/test/sample-projects/command-build/".into();
-    let project_root = TempDir::new().unwrap();
-    project_root.copy_from(&sample_project, &["**"]).unwrap();
-    let project = Project::from(&project_root).unwrap().unwrap();
-    let project_toml = project.toml().into_local().unwrap();
+    let workspace_root = TempDir::new().unwrap();
+    workspace_root.copy_from(&sample_project, &["**"]).unwrap();
+    let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
+    let project_toml = workspace.members().first().toml().into_local().unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -401,7 +401,7 @@ async fn test_multiline_command_build() {
         .build()
         .unwrap();
 
-    let tree = project.tree(&config).unwrap();
+    let tree = workspace.tree(&config).unwrap();
     let bar = Progress::no_progress();
 
     let lua = LuaInstallation::new_from_config(&config, &bar)

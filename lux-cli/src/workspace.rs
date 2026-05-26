@@ -1,6 +1,9 @@
+use std::{collections::HashSet, path::PathBuf};
+
 use std::{str::FromStr, sync::Arc};
 
 use eyre::{Context, Result};
+use itertools::Itertools;
 use lux_lib::{
     config::Config,
     git::shorthand::RemoteGitUrlShorthand,
@@ -8,9 +11,45 @@ use lux_lib::{
     operations::Sync,
     package::PackageReq,
     progress::{MultiProgress, Progress},
-    project::Project,
     tree::Tree,
+    workspace::Workspace,
 };
+use walkdir::WalkDir;
+
+pub fn top_level_ignored_files(project: &Workspace) -> Vec<PathBuf> {
+    let top_level_project_files = ignore::WalkBuilder::new(project.root())
+        .max_depth(Some(1))
+        .build()
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file = entry.into_path();
+            if file.is_dir() || file.extension().is_some_and(|ext| ext == "lua") {
+                Some(file)
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
+
+    let top_level_files = WalkDir::new(project.root())
+        .max_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file = entry.into_path();
+            if file.is_dir() || file.extension().is_some_and(|ext| ext == "lua") {
+                Some(file)
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
+
+    top_level_files
+        .difference(&top_level_project_files)
+        .cloned()
+        .collect_vec()
+}
 
 /// Used for parsing alternatives between a git URL shorthand and a package requirement.
 // The `FromStr` instance tries to parse a git URL shorthand first (expecting a git host prefix),
@@ -32,12 +71,12 @@ impl FromStr for PackageReqOrGitShorthand {
     }
 }
 
-/// Get the current project's tree, or fall back to
+/// Get the current workspaces tree, or fall back to
 /// the user tree if not in a project
-pub fn current_project_or_user_tree(config: &Config) -> Result<Tree> {
-    let project = Project::current()?;
-    Ok(match &project {
-        Some(project) => project.tree(config)?,
+pub fn current_workspace_or_user_tree(config: &Config) -> Result<Tree> {
+    let workspace = Workspace::current()?;
+    Ok(match &workspace {
+        Some(workspace) => workspace.tree(config)?,
         None => {
             let lua_version = LuaVersion::from(config)?.clone();
             config.user_tree(lua_version)?
@@ -46,13 +85,13 @@ pub fn current_project_or_user_tree(config: &Config) -> Result<Tree> {
 }
 
 pub async fn sync_dependencies_if_locked(
-    project: &Project,
+    workspace: &Workspace,
     progress: Arc<Progress<MultiProgress>>,
     config: &Config,
 ) -> Result<()> {
     // NOTE: We only update the lockfile if one exists.
     // Otherwise, the next `lx build` will remove the packages.
-    Sync::new(project, config)
+    Sync::new(workspace, config)
         .progress(progress)
         .sync_dependencies()
         .await
@@ -61,11 +100,11 @@ pub async fn sync_dependencies_if_locked(
 }
 
 pub async fn sync_build_dependencies_if_locked(
-    project: &Project,
+    workspace: &Workspace,
     progress: Arc<Progress<MultiProgress>>,
     config: &Config,
 ) -> Result<()> {
-    Sync::new(project, config)
+    Sync::new(workspace, config)
         .progress(progress.clone())
         .sync_build_dependencies()
         .await
@@ -74,11 +113,11 @@ pub async fn sync_build_dependencies_if_locked(
 }
 
 pub async fn sync_test_dependencies_if_locked(
-    project: &Project,
+    workspace: &Workspace,
     progress: Arc<Progress<MultiProgress>>,
     config: &Config,
 ) -> Result<()> {
-    Sync::new(project, config)
+    Sync::new(workspace, config)
         .progress(progress.clone())
         .sync_test_dependencies()
         .await

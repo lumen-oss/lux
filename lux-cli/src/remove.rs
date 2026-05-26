@@ -1,11 +1,12 @@
 use clap::Args;
 use eyre::{OptionExt, Result};
+use itertools::Itertools;
 use lux_lib::{
-    config::Config, package::PackageName, progress::MultiProgress, project::Project,
-    rockspec::lua_dependency,
+    config::Config, package::PackageName, progress::MultiProgress, rockspec::lua_dependency,
+    workspace::Workspace,
 };
 
-use crate::utils::project::{
+use crate::workspace::{
     sync_build_dependencies_if_locked, sync_dependencies_if_locked,
     sync_test_dependencies_if_locked,
 };
@@ -13,7 +14,7 @@ use crate::utils::project::{
 #[derive(Args)]
 pub struct Remove {
     /// Package or list of packages to remove from the dependencies.
-    package: Vec<PackageName>,
+    depencencies: Vec<PackageName>,
 
     /// Remove a development dependency.
     /// Also called `dev`.
@@ -23,34 +24,52 @@ pub struct Remove {
     /// Remove a test dependency.
     #[arg(short, long)]
     test: Option<Vec<PackageName>>,
+
+    /// Package to remove from.
+    #[arg(short, long, visible_short_alias = 'p')]
+    package: Option<PackageName>,
 }
 
 pub async fn remove(data: Remove, config: Config) -> Result<()> {
-    let mut project = Project::current()?.ok_or_eyre("No project found")?;
+    let mut workspace = Workspace::current()?.ok_or_eyre("No project found")?;
     let progress = MultiProgress::new_arc(&config);
 
-    if !data.package.is_empty() {
+    let project = workspace.single_member_or_select_mut(&data.package)?;
+
+    if !data.depencencies.is_empty() {
         project
-            .remove(lua_dependency::DependencyType::Regular(data.package))
+            .remove(lua_dependency::DependencyType::Regular(
+                data.depencencies.iter().collect_vec(),
+            ))
             .await?;
-        sync_dependencies_if_locked(&project, progress.clone(), &config).await?;
     }
 
     let build_packages = data.build.unwrap_or_default();
     if !build_packages.is_empty() {
         project
-            .remove(lua_dependency::DependencyType::Build(build_packages))
+            .remove(lua_dependency::DependencyType::Build(
+                build_packages.iter().collect_vec(),
+            ))
             .await?;
-        sync_build_dependencies_if_locked(&project, progress.clone(), &config).await?;
     }
 
     let test_packages = data.test.unwrap_or_default();
     if !test_packages.is_empty() {
         project
-            .remove(lua_dependency::DependencyType::Test(test_packages))
+            .remove(lua_dependency::DependencyType::Test(
+                test_packages.iter().collect_vec(),
+            ))
             .await?;
-        sync_test_dependencies_if_locked(&project, progress.clone(), &config).await?;
     }
 
+    if !data.depencencies.is_empty() {
+        sync_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+    }
+    if !build_packages.is_empty() {
+        sync_build_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+    }
+    if !test_packages.is_empty() {
+        sync_test_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+    }
     Ok(())
 }

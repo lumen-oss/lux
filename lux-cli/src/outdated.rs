@@ -5,11 +5,11 @@ use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{
     config::Config, lockfile::LocalPackage, lua_version::LuaVersion, package::PackageVersion,
-    progress::MultiProgress, project::Project, remote_package_db::RemotePackageDB,
+    progress::MultiProgress, remote_package_db::RemotePackageDB, workspace::Workspace,
 };
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
-use crate::utils::project::sync_dependencies_if_locked;
+use crate::workspace::sync_dependencies_if_locked;
 
 #[derive(Args)]
 pub struct Outdated {
@@ -22,8 +22,8 @@ pub struct Outdated {
 pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);
-    let project = Project::current()?;
-    let tree = match &project {
+    let workspace = Workspace::current()?;
+    let tree = match &workspace {
         Some(project) => {
             // Make sure dependencies are synced if in a project
             sync_dependencies_if_locked(project, MultiProgress::new_arc(&config), &config).await?;

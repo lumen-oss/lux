@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Specifies how to install a package
-#[derive(Debug, Builder)]
+#[derive(Debug, Builder, PartialEq, Eq, Hash, Clone)]
 #[builder(start_fn = new, finish_fn(name = build, vis = "pub"))]
 pub struct PackageInstallSpec {
     #[builder(start_fn)]

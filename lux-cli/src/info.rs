@@ -5,7 +5,7 @@ use lux_lib::{
     rockspec::Rockspec,
 };
 
-use crate::utils::project::current_project_or_user_tree;
+use crate::workspace::current_workspace_or_user_tree;
 
 #[derive(Args)]
 pub struct Info {
@@ -13,7 +13,7 @@ pub struct Info {
 }
 
 pub async fn info(data: Info, config: Config) -> Result<()> {
-    let tree = current_project_or_user_tree(&config)?;
+    let tree = current_workspace_or_user_tree(&config)?;
 
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);

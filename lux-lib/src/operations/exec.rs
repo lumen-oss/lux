@@ -5,12 +5,12 @@ use crate::{
     config::Config,
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
-    operations::{BuildProject, BuildProjectError, Install},
+    operations::{BuildWorkspace, BuildWorkspaceError, Install},
     package::{PackageReq, PackageVersionReqError},
     path::{Paths, PathsError},
-    project::{Project, ProjectTreeError},
     remote_package_db::RemotePackageDBError,
     tree::{self, TreeError},
+    workspace::{Workspace, WorkspaceTreeError},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -27,7 +27,7 @@ pub struct Exec<'a> {
     #[builder(start_fn)]
     command: &'a str,
     #[builder(start_fn)]
-    project: Option<&'a Project>,
+    workspace: Option<&'a Workspace>,
     #[builder(start_fn)]
     config: &'a Config,
 
@@ -80,11 +80,11 @@ pub enum ExecError {
     #[error(transparent)]
     LuaVersionError(#[from] LuaVersionError),
     #[error(transparent)]
-    BuildProject(#[from] BuildProjectError),
+    BuildProject(#[from] BuildWorkspaceError),
     #[error(transparent)]
     InstallCommand(#[from] InstallCommandError),
     #[error(transparent)]
-    ProjectTreeError(#[from] ProjectTreeError),
+    WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("failed to execute `{0}`:\n{1}")]
     Io(String, io::Error),
 }
@@ -101,13 +101,13 @@ pub enum InstallCommandError {
 
 async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
     let lua_version = run
-        .project
+        .workspace
         .map(|project| project.lua_version(run.config))
         .transpose()?
         .unwrap_or(LuaVersion::from(run.config)?.clone());
 
-    if let Some(project) = run.project {
-        BuildProject::new(project, run.config)
+    if let Some(project) = run.workspace {
+        BuildWorkspace::new(project, run.config)
             .no_lock(false)
             .only_deps(false)
             .build()
@@ -119,7 +119,7 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
     let user_tree = run.config.user_tree(lua_version)?;
     let mut paths = Paths::new(&user_tree)?;
 
-    if let Some(project) = run.project {
+    if let Some(project) = run.workspace {
         paths.prepend(&Paths::new(&project.tree(run.config)?)?);
     }
 

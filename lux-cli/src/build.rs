@@ -4,7 +4,8 @@ use lux_lib::{
     config::Config,
     lockfile::LocalPackage,
     operations::{self},
-    project::Project,
+    package::PackageName,
+    workspace::Workspace,
 };
 
 #[derive(Args, Default)]
@@ -16,12 +17,17 @@ pub struct Build {
     /// Build only the dependencies
     #[arg(long)]
     only_deps: bool,
+
+    /// Package to build.
+    #[arg(short, long, visible_short_alias = 'p')]
+    package: Option<PackageName>,
 }
 
 /// Returns `Some` if the `only_deps` arg is set to `false`.
-pub async fn build(data: Build, config: Config) -> Result<Option<LocalPackage>> {
-    let project = Project::current_or_err()?;
-    let result = operations::BuildProject::new(&project, &config)
+pub async fn build(data: Build, config: Config) -> Result<Vec<LocalPackage>> {
+    let workspace = Workspace::current_or_err()?;
+    let result = operations::BuildWorkspace::new(&workspace, &config)
+        .maybe_package(data.package)
         .no_lock(data.no_lock)
         .only_deps(data.only_deps)
         .build()

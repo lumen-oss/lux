@@ -11,11 +11,10 @@ use crate::{
     operations::{self, GenLuaRcError},
     package::{PackageName, PackageReq},
     progress::{MultiProgress, Progress},
-    project::{
-        project_toml::LocalProjectTomlValidationError, Project, ProjectError, ProjectTreeError,
-    },
+    project::{project_toml::LocalProjectTomlValidationError, ProjectError},
     rockspec::Rockspec,
     tree::{self, TreeError},
+    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -28,7 +27,7 @@ use super::{Install, InstallError, PackageInstallSpec, RemoveError, Uninstall};
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Sync<'a> {
     #[builder(start_fn)]
-    project: &'a Project,
+    workspace: &'a Workspace,
     #[builder(start_fn)]
     config: &'a Config,
 
@@ -62,45 +61,49 @@ where
     }
 
     pub async fn sync_test_dependencies(mut self) -> Result<SyncReport, SyncError> {
-        let toml = self.project.toml().into_local()?;
-        for test_dep in toml
-            .test()
-            .current_platform()
-            .test_dependencies(self.project)
-            .iter()
-            .filter(|test_dep| {
-                !toml
-                    .test_dependencies()
-                    .current_platform()
-                    .iter()
-                    .any(|dep| dep.name() == test_dep.name())
-            })
-            .cloned()
-        {
-            self.extra_packages.push(test_dep);
+        for project in self.workspace.members() {
+            let toml = project.toml().into_local()?;
+            for test_dep in toml
+                .test()
+                .current_platform()
+                .test_dependencies(project)
+                .iter()
+                .filter(|test_dep| {
+                    !toml
+                        .test_dependencies()
+                        .current_platform()
+                        .iter()
+                        .any(|dep| dep.name() == test_dep.name())
+                })
+                .cloned()
+            {
+                self.extra_packages.push(test_dep);
+            }
         }
         do_sync(self._build(), &LocalPackageLockType::Test).await
     }
 
     pub async fn sync_build_dependencies(mut self) -> Result<SyncReport, SyncError> {
         if cfg!(target_family = "unix") && !self.extra_packages.is_empty() {
-            let toml = self.project.toml().into_local()?;
-            if toml
-                .build()
-                .current_platform()
-                .build_backend
-                .as_ref()
-                .is_some_and(|build_backend| {
-                    matches!(
-                        build_backend,
-                        crate::lua_rockspec::BuildBackendSpec::LuaRock(_)
-                    )
-                })
-            {
-                let luarocks = unsafe {
-                    PackageReq::new_unchecked("luarocks".into(), Some(LUAROCKS_VERSION.into()))
-                };
-                self = self.add_package(luarocks);
+            for project in self.workspace.members() {
+                let toml = project.toml().into_local()?;
+                if toml
+                    .build()
+                    .current_platform()
+                    .build_backend
+                    .as_ref()
+                    .is_some_and(|build_backend| {
+                        matches!(
+                            build_backend,
+                            crate::lua_rockspec::BuildBackendSpec::LuaRock(_)
+                        )
+                    })
+                {
+                    let luarocks = unsafe {
+                        PackageReq::new_unchecked("luarocks".into(), Some(LUAROCKS_VERSION.into()))
+                    };
+                    self = self.add_package(luarocks);
+                }
             }
         }
         do_sync(self._build(), &LocalPackageLockType::Build).await
@@ -137,9 +140,11 @@ pub enum SyncError {
     #[error("integrity error for package {0}: {1}\n")]
     Integrity(PackageName, LockfileIntegrityError),
     #[error(transparent)]
-    ProjectTreeError(#[from] ProjectTreeError),
+    WorkspaceTree(#[from] WorkspaceTreeError),
     #[error(transparent)]
-    ProjectError(#[from] ProjectError),
+    Workspace(#[from] WorkspaceError),
+    #[error(transparent)]
+    Project(#[from] ProjectError),
     #[error(transparent)]
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
     #[error("failed to generate `.luarc.json`:\n{0}")]
@@ -151,57 +156,64 @@ async fn do_sync(
     lock_type: &LocalPackageLockType,
 ) -> Result<SyncReport, SyncError> {
     let tree = match lock_type {
-        LocalPackageLockType::Regular => args.project.tree(args.config)?,
-        LocalPackageLockType::Test => args.project.test_tree(args.config)?,
-        LocalPackageLockType::Build => args.project.build_tree(args.config)?,
+        LocalPackageLockType::Regular => args.workspace.tree(args.config)?,
+        LocalPackageLockType::Test => args.workspace.test_tree(args.config)?,
+        LocalPackageLockType::Build => args.workspace.build_tree(args.config)?,
     };
     std::fs::create_dir_all(tree.root()).map_err(|err| {
         SyncError::FailedToCreateDirectory(tree.root().to_string_lossy().to_string(), err)
     })?;
 
-    let mut project_lockfile = args.project.lockfile()?.write_guard();
+    let mut workspace_lockfile = args.workspace.lockfile()?.write_guard();
     let dest_lockfile = tree.lockfile()?;
 
     let progress = args.progress.unwrap_or(MultiProgress::new_arc(args.config));
 
-    let packages = match lock_type {
-        LocalPackageLockType::Regular => args
-            .project
-            .toml()
-            .into_local()?
-            .dependencies()
-            .current_platform()
-            .clone(),
-        LocalPackageLockType::Build => args
-            .project
-            .toml()
-            .into_local()?
-            .build_dependencies()
-            .current_platform()
-            .clone(),
-        LocalPackageLockType::Test => args
-            .project
-            .toml()
-            .into_local()?
-            .test_dependencies()
-            .current_platform()
-            .clone(),
+    let mut packages = Vec::new();
+    for project in args.workspace.members() {
+        match lock_type {
+            LocalPackageLockType::Regular => packages.extend(
+                project
+                    .toml()
+                    .into_local()?
+                    .dependencies()
+                    .current_platform()
+                    .clone(),
+            ),
+            LocalPackageLockType::Build => packages.extend(
+                project
+                    .toml()
+                    .into_local()?
+                    .build_dependencies()
+                    .current_platform()
+                    .clone(),
+            ),
+            LocalPackageLockType::Test => packages.extend(
+                project
+                    .toml()
+                    .into_local()?
+                    .test_dependencies()
+                    .current_platform()
+                    .clone(),
+            ),
+        }
     }
-    .into_iter()
-    .chain(args.extra_packages.into_iter().map_into())
-    .collect_vec();
+    let packages = packages
+        .into_iter()
+        .chain(args.extra_packages.into_iter().map_into())
+        .collect_vec();
 
     let strategy = if args.fast.unwrap_or(false) {
         SyncStrategy::LockfileOnly
     } else {
         SyncStrategy::EnsureInstalled(&tree)
     };
-    let package_sync_spec = project_lockfile.package_sync_spec(&packages, lock_type, &strategy);
+    let package_sync_spec = workspace_lockfile.package_sync_spec(&packages, lock_type, &strategy);
 
     package_sync_spec
         .to_remove
         .iter()
-        .for_each(|pkg| project_lockfile.remove(pkg, lock_type));
+        .for_each(|pkg| workspace_lockfile.remove(pkg, lock_type));
 
     let mut to_add: Vec<(tree::EntryType, LocalPackage)> = Vec::new();
 
@@ -209,9 +221,9 @@ async fn do_sync(
         added: Vec::new(),
         removed: Vec::new(),
     };
-    for (id, local_package) in project_lockfile.rocks(lock_type) {
+    for (id, local_package) in workspace_lockfile.rocks(lock_type) {
         if dest_lockfile.get(id).is_none() {
-            let entry_type = if project_lockfile.is_entrypoint(&local_package.id(), lock_type) {
+            let entry_type = if workspace_lockfile.is_entrypoint(&local_package.id(), lock_type) {
                 tree::EntryType::Entrypoint
             } else {
                 tree::EntryType::DependencyOnly
@@ -220,7 +232,7 @@ async fn do_sync(
         }
     }
     for (id, local_package) in dest_lockfile.rocks() {
-        if project_lockfile.get(id, lock_type).is_none() {
+        if workspace_lockfile.get(id, lock_type).is_none() {
             report.removed.push(local_package.clone());
         }
     }
@@ -240,7 +252,7 @@ async fn do_sync(
         .added
         .extend(to_add.iter().map(|(_, pkg)| pkg).cloned());
 
-    let package_db = project_lockfile.local_pkg_lock(lock_type).clone().into();
+    let package_db = workspace_lockfile.local_pkg_lock(lock_type).clone().into();
 
     Install::new(args.config)
         .package_db(package_db)
@@ -272,7 +284,7 @@ async fn do_sync(
         .await?;
 
     install_tree_lockfile.map_then_flush(|lockfile| {
-        lockfile.sync(project_lockfile.local_pkg_lock(lock_type));
+        lockfile.sync(workspace_lockfile.local_pkg_lock(lock_type));
         Ok::<_, io::Error>(())
     })?;
 
@@ -300,14 +312,14 @@ async fn do_sync(
 
         report.added.extend(added);
 
-        // Sync the newly added packages back to the project lockfile
+        // Sync the newly added packages back to the workspace lockfile
         let dest_lockfile = tree.lockfile()?;
-        project_lockfile.sync(dest_lockfile.local_pkg_lock(), lock_type);
+        workspace_lockfile.sync(dest_lockfile.local_pkg_lock(), lock_type);
     }
 
     operations::GenLuaRc::new()
         .config(args.config)
-        .project(args.project)
+        .workspace(args.workspace)
         .generate_luarc()
         .await?;
 
@@ -319,7 +331,7 @@ mod tests {
     use super::Sync;
     use crate::{
         config::ConfigBuilder, lockfile::LocalPackageLockType, package::PackageReq,
-        project::Project,
+        workspace::Workspace,
     };
     use assert_fs::{prelude::PathCopy, TempDir};
     use std::path::PathBuf;
@@ -338,16 +350,16 @@ mod tests {
                 &["**"],
             )
             .unwrap();
-        let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+        let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        let report = Sync::new(&project, &config)
+        let report = Sync::new(&workspace, &config)
             .sync_dependencies()
             .await
             .unwrap();
         assert!(report.removed.is_empty());
         assert!(!report.added.is_empty());
 
-        let lockfile_after_sync = project.lockfile().unwrap();
+        let lockfile_after_sync = workspace.lockfile().unwrap();
         assert!(!lockfile_after_sync
             .rocks(&LocalPackageLockType::Regular)
             .is_empty());
@@ -369,9 +381,9 @@ mod tests {
             .unwrap();
         let temp_dir = temp_dir.into_persistent();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+        let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         {
-            let report = Sync::new(&project, &config)
+            let report = Sync::new(&workspace, &config)
                 .add_package(PackageReq::new("toml-edit".into(), None).unwrap())
                 .sync_dependencies()
                 .await
@@ -383,7 +395,7 @@ mod tests {
                 .iter()
                 .any(|pkg| pkg.name().to_string() == "toml-edit"));
         }
-        let lockfile_after_sync = project.lockfile().unwrap();
+        let lockfile_after_sync = workspace.lockfile().unwrap();
         assert!(!lockfile_after_sync
             .rocks(&LocalPackageLockType::Regular)
             .is_empty());
@@ -406,9 +418,9 @@ mod tests {
             )
             .unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+        let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         {
-            let report = Sync::new(&project, &config)
+            let report = Sync::new(&workspace, &config)
                 .add_package(PackageReq::new("toml-edit".into(), None).unwrap())
                 .sync_dependencies()
                 .await
@@ -420,7 +432,7 @@ mod tests {
                 .iter()
                 .any(|pkg| pkg.name().to_string() == "toml-edit"));
         }
-        let lockfile_after_sync = project.lockfile().unwrap();
+        let lockfile_after_sync = workspace.lockfile().unwrap();
         assert!(!lockfile_after_sync
             .rocks(&LocalPackageLockType::Regular)
             .is_empty());
@@ -441,21 +453,21 @@ mod tests {
             )
             .unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        let project = Project::from_exact(temp_dir.path()).unwrap().unwrap();
+        let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         // First sync to create the tree and lockfile
-        Sync::new(&project, &config)
+        Sync::new(&workspace, &config)
             .add_package(PackageReq::new("toml-edit".into(), None).unwrap())
             .sync_dependencies()
             .await
             .unwrap();
-        let report = Sync::new(&project, &config)
+        let report = Sync::new(&workspace, &config)
             .sync_dependencies()
             .await
             .unwrap();
         assert!(!report.removed.is_empty());
         assert!(report.added.is_empty());
 
-        let lockfile_after_sync = project.lockfile().unwrap();
+        let lockfile_after_sync = workspace.lockfile().unwrap();
         assert!(!lockfile_after_sync
             .rocks(&LocalPackageLockType::Regular)
             .is_empty());

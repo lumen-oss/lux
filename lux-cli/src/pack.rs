@@ -3,6 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use crate::build;
 use clap::Args;
 use eyre::{eyre, OptionExt, Result};
+use itertools::Itertools;
 use lux_lib::{
     build::{Build, BuildBehaviour},
     config::Config,
@@ -12,10 +13,11 @@ use lux_lib::{
     operations::{self, Install, PackageInstallSpec},
     package::PackageReq,
     progress::MultiProgress,
-    project::Project,
     rockspec::Rockspec as _,
     tree,
+    workspace::Workspace,
 };
+use path_slash::PathBufExt;
 use tempfile::tempdir;
 
 #[derive(Debug, Clone)]
@@ -68,7 +70,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let lua_version = LuaVersion::from(&config)?.clone();
     let dest_dir = std::env::current_dir()?;
     let progress = MultiProgress::new_arc(&config);
-    let result: Result<PathBuf> = match args.package_or_rockspec {
+    let rock_paths: Result<Vec<PathBuf>> = match args.package_or_rockspec {
         Some(PackageOrRockspec::Package(package_req)) => {
             let user_tree = config.user_tree(lua_version.clone())?;
             match user_tree.match_rocks(&package_req)? {
@@ -90,7 +92,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let rock_path = operations::Pack::new(dest_dir, tree, package.clone())
                         .pack()
                         .await?;
-                    Ok(rock_path)
+                    Ok(vec![rock_path])
                 }
                 lux_lib::tree::RockMatches::Single(local_package_id) => {
                     let lockfile = user_tree.lockfile()?;
@@ -100,7 +102,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
                         .pack()
                         .await?;
-                    Ok(rock_path)
+                    Ok(vec![rock_path])
                 }
                 lux_lib::tree::RockMatches::Many(vec) => {
                     let local_package_id = vec.first();
@@ -111,7 +113,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
                         .pack()
                         .await?;
-                    Ok(rock_path)
+                    Ok(vec![rock_path])
                 }
             }
         }
@@ -150,26 +152,45 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             let rock_path = operations::Pack::new(dest_dir, tree, package)
                 .pack()
                 .await?;
-            Ok(rock_path)
+            Ok(vec![rock_path])
         }
         None => {
-            let project = Project::current_or_err()?;
+            let workspace = Workspace::current_or_err()?;
             // luarocks expects a `<package>-<version>.rockspec` in the package root,
             // so we add a guard that it can be created here.
-            project
-                .toml()
-                .into_remote(None)?
-                .to_lua_remote_rockspec_string()?;
-            let package = build::build(build::Build::default(), config.clone())
-                .await?
-                .ok_or_eyre("build did not produce a package")?;
-            let tree = project.tree(&config)?;
-            let rock_path = operations::Pack::new(dest_dir, tree, package)
-                .pack()
-                .await?;
-            Ok(rock_path)
+            for project in workspace.members() {
+                project
+                    .toml()
+                    .into_remote(None)?
+                    .to_lua_remote_rockspec_string()?;
+            }
+            let mut rock_paths = Vec::new();
+            let packages = build::build(build::Build::default(), config.clone()).await?;
+            if packages.is_empty() {
+                return Err(eyre!("build did not produce a package"));
+            }
+            for package in packages {
+                let tree = workspace.tree(&config)?;
+                let rock_path = operations::Pack::new(dest_dir.clone(), tree, package)
+                    .pack()
+                    .await?;
+                rock_paths.push(rock_path);
+            }
+            Ok(rock_paths)
         }
     };
-    print!("packed rock created at {}", result?.display());
+    let rock_paths = rock_paths?;
+    if rock_paths.len() > 1 {
+        let rock_paths = rock_paths
+            .iter()
+            .map(|path| path.to_slash_lossy().to_string())
+            .join("\n");
+        print!("packed rocks created at\n{}", rock_paths)
+    } else {
+        rock_paths
+            .first()
+            .iter()
+            .for_each(|path| print!("packed rock created at {}", path.display()));
+    }
     Ok(())
 }

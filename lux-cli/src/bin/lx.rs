@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
         Commands::Vendor(vendor_args) => vendor::vendor(vendor_args, config).await?,
         Commands::Which(which_args) => which::which(which_args, config)?,
         Commands::Run(run_args) => run::run(run_args, config).await?,
-        Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data)?,
+        Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data).await?,
         Commands::Shell(data) => shell::shell(data, config).await?,
         Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
     }
