@@ -59,3 +59,21 @@ Supported shells: "bash", "elvish", "fish", "powershell", "zsh"
     clap_generate(shell, &mut Cli::command(), "lx", &mut std::io::stdout());
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_completion() {
+        for shell in [
+            Shell::Bash,
+            Shell::Zsh,
+            Shell::Fish,
+            Shell::Elvish,
+            Shell::PowerShell,
+        ] {
+            completion(Completion { shell: Some(shell) }).await.unwrap();
+        }
+    }
+}
