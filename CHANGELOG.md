@@ -25,6 +25,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Other
 - update flake.lock ([#1521](https://github.com/lumen-oss/lux/pull/1521))
 
+## [0.30.0](https://github.com/lumen-oss/lux/compare/v0.29.3...v0.30.0) `lux-cli` - 2026-05-26
+
+### Added
+- support local dependencies ([#1508](https://github.com/lumen-oss/lux/pull/1508))
+- support workspaces with multiple projects ([#1503](https://github.com/lumen-oss/lux/pull/1503))
+
+### Dependencies
+- *(deps)* bump git2 from 0.20.4 to 0.21.0 ([#1516](https://github.com/lumen-oss/lux/pull/1516))
+
+### Other
+- update flake.lock ([#1521](https://github.com/lumen-oss/lux/pull/1521))
+
+## [0.39.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.38.3...lux-lib-v0.39.0) `lux-lib` - 2026-05-26
+
+### Added
+- support local dependencies ([#1508](https://github.com/lumen-oss/lux/pull/1508))
+- support workspaces with multiple projects ([#1503](https://github.com/lumen-oss/lux/pull/1503))
+
+### Other
+- update flake.lock ([#1521](https://github.com/lumen-oss/lux/pull/1521))
+
 ## [0.38.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.38.2...lux-lib-v0.38.3) `lux-lib` - 2026-05-19
 
 ### Added
