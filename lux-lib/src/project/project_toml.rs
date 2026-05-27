@@ -16,6 +16,7 @@ use crate::operations::RunCommand;
 use crate::package::PackageNameList;
 use crate::package::SpecRev;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
+use crate::ROCKSPEC_FUEL_LIMIT;
 use std::io;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -140,6 +141,14 @@ pub enum ProjectTomlError {
     GenerateSource(#[from] GenerateSourceError),
     #[error("error generating rockspec version:\n{0}")]
     GenerateVersion(#[from] GenerateVersionError),
+    #[error("generated rockspec exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    FuelLimitExceeded,
+    #[error(
+        r#"generated invalid Lua from TOML:
+{0}
+Please report this issue."#
+    )]
+    GeneratedInvalidLua(String),
 }
 
 #[derive(Debug, Error)]
@@ -798,8 +807,22 @@ version = "{}""#,
             Ok(formatted_code) => formatted_code,
             Err(_) => unformatted_code,
         };
+        validate_generated_lua(&result)?;
         Ok(result)
     }
+}
+
+fn validate_generated_lua(lua_str: &str) -> Result<(), ProjectTomlError> {
+    let mut lua = ottavino::Lua::core();
+    lua.try_enter(|ctx| {
+        let closure = ottavino::Closure::load(ctx, None, lua_str.as_bytes())?;
+        let executor = ottavino::Executor::start(ctx, closure.into(), ());
+        if !executor.step(ctx, &mut ottavino::Fuel::with(ROCKSPEC_FUEL_LIMIT))? {
+            return Ok(Err(ProjectTomlError::FuelLimitExceeded));
+        }
+        Ok(Ok(()))
+    })
+    .map_err(|err| ProjectTomlError::GeneratedInvalidLua(err.to_string()))?
 }
 
 #[derive(Error, Debug)]
@@ -999,6 +1022,7 @@ version = "{}""#,
             Ok(formatted_code) => formatted_code,
             Err(_) => unformatted_code,
         };
+        validate_generated_lua(&result)?;
         Ok(result)
     }
 }
