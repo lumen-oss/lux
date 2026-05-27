@@ -186,7 +186,34 @@ impl Display for DisplayLuaValue {
             //DisplayLuaValue::Nil => write!(f, "nil"),
             //DisplayLuaValue::Number(n) => write!(f, "{n}"),
             DisplayLuaValue::Boolean(b) => write!(buf, "{b}")?,
-            DisplayLuaValue::String(s) => write!(buf, "\"{s}\"")?,
+            DisplayLuaValue::String(s) => {
+                // Escape all the string bytes.
+                // We do bytes instead of unicode characters because Lua strings
+                // only got unicode escapes as of version 5.3.
+                buf.push('"');
+                for c in s.bytes() {
+                    match c {
+                        b'"' => buf.push_str("\\\""),
+                        b'\x07' => buf.push_str("\\a"),
+                        b'\x08' => buf.push_str("\\b"),
+                        b'\x0B' => buf.push_str("\\v"),
+                        b'\x0C' => buf.push_str("\\f"),
+                        b'\n' => buf.push_str("\\n"),
+                        b'\r' => buf.push_str("\\r"),
+                        b'\t' => buf.push_str("\\t"),
+                        b'\\' => buf.push_str("\\\\"),
+                        _ => {
+                            if c.is_ascii_graphic() || c == b' ' {
+                                buf.push(c as char);
+                            } else {
+                                // \ddd decimal escapes.
+                                write!(buf, "\\{c:03}")?;
+                            }
+                        }
+                    }
+                }
+                buf.push('"');
+            }
             DisplayLuaValue::List(l) => {
                 writeln!(buf, "{{")?;
                 for item in l {
@@ -307,7 +334,20 @@ mod tests {
     #[test]
     fn display_lua_value() {
         let value = DisplayLuaValue::String("hello".to_string());
-        assert_eq!(format!("{value}"), "\"hello\"");
+        assert_eq!(format!("{value}"), r#""hello""#);
+
+        let value = DisplayLuaValue::String("he\"llo".to_string());
+        assert_eq!(format!("{value}"), r#""he\"llo""#);
+
+        let value = DisplayLuaValue::String("q\"a'".to_string());
+        assert_eq!(format!("{value}"), r#""q\"a'""#);
+
+        let value =
+            DisplayLuaValue::String("1\"2\x073\x084\x0B5\x0C6\n7\r8\t9'a\\b\u{FFFFF}c".to_string());
+        assert_eq!(
+            format!("{value}"),
+            r#""1\"2\a3\b4\v5\f6\n7\r8\t9'a\\b\243\191\191\191c""#
+        );
 
         let value = DisplayLuaValue::Boolean(true);
         assert_eq!(format!("{value}"), "true");
