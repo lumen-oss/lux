@@ -189,6 +189,8 @@ impl Display for DisplayLuaValue {
             DisplayLuaValue::String(s) => {
                 if s.contains('\n') {
                     write!(buf, "[[\n{s}\n]]")?;
+                } else if s.contains("\"") {
+                    write!(buf, "'{s}'")?;
                 } else {
                     write!(buf, "\"{s}\"")?;
                 }
@@ -314,6 +316,9 @@ mod tests {
     fn display_lua_value() {
         let value = DisplayLuaValue::String("hello".to_string());
         assert_eq!(format!("{value}"), "\"hello\"");
+
+        let value = DisplayLuaValue::String("foo\"bar".to_string());
+        assert_eq!(format!("{value}"), "'foo\"bar'");
 
         let value = DisplayLuaValue::String(
             r#"first line
