@@ -186,7 +186,13 @@ impl Display for DisplayLuaValue {
             //DisplayLuaValue::Nil => write!(f, "nil"),
             //DisplayLuaValue::Number(n) => write!(f, "{n}"),
             DisplayLuaValue::Boolean(b) => write!(buf, "{b}")?,
-            DisplayLuaValue::String(s) => write!(buf, "\"{s}\"")?,
+            DisplayLuaValue::String(s) => {
+                if s.contains('\n') {
+                    write!(buf, "[[\n{s}\n]]")?;
+                } else {
+                    write!(buf, "\"{s}\"")?;
+                }
+            }
             DisplayLuaValue::List(l) => {
                 writeln!(buf, "{{")?;
                 for item in l {
@@ -308,6 +314,13 @@ mod tests {
     fn display_lua_value() {
         let value = DisplayLuaValue::String("hello".to_string());
         assert_eq!(format!("{value}"), "\"hello\"");
+
+        let value = DisplayLuaValue::String(
+            r#"first line
+second line"#
+                .to_string(),
+        );
+        assert_eq!(format!("{value}"), "[[\nfirst line\nsecond line\n]]");
 
         let value = DisplayLuaValue::Boolean(true);
         assert_eq!(format!("{value}"), "true");
