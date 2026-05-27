@@ -342,11 +342,12 @@ mod tests {
         let value = DisplayLuaValue::String("q\"a'".to_string());
         assert_eq!(format!("{value}"), r#""q\"a'""#);
 
-        let value =
-            DisplayLuaValue::String("1\"2\x073\x084\x0B5\x0C6\n7\r8\t9'a\\b\u{FFFFF}c".to_string());
+        let value = DisplayLuaValue::String(
+            "1\"2\x073\x084\x0B5\x0C6\n7\r8\t9'a\\b\u{FFFFF}c\0d\u{1}e".to_string(),
+        );
         assert_eq!(
             format!("{value}"),
-            r#""1\"2\a3\b4\v5\f6\n7\r8\t9'a\\b\243\191\191\191c""#
+            r#""1\"2\a3\b4\v5\f6\n7\r8\t9'a\\b\243\191\191\191c\000d\001e""#
         );
 
         let value = DisplayLuaValue::Boolean(true);
