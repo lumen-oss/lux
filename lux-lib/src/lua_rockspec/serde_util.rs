@@ -320,6 +320,9 @@ mod tests {
         let value = DisplayLuaValue::String("foo\"bar".to_string());
         assert_eq!(format!("{value}"), "'foo\"bar'");
 
+        let value = DisplayLuaValue::String(r#"foo\\bar"#.to_string());
+        assert_eq!(format!("{value}"), r#""foo\\bar""#);
+
         let value = DisplayLuaValue::String(
             r#"first line
 second line"#
