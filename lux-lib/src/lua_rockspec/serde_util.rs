@@ -167,7 +167,7 @@ where
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct StringAnalysis {
     /// The lowest number of equal signs needed for long-string delimeters
     /// around this string.
@@ -182,7 +182,8 @@ impl From<&str> for StringAnalysis {
         // The number of consecutive equal signs immediately between all pairs
         // of ] characters, including at the end of a long-delimiter string.
         let mut equal_signs = HashSet::new();
-        let mut analysis = Self::default();
+        let mut has_newline = false;
+        let mut has_nonprintable = false;
         let bytes = value.as_bytes();
         let mut i = 0;
         while i < bytes.len() {
@@ -222,7 +223,7 @@ impl From<&str> for StringAnalysis {
                     }
                 }
                 b'\n' | b'\r' => {
-                    analysis.has_newline = true;
+                    has_newline = true;
                     // Lua considers end-of-line to be CR, LF, CR+LF or LF+CR.
                     // We consider any run of CRs without any LFs to be
                     // non-printable, because that can cause characters to be
@@ -242,7 +243,7 @@ impl From<&str> for StringAnalysis {
                         });
                     i += lf + cr;
                     if lf == 0 {
-                        analysis.has_nonprintable = true;
+                        has_nonprintable = true;
                     }
                 }
                 // Remaining printable bytes.
@@ -250,14 +251,20 @@ impl From<&str> for StringAnalysis {
                     i += 1;
                 }
                 _ => {
-                    analysis.has_nonprintable = true;
+                    has_nonprintable = true;
                     i += 1;
                 }
             }
         }
 
-        analysis.long_string_equal_signs = (0..).find(move |i| !equal_signs.contains(i)).unwrap();
-        analysis
+        #[allow(clippy::unwrap_used)]
+        let long_string_equal_signs = (0..).find(move |i| !equal_signs.contains(i)).unwrap();
+
+        Self {
+            long_string_equal_signs,
+            has_newline,
+            has_nonprintable,
+        }
     }
 }
 
@@ -290,11 +297,11 @@ impl Display for DisplayLuaValue {
                     // A long-delimiter string will look better for strings that
                     // are all printable with line breaks.
                     buf.push('[');
-                    buf.extend(std::iter::repeat('=').take(analysis.long_string_equal_signs));
+                    buf.extend(std::iter::repeat_n('=', analysis.long_string_equal_signs));
                     buf.push_str("[\n");
                     buf.push_str(s);
                     buf.push(']');
-                    buf.extend(std::iter::repeat('=').take(analysis.long_string_equal_signs));
+                    buf.extend(std::iter::repeat_n('=', analysis.long_string_equal_signs));
                     buf.push(']');
                 } else {
                     // Escape all the string bytes.
