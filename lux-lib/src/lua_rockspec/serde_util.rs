@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Display, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    path::PathBuf,
+};
 
 use itertools::Itertools;
 use path_slash::PathBufExt as _;
@@ -163,6 +167,100 @@ where
     }
 }
 
+#[derive(Debug, Default)]
+struct StringAnalysis {
+    /// The lowest number of equal signs needed for long-string delimeters
+    /// around this string.
+    long_string_equal_signs: usize,
+    has_newline: bool,
+    has_nonprintable: bool,
+}
+
+impl From<&str> for StringAnalysis {
+    /// Analyze the string in a single pass.
+    fn from(value: &str) -> Self {
+        // The number of consecutive equal signs immediately between all pairs
+        // of ] characters, including at the end of a long-delimiter string.
+        let mut equal_signs = HashSet::new();
+        let mut analysis = Self::default();
+        let bytes = value.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b']' => {
+                    i += 1;
+                    let bytes_after_brace = &bytes[i..];
+                    let non_equal_sign = bytes_after_brace
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .find(|&(_, c)| c != b'=');
+                    match non_equal_sign {
+                        None => {
+                            // Still need to worry about `]` or `]=...` at the
+                            // end of the string.
+                            equal_signs.insert(bytes_after_brace.len());
+                            break;
+                        }
+                        Some((index, b']')) => {
+                            equal_signs.insert(index);
+
+                            // We still want the `]` to be processed on the next
+                            // loop, because:
+                            // * `]==]===]` should push both a 2 and a 3 into
+                            //   the equal signs hash.
+                            // * `]==]` at the end of the string should push
+                            //   both a 2 and a 0, because `[[...]==]]]` is an
+                            //   invalid string literal.
+                            i += index;
+                        }
+                        Some((index, _)) => {
+                            // These are inoffensive equal signs, because they
+                            // are not followed by `]` or the end of the string.
+                            i += index;
+                        }
+                    }
+                }
+                b'\n' | b'\r' => {
+                    analysis.has_newline = true;
+                    // Lua considers end-of-line to be CR, LF, CR+LF or LF+CR.
+                    // We consider any run of CRs without any LFs to be
+                    // non-printable, because that can cause characters to be
+                    // overwritten when output to a terminal. Any number of CRs
+                    // paired with at least 1 LF are fine.
+                    let bytes_from_newline = &bytes[i..];
+                    let (lf, cr) = bytes_from_newline
+                        .iter()
+                        .copied()
+                        .take_while(|&c| c == b'\n' || c == b'\r')
+                        .fold((0usize, 0usize), |(lf, cr), c| {
+                            if c == b'\n' {
+                                (lf + 1, cr)
+                            } else {
+                                (lf, cr + 1)
+                            }
+                        });
+                    i += lf + cr;
+                    if lf == 0 {
+                        analysis.has_nonprintable = true;
+                    }
+                }
+                // Remaining printable bytes.
+                b' '..=b'~' | b'\t' => {
+                    i += 1;
+                }
+                _ => {
+                    analysis.has_nonprintable = true;
+                    i += 1;
+                }
+            }
+        }
+
+        analysis.long_string_equal_signs = (0..).find(move |i| !equal_signs.contains(i)).unwrap();
+        analysis
+    }
+}
+
 pub(crate) enum DisplayLuaValue {
     // NOTE(vhyrro): these are not used in the current implementation
     // Nil,
@@ -187,32 +285,45 @@ impl Display for DisplayLuaValue {
             //DisplayLuaValue::Number(n) => write!(f, "{n}"),
             DisplayLuaValue::Boolean(b) => write!(buf, "{b}")?,
             DisplayLuaValue::String(s) => {
-                // Escape all the string bytes.
-                // We do bytes instead of unicode characters because Lua strings
-                // only got unicode escapes as of version 5.3.
-                buf.push('"');
-                for c in s.bytes() {
-                    match c {
-                        b'"' => buf.push_str("\\\""),
-                        b'\x07' => buf.push_str("\\a"),
-                        b'\x08' => buf.push_str("\\b"),
-                        b'\x0B' => buf.push_str("\\v"),
-                        b'\x0C' => buf.push_str("\\f"),
-                        b'\n' => buf.push_str("\\n"),
-                        b'\r' => buf.push_str("\\r"),
-                        b'\t' => buf.push_str("\\t"),
-                        b'\\' => buf.push_str("\\\\"),
-                        _ => {
-                            if c.is_ascii_graphic() || c == b' ' {
+                let analysis = StringAnalysis::from(s.as_str());
+                if analysis.has_newline && !analysis.has_nonprintable {
+                    // A long-delimiter string will look better for strings that
+                    // are all printable with line breaks.
+                    buf.push('[');
+                    buf.extend(std::iter::repeat('=').take(analysis.long_string_equal_signs));
+                    buf.push_str("[\n");
+                    buf.push_str(s);
+                    buf.push(']');
+                    buf.extend(std::iter::repeat('=').take(analysis.long_string_equal_signs));
+                    buf.push(']');
+                } else {
+                    // Escape all the string bytes.
+                    // We do bytes instead of unicode characters because Lua strings
+                    // only got unicode escapes as of version 5.3.
+                    buf.push('"');
+                    for c in s.bytes() {
+                        match c {
+                            b'"' => buf.push_str("\\\""),
+                            b'\x07' => buf.push_str("\\a"),
+                            b'\x08' => buf.push_str("\\b"),
+                            b'\x0B' => buf.push_str("\\v"),
+                            b'\x0C' => buf.push_str("\\f"),
+                            b'\n' => buf.push_str("\\n"),
+                            b'\r' => buf.push_str("\\r"),
+                            b'\t' => buf.push_str("\\t"),
+                            b'\\' => buf.push_str("\\\\"),
+                            // Remaining ascii printables.
+                            b' '..=b'~' => {
                                 buf.push(c as char);
-                            } else {
+                            }
+                            _ => {
                                 // \ddd decimal escapes.
                                 write!(buf, "\\{c:03}")?;
                             }
                         }
                     }
+                    buf.push('"');
                 }
-                buf.push('"');
             }
             DisplayLuaValue::List(l) => {
                 writeln!(buf, "{{")?;
@@ -349,6 +460,57 @@ mod tests {
             format!("{value}"),
             r#""1\"2\a3\b4\v5\f6\n7\r8\t9'a\\b\243\191\191\191c\000d\001e""#
         );
+        let value = DisplayLuaValue::String("\n".to_string());
+        assert_eq!(format!("{value}"), "[[\n\n]]");
+        let value = DisplayLuaValue::String("\n]".to_string());
+        assert_eq!(format!("{value}"), "[=[\n\n]]=]");
+        let value = DisplayLuaValue::String("first line\nsecond line".to_string());
+        assert_eq!(format!("{value}"), "[[\nfirst line\nsecond line]]");
+
+        let value = DisplayLuaValue::String("first line\nsecond line]".to_string());
+        assert_eq!(format!("{value}"), "[=[\nfirst line\nsecond line]]=]");
+
+        let value = DisplayLuaValue::String("first line\nsecond line]=]".to_string());
+        assert_eq!(format!("{value}"), "[==[\nfirst line\nsecond line]=]]==]");
+
+        let value = DisplayLuaValue::String("first line\nsecond line]\nthird line".to_string());
+        assert_eq!(
+            format!("{value}"),
+            "[[\nfirst line\nsecond line]\nthird line]]"
+        );
+
+        let value = DisplayLuaValue::String("first line\nsecond line]]\nthird line".to_string());
+        assert_eq!(
+            format!("{value}"),
+            "[=[\nfirst line\nsecond line]]\nthird line]=]"
+        );
+
+        let value = DisplayLuaValue::String("first line\nsecond line]=]\nthird line".to_string());
+        assert_eq!(
+            format!("{value}"),
+            "[[\nfirst line\nsecond line]=]\nthird line]]"
+        );
+
+        let value = DisplayLuaValue::String("first line\nsecond line]=]]\nthird line".to_string());
+        assert_eq!(
+            format!("{value}"),
+            "[==[\nfirst line\nsecond line]=]]\nthird line]==]"
+        );
+
+        let value = DisplayLuaValue::String("first line\nsecond line]]=]\nthird line".to_string());
+        assert_eq!(
+            format!("{value}"),
+            "[==[\nfirst line\nsecond line]]=]\nthird line]==]"
+        );
+
+        let value = DisplayLuaValue::String("\tfirst line\n\tsecond line".to_string());
+        assert_eq!(format!("{value}"), "[[\n\tfirst line\n\tsecond line]]");
+
+        let value = DisplayLuaValue::String("\tfirst line\r\n\tsecond line".to_string());
+        assert_eq!(format!("{value}"), "[[\n\tfirst line\r\n\tsecond line]]");
+
+        let value = DisplayLuaValue::String("\tfirst line\r\tsecond line".to_string());
+        assert_eq!(format!("{value}"), r#""\tfirst line\r\tsecond line""#);
 
         let value = DisplayLuaValue::Boolean(true);
         assert_eq!(format!("{value}"), "true");
