@@ -23,37 +23,74 @@ const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 #[error("could not find a valid home directory")]
 pub struct NoValidHomeDirectory;
 
+/// Resolved, ready-to-use configuration for a lux operation.
+///
+/// `Config` is what every lux command consumes. It captures the union of
+/// (a) the user's config file (typically `<config-dir>/config.toml`),
+/// (b) command-line flags, and (c) lux defaults — the merge is performed by
+/// [`ConfigBuilder`], not here.
+///
+/// All fields are private — use the `with_*` builder-style methods to
+/// override individual settings on an existing `Config`, or build a fresh
+/// instance via [`ConfigBuilder`]. This keeps the in-memory representation
+/// stable across versions even when new options are added.
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Whether to allow installing development versions of packages
+    /// (e.g. `1.2.3-dev` rocks served by the dev variant of each server).
     enable_development_packages: bool,
+    /// Primary rocks server (defaults to luarocks.org).
     server: Url,
+    /// Additional rocks servers consulted in order after `server`.
     extra_servers: Vec<Url>,
+    /// If set, lux installs only this source-build variant
+    /// (e.g. `"src"` to skip prebuilt binaries).
     only_sources: Option<String>,
+    /// Default namespace used when resolving unqualified package names.
     namespace: Option<String>,
+    /// Path to a custom Lua installation. When unset lux discovers Lua
+    /// from the system.
     lua_dir: Option<PathBuf>,
+    /// Pinned Lua version. When unset lux infers it from the project
+    /// or active toolchain.
     lua_version: Option<LuaVersion>,
+    /// Root directory for the user's package tree.
     user_tree: PathBuf,
+    /// Print verbose log output.
     verbose: bool,
     /// Don't display progress bars
     no_progress: bool,
     /// Skip prompts (choosing the default choice)
     no_prompt: bool,
+    /// Timeout for outbound HTTP requests.
     timeout: Duration,
+    /// Maximum number of concurrent build jobs (passed through to
+    /// downstream toolchains where applicable).
     max_jobs: usize,
+    /// Substitution variables exposed to rockspec templates and build
+    /// scripts (e.g. `LUA_INCDIR`).
     variables: HashMap<String, String>,
+    /// Search paths for external (system) C libraries and headers.
     external_deps: ExternalDependencySearchConfig,
     /// The rock layout for entrypoints of new install trees.
     /// Does not affect existing install trees or dependency rock layouts.
     entrypoint_layout: RockLayoutConfig,
 
+    /// Directory holding cached downloads (rocks, indexes, etc.).
     cache_dir: PathBuf,
+    /// Directory holding lux-managed installed state (lockfiles,
+    /// per-tree metadata, etc.).
     data_dir: PathBuf,
+    /// Optional vendored directory of pre-fetched rocks consulted
+    /// before the network.
     vendor_dir: Option<PathBuf>,
 
     /// The user agent to set when making web requests.
     /// Default: "lux-lib/<version>".
     user_agent: String,
 
+    /// Whether to generate a `.luarc.json` for editor tooling on
+    /// project init / install.
     generate_luarc: bool,
 }
 
@@ -215,6 +252,17 @@ pub enum ConfigError {
     CompilerToolchain(#[from] cc::Error),
 }
 
+/// Layered, user-facing builder for [`Config`].
+///
+/// Every field is `Option<_>` so values from later layers override earlier
+/// ones — callers typically deserialize a base instance from a config file
+/// via [`ConfigBuilder::new`], then chain command-line overrides through
+/// the `with_*`-style setters, and finally call [`ConfigBuilder::build`]
+/// to produce the resolved [`Config`] that gets handed to lux operations.
+///
+/// Most callers should not construct fields directly — use
+/// [`ConfigBuilder::new`] (which loads `<config-dir>/config.toml` if it
+/// exists, otherwise returns the default).
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct ConfigBuilder {
     #[serde(
