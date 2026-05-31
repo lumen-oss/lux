@@ -330,10 +330,45 @@ impl Workspace {
             .map_err(|err| WorkspaceError::TOML(err.to_string()))?;
         let mut members = Vec::new();
         for relative_project_path in toml.workspace.members {
-            let project_path = root.join(relative_project_path);
-            match Project::from_exact(&project_path)? {
-                Some(project) => members.push(project),
-                None => return Err(WorkspaceError::ProjectNotFound(project_path)),
+            // Glob patterns (anything containing `*`, `?`, or `[`) are
+            // expanded against the workspace root and only entries that look
+            // like a project (i.e. contain a `lux.toml`) are kept. Plain paths
+            // are looked up directly, preserving the existing
+            // `ProjectNotFound` error for typos.
+            // See <https://github.com/lumen-oss/lux/issues/1543>
+            let pattern_str = relative_project_path.to_string_lossy();
+            if pattern_str.contains('*') || pattern_str.contains('?') || pattern_str.contains('[') {
+                let glob_pattern = root.join(&relative_project_path);
+                let glob_pattern_str = glob_pattern.to_string_lossy().into_owned();
+                let entries = glob::glob(&glob_pattern_str).map_err(|err| {
+                    WorkspaceError::TOML(format!(
+                        "invalid glob pattern `{}` in workspace.members: {err}",
+                        relative_project_path.display()
+                    ))
+                })?;
+                for entry in entries {
+                    let project_path = entry.map_err(|err| {
+                        WorkspaceError::TOML(format!(
+                            "error reading directory while expanding `{}`: {err}",
+                            relative_project_path.display()
+                        ))
+                    })?;
+                    if !project_path.is_dir() {
+                        continue;
+                    }
+                    if let Some(project) = Project::from_exact(&project_path)? {
+                        members.push(project);
+                    }
+                    // Silently skip directories without a project file: they
+                    // are matched by the glob but are not lux projects (e.g.
+                    // `target/`, build outputs).
+                }
+            } else {
+                let project_path = root.join(relative_project_path);
+                match Project::from_exact(&project_path)? {
+                    Some(project) => members.push(project),
+                    None => return Err(WorkspaceError::ProjectNotFound(project_path)),
+                }
             }
         }
         match NonEmpty::from_vec(members) {
@@ -391,5 +426,69 @@ mod tests {
     async fn test_no_find_workspace_upwards() {
         let work_dir = assert_fs::TempDir::new().unwrap();
         assert!(Workspace::from(&work_dir).unwrap().is_none())
+    }
+
+    /// Regression test for <https://github.com/lumen-oss/lux/issues/1543>.
+    ///
+    /// `[workspace] members = ["projects/*"]` should expand to every
+    /// subdirectory of `projects/` that contains a project file. We reuse
+    /// the existing `multi-project` fixture (which has `projects/foo` and
+    /// `projects/bar`) and rewrite its top-level `lux.toml` to use a glob.
+    #[tokio::test]
+    async fn workspace_members_glob_expands_directories() {
+        let sample_workspace: PathBuf = "resources/test/sample-projects/multi-project/".into();
+        let workspace_root = assert_fs::TempDir::new().unwrap();
+        workspace_root
+            .copy_from(&sample_workspace, &["**"])
+            .unwrap();
+        // Replace the literal-list workspace toml with a glob.
+        std::fs::write(
+            workspace_root.join("lux.toml"),
+            b"[workspace]\nmembers = [\"projects/*\"]\n",
+        )
+        .unwrap();
+
+        let workspace = Workspace::from(&*workspace_root).unwrap().unwrap();
+        assert_eq!(
+            workspace.members.len(),
+            2,
+            "glob `projects/*` should resolve to both foo and bar"
+        );
+        // Glob iteration order is not guaranteed; just check both names are present.
+        let mut names: Vec<String> = workspace
+            .members
+            .iter()
+            .map(|m| {
+                m.root()
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["bar".to_string(), "foo".to_string()]);
+    }
+
+    /// Glob expansion silently skips matched directories that aren't lux
+    /// projects (e.g. `target/` or other build outputs co-located with real
+    /// projects). A literal path with the same name should still error.
+    #[tokio::test]
+    async fn workspace_members_glob_skips_non_project_directories() {
+        let sample_workspace: PathBuf = "resources/test/sample-projects/multi-project/".into();
+        let workspace_root = assert_fs::TempDir::new().unwrap();
+        workspace_root
+            .copy_from(&sample_workspace, &["**"])
+            .unwrap();
+        // Add a non-project directory next to the real ones.
+        std::fs::create_dir(workspace_root.join("projects/build-cache")).unwrap();
+        std::fs::write(
+            workspace_root.join("lux.toml"),
+            b"[workspace]\nmembers = [\"projects/*\"]\n",
+        )
+        .unwrap();
+
+        let workspace = Workspace::from(&*workspace_root).unwrap().unwrap();
+        // Only foo and bar — build-cache is silently dropped.
+        assert_eq!(workspace.members.len(), 2);
     }
 }
