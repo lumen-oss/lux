@@ -7,5 +7,8 @@ summary = ""
 maintainer = "lumen-labs"
 labels = [""]
 
+[test_dependencies]
+"luassert" = "1.9.0"
+
 [run]
 args = ["src/main.lua"]
