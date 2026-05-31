@@ -247,6 +247,7 @@ async fn do_sync(
                 .constraint(pkg.constraint())
                 .build()
         })
+        .unique()
         .collect_vec();
     report
         .added
@@ -301,6 +302,7 @@ async fn do_sync(
                     .maybe_source(dep.source.clone())
                     .build()
             })
+            .unique()
             .collect();
 
         let added = Install::new(args.config)

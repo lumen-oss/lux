@@ -51,3 +51,22 @@ async fn sync_test_dependencies_empty_project() {
         RockMatches::Single { .. }
     ));
 }
+
+/// non-regression for https://github.com/lumen-oss/lux/issues/1548
+#[tokio::test]
+async fn sync_multi_projects_same_dependencies() {
+    let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/sample-projects/multi-project/");
+    let _ = tokio::fs::remove_dir_all(sample_project_dir.join(".lux")).await;
+    let temp_dir = TempDir::new().unwrap();
+    temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
+    let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
+    let config = ConfigBuilder::new().unwrap().build().unwrap();
+
+    Sync::new(&workspace, &config)
+        .validate_integrity(cfg!(not(target_os = "windows")))
+        .fast(true)
+        .sync_test_dependencies()
+        .await
+        .unwrap();
+}
