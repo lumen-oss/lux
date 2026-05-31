@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.40.1...lux-lib-v0.40.2) `lux-lib` - 2026-05-31
+
+### Fixed
+- *(sync)* don't error on multiple projects with the same dependencies ([#1549](https://github.com/lumen-oss/lux/pull/1549))
+
 ## [0.30.4](https://github.com/lumen-oss/lux/compare/v0.30.3...v0.30.4) `lux-cli` - 2026-05-31
 
 ### Other
