@@ -52,7 +52,7 @@ impl FromStr for PackageOrRockspec {
 #[derive(Args)]
 pub struct Pack {
     /// Path to a RockSpec or a package query for a package to pack.{n}
-    /// Prioritises workspace members then installed rocks.{n}
+    /// Prioritises local projects if in a workspace, then installed rocks.{n}
     /// If there is no matching workspace member or installed rock,{n}
     /// a rock will be downloaded and installed to a temporary directory.{n}
     /// In case of multiple matches, the latest version will be packed.{n}
