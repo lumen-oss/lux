@@ -52,8 +52,9 @@ impl FromStr for PackageOrRockspec {
 #[derive(Args)]
 pub struct Pack {
     /// Path to a RockSpec or a package query for a package to pack.{n}
-    /// Prioritises installed rocks and will install a rock to a temporary{n}
-    /// directory if none is found.{n}
+    /// Prioritises workspace members then installed rocks.{n}
+    /// If there is no matching workspace member or installed rock,{n}
+    /// a rock will be downloaded and installed to a temporary directory.{n}
     /// In case of multiple matches, the latest version will be packed.{n}
     ///{n}
     /// Examples:{n}
@@ -62,9 +63,9 @@ pub struct Pack {
     ///     - "pkg>=1.0.0"{n}
     ///     - "/path/to/foo-1.0.0-1.rockspec"{n}
     ///{n}
-    /// If not set, lux will build the current project and attempt to pack it.{n}
-    /// To be able to pack a project, lux must be able to generate a release or dev{n}
-    /// Lua rockspec.{n}
+    /// If not set, lux will attempt to pack either all workspace members{n}
+    /// or the current project.{n}
+    /// To pack a project, lux must be able to generate a release or dev RockSpec.{n}
     #[clap(value_parser)]
     package_or_rockspec: Option<PackageOrRockspec>,
 }
