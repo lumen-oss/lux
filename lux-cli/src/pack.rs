@@ -1,4 +1,7 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use crate::build;
 use clap::Args;
@@ -11,7 +14,7 @@ use lux_lib::{
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     operations::{self, Install, PackageInstallSpec},
-    package::PackageReq,
+    package::{PackageName, PackageReq},
     progress::MultiProgress,
     rockspec::Rockspec as _,
     tree,
@@ -66,11 +69,69 @@ pub struct Pack {
     package_or_rockspec: Option<PackageOrRockspec>,
 }
 
+async fn pack_workspace(
+    member: Option<&PackageName>,
+    dest_dir: &Path,
+    config: &Config,
+) -> Result<Vec<PathBuf>> {
+    let workspace = Workspace::current_or_err()?;
+
+    // luarocks expects a `<package>-<version>.rockspec` in the package root,
+    // so we add a guard that it can be created here.
+    let packages = match member {
+        // Pack only the provided workspace member
+        Some(package_name) => {
+            let project = workspace.select_member(package_name)?;
+            project
+                .toml()
+                .into_remote(None)?
+                .to_lua_remote_rockspec_string()?;
+
+            let mut build = build::Build::default();
+            build.package = Some(package_name.clone());
+            build::build(build, config.clone())
+        }
+        // Pack all workspace members
+        None => {
+            for project in workspace.members() {
+                project
+                    .toml()
+                    .into_remote(None)?
+                    .to_lua_remote_rockspec_string()?;
+            }
+            build::build(build::Build::default(), config.clone())
+        }
+    }
+    .await?;
+
+    if packages.is_empty() {
+        return Err(eyre!("build did not produce a package"));
+    }
+
+    let mut rock_paths = Vec::new();
+    for package in packages {
+        let tree = workspace.tree(config)?;
+        let rock_path = operations::Pack::new(dest_dir.to_path_buf(), tree, package)
+            .pack()
+            .await?;
+        rock_paths.push(rock_path);
+    }
+
+    Ok(rock_paths)
+}
+
 pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let lua_version = LuaVersion::from(&config)?.clone();
     let dest_dir = std::env::current_dir()?;
     let progress = MultiProgress::new_arc(&config);
-    let rock_paths: Result<Vec<PathBuf>> = match args.package_or_rockspec {
+    let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
+        // Prioritize packing workspace members if the provided package name matches a member name
+        Some(PackageOrRockspec::Package(package_req))
+            if let Ok(rock_path) =
+                pack_workspace(Some(package_req.name()), &dest_dir, &config).await =>
+        {
+            Ok(rock_path)
+        }
         Some(PackageOrRockspec::Package(package_req)) => {
             let user_tree = config.user_tree(lua_version.clone())?;
             match user_tree.match_rocks(&package_req)? {
@@ -154,32 +215,9 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .await?;
             Ok(vec![rock_path])
         }
-        None => {
-            let workspace = Workspace::current_or_err()?;
-            // luarocks expects a `<package>-<version>.rockspec` in the package root,
-            // so we add a guard that it can be created here.
-            for project in workspace.members() {
-                project
-                    .toml()
-                    .into_remote(None)?
-                    .to_lua_remote_rockspec_string()?;
-            }
-            let mut rock_paths = Vec::new();
-            let packages = build::build(build::Build::default(), config.clone()).await?;
-            if packages.is_empty() {
-                return Err(eyre!("build did not produce a package"));
-            }
-            for package in packages {
-                let tree = workspace.tree(&config)?;
-                let rock_path = operations::Pack::new(dest_dir.clone(), tree, package)
-                    .pack()
-                    .await?;
-                rock_paths.push(rock_path);
-            }
-            Ok(rock_paths)
-        }
-    };
-    let rock_paths = rock_paths?;
+        None => pack_workspace(None, &dest_dir, &config).await,
+    }?;
+
     if rock_paths.len() > 1 {
         let rock_paths = rock_paths
             .iter()
