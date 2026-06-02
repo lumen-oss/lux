@@ -1,4 +1,7 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use crate::build;
 use clap::Args;
@@ -11,7 +14,7 @@ use lux_lib::{
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     operations::{self, Install, PackageInstallSpec},
-    package::PackageReq,
+    package::{PackageName, PackageReq},
     progress::MultiProgress,
     rockspec::Rockspec as _,
     tree,
@@ -49,8 +52,9 @@ impl FromStr for PackageOrRockspec {
 #[derive(Args)]
 pub struct Pack {
     /// Path to a RockSpec or a package query for a package to pack.{n}
-    /// Prioritises installed rocks and will install a rock to a temporary{n}
-    /// directory if none is found.{n}
+    /// Prioritises local projects if in a workspace, then installed rocks.{n}
+    /// If there is no matching workspace member or installed rock,{n}
+    /// a rock will be downloaded and installed to a temporary directory.{n}
     /// In case of multiple matches, the latest version will be packed.{n}
     ///{n}
     /// Examples:{n}
@@ -59,18 +63,87 @@ pub struct Pack {
     ///     - "pkg>=1.0.0"{n}
     ///     - "/path/to/foo-1.0.0-1.rockspec"{n}
     ///{n}
-    /// If not set, lux will build the current project and attempt to pack it.{n}
-    /// To be able to pack a project, lux must be able to generate a release or dev{n}
-    /// Lua rockspec.{n}
+    /// If not set, lux will attempt to pack either all workspace members{n}
+    /// or the current project.{n}
+    /// To pack a project, lux must be able to generate a release or dev RockSpec.{n}
     #[clap(value_parser)]
     package_or_rockspec: Option<PackageOrRockspec>,
+}
+
+fn has_matching_workspace_member(package_req: &PackageReq) -> Result<bool> {
+    let workspace = Workspace::current()?;
+    let has_match = workspace.is_some_and(|ws| {
+        ws.select_member(package_req.name()).is_ok_and(|project| {
+            project
+                .toml()
+                .version()
+                .is_ok_and(|version| package_req.version_req().matches(&version))
+        })
+    });
+    Ok(has_match)
+}
+
+async fn pack_workspace(
+    member: Option<&PackageName>,
+    dest_dir: &Path,
+    config: &Config,
+) -> Result<Vec<PathBuf>> {
+    let workspace = Workspace::current_or_err()?;
+
+    // luarocks expects a `<package>-<version>.rockspec` in the package root,
+    // so we add a guard that it can be created here.
+    let packages = match member {
+        // Pack only the provided workspace member
+        Some(package_name) => {
+            let project = workspace.select_member(package_name)?;
+            project
+                .toml()
+                .into_remote(None)?
+                .to_lua_remote_rockspec_string()?;
+
+            let mut build = build::Build::default();
+            build.package = Some(package_name.clone());
+            build::build(build, config.clone())
+        }
+        // Pack all workspace members
+        None => {
+            for project in workspace.members() {
+                project
+                    .toml()
+                    .into_remote(None)?
+                    .to_lua_remote_rockspec_string()?;
+            }
+            build::build(build::Build::default(), config.clone())
+        }
+    }
+    .await?;
+
+    if packages.is_empty() {
+        return Err(eyre!("build did not produce a package"));
+    }
+
+    let mut rock_paths = Vec::new();
+    for package in packages {
+        let tree = workspace.tree(config)?;
+        let rock_path = operations::Pack::new(dest_dir.to_path_buf(), tree, package)
+            .pack()
+            .await?;
+        rock_paths.push(rock_path);
+    }
+
+    Ok(rock_paths)
 }
 
 pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let lua_version = LuaVersion::from(&config)?.clone();
     let dest_dir = std::env::current_dir()?;
     let progress = MultiProgress::new_arc(&config);
-    let rock_paths: Result<Vec<PathBuf>> = match args.package_or_rockspec {
+    let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
+        Some(PackageOrRockspec::Package(package_req))
+            if has_matching_workspace_member(&package_req)? =>
+        {
+            pack_workspace(Some(package_req.name()), &dest_dir, &config).await
+        }
         Some(PackageOrRockspec::Package(package_req)) => {
             let user_tree = config.user_tree(lua_version.clone())?;
             match user_tree.match_rocks(&package_req)? {
@@ -154,32 +227,9 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .await?;
             Ok(vec![rock_path])
         }
-        None => {
-            let workspace = Workspace::current_or_err()?;
-            // luarocks expects a `<package>-<version>.rockspec` in the package root,
-            // so we add a guard that it can be created here.
-            for project in workspace.members() {
-                project
-                    .toml()
-                    .into_remote(None)?
-                    .to_lua_remote_rockspec_string()?;
-            }
-            let mut rock_paths = Vec::new();
-            let packages = build::build(build::Build::default(), config.clone()).await?;
-            if packages.is_empty() {
-                return Err(eyre!("build did not produce a package"));
-            }
-            for package in packages {
-                let tree = workspace.tree(&config)?;
-                let rock_path = operations::Pack::new(dest_dir.clone(), tree, package)
-                    .pack()
-                    .await?;
-                rock_paths.push(rock_path);
-            }
-            Ok(rock_paths)
-        }
-    };
-    let rock_paths = rock_paths?;
+        None => pack_workspace(None, &dest_dir, &config).await,
+    }?;
+
     if rock_paths.len() > 1 {
         let rock_paths = rock_paths
             .iter()
