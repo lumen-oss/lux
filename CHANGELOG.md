@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.6](https://github.com/lumen-oss/lux/compare/v0.30.5...v0.30.6) `lux-cli` - 2026-06-02
+
+### Added
+- *(generate-rockspec)* add `--porcelain` flag ([#1559](https://github.com/lumen-oss/lux/pull/1559))
+
 ## [0.30.5](https://github.com/lumen-oss/lux/compare/v0.30.4...v0.30.5) `lux-cli` - 2026-06-02
 
 ### Added
