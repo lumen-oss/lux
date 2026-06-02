@@ -9,7 +9,7 @@ pub struct GenerateRockspec {
     #[arg(short, long, visible_short_alias = 'p')]
     package: Option<PackageName>,
 
-    /// Control the command's output to emit a JSON list of paths.
+    /// Output a JSON list of paths to the generated rockspecs.
     #[arg(long)]
     porcelain: bool,
 }
@@ -34,7 +34,6 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
         generated_paths.push(path.to_string_lossy().into_owned());
     }
 
-    // If porcelain mode is active, print all gathered paths as a single JSON array
     if data.porcelain {
         println!("{}", serde_json::to_string(&generated_paths)?);
     }
