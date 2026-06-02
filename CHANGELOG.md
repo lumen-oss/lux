@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.5](https://github.com/lumen-oss/lux/compare/v0.30.4...v0.30.5) `lux-cli` - 2026-06-02
+
+### Added
+- *(pack)* support packing individual workspace members ([#1554](https://github.com/lumen-oss/lux/pull/1554))
+
+### Dependencies
+- *(deps)* bump serial_test from 3.4.0 to 3.5.0 ([#1556](https://github.com/lumen-oss/lux/pull/1556))
+
+## [0.40.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.40.2...lux-lib-v0.40.3) `lux-lib` - 2026-06-02
+
+### Dependencies
+- *(deps)* bump serial_test from 3.4.0 to 3.5.0 ([#1556](https://github.com/lumen-oss/lux/pull/1556))
+
 ## [0.40.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.40.1...lux-lib-v0.40.2) `lux-lib` - 2026-05-31
 
 ### Fixed
