@@ -1,28 +1,47 @@
 use clap::Args;
 use eyre::Result;
 use lux_lib::{package::PackageName, project::Project, rockspec::Rockspec, workspace::Workspace};
+use std::path::PathBuf;
 
 #[derive(Args)]
 pub struct GenerateRockspec {
     /// Package to generate the rockspec for.
     #[arg(short, long, visible_short_alias = 'p')]
     package: Option<PackageName>,
+
+    /// Output a JSON list of paths to the generated rockspecs.
+    #[arg(long)]
+    porcelain: bool,
 }
 
 pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
 
-    if let Some(package) = data.package {
-        generate_project_rockspec(workspace.select_member(&package)?).await
-    } else {
-        for project in workspace.members() {
-            generate_project_rockspec(project).await?;
+    let targets: Vec<&Project> = match &data.package {
+        Some(package) => vec![workspace.select_member(package)?],
+        None => workspace.members().into_iter().collect(),
+    };
+
+    let mut generated_paths = Vec::new();
+
+    for project in targets {
+        let path = generate_project_rockspec(project).await?;
+
+        if !data.porcelain {
+            println!("Wrote rockspec to {}", path.display());
         }
-        Ok(())
+
+        generated_paths.push(path.to_string_lossy().into_owned());
     }
+
+    if data.porcelain {
+        println!("{}", serde_json::to_string(&generated_paths)?);
+    }
+
+    Ok(())
 }
 
-async fn generate_project_rockspec(project: &Project) -> Result<()> {
+async fn generate_project_rockspec(project: &Project) -> Result<PathBuf> {
     let toml = project.toml().into_remote(None)?;
     let rockspec = toml.to_lua_remote_rockspec_string()?;
 
@@ -32,6 +51,5 @@ async fn generate_project_rockspec(project: &Project) -> Result<()> {
 
     tokio::fs::write(&path, rockspec).await?;
 
-    println!("Wrote rockspec to {}", path.display());
-    Ok(())
+    Ok(path)
 }
