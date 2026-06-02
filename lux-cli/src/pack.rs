@@ -70,6 +70,19 @@ pub struct Pack {
     package_or_rockspec: Option<PackageOrRockspec>,
 }
 
+fn has_matching_workspace_member(package_req: &PackageReq) -> Result<bool> {
+    let workspace = Workspace::current()?;
+    let has_match = workspace.is_some_and(|ws| {
+        ws.select_member(package_req.name()).is_ok_and(|project| {
+            project
+                .toml()
+                .version()
+                .is_ok_and(|version| package_req.version_req().matches(&version))
+        })
+    });
+    Ok(has_match)
+}
+
 async fn pack_workspace(
     member: Option<&PackageName>,
     dest_dir: &Path,
@@ -126,17 +139,8 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let dest_dir = std::env::current_dir()?;
     let progress = MultiProgress::new_arc(&config);
     let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
-        // Prioritize packing workspace members if the provided
-        // package name and version matches a workspace member
         Some(PackageOrRockspec::Package(package_req))
-            if Workspace::current_or_err().is_ok_and(|ws| {
-                ws.select_member(package_req.name()).is_ok_and(|project| {
-                    project
-                        .toml()
-                        .version()
-                        .is_ok_and(|version| package_req.version_req().matches(&version))
-                })
-            }) =>
+            if has_matching_workspace_member(&package_req)? =>
         {
             pack_workspace(Some(package_req.name()), &dest_dir, &config).await
         }
