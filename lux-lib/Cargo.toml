@@ -100,7 +100,7 @@ serde-value = "0.7.0"
 
 [dev-dependencies]
 httptest = { version = "0.16" }
-serial_test = { version = "3.4" }
+serial_test = { version = "3.5" }
 proptest = "1.11"
 dir-diff = "0.3"
 insta = { version = "1.47", features = ["redactions", "yaml", "json"] }
