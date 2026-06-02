@@ -16,17 +16,22 @@ pub struct GenerateRockspec {
 
 pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
+
+    let targets: Vec<&Project> = match &data.package {
+        Some(package) => vec![workspace.select_member(package)?],
+        None => workspace.members().into_iter().collect(),
+    };
+
     let mut generated_paths = Vec::new();
 
-    if let Some(package) = data.package {
-        let path =
-            generate_project_rockspec(workspace.select_member(&package)?, data.porcelain).await?;
-        generated_paths.push(path.to_string_lossy().into_owned());
-    } else {
-        for project in workspace.members() {
-            let path = generate_project_rockspec(project, data.porcelain).await?;
-            generated_paths.push(path.to_string_lossy().into_owned());
+    for project in targets {
+        let path = generate_project_rockspec(project).await?;
+
+        if !data.porcelain {
+            println!("Wrote rockspec to {}", path.display());
         }
+
+        generated_paths.push(path.to_string_lossy().into_owned());
     }
 
     // If porcelain mode is active, print all gathered paths as a single JSON array
@@ -37,7 +42,7 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     Ok(())
 }
 
-async fn generate_project_rockspec(project: &Project, porcelain: bool) -> Result<PathBuf> {
+async fn generate_project_rockspec(project: &Project) -> Result<PathBuf> {
     let toml = project.toml().into_remote(None)?;
     let rockspec = toml.to_lua_remote_rockspec_string()?;
 
@@ -46,10 +51,6 @@ async fn generate_project_rockspec(project: &Project, porcelain: bool) -> Result
         .join(format!("{}-{}.rockspec", toml.package(), toml.version()));
 
     tokio::fs::write(&path, rockspec).await?;
-
-    if !porcelain {
-        println!("Wrote rockspec to {}", path.display());
-    }
 
     Ok(path)
 }
