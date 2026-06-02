@@ -126,12 +126,19 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let dest_dir = std::env::current_dir()?;
     let progress = MultiProgress::new_arc(&config);
     let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
-        // Prioritize packing workspace members if the provided package name matches a member name
+        // Prioritize packing workspace members if the provided
+        // package name and version matches a workspace member
         Some(PackageOrRockspec::Package(package_req))
-            if let Ok(rock_path) =
-                pack_workspace(Some(package_req.name()), &dest_dir, &config).await =>
+            if Workspace::current_or_err().is_ok_and(|ws| {
+                ws.select_member(package_req.name()).is_ok_and(|project| {
+                    project
+                        .toml()
+                        .version()
+                        .is_ok_and(|version| package_req.version_req().matches(&version))
+                })
+            }) =>
         {
-            Ok(rock_path)
+            pack_workspace(Some(package_req.name()), &dest_dir, &config).await
         }
         Some(PackageOrRockspec::Package(package_req)) => {
             let user_tree = config.user_tree(lua_version.clone())?;
