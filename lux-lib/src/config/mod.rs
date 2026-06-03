@@ -23,6 +23,9 @@ const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 #[error("could not find a valid home directory")]
 pub struct NoValidHomeDirectory;
 
+/// This holds the live configuration values used across `lux`.
+/// It's completely immutable once built, so you can't just change these fields on the fly.
+/// If you need to build one or modify settings, use `ConfigBuilder`.
 #[derive(Debug, Clone)]
 pub struct Config {
     enable_development_packages: bool,
@@ -215,6 +218,9 @@ pub enum ConfigError {
     CompilerToolchain(#[from] cc::Error),
 }
 
+/// A flexible builder pattern struct for assembling a `Config`.
+/// Everything here is an `Option` so we can overlay configurations
+/// (e.g., read file defaults first, then override with CLI arguments).
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct ConfigBuilder {
     #[serde(
