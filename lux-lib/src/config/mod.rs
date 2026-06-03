@@ -24,7 +24,7 @@ const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 pub struct NoValidHomeDirectory;
 
 /// The resolved configuration for a Lux session.
-/// Can be constructed via [``ConfigBuilder``], which supports layering multiple
+/// Can be constructed via [`ConfigBuilder`], which supports layering multiple
 /// configuration sources (config file, CLI flags, environment variables).
 #[derive(Debug, Clone)]
 pub struct Config {
