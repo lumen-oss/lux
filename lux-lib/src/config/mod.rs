@@ -23,6 +23,9 @@ const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 #[error("could not find a valid home directory")]
 pub struct NoValidHomeDirectory;
 
+/// The resolved configuration for a Lux session.
+/// Can be constructed via [`ConfigBuilder`], which supports layering multiple
+/// configuration sources (config file, CLI flags, environment variables).
 #[derive(Debug, Clone)]
 pub struct Config {
     enable_development_packages: bool,
@@ -215,6 +218,12 @@ pub enum ConfigError {
     CompilerToolchain(#[from] cc::Error),
 }
 
+/// Incrementally builds a [`Config`] by layering configuration sources.
+///
+/// - Call [`ConfigBuilder::default`] to start with a blank slate,
+///   or call [`ConfigBuilder::new`] to start from a deserialised configuration file.
+/// - Populate the fields from overriding sources (e.g. CLI arguments).
+/// - Finish with [`ConfigBuilder::build`].
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct ConfigBuilder {
     #[serde(
