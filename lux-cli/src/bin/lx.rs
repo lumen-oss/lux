@@ -81,8 +81,8 @@ async fn main() -> Result<()> {
             Debug::UnpackRemote(unpack_data) => unpack::unpack_remote(unpack_data, config).await?,
             Debug::Project(debug_project) => project::debug_project(debug_project)?,
         },
-        Commands::Dist(dist) => match dist {
-            Dist::Tarball(tarball) => dist::tarball(tarball, config).await?,
+        Commands::Dist(dist_data) => match dist_data {
+            Dist::FlatArchive(archive) => dist::dist_archive(archive, config).await?,
             Dist::Bin(bin) => dist::bin(bin, config).await?,
         },
         Commands::New(project_data) => {
