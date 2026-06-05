@@ -136,7 +136,7 @@ fn update_luarc_content(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use super::*;
 

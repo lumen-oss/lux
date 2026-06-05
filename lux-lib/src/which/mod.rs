@@ -102,7 +102,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::config::ConfigBuilder;
     use assert_fs::prelude::PathCopy;

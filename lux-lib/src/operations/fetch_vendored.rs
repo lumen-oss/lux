@@ -153,7 +153,7 @@ fn load_vendored_package(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use assert_fs::{
         prelude::{FileTouch, FileWriteStr, PathChild, PathCreateDir},
         TempDir,

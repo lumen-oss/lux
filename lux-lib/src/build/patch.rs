@@ -136,7 +136,7 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::{config::ConfigBuilder, progress::MultiProgress};
 
     use super::*;

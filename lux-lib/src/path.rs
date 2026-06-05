@@ -220,7 +220,7 @@ impl Display for BinPath {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

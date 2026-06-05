@@ -115,7 +115,7 @@ impl<'de> Deserialize<'de> for RemotePackageSource {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     const LUAROCKS_ROCKSPEC: &str = "

@@ -524,7 +524,7 @@ fn parse_lua_version_from_output(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::{config::ConfigBuilder, progress::MultiProgress};
 
     use super::*;

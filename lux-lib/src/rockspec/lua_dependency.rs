@@ -175,7 +175,7 @@ pub enum LuaDependencyType<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use ottavino::{Closure, Executor, Fuel, Lua, Value};
     use ottavino_util::serde::from_value;

@@ -58,7 +58,9 @@ We use the following tools:
 
 ### Nix dev shell
 
-- Requires [flakes](https://nixos.wiki/wiki/Flakes) to be enabled.
+> [!IMPORTANT]
+>
+> Requires [flakes](https://nixos.wiki/wiki/Flakes) to be enabled.
 
 For Nix users, we provide a `devShell` that can bootstrap
 everything needed to build, format and lint Lux.
@@ -66,7 +68,7 @@ everything needed to build, format and lint Lux.
 To enter a development shell:
 
 ```console
-nix develop
+nix develop ".#lua51-ci"
 ```
 
 To apply formatting and run linters, run
