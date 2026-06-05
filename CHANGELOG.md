@@ -18,6 +18,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(fmt)* [**breaking**] allow workspace which resides in a different directory ([#1574](https://github.com/lumen-oss/lux/pull/1574))
 - *(build)* [**breaking**] read-only file system error when `src/init.lua` exists ([#1573](https://github.com/lumen-oss/lux/pull/1573))
 
+## [0.31.0](https://github.com/lumen-oss/lux/compare/v0.30.6...v0.31.0) `lux-cli` - 2026-06-05
+
+### Dependencies
+- *(deps)* bump octocrab from 0.51.0 to 0.53.0 ([#1564](https://github.com/lumen-oss/lux/pull/1564))
+
+### Fixed
+- *(fmt)* [**breaking**] allow workspace which resides in a different directory ([#1574](https://github.com/lumen-oss/lux/pull/1574))
+
+## [0.41.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.40.3...lux-lib-v0.41.0) `lux-lib` - 2026-06-05
+
+### Fixed
+- *(fmt)* [**breaking**] allow workspace which resides in a different directory ([#1574](https://github.com/lumen-oss/lux/pull/1574))
+- *(build)* [**breaking**] read-only file system error when `src/init.lua` exists ([#1573](https://github.com/lumen-oss/lux/pull/1573))
+
 ## [0.30.6](https://github.com/lumen-oss/lux/compare/v0.30.5...v0.30.6) `lux-cli` - 2026-06-02
 
 ### Added
