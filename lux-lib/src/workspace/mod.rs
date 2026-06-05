@@ -4,8 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use glob::glob;
+use itertools::Itertools;
 use lets_find_up::{find_up_with, FindUpKind, FindUpOptions};
 use nonempty::NonEmpty;
+use path_slash::PathBufExt;
 use thiserror::Error;
 
 use crate::{
@@ -16,7 +19,7 @@ use crate::{
     package::PackageName,
     project::{Project, ProjectError, PROJECT_TOML},
     tree::{Tree, TreeError},
-    workspace::workspace_toml::WorkspaceToml,
+    workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
 };
 
 pub mod workspace_toml;
@@ -56,6 +59,8 @@ pub enum WorkspaceError {
     TOML(String),
     #[error("no project found at '{0}'")]
     ProjectNotFound(PathBuf),
+    #[error("glob error: '{0}'")]
+    Glob(String),
     #[error("error deserializing project TOML:\n{0}")]
     Project(#[from] ProjectError),
     #[error("no project or workspace found")]
@@ -330,11 +335,31 @@ impl Workspace {
         let toml = WorkspaceToml::new(toml_content)
             .map_err(|err| WorkspaceError::TOML(err.to_string()))?;
         let mut members = Vec::new();
-        for relative_project_path in toml.workspace.members {
-            let project_path = root.join(relative_project_path);
-            match Project::from_exact(&project_path)? {
-                Some(project) => members.push(project),
-                None => return Err(WorkspaceError::ProjectNotFound(project_path)),
+        for member in toml.workspace.members {
+            match member {
+                WorkspaceMemberSpec::RelativeProjectGlob(pattern) => {
+                    let potential_paths = glob(root.join(pattern).to_slash_lossy().deref())
+                        .ok() // This is fine because we fail to deserialize invalid globs
+                        .into_iter()
+                        .flat_map(|paths| {
+                            paths.map(|path| {
+                                path.map_err(|err| WorkspaceError::Glob(err.to_string()))
+                            })
+                        })
+                        .try_collect::<_, Vec<_>, _>()?;
+                    for project_path in potential_paths {
+                        if let Some(project) = Project::from_exact(&project_path)? {
+                            members.push(project)
+                        }
+                    }
+                }
+                WorkspaceMemberSpec::RelativeProjectPath(relative_project_path) => {
+                    let project_path = root.join(relative_project_path);
+                    match Project::from_exact(&project_path)? {
+                        Some(project) => members.push(project),
+                        None => return Err(WorkspaceError::ProjectNotFound(project_path)),
+                    }
+                }
             }
         }
         match NonEmpty::from_vec(members) {
@@ -374,6 +399,37 @@ mod tests {
             .copy_from(&sample_workspace, &["**"])
             .unwrap();
         let work_dir: PathBuf = workspace_root.join("projects");
+        let workspace = Workspace::from(&work_dir).unwrap().unwrap();
+        assert_eq!(workspace.members.len(), 2);
+        let foo = workspace.select_member(&"foo".into()).unwrap();
+        assert_eq!(
+            foo.root().to_path_buf(),
+            workspace_root.join("projects/foo").to_path_buf()
+        );
+        let bar = workspace.select_member(&"bar".into()).unwrap();
+        assert_eq!(
+            bar.root().to_path_buf(),
+            workspace_root.join("projects/bar").to_path_buf()
+        );
+    }
+
+    #[tokio::test]
+    async fn find_multi_project_workspace_members_glob() {
+        let sample_workspace: PathBuf = "resources/test/sample-projects/multi-project/".into();
+        let workspace_root = assert_fs::TempDir::new().unwrap();
+        workspace_root
+            .copy_from(&sample_workspace, &["**"])
+            .unwrap();
+        let work_dir: PathBuf = workspace_root.join("projects");
+        let workspace_toml_file = workspace_root.join(WORKSPACE_TOML);
+        let workspace_toml_content = r#"
+[workspace]
+members = [ "glob:projects/*" ]
+"#;
+        tokio::fs::write(&workspace_toml_file, workspace_toml_content)
+            .await
+            .unwrap();
+
         let workspace = Workspace::from(&work_dir).unwrap().unwrap();
         assert_eq!(workspace.members.len(), 2);
         let foo = workspace.select_member(&"foo".into()).unwrap();
