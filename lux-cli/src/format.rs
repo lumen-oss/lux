@@ -37,7 +37,14 @@ enum FmtBackend {
 }
 
 pub fn format(args: Fmt, config: Config) -> Result<()> {
-    let workspace = Workspace::current_or_err()?;
+    let workspace: Workspace = match args.workspace_or_file {
+        Some(ref ws) => match Workspace::from_exact(ws)? {
+            Some(ws) => ws,
+            None => Workspace::current_or_err()?,
+        },
+        None => Workspace::current_or_err()?,
+    };
+
     if let Some(package) = &args.package {
         let project = workspace.select_member(package)?;
         format_project(&args, &workspace, project, &config)?;
@@ -186,5 +193,53 @@ fn lua_version_to_luafmt_syntax_level(lua_version: LuaVersion) -> luafmt::LuaSyn
         LuaVersion::Lua54 => luafmt::LuaSyntaxLevel::Lua54,
         LuaVersion::Lua55 => luafmt::LuaSyntaxLevel::Lua55,
         LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => luafmt::LuaSyntaxLevel::LuaJIT,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_fs::fixture::PathChild;
+    use assert_fs::{prelude::PathCopy, TempDir};
+    use lux_lib::config::ConfigBuilder;
+    use serial_test::serial;
+
+    use super::*;
+    use std::path::PathBuf;
+
+    #[serial]
+    #[tokio::test]
+    async fn test_format_while_in_another_workspace() {
+        let unformatted_sample_project: PathBuf =
+            "resources/test/sample-projects/unformatted/".into();
+        let unformatted_project_root = TempDir::new().unwrap();
+        unformatted_project_root
+            .copy_from(&unformatted_sample_project, &["**"])
+            .unwrap();
+
+        let cwd_sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let cwd_project_root = TempDir::new().unwrap();
+        cwd_project_root
+            .copy_from(&cwd_sample_project, &["**"])
+            .unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&cwd_project_root).unwrap();
+
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let fmt = Fmt {
+            workspace_or_file: Some(unformatted_project_root.to_path_buf()),
+            backend: FmtBackend::Stylua,
+            package: None,
+        };
+
+        format(fmt, config).unwrap();
+
+        let unformatted_file_path = unformatted_project_root.child("src").child("main.lua");
+        let content = std::fs::read_to_string(&unformatted_file_path).unwrap();
+
+        // the unformatted variant contains too many spaces
+        assert!(content.contains("print(1 * 2)"));
+
+        std::env::set_current_dir(&cwd).unwrap();
     }
 }
