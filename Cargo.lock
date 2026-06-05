@@ -3352,6 +3352,7 @@ dependencies = [
  "futures",
  "git-url-parse",
  "git2",
+ "glob",
  "gpgme",
  "hex",
  "html-escape",
