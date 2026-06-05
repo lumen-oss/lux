@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use path_slash::PathBufExt;
 use serde::{de, Deserialize, Deserializer};
 use std::{collections::HashMap, convert::Infallible, fmt::Display, path::PathBuf, str::FromStr};
 use thiserror::Error;
@@ -43,7 +44,7 @@ impl LuaModule {
         PathBuf::from(self.0.replace('.', std::path::MAIN_SEPARATOR_STR) + extension)
     }
 
-    pub fn from_pathbuf(path: PathBuf) -> Self {
+    pub fn from_pathbuf(path: PathBuf) -> Result<Self, ParseLuaModuleError> {
         let extension = path
             .extension()
             .map(|ext| ext.to_string_lossy().to_string())
@@ -54,7 +55,13 @@ impl LuaModule {
             .trim_end_matches(format!(".{extension}").as_str())
             .trim_end_matches(std::path::MAIN_SEPARATOR_STR)
             .replace(std::path::MAIN_SEPARATOR_STR, ".");
-        LuaModule(module)
+        if module.is_empty() {
+            Err(ParseLuaModuleError::EmptyModule(
+                path.to_slash_lossy().to_string(),
+            ))
+        } else {
+            Ok(LuaModule(module))
+        }
     }
 
     pub fn join(&self, other: &LuaModule) -> LuaModule {
@@ -67,15 +74,23 @@ impl LuaModule {
 }
 
 #[derive(Error, Debug)]
-#[error("could not parse lua module from {0}.")]
-pub struct ParseLuaModuleError(String);
+pub enum ParseLuaModuleError {
+    #[error("could not parse Lua module from '{0}'.")]
+    FromString(String),
+    #[error("path '{0}' resulted in an empty Lua module.")]
+    EmptyModule(String),
+}
 
 impl FromStr for LuaModule {
     type Err = ParseLuaModuleError;
 
-    // NOTE: We may want to add some validations
+    // NOTE: We may want to add some additional validations
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(LuaModule(s.into()))
+        if s.is_empty() {
+            Err(ParseLuaModuleError::EmptyModule(s.into()))
+        } else {
+            Ok(LuaModule(s.into()))
+        }
     }
 }
 
@@ -432,13 +447,13 @@ mod tests {
 
     #[tokio::test]
     pub async fn parse_lua_module_from_path() {
-        let lua_module = LuaModule::from_pathbuf("foo/init.lua".into());
+        let lua_module = LuaModule::from_pathbuf("foo/init.lua".into()).unwrap();
         assert_eq!(&lua_module.0, "foo");
-        let lua_module = LuaModule::from_pathbuf("foo/bar.lua".into());
+        let lua_module = LuaModule::from_pathbuf("foo/bar.lua".into()).unwrap();
         assert_eq!(&lua_module.0, "foo.bar");
-        let lua_module = LuaModule::from_pathbuf("foo/bar/init.lua".into());
+        let lua_module = LuaModule::from_pathbuf("foo/bar/init.lua".into()).unwrap();
         assert_eq!(&lua_module.0, "foo.bar");
-        let lua_module = LuaModule::from_pathbuf("foo/bar/baz.lua".into());
+        let lua_module = LuaModule::from_pathbuf("foo/bar/baz.lua".into()).unwrap();
         assert_eq!(&lua_module.0, "foo.bar.baz");
     }
 

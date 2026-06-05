@@ -13,7 +13,7 @@ use crate::{
         backend::{BuildBackend, BuildInfo, RunBuildArgs},
         utils,
     },
-    lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec},
+    lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
     tree::TreeError,
 };
 
@@ -31,6 +31,8 @@ pub enum BuiltinBuildError {
     Io(#[from] io::Error),
     #[error(transparent)]
     Tree(#[from] TreeError),
+    #[error(transparent)]
+    ParseLuaModule(#[from] ParseLuaModuleError),
 }
 
 impl BuildBackend for BuiltinBuildSpec {
@@ -46,7 +48,7 @@ impl BuildBackend for BuiltinBuildSpec {
         let progress = args.progress;
 
         // Detect all Lua modules
-        let modules = autodetect_modules(build_dir, source_paths(build_dir, &self.modules))
+        let modules = autodetect_modules(build_dir, source_paths(build_dir, &self.modules))?
             .into_iter()
             .chain(self.modules)
             .collect::<HashMap<_, _>>();
@@ -153,7 +155,7 @@ fn source_paths(build_dir: &Path, modules: &HashMap<LuaModule, ModuleSpec>) -> H
 fn autodetect_modules(
     build_dir: &Path,
     exclude: HashSet<PathBuf>,
-) -> HashMap<LuaModule, ModuleSpec> {
+) -> Result<HashMap<LuaModule, ModuleSpec>, ParseLuaModuleError> {
     WalkDir::new(build_dir.join("src"))
         .into_iter()
         .chain(WalkDir::new(build_dir.join("lua")))
@@ -183,20 +185,28 @@ fn autodetect_modules(
             // The rockspec requires the format to be like this, and representing our
             // data in this form allows us to respect any overrides made by the user (which follow
             // the `module.name` format, not our internal one).
-            let pathbuf = diff.components().skip(1).collect::<PathBuf>();
-            let mut lua_module = LuaModule::from_pathbuf(pathbuf);
-
-            // NOTE(mrcjkb): `LuaModule` does not parse as "<module>.init" from files named "init.lua"
-            // To make sure we don't change the file structure when installing, we append it here.
-            if file.file_name().to_string_lossy().as_bytes() == b"init.lua" {
-                unsafe {
-                    lua_module = lua_module.join(&LuaModule::from_str("init").unwrap_unchecked())
+            let mut pathbuf = diff.components().skip(1).collect::<PathBuf>();
+            let lua_module = if pathbuf
+                .parent()
+                .is_none_or(|parent| parent.as_os_str().is_empty())
+            {
+                pathbuf.set_extension("");
+                LuaModule::from_pathbuf(pathbuf)
+            } else {
+                let mut lua_module = LuaModule::from_pathbuf(pathbuf)?;
+                // NOTE(mrcjkb): `LuaModule` does not parse as "<module>.init" from files named "init.lua"
+                // To make sure we don't change the file structure when installing, we append it here.
+                if file.file_name().to_string_lossy().as_bytes() == b"init.lua" {
+                    unsafe {
+                        lua_module =
+                            lua_module.join(&LuaModule::from_str("init").unwrap_unchecked())
+                    }
                 }
-            }
-
-            (lua_module, ModuleSpec::SourcePath(diff))
+                Ok(lua_module)
+            };
+            lua_module.map(|lua_module| (lua_module, ModuleSpec::SourcePath(diff)))
         })
-        .collect()
+        .try_collect()
 }
 
 fn autodetect_bin_scripts(build_dir: &Path) -> Vec<PathBuf> {

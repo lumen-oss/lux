@@ -4,17 +4,14 @@ mod make;
 mod rust_mlua;
 mod tree_sitter;
 
-pub use builtin::{BuiltinBuildSpec, LuaModule, ModulePaths, ModuleSpec};
+pub use builtin::{BuiltinBuildSpec, LuaModule, ModulePaths, ModuleSpec, ParseLuaModuleError};
 pub use cmake::*;
 pub use make::*;
 use path_slash::PathBufExt;
 pub use rust_mlua::*;
 pub use tree_sitter::*;
 
-use builtin::{
-    ModulePathsMissingSources, ModuleSpecAmbiguousPlatformOverride, ModuleSpecInternal,
-    ParseLuaModuleError,
-};
+use builtin::{ModulePathsMissingSources, ModuleSpecAmbiguousPlatformOverride, ModuleSpecInternal};
 
 use itertools::Itertools;
 
