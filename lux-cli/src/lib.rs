@@ -1,4 +1,4 @@
-use crate::{completion::Completion, format::Fmt, project::NewProject};
+use crate::{completion::Completion, dist::Dist, format::Fmt, project::NewProject};
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -42,6 +42,7 @@ pub mod check;
 pub mod completion;
 pub mod config;
 pub mod debug;
+pub mod dist;
 pub mod doc;
 pub mod download;
 pub mod exec;
@@ -197,6 +198,9 @@ pub enum Commands {
     /// Internal commands for debugging Lux itself.
     #[command(subcommand, arg_required_else_help = true)]
     Debug(Debug),
+    /// Distribute a Lux project.
+    #[command(subcommand, arg_required_else_help = true)]
+    Dist(Dist),
     /// Show documentation for an installed rock.
     Doc(Doc),
     /// Download a specific rock file from a luarocks server.

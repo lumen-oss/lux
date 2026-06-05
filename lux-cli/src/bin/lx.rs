@@ -5,6 +5,7 @@ use eyre::Result;
 use lux_cli::{
     add, build, check, completion, config,
     debug::Debug,
+    dist::{self, Dist},
     doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
     install_rockspec, lint, list, outdated, pack, path, pin, project, purge, remove, run, run_lua,
     search, shell, sync, test, uninstall, unpack, update,
@@ -79,6 +80,10 @@ async fn main() -> Result<()> {
             Debug::Unpack(unpack_data) => unpack::unpack(unpack_data, config).await?,
             Debug::UnpackRemote(unpack_data) => unpack::unpack_remote(unpack_data, config).await?,
             Debug::Project(debug_project) => project::debug_project(debug_project)?,
+        },
+        Commands::Dist(dist) => match dist {
+            Dist::Tarball(tarball) => dist::tarball(tarball, config).await?,
+            Dist::Bin(bin) => dist::bin(bin, config).await?,
         },
         Commands::New(project_data) => {
             project::write_project_rockspec(project_data, config).await?
