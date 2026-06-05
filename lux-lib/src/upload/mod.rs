@@ -113,7 +113,7 @@ pub enum UploadError {
     ApiKeyUnspecified(#[from] ApiKeyUnspecified),
     ValidationError(#[from] RemoteProjectTomlValidationError),
     #[error(
-        "unsupported version: `{0}`.\nLux can upload packages with a SemVer version, 'dev' or 'scm'"
+        "unsupported version: '{0}'.\nLux can upload packages with a SemVer version, 'dev' or 'scm'"
     )]
     UnsupportedVersion(String),
     #[error("{0}")] // We don't know the concrete error type

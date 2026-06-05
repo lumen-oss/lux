@@ -54,21 +54,21 @@ pub enum WorkspaceError {
     ReadLuxTOML(String, io::Error),
     #[error("error deserializing workspace TOML:\n{0}")]
     TOML(String),
-    #[error("no project found at `{0}`")]
+    #[error("no project found at '{0}'")]
     ProjectNotFound(PathBuf),
     #[error("error deserializing project TOML:\n{0}")]
     Project(#[from] ProjectError),
     #[error("no project or workspace found")]
     NoWorkspaceOrProject,
-    #[error("empty workspace at `{0}`")]
+    #[error("empty workspace at '{0}'")]
     EmptyWorkspace(PathBuf),
     #[error(transparent)]
     Lockfile(#[from] LockfileError),
-    #[error("not a lux project or workspace directory:\n`{0}`")]
+    #[error("not a lux project or workspace directory:\n'{0}'")]
     NotAWorkspaceDir(PathBuf),
     #[error("package must be specified in a multi-project workspace")]
     NoPackageSpecified,
-    #[error("package `{0}` not found in workspace `{1}`")]
+    #[error("package '{0}' not found in workspace '{1}'")]
     PackageNotFound(PackageName, WorkspaceRoot),
 }
 

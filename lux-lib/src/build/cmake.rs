@@ -37,7 +37,7 @@ pub enum CMakeError {
     Io(io::Error),
     #[error("failed to write CMakeLists.txt: {0}")]
     WriteCmakeListsError(io::Error),
-    #[error("failed to run `cmake` step: `{0}` command not found!")]
+    #[error("failed to run `cmake` step: '{0}' command not found!")]
     CommandNotFound(String),
     #[error(transparent)]
     VariableSubstitutionError(#[from] VariableSubstitutionError),
