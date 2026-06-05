@@ -813,4 +813,10 @@ mod tests {
         let project_files = project_files(&project_root);
         assert!(project_files.contains(&cargo_config.to_path_buf()));
     }
+
+    #[tokio::test]
+    async fn from_exact_on_nonexistent_directory() {
+        let empty_dir = assert_fs::TempDir::new().unwrap();
+        assert!(Project::from_exact(&empty_dir).unwrap().is_none());
+    }
 }
