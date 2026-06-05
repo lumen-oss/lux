@@ -319,4 +319,40 @@ mod tests {
         assert!(bin_dir.join("foo").is_file());
         assert!(bin_dir.join("bar").is_file());
     }
+
+    #[tokio::test]
+    /// Non-regression for #1563
+    async fn builtin_build_support_src_init_lua() {
+        let data_dir: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
+        let project_root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
+        let temp_dir = assert_fs::TempDir::new().unwrap();
+        temp_dir.copy_from(&project_root, &["**"]).unwrap();
+        let project_root = temp_dir.path();
+        let src_dir = project_root.join("src");
+        tokio::fs::create_dir_all(&src_dir).await.unwrap();
+        let init_lua_file = src_dir.join("init.lua");
+        tokio::fs::write(&init_lua_file, "print('hello')")
+            .await
+            .unwrap();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .data_dir(Some(data_dir))
+            .lua_version(lua_version)
+            .build()
+            .unwrap();
+        let workspace = Workspace::from_exact(project_root).unwrap().unwrap();
+        let package = BuildWorkspace::new(&workspace, &config)
+            .no_lock(false)
+            .only_deps(false)
+            .build()
+            .await
+            .unwrap();
+        let package = package.first().unwrap();
+        let tree = workspace.tree(&config).unwrap();
+        let layout = tree.installed_rock_layout(package).unwrap();
+        let src_dir = layout.src;
+        assert!(src_dir.join("init.lua").is_file());
+    }
 }
