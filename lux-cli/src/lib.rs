@@ -37,6 +37,7 @@ use vendor::Vendor;
 use which::Which;
 
 pub mod add;
+pub mod args;
 pub mod build;
 pub mod check;
 pub mod completion;

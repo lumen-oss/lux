@@ -1,9 +1,6 @@
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::path::{Path, PathBuf};
 
-use crate::build;
+use crate::{args::PackageOrRockspec, build};
 use clap::Args;
 use eyre::{eyre, OptionExt, Result};
 use itertools::Itertools;
@@ -22,32 +19,6 @@ use lux_lib::{
 };
 use path_slash::PathBufExt;
 use tempfile::tempdir;
-
-#[derive(Debug, Clone)]
-pub enum PackageOrRockspec {
-    Package(PackageReq),
-    RockSpec(PathBuf),
-}
-
-impl FromStr for PackageOrRockspec {
-    type Err = eyre::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let path = PathBuf::from(s);
-        if path.is_file() {
-            Ok(Self::RockSpec(path))
-        } else {
-            let pkg = PackageReq::from_str(s).map_err(|err| {
-                eyre!(
-                    "No file {0} found and cannot parse package query: {1}",
-                    s,
-                    err
-                )
-            })?;
-            Ok(Self::Package(pkg))
-        }
-    }
-}
 
 #[derive(Args)]
 pub struct Pack {
