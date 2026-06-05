@@ -769,7 +769,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion, progress::MultiProgress,
+        lua_version::LuaVersion, progress::MultiProgress, tree::Tree,
     };
 
     use super::*;

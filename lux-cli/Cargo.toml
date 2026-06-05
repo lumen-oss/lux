@@ -54,6 +54,7 @@ toml = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
 which = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
 serial_test = { version = "3.5" }

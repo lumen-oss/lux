@@ -12,7 +12,10 @@ use itertools::Itertools;
 use nonempty::NonEmpty;
 use thiserror::Error;
 
+mod dist;
 mod list;
+
+pub use dist::*;
 
 const LOCKFILE_NAME: &str = "lux.lock";
 
@@ -220,47 +223,12 @@ impl Tree {
 
     /// Create a [`RockLayout`] for an entrypoint
     pub(crate) fn entrypoint_layout(&self, package: &LocalPackage) -> RockLayout {
-        self.mk_rock_layout(package, &self.entrypoint_layout)
+        mk_rock_layout("src", "lib", self, package, &self.entrypoint_layout)
     }
 
     /// Create a [`RockLayout`] for a dependency
     fn dependency_layout(&self, package: &LocalPackage) -> RockLayout {
-        self.mk_rock_layout(package, &RockLayoutConfig::default())
-    }
-
-    /// Create a `RockLayout` for a package.
-    fn mk_rock_layout(
-        &self,
-        package: &LocalPackage,
-        layout_config: &RockLayoutConfig,
-    ) -> RockLayout {
-        let rock_path = self.root_for(package);
-        let bin = self.bin();
-        let etc_root = match layout_config.etc_root {
-            Some(ref etc_root) => self.root().join(etc_root),
-            None => rock_path.clone(),
-        };
-        let mut etc = match package.spec.opt {
-            OptState::Required => etc_root.join(&layout_config.etc),
-            OptState::Optional => etc_root.join(&layout_config.opt_etc),
-        };
-        if layout_config.etc_root.is_some() {
-            etc = etc.join(format!("{}", package.name()));
-        }
-        let lib = rock_path.join("lib");
-        let src = rock_path.join("src");
-        let conf = etc.join(&layout_config.conf);
-        let doc = etc.join(&layout_config.doc);
-
-        RockLayout {
-            rock_path,
-            etc,
-            lib,
-            src,
-            bin,
-            conf,
-            doc,
-        }
+        mk_rock_layout("src", "lib", self, package, &RockLayoutConfig::default())
     }
 }
 
@@ -391,6 +359,43 @@ pub enum RockMatches {
 impl RockMatches {
     pub fn is_found(&self) -> bool {
         matches!(self, Self::Single(_) | Self::Many(_))
+    }
+}
+
+/// Create a [`RockLayout`] for a package.
+fn mk_rock_layout(
+    src_dir_name: &str,
+    lib_dir_name: &str,
+    tree: &impl InstallTree,
+    package: &LocalPackage,
+    layout_config: &RockLayoutConfig,
+) -> RockLayout {
+    let rock_path = tree.root_for(package);
+    let bin = tree.bin();
+    let etc_root = match layout_config.etc_root {
+        Some(ref etc_root) => tree.root().join(etc_root),
+        None => rock_path.clone(),
+    };
+    let mut etc = match package.spec.opt {
+        OptState::Required => etc_root.join(&layout_config.etc),
+        OptState::Optional => etc_root.join(&layout_config.opt_etc),
+    };
+    if layout_config.etc_root.is_some() {
+        etc = etc.join(format!("{}", package.name()));
+    }
+    let lib = rock_path.join(lib_dir_name);
+    let src = rock_path.join(src_dir_name);
+    let conf = etc.join(&layout_config.conf);
+    let doc = etc.join(&layout_config.doc);
+
+    RockLayout {
+        rock_path,
+        etc,
+        lib,
+        src,
+        bin,
+        conf,
+        doc,
     }
 }
 
