@@ -33,7 +33,7 @@ pub struct PartialLuaRockspec {
 pub enum PartialRockspecError {
     #[error("rockspec execution exceeded fuel limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,
-    #[error("field `{0}` should not be declared in extra.rockspec")]
+    #[error("field '{0}' should not be declared in extra.rockspec")]
     ExtraneousField(String),
     #[error("error while parsing rockspec: {0}")]
     Lua(#[from] ottavino::ExternError),

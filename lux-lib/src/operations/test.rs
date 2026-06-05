@@ -88,7 +88,7 @@ pub enum RunTestsError {
     BuildProject(#[from] BuildWorkspaceError),
     #[error("tests failed!")]
     TestFailure,
-    #[error("failed to execute `{0}`: {1}")]
+    #[error("failed to execute '{0}': {1}")]
     RunCommandFailure(String, io::Error),
     #[error(transparent)]
     Io(#[from] io::Error),

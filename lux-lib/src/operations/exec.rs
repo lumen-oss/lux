@@ -85,7 +85,7 @@ pub enum ExecError {
     InstallCommand(#[from] InstallCommandError),
     #[error(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
-    #[error("failed to execute `{0}`:\n{1}")]
+    #[error("failed to execute '{0}':\n{1}")]
     Io(String, io::Error),
 }
 

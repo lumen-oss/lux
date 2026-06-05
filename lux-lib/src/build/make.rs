@@ -34,7 +34,7 @@ pub enum MakeError {
     },
     #[error("failed to run `make` step: {0}")]
     Io(io::Error),
-    #[error("failed to run `make` step: `{0}` command not found!")]
+    #[error("failed to run `make` step: '{0}' command not found!")]
     CommandNotFound(String),
     #[error(transparent)]
     VariableSubstitutionError(#[from] VariableSubstitutionError),

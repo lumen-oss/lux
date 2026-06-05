@@ -21,7 +21,7 @@ use crate::{
 use super::RunLuaError;
 
 #[derive(Debug, Error)]
-#[error("`{0}` should not be used as a `command` as it is not cross-platform.
+#[error("'{0}' should not be used as a `command` as it is not cross-platform.
 You should only change the default `command` if it is a different Lua interpreter that behaves identically on all platforms.
 Consider removing the `command` field and letting Lux choose the default Lua interpreter instead.")]
 pub struct RunCommandError(String);
