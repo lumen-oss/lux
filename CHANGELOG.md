@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.41.0...lux-lib-v0.41.1) `lux-lib` - 2026-06-05
+
+### Added
+- support globs in workplace member paths ([#1580](https://github.com/lumen-oss/lux/pull/1580))
+
 ## [0.31.1](https://github.com/lumen-oss/lux/compare/v0.31.0...v0.31.1) `lux-cli` - 2026-06-05
 
 ### Other

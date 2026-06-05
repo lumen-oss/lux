@@ -3289,7 +3289,7 @@ dependencies = [
 
 [[package]]
 name = "lux-cli"
-version = "0.31.0"
+version = "0.31.1"
 dependencies = [
  "assert_fs",
  "clap 4.6.1",
@@ -3414,7 +3414,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lua"
-version = "0.31.0"
+version = "0.31.1"
 dependencies = [
  "assert_fs",
  "itertools 0.14.0",
