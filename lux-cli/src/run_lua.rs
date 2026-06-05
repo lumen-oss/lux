@@ -167,7 +167,7 @@ Build options (if running a repl for a project):
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::path::PathBuf;
 
     use lux_lib::config::ConfigBuilder;

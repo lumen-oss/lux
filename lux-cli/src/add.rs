@@ -128,7 +128,7 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use assert_fs::{prelude::PathCopy, TempDir};
     use lux_lib::config::ConfigBuilder;
     use serial_test::serial;

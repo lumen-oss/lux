@@ -240,7 +240,7 @@ async fn install_manifest_entries<T>(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
     use io::Read;
 

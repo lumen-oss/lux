@@ -180,7 +180,7 @@ async fn detect_lua_module(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::str::FromStr;
 
     use super::*;
