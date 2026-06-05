@@ -124,3 +124,15 @@ pub async fn sync_test_dependencies_if_locked(
         .wrap_err("syncing test dependencies with the project lockfile failed.")?;
     Ok(())
 }
+
+pub fn exists_matching_workspace_member(package_req: &PackageReq) -> Result<bool> {
+    let workspace = Workspace::current()?;
+    Ok(workspace.is_some_and(|ws| {
+        ws.select_member(package_req.name()).is_ok_and(|project| {
+            project
+                .toml()
+                .version()
+                .is_ok_and(|version| package_req.version_req().matches(&version))
+        })
+    }))
+}
