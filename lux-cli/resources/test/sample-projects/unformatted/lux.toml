@@ -1,0 +1,21 @@
+package = "sample-project"
+version = "0.1.0"
+lua = ">=5.1"
+
+[description]
+summary = ""
+maintainer = "mrcjkb"
+labels = [""]
+
+
+[dependencies]
+busted = "2.2.0-1"
+luassert = "1.9.0-1"
+# Add your dependencies here
+# `busted = ">=2.0"`
+
+[run]
+args = ["src/main.lua"]
+
+[build]
+type = "builtin"

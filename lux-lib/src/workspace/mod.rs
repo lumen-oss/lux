@@ -64,8 +64,8 @@ pub enum WorkspaceError {
     EmptyWorkspace(PathBuf),
     #[error(transparent)]
     Lockfile(#[from] LockfileError),
-    #[error("not in a lux project or workspace directory")]
-    NotAWorkspaceDir,
+    #[error("not a lux project or workspace directory:\n`{0}`")]
+    NotAWorkspaceDir(PathBuf),
     #[error("package must be specified in a multi-project workspace")]
     NoPackageSpecified,
     #[error("package `{0}` not found in workspace `{1}`")]
@@ -95,7 +95,8 @@ impl Workspace {
     }
 
     pub fn current_or_err() -> Result<Self, WorkspaceError> {
-        Self::current()?.ok_or(WorkspaceError::NotAWorkspaceDir)
+        let cwd = std::env::current_dir().map_err(WorkspaceError::GetCwd)?;
+        Self::current()?.ok_or(WorkspaceError::NotAWorkspaceDir(cwd))
     }
 
     /// The path where the root `lux.toml` resides.
