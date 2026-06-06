@@ -9,18 +9,15 @@ use crate::{
     lockfile::LocalPackage,
     lua_installation::{LuaInstallation, LuaInstallationError},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
+    operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
     package::PackageName,
     progress::{MultiProgress, Progress},
-    project::{
-        project_toml::{LocalProjectToml, LocalProjectTomlValidationError},
-        Project,
-    },
-    rockspec::Rockspec,
-    tree::{self, Tree, TreeError},
+    project::{project_toml::LocalProjectTomlValidationError, Project},
+    tree::{self, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
-use super::{Install, InstallError, PackageInstallSpec, Sync, SyncError};
+use super::{InstallError, Sync, SyncError};
 
 #[derive(Debug, Error)]
 pub enum BuildWorkspaceError {
@@ -109,7 +106,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
             if let Some(package) = &args.package {
                 let project = workspace.select_member(package)?;
                 let project_toml = project.toml().into_local()?;
-                prepare_dependencies(
+                prepare_dependencies_for_build(
                     &project_toml,
                     &workspace_tree,
                     &mut dependencies_to_install,
@@ -118,7 +115,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
             } else {
                 for project in workspace.members() {
                     let project_toml = project.toml().into_local()?;
-                    prepare_dependencies(
+                    prepare_dependencies_for_build(
                         &project_toml,
                         &workspace_tree,
                         &mut dependencies_to_install,
@@ -127,31 +124,26 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                 }
             }
 
-            if !build_dependencies_to_install.is_empty() {
-                let bar = progress_arc.map(|p| p.new_bar());
-                luarocks.ensure_installed(&lua, &bar).await?;
-                Install::new(config)
-                    .packages(
-                        build_dependencies_to_install
-                            .into_iter()
-                            .unique()
-                            .collect_vec(),
-                    )
-                    .tree(build_tree.clone())
-                    .progress(progress_arc.clone())
-                    .install()
-                    .await
-                    .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
-            }
-            // for some reason, cargo can't infer the type
-            let res: Result<Vec<LocalPackage>, InstallError> = Install::new(config)
-                .packages(dependencies_to_install.into_iter().unique().collect_vec())
-                .workspace(workspace)?
+            let tree = workspace.tree(config)?;
+
+            InstallDependencies::new()
+                .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
+                .build_dependencies(
+                    build_dependencies_to_install
+                        .into_iter()
+                        .unique()
+                        .collect_vec(),
+                )
+                .tree(&tree)
+                .lua(&lua)
+                .luarocks(&luarocks)
+                .config(config)
                 .progress(progress_arc.clone())
-                .install()
-                .await;
-            res.map_err(BuildWorkspaceError::InstallDependencies)?;
+                .build()
+                .await
+                .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
         }
+
         let mut packages = Vec::new();
         if !args.only_deps {
             if let Some(package) = &args.package {
@@ -169,58 +161,6 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
         }
         Ok(packages)
     }
-}
-
-fn prepare_dependencies(
-    project_toml: &LocalProjectToml,
-    workspace_tree: &Tree,
-    dependencies_to_install: &mut Vec<PackageInstallSpec>,
-    build_dependencies_to_install: &mut Vec<PackageInstallSpec>,
-) {
-    let dependencies = project_toml
-        .dependencies()
-        .current_platform()
-        .iter()
-        .cloned()
-        .collect_vec();
-
-    let build_dependencies = project_toml
-        .build_dependencies()
-        .current_platform()
-        .iter()
-        .cloned()
-        .collect_vec();
-    dependencies
-        .into_iter()
-        .filter(|dep| {
-            workspace_tree
-                .match_rocks(dep.package_req())
-                .is_ok_and(|rock_match| !rock_match.is_found())
-        })
-        .map(|dep| {
-            PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
-                .pin(*dep.pin())
-                .opt(*dep.opt())
-                .maybe_source(dep.source().clone())
-                .build()
-        })
-        .for_each(|dep| dependencies_to_install.push(dep));
-
-    build_dependencies
-        .into_iter()
-        .filter(|dep| {
-            workspace_tree
-                .match_rocks(dep.package_req())
-                .is_ok_and(|rock_match| !rock_match.is_found())
-        })
-        .map(|dep| {
-            PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
-                .pin(*dep.pin())
-                .opt(*dep.opt())
-                .maybe_source(dep.source().clone())
-                .build()
-        })
-        .for_each(|dep| build_dependencies_to_install.push(dep));
 }
 
 async fn build_project(
