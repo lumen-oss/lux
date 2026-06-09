@@ -14,7 +14,7 @@ use crate::{
     lua_installation::LuaInstallation,
     lua_rockspec::CommandBuildSpec,
     path::{Paths, PathsError},
-    tree::{RockLayout, TreeError},
+    tree::{InstallTree, RockLayout, TreeError},
     variables::VariableSubstitutionError,
 };
 
@@ -52,7 +52,10 @@ pub enum CommandError {
 impl BuildBackend for CommandBuildSpec {
     type Err = CommandError;
 
-    async fn run(self, args: RunBuildArgs<'_>) -> Result<BuildInfo, Self::Err> {
+    async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
+    where
+        T: InstallTree,
+    {
         let output_paths = args.output_paths;
         let no_install = args.no_install;
         let lua = args.lua;

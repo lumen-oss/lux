@@ -14,7 +14,7 @@ use crate::{
         utils,
     },
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
-    tree::TreeError,
+    tree::{InstallTree, TreeError},
 };
 
 use super::utils::{CompileCFilesError, CompileCModulesError, InstallBinaryError};
@@ -38,7 +38,10 @@ pub enum BuiltinBuildError {
 impl BuildBackend for BuiltinBuildSpec {
     type Err = BuiltinBuildError;
 
-    async fn run(self, args: RunBuildArgs<'_>) -> Result<BuildInfo, Self::Err> {
+    async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
+    where
+        T: InstallTree + Sync,
+    {
         let output_paths = args.output_paths;
         let lua = args.lua;
         let external_dependencies = args.external_dependencies;

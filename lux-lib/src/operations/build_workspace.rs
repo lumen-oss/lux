@@ -13,7 +13,7 @@ use crate::{
     package::PackageName,
     progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, Project},
-    tree::{self, TreeError},
+    tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 

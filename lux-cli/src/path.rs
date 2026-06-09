@@ -3,6 +3,7 @@ use eyre::Result;
 use lux_lib::{
     config::Config,
     path::{BinPath, PackagePath, Paths},
+    tree::InstallTree,
 };
 use strum_macros::{Display, EnumString, VariantNames};
 

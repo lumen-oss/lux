@@ -2,6 +2,7 @@ use super::utils::c_dylib_extension;
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::progress::{Progress, ProgressBar};
+use crate::tree::InstallTree;
 use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -48,7 +49,10 @@ pub struct InstallLuaLibError {
 impl BuildBackend for RustMluaBuildSpec {
     type Err = RustError;
 
-    async fn run(self, args: RunBuildArgs<'_>) -> Result<BuildInfo, Self::Err> {
+    async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
+    where
+        T: InstallTree,
+    {
         let output_paths = args.output_paths;
         let config = args.config;
         let build_dir = args.build_dir;

@@ -9,7 +9,7 @@ use lux_lib::{
     lockfile::{LocalPackageId, OptState, PinnedState},
     operations::install::PackageInstallSpec,
     package::PackageReq,
-    tree::{self, RockMatches, Tree},
+    tree::{self, InstallTree, RockMatches, Tree},
 };
 
 pub fn apply_build_behaviour(

@@ -14,7 +14,7 @@ use crate::{
     config::Config,
     lua_rockspec::CMakeBuildSpec,
     path::{Paths, PathsError},
-    tree::TreeError,
+    tree::{InstallTree, TreeError},
     variables::{self, GetVariableError, HasVariables, VariableSubstitutionError},
 };
 
@@ -59,7 +59,10 @@ impl HasVariables for CMakeVariables {
 impl BuildBackend for CMakeBuildSpec {
     type Err = CMakeError;
 
-    async fn run(self, args: RunBuildArgs<'_>) -> Result<BuildInfo, Self::Err> {
+    async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
+    where
+        T: InstallTree,
+    {
         let output_paths = args.output_paths;
         let no_install = args.no_install;
         let lua = args.lua;

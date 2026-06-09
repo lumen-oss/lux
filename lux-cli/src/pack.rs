@@ -14,7 +14,7 @@ use lux_lib::{
     package::PackageName,
     progress::MultiProgress,
     rockspec::Rockspec as _,
-    tree,
+    tree::{self, InstallTree},
     workspace::Workspace,
 };
 use path_slash::PathBufExt;

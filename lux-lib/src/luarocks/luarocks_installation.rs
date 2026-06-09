@@ -17,6 +17,7 @@ use crate::{
     operations::UnpackError,
     path::{Paths, PathsError},
     progress::{Progress, ProgressBar},
+    tree::InstallTree,
     variables::{self, VariableSubstitutionError},
 };
 

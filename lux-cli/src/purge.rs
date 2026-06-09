@@ -4,6 +4,7 @@ use lux_lib::{
     config::Config,
     lua_version::LuaVersion,
     progress::{MultiProgress, ProgressBar},
+    tree::InstallTree,
 };
 
 /// Purge the user tree

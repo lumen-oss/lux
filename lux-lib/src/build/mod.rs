@@ -4,7 +4,7 @@ use crate::lua_installation::LuaInstallationError;
 use crate::lua_rockspec::LuaVersionError;
 use crate::operations::{RemotePackageSourceMetadata, UnpackError};
 use crate::rockspec::{LuaVersionCompatibility, Rockspec};
-use crate::tree::{self, EntryType, TreeError};
+use crate::tree::{self, EntryType, InstallTree, TreeError};
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::fs::DirEntry;
@@ -22,7 +22,7 @@ use crate::{
     package::PackageSpec,
     progress::{Progress, ProgressBar},
     remote_package_source::RemotePackageSource,
-    tree::{RockLayout, Tree},
+    tree::RockLayout,
 };
 use bon::Builder;
 use builtin::BuiltinBuildError;
@@ -62,9 +62,9 @@ pub mod external_dependency;
 /// over how a package should be built.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct Build<'a, R: Rockspec + HasIntegrity> {
+pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     rockspec: &'a R,
-    tree: &'a Tree,
+    tree: &'a T,
     entry_type: tree::EntryType,
     config: &'a Config,
     progress: &'a Progress<ProgressBar>,
@@ -101,7 +101,7 @@ pub(crate) struct SrcRockSource {
 }
 
 // Overwrite the `build()` function to use our own instead.
-impl<R: Rockspec + HasIntegrity, State> BuildBuilder<'_, R, State>
+impl<R: Rockspec + HasIntegrity, T: InstallTree + Sync, State> BuildBuilder<'_, R, T, State>
 where
     State: build_builder::State + build_builder::IsComplete,
 {
@@ -168,9 +168,9 @@ pub enum BuildBehaviour {
     Force,
 }
 
-async fn run_build<R: Rockspec + HasIntegrity>(
+async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
-    args: RunBuildArgs<'_>,
+    args: RunBuildArgs<'_, T>,
 ) -> Result<BuildInfo, BuildError> {
     let progress = args.progress;
     progress.map(|p| p.set_message("🛠️ Building..."));
@@ -193,9 +193,9 @@ async fn run_build<R: Rockspec + HasIntegrity>(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn install<R: Rockspec + HasIntegrity>(
+async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
-    tree: &Tree,
+    tree: &T,
     output_paths: &RockLayout,
     lua: &LuaInstallation,
     build_dir: &Path,
@@ -270,9 +270,10 @@ async fn install<R: Rockspec + HasIntegrity>(
     Ok(())
 }
 
-async fn do_build<R>(build: Build<'_, R>) -> Result<LocalPackage, BuildError>
+async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LocalPackage, BuildError>
 where
     R: Rockspec + HasIntegrity,
+    T: InstallTree + Sync,
 {
     let rockspec = build.rockspec;
 
