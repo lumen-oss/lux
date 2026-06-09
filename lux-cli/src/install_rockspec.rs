@@ -13,7 +13,7 @@ use lux_lib::{
     operations::{Install, PackageInstallSpec},
     progress::MultiProgress,
     rockspec::{LuaVersionCompatibility, Rockspec},
-    tree,
+    tree::{self, InstallTree},
 };
 
 #[derive(Args, Default)]

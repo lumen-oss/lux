@@ -19,7 +19,7 @@ use crate::{
     progress::{MultiProgress, Progress, ProgressBar},
     remote_package_db::{RemotePackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
     rockspec::Rockspec,
-    tree::{self, Tree, TreeError},
+    tree::{self, InstallTree, Tree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
 };
 
@@ -40,37 +40,46 @@ pub mod spec;
 /// Can install multiple packages in parallel.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct Install<'a> {
+pub struct Install<'a, T>
+where
+    T: InstallTree + Clone + Send + Sync,
+{
     #[builder(start_fn)]
     config: &'a Config,
     #[builder(field)]
     packages: Vec<PackageInstallSpec>,
     #[builder(setters(name = "_tree", vis = ""))]
-    tree: Tree,
+    tree: T,
     package_db: Option<RemotePackageDB>,
     progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
-impl<'a, State> InstallBuilder<'a, State>
+impl<'a, State> InstallBuilder<'a, Tree, State>
 where
     State: install_builder::State,
 {
-    pub fn tree(self, tree: Tree) -> InstallBuilder<'a, install_builder::SetTree<State>>
-    where
-        State::Tree: install_builder::IsUnset,
-    {
-        self._tree(tree)
-    }
-
     pub fn workspace(
         self,
         workspace: &'a Workspace,
-    ) -> Result<InstallBuilder<'a, install_builder::SetTree<State>>, WorkspaceTreeError>
+    ) -> Result<InstallBuilder<'a, Tree, install_builder::SetTree<State>>, WorkspaceTreeError>
     where
         State::Tree: install_builder::IsUnset,
     {
         let config = self.config;
         Ok(self._tree(workspace.tree(config)?))
+    }
+}
+
+impl<'a, T, State> InstallBuilder<'a, T, State>
+where
+    State: install_builder::State,
+    T: InstallTree + Clone + Send + Sync,
+{
+    pub fn tree(self, tree: T) -> InstallBuilder<'a, T, install_builder::SetTree<State>>
+    where
+        State::Tree: install_builder::IsUnset,
+    {
+        self._tree(tree)
     }
 
     pub fn packages(self, packages: Vec<PackageInstallSpec>) -> Self {
@@ -89,9 +98,10 @@ where
     }
 }
 
-impl<State> InstallBuilder<'_, State>
+impl<State, T> InstallBuilder<'_, T, State>
 where
     State: install_builder::State + install_builder::IsComplete,
+    T: InstallTree + Clone + Send + Sync + 'static,
 {
     /// Install the packages.
     pub async fn install(self) -> Result<Vec<LocalPackage>, InstallError> {
@@ -171,13 +181,16 @@ pub enum InstallError {
 
 // TODO(vhyrro): This function has too many arguments. Refactor it.
 #[allow(clippy::too_many_arguments)]
-async fn install_impl(
+async fn install_impl<T>(
     packages: Vec<PackageInstallSpec>,
     package_db: Arc<RemotePackageDB>,
     config: &Config,
-    tree: &Tree,
+    tree: &T,
     progress_arc: Arc<Progress<MultiProgress>>,
-) -> Result<Vec<LocalPackage>, InstallError> {
+) -> Result<Vec<LocalPackage>, InstallError>
+where
+    T: InstallTree + Clone + Send + Sync + 'static,
+{
     let (dep_tx, mut dep_rx) = tokio::sync::mpsc::unbounded_channel();
     let (build_dep_tx, mut build_dep_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -366,7 +379,7 @@ This is likely because an install thread panicked and was interrupted unexpected
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn install_rockspec(
+async fn install_rockspec<T>(
     rockspec_download: DownloadedRockspec,
     src_rock_source: Option<SrcRockSource>,
     constraint: LockConstraint,
@@ -375,10 +388,13 @@ async fn install_rockspec(
     opt: OptState,
     entry_type: tree::EntryType,
     lua: &LuaInstallation,
-    tree: &Tree,
+    tree: &T,
     config: &Config,
     progress_arc: Arc<Progress<MultiProgress>>,
-) -> Result<LocalPackage, InstallError> {
+) -> Result<LocalPackage, InstallError>
+where
+    T: InstallTree + Sync,
+{
     let progress = Arc::clone(&progress_arc);
     let rockspec = rockspec_download.rockspec;
     let source = rockspec_download.source;
@@ -428,7 +444,7 @@ async fn install_binary_rock(
     opt: OptState,
     entry_type: tree::EntryType,
     config: &Config,
-    tree: &Tree,
+    tree: &impl InstallTree,
     progress_arc: Arc<Progress<MultiProgress>>,
 ) -> Result<LocalPackage, InstallError> {
     let progress = Arc::clone(&progress_arc);

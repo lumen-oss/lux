@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::lockfile::LocalPackageLockType;
+use crate::tree::InstallTree;
 use crate::workspace::Workspace;
 use crate::workspace::WorkspaceError;
 use crate::workspace::WorkspaceTreeError;

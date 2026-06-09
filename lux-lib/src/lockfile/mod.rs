@@ -23,7 +23,7 @@ use crate::package::{
 use crate::remote_package_source::RemotePackageSource;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
-use crate::tree::Tree;
+use crate::tree::{InstallTree, Tree};
 
 const LOCKFILE_VERSION_STR: &str = "1.0.0";
 

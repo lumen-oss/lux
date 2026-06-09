@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::{
     lockfile::{FlushLockfileError, LocalPackageId, PinnedState},
     package::PackageSpec,
-    tree::{Tree, TreeError},
+    tree::{InstallTree, Tree, TreeError},
 };
 
 // TODO(vhyrro): Differentiate pinned LocalPackages at the type level?

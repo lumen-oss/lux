@@ -10,6 +10,7 @@ use crate::{
         ProjectRoot, PROJECT_TOML,
     },
     rockspec::Rockspec,
+    tree::InstallTree,
 };
 
 use super::{
@@ -45,7 +46,10 @@ pub enum SourceBuildError {
     UnsupporedLuarocksBuildBackend(String),
 }
 
-pub(crate) async fn build(args: RunBuildArgs<'_>) -> Result<BuildInfo, SourceBuildError> {
+pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, SourceBuildError>
+where
+    T: InstallTree + Sync,
+{
     let output_paths = args.output_paths;
     let build_dir = args.build_dir;
 

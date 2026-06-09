@@ -11,17 +11,20 @@ use crate::{
     progress::{MultiProgress, Progress},
     project::project_toml::LocalProjectToml,
     rockspec::Rockspec,
-    tree::{self, Tree},
+    tree::{self, InstallTree},
 };
 
 use super::PackageInstallSpec;
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct InstallDependencies<'a> {
+pub(crate) struct InstallDependencies<'a, T>
+where
+    T: InstallTree,
+{
     dependencies: Vec<PackageInstallSpec>,
     build_dependencies: Vec<PackageInstallSpec>,
-    tree: &'a Tree,
+    tree: &'a T,
 
     lua: &'a LuaInstallation,
     luarocks: &'a LuaRocksInstallation,
@@ -29,8 +32,10 @@ pub(crate) struct InstallDependencies<'a> {
     progress: Arc<Progress<MultiProgress>>,
 }
 
-impl<State: install_dependencies_builder::State + install_dependencies_builder::IsComplete>
-    InstallDependenciesBuilder<'_, State>
+impl<
+        T: InstallTree + Sync + Send + Clone + 'static,
+        State: install_dependencies_builder::State + install_dependencies_builder::IsComplete,
+    > InstallDependenciesBuilder<'_, T, State>
 {
     pub(crate) async fn build(self) -> Result<(), InstallError> {
         let args = self._build();
@@ -65,7 +70,7 @@ impl<State: install_dependencies_builder::State + install_dependencies_builder::
 
 pub(crate) fn prepare_dependencies_for_build(
     project_toml: &LocalProjectToml,
-    workspace_tree: &Tree,
+    workspace_tree: &impl InstallTree,
     dependencies_to_install: &mut Vec<PackageInstallSpec>,
     build_dependencies_to_install: &mut Vec<PackageInstallSpec>,
 ) {

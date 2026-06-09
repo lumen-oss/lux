@@ -12,19 +12,19 @@ use crate::{
     lua_installation::LuaInstallation,
     lua_rockspec::DeploySpec,
     progress::{Progress, ProgressBar},
-    tree::{RockLayout, Tree},
+    tree::{InstallTree, RockLayout},
 };
 
 #[derive(Builder)]
 #[builder(start_fn(name = "new"))]
-pub(crate) struct RunBuildArgs<'a> {
+pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
     pub(crate) output_paths: &'a RockLayout,
     pub(crate) no_install: bool,
     pub(crate) lua: &'a LuaInstallation,
     pub(crate) external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,
     pub(crate) deploy: &'a DeploySpec,
     pub(crate) config: &'a Config,
-    pub(crate) tree: &'a Tree,
+    pub(crate) tree: &'a T,
     pub(crate) build_dir: &'a Path,
     pub(crate) progress: &'a Progress<ProgressBar>,
 }
@@ -32,9 +32,9 @@ pub(crate) struct RunBuildArgs<'a> {
 pub(crate) trait BuildBackend {
     type Err: std::error::Error;
 
-    fn run(
+    fn run<T: InstallTree + Sync>(
         self,
-        args: RunBuildArgs<'_>,
+        args: RunBuildArgs<'_, T>,
     ) -> impl Future<Output = Result<BuildInfo, Self::Err>> + Send;
 }
 

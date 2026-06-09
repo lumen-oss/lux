@@ -15,7 +15,7 @@ use crate::{
     progress::{MultiProgress, Progress},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     remote_package_source::RemotePackageSource,
-    tree::{self, Tree, TreeError},
+    tree::{self, InstallTree, Tree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 

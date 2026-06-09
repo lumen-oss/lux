@@ -9,7 +9,7 @@ use crate::{
     package::{PackageReq, PackageVersionReqError},
     path::{Paths, PathsError},
     remote_package_db::RemotePackageDBError,
-    tree::{self, TreeError},
+    tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
 };
 use bon::Builder;

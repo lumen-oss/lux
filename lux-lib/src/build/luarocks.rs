@@ -3,6 +3,7 @@ use crate::build::backend::RunBuildArgs;
 use crate::lua_rockspec::LuaVersionError;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
+use crate::tree::InstallTree;
 use crate::tree::TreeError;
 use std::{io, path::Path};
 
@@ -33,9 +34,9 @@ pub enum LuarocksBuildError {
     LuaVersion(#[from] LuaVersionError),
 }
 
-pub(crate) async fn build<R: Rockspec>(
+pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     rockspec: &R,
-    args: RunBuildArgs<'_>,
+    args: RunBuildArgs<'_, T>,
 ) -> Result<BuildInfo, LuarocksBuildError> {
     let output_paths = args.output_paths;
     let lua = args.lua;

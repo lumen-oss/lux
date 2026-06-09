@@ -1,5 +1,6 @@
 use std::{io, ops::Deref, path::PathBuf, process::Command, sync::Arc};
 
+use crate::tree::InstallTree;
 use crate::workspace::{WorkspaceError, WorkspaceTreeError};
 use crate::{
     build::BuildBehaviour,
