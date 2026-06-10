@@ -165,6 +165,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_luarc: bool,
 
+    /// Do not wrap Lua `bin` scripts.
+    #[arg(long)]
+    pub no_wrap_bin: bool,
+
     /// The user agent to set when making web requests.
     /// Default is "lux/<version>"
     #[arg(long)]

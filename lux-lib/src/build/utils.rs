@@ -571,14 +571,16 @@ pub(crate) async fn install_binary(
 ) -> Result<PathBuf, InstallBinaryError> {
     tokio::fs::create_dir_all(&tree.bin()).await?;
     let paths = Paths::new(tree)?;
-    let script =
-        if deploy.wrap_bin_scripts && is_compatible_lua_script(source, lua, &paths, config).await {
-            install_wrapped_binary(source, target, tree, lua, config).await?
-        } else {
-            let target = tree.bin().join(target);
-            tokio::fs::copy(source, &target).await?;
-            target
-        };
+    let script = if config.wrap_bin_scripts()
+        && deploy.wrap_bin_scripts
+        && is_compatible_lua_script(source, lua, &paths, config).await
+    {
+        install_wrapped_binary(source, target, tree, lua, config).await?
+    } else {
+        let target = tree.bin().join(target);
+        tokio::fs::copy(source, &target).await?;
+        target
+    };
 
     #[cfg(unix)]
     set_executable_permissions(&script).await?;
