@@ -35,6 +35,7 @@ async fn main() -> Result<()> {
         .dev(Some(cli.dev))
         .extra_servers(cli.extra_servers)
         .generate_luarc(Some(!cli.no_luarc))
+        .wrap_bin_scripts(Some(!cli.no_wrap_bin))
         .lua_dir(cli.lua_dir)
         .lua_version(lua_version)
         .namespace(cli.namespace)

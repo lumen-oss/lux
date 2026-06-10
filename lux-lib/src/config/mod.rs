@@ -58,6 +58,12 @@ pub struct Config {
     user_agent: String,
 
     generate_luarc: bool,
+    /// Whether to wrap installed Lua bin scripts to be executed with
+    /// the detected or configured Lua installation.
+    /// Setting this to `false` disables wrapping globally.
+    /// If set to `true`, individual rocks can still disable wrapping of their own bin scripts.
+    /// Default: `true`.
+    wrap_bin_scripts: bool,
 }
 
 impl Config {
@@ -196,6 +202,10 @@ impl Config {
     pub fn generate_luarc(&self) -> bool {
         self.generate_luarc
     }
+
+    pub fn wrap_bin_scripts(&self) -> bool {
+        self.wrap_bin_scripts
+    }
 }
 
 impl HasVariables for Config {
@@ -261,6 +271,12 @@ pub struct ConfigBuilder {
     entrypoint_layout: RockLayoutConfig,
     user_agent: Option<String>,
     generate_luarc: Option<bool>,
+    /// Whether to wrap installed Lua bin scripts to be executed with
+    /// the detected or configured Lua installation.
+    /// Setting this to `false` disables wrapping globally.
+    /// If set to `true`, individual rocks can still disable wrapping of their own bin scripts.
+    /// Default: `true`.
+    wrap_bin_scripts: Option<bool>,
 }
 
 /// A builder for the lux `Config`.
@@ -423,6 +439,13 @@ impl ConfigBuilder {
         }
     }
 
+    pub fn wrap_bin_scripts(self, generate: Option<bool>) -> Self {
+        Self {
+            wrap_bin_scripts: generate.or(self.generate_luarc),
+            ..self
+        }
+    }
+
     pub fn build(self) -> Result<Config, ConfigError> {
         let data_dir = self.data_dir.unwrap_or(Config::get_default_data_path()?);
         let cache_dir = self.cache_dir.unwrap_or(Config::get_default_cache_path()?);
@@ -461,6 +484,7 @@ impl ConfigBuilder {
             vendor_dir: self.vendor_dir,
             user_agent: self.user_agent.unwrap_or(DEFAULT_USER_AGENT.into()),
             generate_luarc: self.generate_luarc.unwrap_or(true),
+            wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
         })
     }
 }
@@ -494,6 +518,7 @@ impl From<Config> for ConfigBuilder {
             entrypoint_layout: value.entrypoint_layout,
             user_agent: Some(value.user_agent),
             generate_luarc: Some(value.generate_luarc),
+            wrap_bin_scripts: Some(value.wrap_bin_scripts),
         }
     }
 }

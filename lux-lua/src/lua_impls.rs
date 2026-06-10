@@ -584,6 +584,9 @@ impl LuaUserData for ConfigBuilderLua {
         methods.add_method("generate_luarc", |_, this, generate: Option<bool>| {
             Ok(ConfigBuilderLua(this.0.clone().generate_luarc(generate)))
         });
+        methods.add_method("wrap_bin_scripts", |_, this, wrap: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().wrap_bin_scripts(wrap)))
+        });
         methods.add_method("build", |_, this, ()| {
             this.0.clone().build().map(ConfigLua).into_lua_err()
         });
