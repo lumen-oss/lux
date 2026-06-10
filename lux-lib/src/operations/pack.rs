@@ -73,8 +73,10 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
         "all.rock".into()
     };
     let file_name = format!("{}-{}.{}", package.name(), package.version(), suffix);
+    let temp_file_name = format!("{}-{}.{}.part", package.name(), package.version(), suffix);
+    let temp_output_path = args.dest_dir.join(temp_file_name);
     let output_path = args.dest_dir.join(file_name);
-    let file = File::create(&output_path)?;
+    let file = File::create(&temp_output_path)?;
     let mut zip = ZipWriter::new(file);
 
     let lua_entries = add_rock_entries(&mut zip, &layout.src, "lua".into())?;
@@ -82,14 +84,14 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let doc_entries = add_rock_entries(&mut zip, &layout.doc, "doc".into())?;
     let conf_entries = add_rock_entries(&mut zip, &layout.conf, "conf".into())?;
     // We copy entries from `etc` to the root directory, as luarocks doesn't have an etc directory.
-    let temp_dir = tempdir()?;
-    utils::recursive_copy_dir(&layout.etc, temp_dir.path()).await?;
+    let temp_root_dir = tempdir()?;
+    utils::recursive_copy_dir(&layout.etc, temp_root_dir.path()).await?;
     // prevent duplicate doc and conf entries
-    let doc = temp_dir.path().join("doc");
+    let doc = temp_root_dir.path().join("doc");
     if doc.is_dir() {
         tokio::fs::remove_dir_all(&doc).await?;
     }
-    let conf = temp_dir.path().join("conf");
+    let conf = temp_root_dir.path().join("conf");
     if conf.is_dir() {
         tokio::fs::remove_dir_all(&conf).await?;
     }
@@ -99,9 +101,9 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
         return Err(PackError::MissingRockspec);
     }
     let packed_rockspec_name = format!("{}-{}.rockspec", &package.name(), &package.version());
-    let renamed_rockspec_entry = temp_dir.path().join(packed_rockspec_name);
+    let renamed_rockspec_entry = temp_root_dir.path().join(packed_rockspec_name);
     tokio::fs::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
-    let root_entries = add_rock_entries(&mut zip, temp_dir.path(), "".into())?;
+    let root_entries = add_rock_entries(&mut zip, temp_root_dir.path(), "".into())?;
     let mut bin_entries = HashMap::new();
     for relative_binary_path in package.spec.binaries() {
         if let Some(binary_name) = relative_binary_path.clean().file_name() {
@@ -137,6 +139,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     zip.start_file("rock_manifest", options)?;
     zip.write_all(manifest_str.as_bytes())?;
+    tokio::fs::rename(&temp_output_path, &output_path).await?;
     Ok(output_path)
 }
 
