@@ -1,5 +1,10 @@
 use assert_fs::{prelude::PathCopy, TempDir};
-use lux_lib::{config::ConfigBuilder, operations::Sync, tree::RockMatches, workspace::Workspace};
+use lux_lib::{
+    config::ConfigBuilder,
+    operations::Sync,
+    tree::{InstallTree, RockMatches},
+    workspace::Workspace,
+};
 use std::path::PathBuf;
 
 #[tokio::test]

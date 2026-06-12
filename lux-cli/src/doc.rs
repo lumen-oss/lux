@@ -9,7 +9,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     package::PackageReq,
     rockspec::Rockspec,
-    tree::{RockMatches, Tree},
+    tree::{InstallTree, RockMatches, Tree},
 };
 use url::Url;
 use walkdir::WalkDir;

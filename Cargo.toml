@@ -49,6 +49,7 @@ toml = "1.0"
 tokio = { version = "1.52", features = ["full"] }
 walkdir = "2.5"
 which = "8.0"
+zip = "8.6"
 
 [profile.release]
 lto = true

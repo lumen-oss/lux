@@ -7,6 +7,7 @@ use bon::Builder;
 use crate::{
     config::Config,
     path::{BinPath, PackagePath},
+    tree::InstallTree,
 };
 
 use std::{

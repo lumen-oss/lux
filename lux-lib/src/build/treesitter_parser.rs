@@ -1,6 +1,7 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::lua_rockspec::TreesitterParserBuildSpec;
 use crate::lua_version::LuaVersionUnset;
+use crate::tree::InstallTree;
 use std::io;
 use std::num::ParseIntError;
 use std::path::PathBuf;
@@ -30,7 +31,10 @@ pub enum TreesitterBuildError {
 impl BuildBackend for TreesitterParserBuildSpec {
     type Err = TreesitterBuildError;
 
-    async fn run(self, args: RunBuildArgs<'_>) -> Result<BuildInfo, Self::Err> {
+    async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
+    where
+        T: InstallTree,
+    {
         let output_paths = args.output_paths;
         let build_dir = args.build_dir;
         let progress = args.progress;

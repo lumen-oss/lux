@@ -3330,6 +3330,7 @@ dependencies = [
  "walkdir",
  "which 8.0.2",
  "whoami",
+ "zip 8.6.0",
 ]
 
 [[package]]

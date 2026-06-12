@@ -10,7 +10,7 @@ use lux_lib::{
     operations::{self, PackageInstallSpec},
     package::PackageReq,
     progress::MultiProgress,
-    tree::{self, RockMatches, TreeError},
+    tree::{self, InstallTree, RockMatches, TreeError},
 };
 
 #[derive(Args)]

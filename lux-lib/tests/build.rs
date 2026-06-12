@@ -5,6 +5,7 @@ use assert_fs::TempDir;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::progress::MultiProgress;
 use lux_lib::rockspec::Rockspec;
+use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{
     build::{Build, BuildBehaviour::Force},

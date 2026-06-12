@@ -15,7 +15,7 @@ use crate::{
     },
     lua_rockspec::MakeBuildSpec,
     path::{Paths, PathsError},
-    tree::TreeError,
+    tree::{InstallTree, TreeError},
     variables::VariableSubstitutionError,
 };
 
@@ -45,7 +45,10 @@ pub enum MakeError {
 impl BuildBackend for MakeBuildSpec {
     type Err = MakeError;
 
-    async fn run(self, args: RunBuildArgs<'_>) -> Result<BuildInfo, Self::Err> {
+    async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
+    where
+        T: InstallTree,
+    {
         let output_paths = args.output_paths;
         let no_install = args.no_install;
         let lua = args.lua;

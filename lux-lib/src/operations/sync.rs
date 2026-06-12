@@ -13,7 +13,7 @@ use crate::{
     progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, ProjectError},
     rockspec::Rockspec,
-    tree::{self, TreeError},
+    tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 use bon::Builder;

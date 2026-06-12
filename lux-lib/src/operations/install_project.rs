@@ -12,7 +12,7 @@ use crate::{
     operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
     progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
-    tree::{self, Tree, TreeError},
+    tree::{self, InstallTree, TreeError},
 };
 
 use super::InstallError;
@@ -44,18 +44,23 @@ pub enum InstallProjectError {
 /// Useful for installing a project and its dependencies outside of a workspace tree.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct InstallProject<'a> {
+pub struct InstallProject<'a, T>
+where
+    T: InstallTree,
+{
     project: &'a Project,
 
     config: &'a Config,
 
-    tree: &'a Tree,
+    tree: &'a T,
 
     progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
-impl<State: install_project_builder::State + install_project_builder::IsComplete>
-    InstallProjectBuilder<'_, State>
+impl<
+        T: InstallTree + Sync + Send + Clone + 'static,
+        State: install_project_builder::State + install_project_builder::IsComplete,
+    > InstallProjectBuilder<'_, T, State>
 {
     /// Returns `Some` if the `only_deps` option is set to `false`.
     pub async fn build(self) -> Result<LocalPackage, InstallProjectError> {

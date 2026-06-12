@@ -40,7 +40,7 @@ use lux_lib::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         Rockspec,
     },
-    tree::{EntryType, RockLayout, RockMatches, Tree},
+    tree::{EntryType, InstallTree, RockLayout, RockMatches, Tree},
     workspace::Workspace,
 };
 

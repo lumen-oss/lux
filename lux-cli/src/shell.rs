@@ -2,6 +2,7 @@ use clap::Args;
 use eyre::{eyre, Result, WrapErr};
 use lux_lib::{
     config::Config, lua_installation::LuaInstallation, path::Paths, progress::MultiProgress,
+    tree::InstallTree,
 };
 use which::which;
 

@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::{
     build::utils::c_dylib_extension,
     lua_version::LuaVersion,
-    tree::{Tree, TreeError},
+    tree::{InstallTree, TreeError},
 };
 
 const LUA_PATH_SEPARATOR: &str = ";";
@@ -32,7 +32,7 @@ pub enum PathsError {
 }
 
 impl Paths {
-    fn default(tree: &Tree) -> Self {
+    fn default(tree: &impl InstallTree) -> Self {
         Self {
             src: <_>::default(),
             lib: <_>::default(),
@@ -41,7 +41,7 @@ impl Paths {
         }
     }
 
-    pub fn new(tree: &Tree) -> Result<Self, PathsError> {
+    pub fn new(tree: &impl InstallTree) -> Result<Self, PathsError> {
         let mut paths = tree
             .list()?
             .values()

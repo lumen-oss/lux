@@ -9,7 +9,7 @@ use crate::{
     lua_rockspec::LuaModule,
     lua_version::{LuaVersion, LuaVersionUnset},
     package::PackageReq,
-    tree::TreeError,
+    tree::{InstallTree, TreeError},
 };
 
 /// A rocks module finder.

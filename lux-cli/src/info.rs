@@ -2,7 +2,7 @@ use clap::Args;
 use eyre::Result;
 use lux_lib::{
     config::Config, operations::Download, package::PackageReq, progress::MultiProgress,
-    rockspec::Rockspec,
+    rockspec::Rockspec, tree::InstallTree,
 };
 
 use crate::workspace::current_workspace_or_user_tree;

@@ -25,7 +25,7 @@ use crate::{
     progress::{Progress, ProgressBar},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
-    tree::{self, Tree, TreeError},
+    tree::{self, InstallTree, TreeError},
 };
 use crate::{lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
 
@@ -55,7 +55,10 @@ pub enum InstallBinaryRockError {
     NotAFileOrDirectory(String, std::fs::Metadata),
 }
 
-pub(crate) struct BinaryRockInstall<'a> {
+pub(crate) struct BinaryRockInstall<'a, T>
+where
+    T: InstallTree,
+{
     rockspec: &'a RemoteLuaRockspec,
     rock_bytes: Bytes,
     source: RemotePackageSource,
@@ -65,18 +68,21 @@ pub(crate) struct BinaryRockInstall<'a> {
     constraint: LockConstraint,
     behaviour: BuildBehaviour,
     config: &'a Config,
-    tree: &'a Tree,
+    tree: &'a T,
     progress: &'a Progress<ProgressBar>,
 }
 
-impl<'a> BinaryRockInstall<'a> {
+impl<'a, T> BinaryRockInstall<'a, T>
+where
+    T: InstallTree,
+{
     pub(crate) fn new(
         rockspec: &'a RemoteLuaRockspec,
         source: RemotePackageSource,
         rock_bytes: Bytes,
         entry_type: tree::EntryType,
         config: &'a Config,
-        tree: &'a Tree,
+        tree: &'a T,
         progress: &'a Progress<ProgressBar>,
     ) -> Self {
         Self {

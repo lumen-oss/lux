@@ -4,7 +4,7 @@ use crate::{
     lua_rockspec::{DeploySpec, LuaModule, ModulePaths},
     path::{Paths, PathsError},
     project::project_files,
-    tree::{RockLayout, Tree},
+    tree::{InstallTree, RockLayout},
     variables::{self, Environment, VariableSubstitutionError},
 };
 use itertools::Itertools;
@@ -564,11 +564,12 @@ pub enum WrapBinaryError {
 pub(crate) async fn install_binary(
     source: &Path,
     target: &str,
-    tree: &Tree,
+    tree: &impl InstallTree,
     lua: &LuaInstallation,
     deploy: &DeploySpec,
     config: &Config,
-) -> Result<PathBuf, InstallBinaryError> {
+) -> Result<PathBuf, InstallBinaryError> where
+{
     tokio::fs::create_dir_all(&tree.bin()).await?;
     let paths = Paths::new(tree)?;
     let script = if config.wrap_bin_scripts()
@@ -603,7 +604,7 @@ pub(crate) fn log_command_output(output: &Output, config: &Config) {
 async fn install_wrapped_binary(
     source: &Path,
     target: &str,
-    tree: &Tree,
+    tree: &impl InstallTree,
     lua: &LuaInstallation,
     config: &Config,
 ) -> Result<PathBuf, WrapBinaryError> {
@@ -768,7 +769,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion, progress::MultiProgress,
+        lua_version::LuaVersion, progress::MultiProgress, tree::Tree,
     };
 
     use super::*;

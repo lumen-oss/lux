@@ -18,7 +18,7 @@ use crate::{
     lua_version::LuaVersion,
     package::PackageName,
     project::{Project, ProjectError, PROJECT_TOML},
-    tree::{Tree, TreeError},
+    tree::{InstallTree, Tree, TreeError},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
 };
 

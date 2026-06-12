@@ -20,6 +20,7 @@ use crate::operations;
 use crate::operations::BuildLuaError;
 use crate::progress::Progress;
 use crate::progress::ProgressBar;
+use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
 use crate::{config::Config, package::PackageVersion, variables::HasVariables};
 use lazy_static::lazy_static;

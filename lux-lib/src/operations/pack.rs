@@ -10,6 +10,7 @@ use crate::luarocks::rock_manifest::RockManifestDoc;
 use crate::luarocks::rock_manifest::RockManifestLib;
 use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
+use crate::tree::InstallTree;
 use crate::tree::RockLayout;
 use crate::tree::Tree;
 use bon::Builder;

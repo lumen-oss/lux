@@ -1,9 +1,6 @@
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::path::{Path, PathBuf};
 
-use crate::build;
+use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace_member};
 use clap::Args;
 use eyre::{eyre, OptionExt, Result};
 use itertools::Itertools;
@@ -14,40 +11,14 @@ use lux_lib::{
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     operations::{self, Install, PackageInstallSpec},
-    package::{PackageName, PackageReq},
+    package::PackageName,
     progress::MultiProgress,
     rockspec::Rockspec as _,
-    tree,
+    tree::{self, InstallTree},
     workspace::Workspace,
 };
 use path_slash::PathBufExt;
 use tempfile::tempdir;
-
-#[derive(Debug, Clone)]
-pub enum PackageOrRockspec {
-    Package(PackageReq),
-    RockSpec(PathBuf),
-}
-
-impl FromStr for PackageOrRockspec {
-    type Err = eyre::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let path = PathBuf::from(s);
-        if path.is_file() {
-            Ok(Self::RockSpec(path))
-        } else {
-            let pkg = PackageReq::from_str(s).map_err(|err| {
-                eyre!(
-                    "No file {0} found and cannot parse package query: {1}",
-                    s,
-                    err
-                )
-            })?;
-            Ok(Self::Package(pkg))
-        }
-    }
-}
 
 #[derive(Args)]
 pub struct Pack {
@@ -68,19 +39,6 @@ pub struct Pack {
     /// To pack a project, lux must be able to generate a release or dev RockSpec.{n}
     #[clap(value_parser)]
     package_or_rockspec: Option<PackageOrRockspec>,
-}
-
-fn has_matching_workspace_member(package_req: &PackageReq) -> Result<bool> {
-    let workspace = Workspace::current()?;
-    let has_match = workspace.is_some_and(|ws| {
-        ws.select_member(package_req.name()).is_ok_and(|project| {
-            project
-                .toml()
-                .version()
-                .is_ok_and(|version| package_req.version_req().matches(&version))
-        })
-    });
-    Ok(has_match)
 }
 
 async fn pack_workspace(
@@ -140,7 +98,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let progress = MultiProgress::new_arc(&config);
     let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
         Some(PackageOrRockspec::Package(package_req))
-            if has_matching_workspace_member(&package_req)? =>
+            if exists_matching_workspace_member(&package_req)? =>
         {
             pack_workspace(Some(package_req.name()), &dest_dir, &config).await
         }

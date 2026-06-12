@@ -15,6 +15,7 @@ use crate::{
     package::PackageName,
     path::{Paths, PathsError},
     project::project_toml::LocalProjectTomlValidationError,
+    tree::InstallTree,
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
