@@ -68,5 +68,3 @@ jobs:
     - name: Build lux-luajit
       run: nix build ".#packages.${{matrix.job.target}}.lux-luajit" -Lv --accept-flake-config --log-lines 500 --fallback
       shell: bash
-      # FIXME: This fails with permission denied on darwin
-      if: ${{ matrix.job.target == 'x86_64-linux' }}
