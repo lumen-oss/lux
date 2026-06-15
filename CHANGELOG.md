@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0](https://github.com/lumen-oss/lux/compare/v0.31.1...v0.32.0) `lux-cli` - 2026-06-15
+
+### Added
+- *(dist)* `lx dist flat-archive`
+- `lx dist` skeleton
+- config option to disable bin script wrapping ([#1586](https://github.com/lumen-oss/lux/pull/1586))
+
+## [0.42.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.41.1...lux-lib-v0.42.0) `lux-lib` - 2026-06-15
+
+### Added
+- *(dist)* `lx dist flat-archive`
+- config option to disable bin script wrapping ([#1586](https://github.com/lumen-oss/lux/pull/1586))
+- `InstallProject` operation ([#1585](https://github.com/lumen-oss/lux/pull/1585))
+
+### Fixed
+- *(pack)* ensure atomicity of output archive ([#1588](https://github.com/lumen-oss/lux/pull/1588))
+
 ## [0.41.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.41.0...lux-lib-v0.41.1) `lux-lib` - 2026-06-05
 
 ### Added
