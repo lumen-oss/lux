@@ -1,20 +1,13 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, hash::Hash, str::FromStr};
 use thiserror::Error;
-
-// NOTE: This module implements a basic `GitUrl` struct with only what we need.
-// This is so that we don't have to expose `git_url_parse::GitUrl`, which is  highly unstable,
-// via our API.
+use url::Url;
 
 /// GitUrl represents an input url that is a url used by git
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct RemoteGitUrl {
-    /// The fully qualified domain name (FQDN) or IP of the repo
-    pub(crate) host: String,
-    /// The name of the repo
-    pub(crate) repo: String,
-    /// The owner/account/project name
-    pub(crate) owner: String,
+    pub(crate) url: Url,
+    host_str: String,
     /// The raw URL string
     url_str: String,
 }
@@ -22,31 +15,53 @@ pub struct RemoteGitUrl {
 #[derive(Debug, Error)]
 pub enum RemoteGitUrlParseError {
     #[error("error parsing git URL:\n{0}")]
-    GitUrlParse(String),
+    GitUrlParse(#[from] url::ParseError),
     #[error("not a remote git URL: {0}")]
     NotARemoteGitUrl(String),
+    #[error("Unsupported git remote scheme {scheme:?} in url {url}")]
+    UnsupportedRemoteScheme { scheme: String, url: Url },
+    #[error("Url {0} missing host name")]
+    MissingHostName(Url),
+}
+
+impl RemoteGitUrl {
+    /// Get the repo name, as the final component of the path, with any .git
+    /// suffix removed, or as the hostname, if there is no final path component,
+    /// or as a hash of the whole URL otherwise.
+    pub fn repo(&self) -> &str {
+        let url = &self.url;
+        url.path_segments()
+            .into_iter()
+            .flatten()
+            .next_back()
+            .map(|part| part.strip_suffix(".git").unwrap_or(part))
+            .unwrap_or(&self.host_str)
+    }
+    /// Get the repo owner, as second-final component of the path.
+    pub fn owner(&self) -> Option<&str> {
+        self.url.path_segments().into_iter().flatten().rev().nth(1)
+    }
 }
 
 impl FromStr for RemoteGitUrl {
     type Err = RemoteGitUrlParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let url = git_url_parse::GitUrl::parse(s)
-            .map_err(|err| RemoteGitUrlParseError::GitUrlParse(err.to_string()))?;
-        let host = url
-            .host()
-            .ok_or_else(|| RemoteGitUrlParseError::NotARemoteGitUrl(url.to_string()))?;
-        let provider: Result<
-            git_url_parse::types::provider::GenericProvider,
-            git_url_parse::GitUrlParseError,
-        > = url.provider_info();
-        let provider =
-            provider.map_err(|_err| RemoteGitUrlParseError::NotARemoteGitUrl(s.to_string()))?;
+        let url: Url = s.parse()?;
+        let scheme = url.scheme();
+        if !matches!(scheme, "ssh" | "git" | "http" | "https" | "ftp" | "ftps") {
+            return Err(RemoteGitUrlParseError::UnsupportedRemoteScheme {
+                scheme: scheme.into(),
+                url,
+            });
+        }
+        let Some(host_str) = url.host_str() else {
+            return Err(RemoteGitUrlParseError::MissingHostName(url));
+        };
         Ok(RemoteGitUrl {
-            host: host.to_string(),
-            repo: provider.repo().to_string(),
-            owner: provider.owner().to_string(),
-            url_str: url.to_string(),
+            host_str: String::from(host_str),
+            url,
+            url_str: String::from(s),
         })
     }
 }

@@ -136,59 +136,70 @@ fn prefix_parser<'a>(
         })
 }
 
-// A more lenient parser that defaults to github: if there is not prefix
+// A parser for scp-style git URLs, converting them into ssh: URLs.
+fn scp_style_parser<'a>(
+) -> impl Parser<'a, &'a str, RemoteGitUrlShorthand, chumsky::extra::Err<Rich<'a, char>>> {
+    none_of(":/")
+        .repeated()
+        .collect::<String>()
+        .then(
+            just(':')
+                .ignore_then(just("//").not())
+                .ignore_then(any().repeated().collect::<String>()),
+        )
+        .try_map(|(host, path), span| {
+            let inner = format!("ssh://{host}/{path}")
+                .parse::<RemoteGitUrl>()
+                .map_err(|err| {
+                    Rich::custom(span, format!("error parsing scp style git url: {err}"))
+                })?;
+            Ok(RemoteGitUrlShorthand(inner))
+        })
+}
+
+// A parser that tries to parse as such:
+//
+// * If it can be parsed exactly as one of our shorthand prefixes, it is expanded into that host reference.
+// * If it can be parsed as a simple owner/repo pair, it is considered to be a github shorthand reference.
+// * If the string has at least one colon, and the first colon does not follow any slashes and is not immediately followed by two slashes, it is considered to be in scp style.
 fn parser<'a>(
 ) -> impl Parser<'a, &'a str, RemoteGitUrlShorthand, chumsky::extra::Err<Rich<'a, char>>> {
-    let git_host_prefix = just(GITHUB)
-        .or(just(GITLAB).or(just(SOURCEHUT).or(just(CODEBERG))))
-        .then_ignore(just(":"))
-        .or_not()
-        .map(|prefix| match prefix {
-            Some(GITHUB) => GitHost::Github,
-            Some(GITLAB) => GitHost::Gitlab,
-            Some(SOURCEHUT) => GitHost::Sourcehut,
-            Some(CODEBERG) => GitHost::Codeberg,
-            _ => GitHost::default(),
-        });
-    let owner_repo = none_of('/')
+    let owner_repo = none_of(":/")
         .repeated()
         .collect::<String>()
         .separated_by(just('/'))
         .exactly(2)
         .collect::<Vec<String>>()
         .map(to_tuple);
-    git_host_prefix
-        .then(owner_repo)
-        .try_map(|(host, (owner, repo)), span| {
-            let url = url_from_git_host(host, owner, repo).map_err(|err| {
+    owner_repo
+        .try_map(|(owner, repo), span| {
+            let url = url_from_git_host(GitHost::default(), owner, repo).map_err(|err| {
                 Rich::custom(span, format!("error parsing git url shorthand: {err}"))
             })?;
             Ok(url)
         })
+        .or(prefix_parser())
+        .or(scp_style_parser())
 }
 
 impl Display for RemoteGitUrlShorthand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0.host == "github.com" {
-            format!("{}:{}/{}", GITHUB, self.0.owner, self.0.repo)
-        } else if self.0.host == "gitlab.com" {
-            format!("{}:{}/{}", GITLAB, self.0.owner, self.0.repo)
-        } else if self.0.host == "git.sr.ht" {
-            format!(
-                "{}:{}/{}",
-                SOURCEHUT,
-                self.0.owner.replace('~', ""),
-                self.0.repo
-            )
-        } else if self.0.host == "codeberg.org" {
-            format!(
-                "{}:{}/{}",
-                CODEBERG,
-                self.0.owner.replace('~', ""),
-                self.0.repo
-            )
-        } else {
-            format!("{}", self.0)
+        match (self.0.url.host_str(), self.0.owner()) {
+            (Some("github.com"), Some(owner)) => {
+                format!("{}:{}/{}", GITHUB, owner, self.0.repo())
+            }
+            (Some("gitlab.com"), Some(owner)) => {
+                format!("{}:{}/{}", GITLAB, owner, self.0.repo())
+            }
+            (Some("git.sr.ht"), Some(owner)) => {
+                format!("{}:{}/{}", SOURCEHUT, owner.replace('~', ""), self.0.repo())
+            }
+            (Some("codeberg.org"), Some(owner)) => {
+                format!("{}:{}/{}", CODEBERG, owner.replace('~', ""), self.0.repo())
+            }
+            _ => {
+                format!("{}", self.0)
+            }
         }
         .fmt(f)
     }
@@ -201,17 +212,17 @@ mod tests {
     #[tokio::test]
     async fn owner_repo_shorthand() {
         let url_shorthand: RemoteGitUrlShorthand = "lumen-oss/lux".parse().unwrap();
-        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
     }
 
     #[tokio::test]
     async fn github_shorthand() {
         let url_shorthand_str = "github:lumen-oss/lux";
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, "github.com".to_string());
-        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -219,9 +230,9 @@ mod tests {
     async fn gitlab_shorthand() {
         let url_shorthand_str = "gitlab:lumen-oss/lux";
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, "gitlab.com".to_string());
-        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.url.host_str(), Some("gitlab.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -229,9 +240,9 @@ mod tests {
     async fn sourcehut_shorthand() {
         let url_shorthand_str = "sourcehut:lumen-oss/lux";
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, "git.sr.ht".to_string());
-        assert_eq!(url_shorthand.0.owner, "~lumen-oss".to_string());
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.url.host_str(), Some("git.sr.ht"));
+        assert_eq!(url_shorthand.0.owner(), Some("~lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -239,9 +250,9 @@ mod tests {
     async fn codeberg_shorthand() {
         let url_shorthand_str = "codeberg:lumen-oss/lux";
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, "codeberg.org".to_string());
-        assert_eq!(url_shorthand.0.owner, "~lumen-oss".to_string());
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.url.host_str(), Some("codeberg.org"));
+        assert_eq!(url_shorthand.0.owner(), Some("~lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -249,9 +260,22 @@ mod tests {
     async fn regular_https_url() {
         let url_shorthand: RemoteGitUrlShorthand =
             "https://github.com/lumen-oss/lux.git".parse().unwrap();
-        assert_eq!(url_shorthand.0.host, "github.com".to_string());
-        assert_eq!(url_shorthand.0.owner, "lumen-oss".to_string());
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn regular_http_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "http://github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(
             url_shorthand.to_string(),
             "github:lumen-oss/lux".to_string()
@@ -260,14 +284,73 @@ mod tests {
 
     #[tokio::test]
     async fn regular_ssh_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "ssh://git@github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn regular_ftp_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "ftp://github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn regular_ftps_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "ftps://github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn illegal_scheme_url() {
+        RemoteGitUrlShorthand::from_str("git+https://github.com/lumen-oss/lux.git")
+            .expect_err("git+ handling should be done in an outer layer.");
+        RemoteGitUrlShorthand::from_str("file:///lumen-oss/lux.git")
+            .expect_err("local filesystems are not supported as a Remote URL.");
+        RemoteGitUrlShorthand::from_str("xyz:///lumen-oss/lux.git")
+            .expect_err("Unknown schemes are rejected");
+    }
+
+    #[tokio::test]
+    async fn git_scheme_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "git://git@github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn scp_style_url() {
         let url_str = "git@github.com:lumen-oss/lux.git";
         let url_shorthand: RemoteGitUrlShorthand = url_str.parse().unwrap();
-        assert_eq!(url_shorthand.0.host, "github.com".to_string());
-        assert_eq!(
-            url_shorthand.0.owner,
-            "git@github.com:lumen-oss".to_string(),
-        );
-        assert_eq!(url_shorthand.0.repo, "lux".to_string());
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
     }
 
     #[tokio::test]

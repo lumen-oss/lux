@@ -2108,30 +2108,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "getset"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf0fc11e47561d47397154977bc219f4cf809b2974facc3ccb3b89e2436f912"
-dependencies = [
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "git-url-parse"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8df306e4dfc91752e89b74c88ee876c8518890600f82255254828f9192dd003c"
-dependencies = [
- "getset",
- "nom 8.0.0",
- "thiserror 2.0.18",
- "url",
-]
-
-[[package]]
 name = "git2"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3310,7 +3286,6 @@ dependencies = [
  "emmylua_codestyle",
  "emmylua_formatter",
  "eyre",
- "git-url-parse",
  "git2",
  "ignore",
  "indicatif",
@@ -3363,7 +3338,6 @@ dependencies = [
  "flate2",
  "fs_extra",
  "futures",
- "git-url-parse",
  "git2",
  "glob",
  "gpgme",

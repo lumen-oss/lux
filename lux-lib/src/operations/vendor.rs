@@ -32,9 +32,11 @@ use crate::{
     workspace::{Workspace, WorkspaceError},
 };
 
+#[allow(clippy::large_enum_variant)]
 pub enum VendorTarget {
     /// Vendor dependencies of a Lux workspace
     Workspace(Workspace),
+
     /// Vendor dependencies of a Lua RockSpec
     Rockspec(RemoteLuaRockspec),
 }
