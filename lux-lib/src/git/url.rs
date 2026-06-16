@@ -33,20 +33,13 @@ impl RemoteGitUrl {
         url.path_segments()
             .into_iter()
             .flatten()
-            .rev()
-            .next()
+            .next_back()
             .map(|part| part.strip_suffix(".git").unwrap_or(part))
             .unwrap_or(&self.host_str)
     }
     /// Get the repo owner, as second-final component of the path.
     pub fn owner(&self) -> Option<&str> {
-        self.url
-            .path_segments()
-            .into_iter()
-            .flatten()
-            .rev()
-            .skip(1)
-            .next()
+        self.url.path_segments().into_iter().flatten().rev().nth(1)
     }
 }
 
