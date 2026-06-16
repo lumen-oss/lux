@@ -1,6 +1,7 @@
+use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
 use git2::build::RepoBuilder;
-use git2::{Cred, FetchOptions, RemoteCallbacks};
+use git2::{FetchOptions, RemoteCallbacks};
 use remove_dir_all::remove_dir_all;
 use ssri::Integrity;
 use std::fs::File;
@@ -164,6 +165,24 @@ pub enum FetchSrcRockError {
     Io(#[from] io::Error),
 }
 
+/// A no-prompt implementer for auth_git2's prompter
+#[derive(Copy, Clone, Debug)]
+struct NullPrompter;
+
+impl Prompter for NullPrompter {
+    fn prompt_username_password(&mut self, _: &str, _: &git2::Config) -> Option<(String, String)> {
+        None
+    }
+
+    fn prompt_password(&mut self, _: &str, _: &str, _: &git2::Config) -> Option<String> {
+        None
+    }
+
+    fn prompt_ssh_key_passphrase(&mut self, _: &Path, _: &git2::Config) -> Option<String> {
+        None
+    }
+}
+
 async fn do_fetch_src<R: Rockspec>(
     fetch: &FetchSrc<'_, R>,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
@@ -201,10 +220,17 @@ async fn do_fetch_src<R: Rockspec>(
             let url = git.url.to_string();
             progress.map(|p| p.set_message(format!("🦠 Cloning {url}")));
 
+            let auth = if config.no_prompt() {
+                GitAuthenticator::default()
+                    .try_password_prompt(0)
+                    .prompt_ssh_key_password(false)
+                    .set_prompter(NullPrompter)
+            } else {
+                GitAuthenticator::default()
+            };
+            let git_config = git2::Config::open_default()?;
             let mut callbacks = RemoteCallbacks::new();
-            callbacks.credentials(|_url, username_from_url, _allowed_types| {
-                Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-            });
+            callbacks.credentials(auth.credentials(&git_config));
             let mut fetch_options = FetchOptions::new();
             fetch_options.update_fetchhead(false);
             fetch_options.remote_callbacks(callbacks);
