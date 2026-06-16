@@ -300,7 +300,7 @@ impl Project {
                             dep_entry["version"] = Item::Value(sha.into());
                         }
                     }
-                    table[git_url.repo.clone()] = dep_entry;
+                    table[git_url.repo().as_ref()] = dep_entry;
                 }
             }
         }

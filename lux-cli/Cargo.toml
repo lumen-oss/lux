@@ -36,7 +36,6 @@ text_trees = "0.1"
 url = "2.5"
 whoami = "2.1"
 
-git-url-parse = { workspace = true }
 git2 = { workspace = true }
 ignore = { workspace = true }
 indicatif = { workspace = true }

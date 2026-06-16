@@ -72,7 +72,6 @@ tree-sitter-loader = "0.26"
 url = "2.5"
 vfs = "0.13"
 
-git-url-parse = { workspace = true }
 git2 = { workspace = true }
 ignore = { workspace = true }
 indicatif = { workspace = true }
