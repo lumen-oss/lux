@@ -20,8 +20,8 @@ pub enum RemoteGitUrlParseError {
     NotARemoteGitUrl(String),
     #[error("Unsupported git remote scheme {scheme:?} in url {url}")]
     UnsupportedRemoteScheme { scheme: String, url: Url },
-    #[error("Url {url} missing host name")]
-    MissingHostName(String),
+    #[error("Url {0} missing host name")]
+    MissingHostName(Url),
 }
 
 impl RemoteGitUrl {
