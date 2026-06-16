@@ -18,9 +18,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 - *(dependencies)* [**breaking**] improve git remote URL parsing ([#1595](https://github.com/lumen-oss/lux/pull/1595))
 
-### Other
-- error message consistency (PR cleanup)
-
 ## [0.32.0](https://github.com/lumen-oss/lux/compare/v0.31.1...v0.32.0) `lux-cli` - 2026-06-15
 
 ### Added
