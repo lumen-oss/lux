@@ -18,6 +18,8 @@ pub enum RemoteGitUrlParseError {
     GitUrlParse(#[from] url::ParseError),
     #[error("not a remote git URL: {0}")]
     NotARemoteGitUrl(String),
+    #[error("Unsupported git remote scheme {scheme:?} in url {url}")]
+    UnsupportedRemoteScheme { scheme: String, url: Url },
 }
 
 impl RemoteGitUrl {
@@ -53,14 +55,15 @@ impl FromStr for RemoteGitUrl {
         let url: Url = s.parse()?;
         let scheme = url.scheme();
         if !matches!(scheme, "ssh" | "git" | "http" | "https" | "ftp" | "ftps") {
-            return Err(RemoteGitUrlParseError::NotARemoteGitUrl(format!(
-                "Illegal git remote scheme: {scheme}"
-            )));
+            return Err(RemoteGitUrlParseError::UnsupportedRemoteScheme {
+                scheme: scheme.into(),
+                url,
+            });
         }
         let Some(host_str) = url.host_str() else {
-            return Err(RemoteGitUrlParseError::NotARemoteGitUrl(
-                "Missing hostname".into(),
-            ));
+            return Err(RemoteGitUrlParseError::NotARemoteGitUrl(format!(
+                "Missing hostname in url: {url}"
+            )));
         };
         Ok(RemoteGitUrl {
             host_str: String::from(host_str),
