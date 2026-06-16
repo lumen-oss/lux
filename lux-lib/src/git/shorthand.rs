@@ -148,7 +148,7 @@ fn scp_style_parser<'a>(
                 .ignore_then(any().repeated().collect::<String>()),
         )
         .try_map(|(host, path), span| {
-            let inner = format!("git+ssh://{host}/{path}")
+            let inner = format!("ssh://{host}/{path}")
                 .parse::<RemoteGitUrl>()
                 .map_err(|err| {
                     Rich::custom(span, format!("error parsing scp style git url: {err}"))
@@ -213,7 +213,7 @@ mod tests {
     async fn owner_repo_shorthand() {
         let url_shorthand: RemoteGitUrlShorthand = "lumen-oss/lux".parse().unwrap();
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
     }
 
     #[tokio::test]
@@ -222,7 +222,7 @@ mod tests {
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -232,7 +232,7 @@ mod tests {
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("gitlab.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -242,7 +242,7 @@ mod tests {
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("git.sr.ht"));
         assert_eq!(url_shorthand.0.owner(), Some("~lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -252,7 +252,7 @@ mod tests {
         let url_shorthand: RemoteGitUrlShorthand = url_shorthand_str.parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("codeberg.org"));
         assert_eq!(url_shorthand.0.owner(), Some("~lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(url_shorthand.to_string(), url_shorthand_str.to_string());
     }
 
@@ -262,7 +262,7 @@ mod tests {
             "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(
             url_shorthand.to_string(),
             "github:lumen-oss/lux".to_string()
@@ -270,16 +270,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn git_plus_https_url() {
+    async fn regular_http_url() {
         let url_shorthand: RemoteGitUrlShorthand =
-            "git+https://github.com/lumen-oss/lux.git".parse().unwrap();
+            "http://github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(
             url_shorthand.to_string(),
             "github:lumen-oss/lux".to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn regular_ftp_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "ftp://github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn illegal_scheme_url() {
+        RemoteGitUrlShorthand::from_str("git+https://github.com/lumen-oss/lux.git")
+            .expect_err("git+ handling should be done in an outer layer.");
+        RemoteGitUrlShorthand::from_str("file:///lumen-oss/lux.git")
+            .expect_err("local filesystems are not supported as a Remote URL.");
+        RemoteGitUrlShorthand::from_str("xyz:///lumen-oss/lux.git")
+            .expect_err("Unknown schemes are rejected");
     }
 
     #[tokio::test]
@@ -288,7 +311,7 @@ mod tests {
             "git://git@github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(
             url_shorthand.to_string(),
             "github:lumen-oss/lux".to_string()
@@ -301,21 +324,7 @@ mod tests {
             "ssh://git@github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
-        assert_eq!(
-            url_shorthand.to_string(),
-            "github:lumen-oss/lux".to_string()
-        );
-    }
-
-    #[tokio::test]
-    async fn git_plus_ssh_url() {
-        let url_shorthand: RemoteGitUrlShorthand = "git+ssh://git@github.com/lumen-oss/lux.git"
-            .parse()
-            .unwrap();
-        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
-        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
         assert_eq!(
             url_shorthand.to_string(),
             "github:lumen-oss/lux".to_string()
@@ -328,7 +337,7 @@ mod tests {
         let url_shorthand: RemoteGitUrlShorthand = url_str.parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo().to_owned(), "lux".to_string());
+        assert_eq!(url_shorthand.0.repo(), "lux");
     }
 
     #[tokio::test]

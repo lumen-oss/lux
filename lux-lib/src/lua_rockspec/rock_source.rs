@@ -354,8 +354,8 @@ mod tests {
         assert!(matches!(url, SourceUrl::Url { .. }));
         let url: SourceUrl = "git://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
-        let url: SourceUrl = "git+file:///path/to/repo.git".parse().unwrap();
-        assert!(matches!(url, SourceUrl::Git { .. }));
+        // We don't support file-like URLs, as they are not remote.
+        SourceUrl::from_str("git+file:///path/to/repo.git").unwrap_err();
         let url: SourceUrl = "git+http://example.com/foo/bar".parse().unwrap();
         assert!(matches!(url, SourceUrl::Git { .. }));
         let url: SourceUrl = "git+https://example.com/foo/bar".parse().unwrap();

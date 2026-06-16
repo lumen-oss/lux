@@ -50,7 +50,7 @@ pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<Repo
             None => return Ok(None),
         };
 
-        let repo = parsed_url.repo().into_owned();
+        let repo = parsed_url.repo().to_string();
 
         let octocrab = octocrab::instance();
         let repo_handler = octocrab.repos(owner, repo);
