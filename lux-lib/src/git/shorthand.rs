@@ -283,9 +283,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn regular_ssh_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "ssh://git@github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
     async fn regular_ftp_url() {
         let url_shorthand: RemoteGitUrlShorthand =
             "ftp://github.com/lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
+        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
+        assert_eq!(url_shorthand.0.repo(), "lux");
+        assert_eq!(
+            url_shorthand.to_string(),
+            "github:lumen-oss/lux".to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn regular_ftps_url() {
+        let url_shorthand: RemoteGitUrlShorthand =
+            "ftps://github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
         assert_eq!(url_shorthand.0.repo(), "lux");
@@ -309,19 +335,6 @@ mod tests {
     async fn git_scheme_url() {
         let url_shorthand: RemoteGitUrlShorthand =
             "git://git@github.com/lumen-oss/lux.git".parse().unwrap();
-        assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
-        assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
-        assert_eq!(url_shorthand.0.repo(), "lux");
-        assert_eq!(
-            url_shorthand.to_string(),
-            "github:lumen-oss/lux".to_string()
-        );
-    }
-
-    #[tokio::test]
-    async fn ssh_url() {
-        let url_shorthand: RemoteGitUrlShorthand =
-            "ssh://git@github.com/lumen-oss/lux.git".parse().unwrap();
         assert_eq!(url_shorthand.0.url.host_str(), Some("github.com"));
         assert_eq!(url_shorthand.0.owner(), Some("lumen-oss"));
         assert_eq!(url_shorthand.0.repo(), "lux");

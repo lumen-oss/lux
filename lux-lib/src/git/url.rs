@@ -52,7 +52,7 @@ impl FromStr for RemoteGitUrl {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let url: Url = s.parse()?;
         let scheme = url.scheme();
-        if !matches!(scheme, "ssh" | "git" | "http" | "https" | "ftp") {
+        if !matches!(scheme, "ssh" | "git" | "http" | "https" | "ftp" | "ftps") {
             return Err(RemoteGitUrlParseError::NotARemoteGitUrl(format!(
                 "Illegal git remote scheme: {scheme}"
             )));
