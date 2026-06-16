@@ -16,9 +16,9 @@ pub struct RemoteGitUrl {
 pub enum RemoteGitUrlParseError {
     #[error("error parsing git URL:\n{0}")]
     GitUrlParse(#[from] url::ParseError),
-    #[error("Unsupported git remote scheme {scheme:?} in url {url}")]
+    #[error("unsupported git remote scheme {scheme} in URL {url}")]
     UnsupportedRemoteScheme { scheme: String, url: Url },
-    #[error("Url {0} missing host name")]
+    #[error("URL {0} missing host name")]
     MissingHostName(Url),
 }
 
