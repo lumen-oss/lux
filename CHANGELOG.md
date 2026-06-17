@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.1](https://github.com/lumen-oss/lux/compare/v0.33.0...v0.33.1) `lux-cli` - 2026-06-17
+
+### Added
+- use `color_eyre` for colorful, consistent, and well formatted error reports ([#1601](https://github.com/lumen-oss/lux/pull/1601))
+
+## [0.43.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.43.0...lux-lib-v0.43.1) `lux-lib` - 2026-06-17
+
+### Other
+- update Cargo.toml dependencies
+
 ## [0.33.0](https://github.com/lumen-oss/lux/compare/v0.32.0...v0.33.0) `lux-cli` - 2026-06-16
 
 ### Fixed
