@@ -22,6 +22,7 @@ const DEFAULT_USER_AGENT: &str = concat!("lux/", env!("CARGO_PKG_VERSION"));
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    color_eyre::install()?;
     let cli = Cli::parse();
 
     let lua_version = cli.lua_version.or({

@@ -24,6 +24,7 @@ emmylua_check = { version = "0.23", features = [] }
 emmylua_formatter = { version = "0.23", features = [] }
 emmylua_codestyle = "0.6.0"
 eyre = "0.6"
+color-eyre = "0.6"
 inquire = "0.9"
 nucleo = "0.5"
 octocrab = "0.53"
@@ -74,3 +75,7 @@ ssh-tests = ["lux-lib/ssh-tests"]
 panic = "warn"
 unwrap_used = "warn"
 expect_used = "warn"
+
+# Improve color-eyre performance in debug mode
+[profile.dev.package.backtrace]
+opt-level = 3
