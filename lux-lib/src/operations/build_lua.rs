@@ -642,15 +642,19 @@ async fn do_build_lua_msvc(
         }
     }
 
-    let lib_objects = cc
-        .include(&src_dir)
+    cc.include(&src_dir)
         .files(lib_c_files)
         .out_dir(&lib_dir)
-        .try_compile_intermediates()?;
+        .try_compile(lib_name)?;
 
-    let bin_objects = cc
+    let lua_bin_objects = cc
         .include(&src_dir)
         .file(src_dir.join("lua.c"))
+        .out_dir(&src_dir)
+        .try_compile_intermediates()?;
+
+    let luac_bin_objects = cc
+        .include(&src_dir)
         .file(src_dir.join("luac.c"))
         .out_dir(&src_dir)
         .try_compile_intermediates()?;
@@ -663,56 +667,54 @@ async fn do_build_lua_msvc(
 
     let dll_path = bin_dir.join(format!("{dll_name}.dll"));
     let implib_path = lib_dir.join(format!("{lib_name}.lib"));
+    let lua_bin_name = "lua.exe";
+    let luac_bin_name = "luac.exe";
 
-    match Command::new(link.path())
-        .arg("/DLL")
-        .arg(format!("/OUT:{}", dll_path.display()))
-        .arg(format!("/IMPLIB:{}", implib_path.display()))
-        .args(&lib_objects)
-        .output()
-        .await
-    {
-        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
-        Ok(output) => {
-            return Err(BuildLuaError::CommandFailure {
-                name: format!("link {dll_name}.dll"),
-                status: output.status,
-                stdout: String::from_utf8_lossy(&output.stdout).into(),
-                stderr: String::from_utf8_lossy(&output.stderr).into(),
-            });
-        }
-        Err(err) => return Err(BuildLuaError::Io(err)),
-    };
-
-    for name in ["lua", "luac"] {
-        let bin = bin_dir.join(format!("{name}.exe"));
-        let objects = bin_objects.iter().filter(|file| {
-            file.with_extension("").file_name().is_some_and(|fname| {
-                fname
-                    .to_string_lossy()
-                    .to_string()
-                    .ends_with(&format!("-{name}"))
-            })
-        });
-        match Command::new(link.path())
-            .arg(format!("/OUT:{}", bin.display()))
-            .args(objects)
-            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
-            .output()
-            .await
-        {
-            Ok(output) if output.status.success() => utils::log_command_output(&output, config),
-            Ok(output) => {
-                return Err(BuildLuaError::CommandFailure {
-                    name: format!("install {name}.exe"),
+    let handle_build_err =
+        |res: Result<std::process::Output, io::Error>, message: String| -> Result<_, _> {
+            match res {
+                Ok(output) if output.status.success() => {
+                    utils::log_command_output(&output, config);
+                    Ok(())
+                }
+                Ok(output) => Err(BuildLuaError::CommandFailure {
+                    name: message,
                     status: output.status,
                     stdout: String::from_utf8_lossy(&output.stdout).into(),
                     stderr: String::from_utf8_lossy(&output.stderr).into(),
-                });
+                }),
+                Err(err) => Err(BuildLuaError::Io(err)),
             }
-            Err(err) => return Err(BuildLuaError::Io(err)),
         };
-    }
+
+    let res = Command::new(link.path())
+        .arg("/DLL")
+        .arg(format!("/OUT:{}", dll_path.display()))
+        .arg(format!("/IMPLIB:{}", implib_path.display()))
+        .args(&lua_bin_objects)
+        .args(&luac_bin_objects)
+        .output()
+        .await;
+
+    handle_build_err(res, format!("link {dll_name}.dll"))?;
+
+    let res = Command::new(link.path())
+        .arg(format!("/OUT:{lua_bin_name}"))
+        .args(&lua_bin_objects)
+        .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
+        .output()
+        .await;
+
+    handle_build_err(res, format!("install {lua_bin_name}.exe"))?;
+
+    let res = Command::new(link.path())
+        .arg(format!("/OUT:{luac_bin_name}"))
+        .args(&luac_bin_objects)
+        .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
+        .output()
+        .await;
+
+    handle_build_err(res, format!("install {luac_bin_name}.exe"))?;
 
     copy_includes(&src_dir, &include_dir).await?;
 
