@@ -661,7 +661,7 @@ async fn do_build_lua_msvc(
     let link =
         cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
 
-    let dll_path = lib_dir.join(format!("{dll_name}.dll"));
+    let dll_path = bin_dir.join(format!("{dll_name}.dll"));
     let implib_path = lib_dir.join(format!("{lib_name}.lib"));
 
     match Command::new(link.path())
@@ -695,20 +695,13 @@ async fn do_build_lua_msvc(
             })
         });
 
-        let mut cmd = Command::new(link.path());
-        cmd.arg(format!("/OUT:{}", bin.display())).args(objects);
-
-        if name == "luac" {
-            // luac.c calls internal core functions (luaU_dump,
-            // luaG_getfuncline) that are marked LUAI_FUNC, not LUA_API — they
-            // are never exported from the DLL, so luac must link directly
-            // against the core+lib object files instead of the import lib.
-            cmd.args(&lib_objects);
-        } else {
-            cmd.arg(implib_path.display().to_string());
-        }
-
-        match cmd.output().await {
+        match Command::new(link.path())
+            .arg(format!("/OUT:{}", bin.display()))
+            .args(objects)
+            .args(&lib_objects)
+            .output()
+            .await
+        {
             Ok(output) if output.status.success() => utils::log_command_output(&output, config),
             Ok(output) => {
                 return Err(BuildLuaError::CommandFailure {
@@ -721,16 +714,6 @@ async fn do_build_lua_msvc(
             Err(err) => return Err(BuildLuaError::Io(err)),
         };
     }
-
-    let dll_in_bin = bin_dir.join(format!("{dll_name}.dll"));
-    fs::copy(&dll_path, &dll_in_bin).await.map_err(|err| {
-        io::Error::other(format!(
-            "Failed to copy {} to {}:\n{}",
-            dll_path.display(),
-            dll_in_bin.display(),
-            err
-        ))
-    })?;
 
     copy_includes(&src_dir, &include_dir).await?;
 
