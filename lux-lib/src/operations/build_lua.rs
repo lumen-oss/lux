@@ -697,7 +697,7 @@ async fn do_build_lua_msvc(
         match Command::new(link.path())
             .arg(format!("/OUT:{}", bin.display()))
             .args(objects)
-            .args(&implib_path)
+            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
             .output()
             .await
         {
