@@ -642,11 +642,10 @@ async fn do_build_lua_msvc(
         }
     }
 
-    let lib_objects = cc
-        .include(&src_dir)
+    cc.include(&src_dir)
         .files(&lib_c_files)
         .out_dir(&lib_dir)
-        .try_compile_intermediates()?;
+        .try_compile(lib_name)?;
 
     let bin_objects = cc
         .include(&src_dir)
@@ -668,7 +667,7 @@ async fn do_build_lua_msvc(
         .arg("/DLL")
         .arg(format!("/OUT:{}", dll_path.display()))
         .arg(format!("/IMPLIB:{}", implib_path.display()))
-        .args(&lib_objects)
+        .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
         .output()
         .await
     {
@@ -698,7 +697,7 @@ async fn do_build_lua_msvc(
         match Command::new(link.path())
             .arg(format!("/OUT:{}", bin.display()))
             .args(objects)
-            .args(&lib_objects)
+            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
             .output()
             .await
         {
