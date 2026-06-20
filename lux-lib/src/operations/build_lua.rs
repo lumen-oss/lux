@@ -643,7 +643,7 @@ async fn do_build_lua_msvc(
     }
 
     cc.include(&src_dir)
-        .files(&lib_c_files)
+        .files(lib_c_files)
         .out_dir(&lib_dir)
         .try_compile(lib_name)?;
 
@@ -693,7 +693,6 @@ async fn do_build_lua_msvc(
                     .ends_with(&format!("-{name}"))
             })
         });
-
         match Command::new(link.path())
             .arg(format!("/OUT:{}", bin.display()))
             .args(objects)
