@@ -599,6 +599,16 @@ async fn do_build_lua_msvc(
         LuaVersion::Lua55 => "lua5.5",
         LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
     };
+
+    let dll_name = match lua_version {
+        LuaVersion::Lua51 => "lua51",
+        LuaVersion::Lua52 => "lua52",
+        LuaVersion::Lua53 => "lua53",
+        LuaVersion::Lua54 => "lua54",
+        LuaVersion::Lua55 => "lua55",
+        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+    };
+
     let host = Triple::host();
     let mut cc = cc::Build::new();
     cc.cargo_output(false)
@@ -651,7 +661,7 @@ async fn do_build_lua_msvc(
     let link =
         cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
 
-    let dll_path = lib_dir.join(format!("{lib_name}.dll"));
+    let dll_path = lib_dir.join(format!("{dll_name}.dll"));
     let implib_path = lib_dir.join(format!("{lib_name}.lib"));
 
     match Command::new(link.path())
@@ -665,7 +675,7 @@ async fn do_build_lua_msvc(
         Ok(output) if output.status.success() => utils::log_command_output(&output, config),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
-                name: format!("link {lib_name}.dll"),
+                name: format!("link {dll_name}.dll"),
                 status: output.status,
                 stdout: String::from_utf8_lossy(&output.stdout).into(),
                 stderr: String::from_utf8_lossy(&output.stderr).into(),
@@ -712,7 +722,7 @@ async fn do_build_lua_msvc(
         };
     }
 
-    let dll_in_bin = bin_dir.join(format!("{lib_name}.dll"));
+    let dll_in_bin = bin_dir.join(format!("{dll_name}.dll"));
     fs::copy(&dll_path, &dll_in_bin).await.map_err(|err| {
         io::Error::other(format!(
             "Failed to copy {} to {}:\n{}",
