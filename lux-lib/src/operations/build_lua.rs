@@ -610,6 +610,7 @@ async fn do_build_lua_msvc(
         .target(&host.to_string());
 
     cc.define("LUA_USE_WINDOWS", None);
+    cc.define("LUA_BUILD_AS_DLL", None);
 
     let mut lib_c_files = Vec::new();
     let mut read_dir = fs::read_dir(&src_dir).await.map_err(|err| {
@@ -630,10 +631,12 @@ async fn do_build_lua_msvc(
             lib_c_files.push(path);
         }
     }
-    cc.include(&src_dir)
-        .files(lib_c_files)
+
+    let lib_objects = cc
+        .include(&src_dir)
+        .files(&lib_c_files)
         .out_dir(&lib_dir)
-        .try_compile(lib_name)?;
+        .try_compile_intermediates()?;
 
     let bin_objects = cc
         .include(&src_dir)
@@ -648,6 +651,29 @@ async fn do_build_lua_msvc(
     let link =
         cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
 
+    let dll_path = lib_dir.join(format!("{lib_name}.dll"));
+    let implib_path = lib_dir.join(format!("{lib_name}.lib"));
+
+    match Command::new(link.path())
+        .arg("/DLL")
+        .arg(format!("/OUT:{}", dll_path.display()))
+        .arg(format!("/IMPLIB:{}", implib_path.display()))
+        .args(&lib_objects)
+        .output()
+        .await
+    {
+        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        Ok(output) => {
+            return Err(BuildLuaError::CommandFailure {
+                name: format!("link {lib_name}.dll"),
+                status: output.status,
+                stdout: String::from_utf8_lossy(&output.stdout).into(),
+                stderr: String::from_utf8_lossy(&output.stderr).into(),
+            });
+        }
+        Err(err) => return Err(BuildLuaError::Io(err)),
+    };
+
     for name in ["lua", "luac"] {
         let bin = bin_dir.join(format!("{name}.exe"));
         let objects = bin_objects.iter().filter(|file| {
@@ -661,7 +687,7 @@ async fn do_build_lua_msvc(
         match Command::new(link.path())
             .arg(format!("/OUT:{}", bin.display()))
             .args(objects)
-            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
+            .arg(implib_path.display().to_string())
             .output()
             .await
         {
@@ -677,6 +703,16 @@ async fn do_build_lua_msvc(
             Err(err) => return Err(BuildLuaError::Io(err)),
         };
     }
+
+    let dll_in_bin = bin_dir.join(format!("{lib_name}.dll"));
+    fs::copy(&dll_path, &dll_in_bin).await.map_err(|err| {
+        io::Error::other(format!(
+            "Failed to copy {} to {}:\n{}",
+            dll_path.display(),
+            dll_in_bin.display(),
+            err
+        ))
+    })?;
 
     copy_includes(&src_dir, &include_dir).await?;
 
