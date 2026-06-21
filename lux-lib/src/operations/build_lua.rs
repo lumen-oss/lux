@@ -703,7 +703,7 @@ async fn do_build_lua_msvc(
         Command::new(link.path())
             .arg(format!("/OUT:{lua_bin_name}"))
             .args(&lua_bin_objects)
-            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
+            .arg(&implib_path)
             .output()
             .await,
         format!("install {lua_bin_name}.exe"),
@@ -713,7 +713,7 @@ async fn do_build_lua_msvc(
         Command::new(link.path())
             .arg(format!("/OUT:{luac_bin_name}"))
             .args(&luac_bin_objects)
-            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
+            .arg(&implib_path)
             .output()
             .await,
         format!("install {luac_bin_name}.exe"),
