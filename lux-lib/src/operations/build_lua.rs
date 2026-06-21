@@ -670,9 +670,10 @@ async fn do_build_lua_msvc(
         cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
 
     let dll_path = bin_dir.join(format!("{dll_name}.dll"));
-    let implib_path = lib_dir.join(format!("{lib_name}.lib"));
     let lua_bin_path = bin_dir.join(format!("{lua_bin_name}.exe"));
     let lua_c_bin_path = bin_dir.join(format!("{lua_c_bin_name}.exe"));
+
+    let implib_path = lib_dir.join(format!("{lib_name}.lib"));
 
     let handle_build_err =
         |res: Result<std::process::Output, io::Error>, message: String| -> Result<_, _> {
@@ -706,7 +707,7 @@ async fn do_build_lua_msvc(
         Command::new(link.path())
             .arg(format!("/OUT:{}", lua_bin_path.display()))
             .args(&lua_bin_objects)
-            .arg(&implib_path)
+            .args(&lib_objects)
             .output()
             .await,
         format!("install {lua_bin_name}.exe"),
