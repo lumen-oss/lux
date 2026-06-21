@@ -706,8 +706,8 @@ async fn do_build_lua_msvc(
     handle_build_err(
         Command::new(link.path())
             .arg(format!("/OUT:{}", lua_bin_path.display()))
+            .arg(&implib_path)
             .args(&lua_bin_objects)
-            .args(&lib_objects)
             .output()
             .await,
         format!("install {lua_bin_name}.exe"),
@@ -716,8 +716,8 @@ async fn do_build_lua_msvc(
     handle_build_err(
         Command::new(link.path())
             .arg(format!("/OUT:{}", lua_c_bin_path.display()))
-            .args(&lua_c_bin_objects)
             .args(&lib_objects)
+            .args(&lua_c_bin_objects)
             .output()
             .await,
         format!("install {lua_c_bin_name}.exe"),
