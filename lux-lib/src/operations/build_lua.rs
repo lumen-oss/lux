@@ -703,6 +703,7 @@ async fn do_build_lua_msvc(
         Command::new(link.path())
             .arg(format!("/OUT:{lua_bin_name}"))
             .args(&lua_bin_objects)
+            .args(&lib_objects)
             .arg(&implib_path)
             .output()
             .await,
@@ -713,6 +714,7 @@ async fn do_build_lua_msvc(
         Command::new(link.path())
             .arg(format!("/OUT:{luac_bin_name}"))
             .args(&luac_bin_objects)
+            .args(&lib_objects)
             .arg(&implib_path)
             .output()
             .await,
