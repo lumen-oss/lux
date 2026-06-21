@@ -591,6 +591,9 @@ async fn do_build_lua_msvc(
 
     let src_dir = build_dir.join("src");
 
+    let lua_bin_name = "lua";
+    let lua_c_bin_name = "luac";
+
     let lib_name = match lua_version {
         LuaVersion::Lua51 => "lua5.1",
         LuaVersion::Lua52 => "lua5.2",
@@ -650,13 +653,13 @@ async fn do_build_lua_msvc(
 
     let lua_bin_objects = cc
         .include(&src_dir)
-        .file(src_dir.join("lua.c"))
+        .file(src_dir.join(format!("{lua_bin_name}.c")))
         .out_dir(&src_dir)
         .try_compile_intermediates()?;
 
-    let luac_bin_objects = cc
+    let lua_c_bin_objects = cc
         .include(&src_dir)
-        .file(src_dir.join("luac.c"))
+        .file(src_dir.join(format!("{lua_c_bin_name}.c")))
         .out_dir(&src_dir)
         .try_compile_intermediates()?;
 
@@ -668,8 +671,8 @@ async fn do_build_lua_msvc(
 
     let dll_path = bin_dir.join(format!("{dll_name}.dll"));
     let implib_path = lib_dir.join(format!("{lib_name}.lib"));
-    let lua_bin_name = "lua.exe";
-    let luac_bin_name = "luac.exe";
+    let lua_bin_path = bin_dir.join(format!("{lua_bin_name}.exe"));
+    let lua_c_bin_path = bin_dir.join(format!("{lua_c_bin_name}.exe"));
 
     let handle_build_err =
         |res: Result<std::process::Output, io::Error>, message: String| -> Result<_, _> {
@@ -696,14 +699,13 @@ async fn do_build_lua_msvc(
             .args(&lib_objects)
             .output()
             .await,
-        format!("link {dll_name}.dll"),
+        format!("install {dll_name}.dll"),
     )?;
 
     handle_build_err(
         Command::new(link.path())
-            .arg(format!("/OUT:{lua_bin_name}"))
+            .arg(format!("/OUT:{}", lua_bin_path.display()))
             .args(&lua_bin_objects)
-            .args(&lib_objects)
             .arg(&implib_path)
             .output()
             .await,
@@ -712,13 +714,12 @@ async fn do_build_lua_msvc(
 
     handle_build_err(
         Command::new(link.path())
-            .arg(format!("/OUT:{luac_bin_name}"))
-            .args(&luac_bin_objects)
-            .args(&lib_objects)
+            .arg(format!("/OUT:{}", lua_c_bin_path.display()))
+            .args(&lua_c_bin_objects)
             .arg(&implib_path)
             .output()
             .await,
-        format!("install {luac_bin_name}.exe"),
+        format!("install {lua_c_bin_name}.exe"),
     )?;
 
     copy_includes(&src_dir, &include_dir).await?;
