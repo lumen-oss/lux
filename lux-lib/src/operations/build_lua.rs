@@ -697,7 +697,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        &format!("install {}", lua_c_bin_path.display()),
+        &format!("link {}", lua_c_bin_path.display()),
     )?;
 
     copy_includes(&src_dir, &include_dir).await?;
