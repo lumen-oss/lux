@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Args;
 use emmylua_formatter as luafmt;
-use eyre::{Context, Result};
+use eyre::{bail, Context, Result};
 use lux_lib::{
     config::Config, lua_version::LuaVersion, package::PackageName, project::Project,
     workspace::Workspace,
@@ -12,8 +12,8 @@ use walkdir::WalkDir;
 
 #[derive(Args)]
 pub struct Fmt {
-    /// Optional path to a workspace or Lua file to format.
-    workspace_or_file: Option<PathBuf>,
+    /// Path to a workspace, directory, or Lua file to format. Defaults to the current workspace.
+    path: Option<PathBuf>,
 
     #[clap(default_value = "stylua")]
     #[arg(long)]
@@ -36,24 +36,139 @@ enum FmtBackend {
     EmmyluaCodestyle,
 }
 
-pub fn format(args: Fmt, config: Config) -> Result<()> {
-    let workspace: Workspace = match args.workspace_or_file {
-        Some(ref ws) => match Workspace::from_exact(ws)? {
-            Some(ws) => ws,
-            None => Workspace::current_or_err()?,
-        },
-        None => Workspace::current_or_err()?,
-    };
+// TODO: For `lx check` #1407 and `lx lint` #1409, move `PathTarget` + `classify_path` into a shared module.
+enum PathTarget {
+    Workspace(Box<Workspace>),
+    Directory(PathBuf),
+    File(PathBuf),
+}
 
-    if let Some(package) = &args.package {
-        let project = workspace.select_member(package)?;
-        format_project(&args, &workspace, project, &config)?;
+fn classify_path(path: &Path) -> Result<PathTarget> {
+    if !path.exists() {
+        bail!("path does not exist: {}", path.display());
+    }
+    if let Some(workspace) = Workspace::from_exact(path)? {
+        return Ok(PathTarget::Workspace(Box::new(workspace)));
+    }
+    let path = std::path::absolute(path)?;
+    if path.is_file() {
+        Ok(PathTarget::File(path))
     } else {
-        for project in workspace.members() {
-            format_project(&args, &workspace, project, &config)?;
+        Ok(PathTarget::Directory(path))
+    }
+}
+
+pub fn format(args: Fmt, config: Config) -> Result<()> {
+    let target = match args.path.as_deref() {
+        None => PathTarget::Workspace(Box::new(Workspace::current_or_err()?)),
+        Some(path) => classify_path(path)?,
+    };
+    match target {
+        PathTarget::Workspace(workspace) => {
+            if let Some(package) = &args.package {
+                let project = workspace.select_member(package)?;
+                format_project(&args, &workspace, project, &config)?;
+            } else {
+                for project in workspace.members() {
+                    format_project(&args, &workspace, project, &config)?;
+                }
+            }
+        }
+        PathTarget::File(file) => {
+            ensure_no_package(&args)?;
+            if !is_lua_file(&file) {
+                bail!("not a Lua (.lua) file: {}", file.display());
+            }
+            let root = file
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf();
+            format_loose(std::iter::once(file), &root, &args.backend, &config)?;
+        }
+        PathTarget::Directory(dir) => {
+            ensure_no_package(&args)?;
+            let files = WalkDir::new(&dir)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_type().is_file())
+                .map(|entry| entry.into_path())
+                .filter(|path| is_lua_file(path));
+            format_loose(files, &dir, &args.backend, &config)?;
         }
     }
     Ok(())
+}
+
+struct FmtConfig {
+    stylua: stylua_lib::Config,
+    luafmt: luafmt::LuaFormatConfig,
+    luafmt_syntax_level: luafmt::LuaSyntaxLevel,
+    editorconfig: PathBuf,
+}
+
+impl FmtConfig {
+    fn resolve(root: &Path, lua_version: Option<LuaVersion>) -> Self {
+        let stylua: stylua_lib::Config = std::fs::read_to_string(root.join("stylua.toml"))
+            .or_else(|_| std::fs::read_to_string(root.join(".stylua.toml")))
+            .map(|config: String| toml::from_str(&config).unwrap_or_default())
+            .or_else(|_| {
+                stylua_lib::editorconfig::parse(stylua_lib::Config::new(), &root.join("*.lua"))
+            })
+            .unwrap_or_default();
+
+        let luafmt = luafmt::resolve_config_for_path(Some(root), None)
+            .map(|resolved| resolved.config)
+            .unwrap_or_default();
+        let luafmt_syntax_level = lua_version
+            .map(lua_version_to_luafmt_syntax_level)
+            .unwrap_or(luafmt.syntax.level);
+
+        Self {
+            stylua,
+            luafmt,
+            luafmt_syntax_level,
+            editorconfig: root.join(".editorconfig"),
+        }
+    }
+
+    fn format(&self, backend: &FmtBackend, path: &Path, code: &str) -> Result<String> {
+        Ok(match backend {
+            FmtBackend::Stylua => stylua_lib::format_code(
+                code,
+                self.stylua,
+                None,
+                stylua_lib::OutputVerification::Full,
+            )
+            .context(format!("error formatting {} with stylua.", path.display()))?,
+            FmtBackend::Luafmt => {
+                luafmt::check_text(code, self.luafmt_syntax_level.into(), &self.luafmt).formatted
+            }
+            FmtBackend::EmmyluaCodestyle => {
+                let uri = path.to_slash_lossy().to_string();
+                if self.editorconfig.is_file() {
+                    emmylua_codestyle::update_code_style(&uri, &self.editorconfig.to_slash_lossy());
+                }
+                emmylua_codestyle::reformat_code(
+                    code,
+                    &uri,
+                    emmylua_codestyle::FormattingOptions::default(),
+                )
+            }
+        })
+    }
+}
+
+fn format_files(
+    files: impl Iterator<Item = PathBuf>,
+    configs: &FmtConfig,
+    backend: &FmtBackend,
+) -> Result<()> {
+    files.into_iter().try_for_each(|file| {
+        let unformatted_code = std::fs::read_to_string(&file)?;
+        let formatted_code = configs.format(backend, &file, &unformatted_code)?;
+        std::fs::write(&file, formatted_code)
+            .context(format!("error writing formatted file {}.", file.display()))
+    })
 }
 
 fn format_project(
@@ -62,127 +177,54 @@ fn format_project(
     project: &Project,
     config: &Config,
 ) -> Result<()> {
-    let root = workspace.root();
+    let configs = FmtConfig::resolve(
+        workspace.root().as_ref(),
+        workspace.lua_version(config).ok(),
+    );
 
-    let stylua_config: stylua_lib::Config = std::fs::read_to_string(root.join("stylua.toml"))
-        .or_else(|_| std::fs::read_to_string(root.join(".stylua.toml")))
-        .map(|config: String| toml::from_str(&config).unwrap_or_default())
-        .or_else(|_| {
-            stylua_lib::editorconfig::parse(stylua_lib::Config::new(), &root.join("*.lua"))
-        })
-        .unwrap_or_default();
+    let path_filter = args.path.as_ref().map(std::path::absolute).transpose()?;
 
-    let luafmt_config = luafmt::resolve_config_for_path(Some(root.as_ref()), None)
-        .map(|resolved| resolved.config)
-        .unwrap_or_default();
-    let luafmt_syntax_level = workspace
-        .lua_version(config)
-        .map(lua_version_to_luafmt_syntax_level)
-        .unwrap_or(luafmt_config.syntax.level);
-
-    let emmylua_config = root.join(".editorconfig");
-
-    let workspace_or_file = args
-        .workspace_or_file
-        .as_ref()
-        .map(std::path::absolute)
-        .transpose()?;
-
-    WalkDir::new(project.root().join("src"))
-        .into_iter()
-        .chain(WalkDir::new(project.root().join("lua")))
-        .chain(WalkDir::new(project.root().join("lib")))
-        .chain(WalkDir::new(project.root().join("spec")))
-        .chain(WalkDir::new(project.root().join("test")))
-        .chain(WalkDir::new(project.root().join("tests")))
+    let lua_files = ["src", "lua", "lib", "spec", "test", "tests"]
+        .iter()
+        .flat_map(|dir| WalkDir::new(project.root().join(dir)))
         .filter_map(Result::ok)
-        .filter(|file| {
-            workspace_or_file
+        .map(walkdir::DirEntry::into_path)
+        .filter(|path| is_lua_file(path))
+        .filter(|path| {
+            path_filter
                 .as_ref()
-                .is_none_or(|workspace_or_file| file.path().starts_with(workspace_or_file))
-        })
-        .try_for_each(|file| {
-            if PathBuf::from(file.file_name())
-                .extension()
-                .is_some_and(|ext| ext == "lua")
-            {
-                let file = file.path();
-                let unformatted_code = std::fs::read_to_string(file)?;
-                let formatted_code = match args.backend {
-                    FmtBackend::Stylua => stylua_lib::format_code(
-                        &unformatted_code,
-                        stylua_config,
-                        None,
-                        stylua_lib::OutputVerification::Full,
-                    )
-                    .context(format!("error formatting {} with stylua.", file.display()))?,
-                    FmtBackend::Luafmt => {
-                        luafmt::check_text(
-                            &unformatted_code,
-                            luafmt_syntax_level.into(),
-                            &luafmt_config,
-                        )
-                        .formatted
-                    }
-                    FmtBackend::EmmyluaCodestyle => {
-                        let uri = file.to_slash_lossy().to_string();
-                        if emmylua_config.is_file() {
-                            emmylua_codestyle::update_code_style(
-                                &uri,
-                                &emmylua_config.to_slash_lossy(),
-                            );
-                        }
-                        emmylua_codestyle::reformat_code(
-                            &unformatted_code,
-                            &uri,
-                            emmylua_codestyle::FormattingOptions::default(),
-                        )
-                    }
-                };
-
-                std::fs::write(file, formatted_code)
-                    .context(format!("error writing formatted file {}.", file.display()))?
-            };
-            Ok::<_, eyre::Report>(())
-        })?;
-
-    // Format the rockspec
+                .is_none_or(|path_filter| path.starts_with(path_filter))
+        });
 
     let rockspec = project.root().join("extra.rockspec");
 
-    if rockspec.exists() {
-        let unformatted_code = std::fs::read_to_string(&rockspec)?;
-        let formatted_code = match args.backend {
-            FmtBackend::Stylua => stylua_lib::format_code(
-                &unformatted_code,
-                stylua_config,
-                None,
-                stylua_lib::OutputVerification::Full,
-            )?,
-            FmtBackend::Luafmt => {
-                luafmt::check_text(
-                    &unformatted_code,
-                    luafmt_syntax_level.into(),
-                    &luafmt_config,
-                )
-                .formatted
-            }
-            FmtBackend::EmmyluaCodestyle => {
-                let uri = rockspec.to_slash_lossy().to_string();
-                if emmylua_config.is_file() {
-                    emmylua_codestyle::update_code_style(&uri, &emmylua_config.to_slash_lossy());
-                }
-                emmylua_codestyle::reformat_code(
-                    &unformatted_code,
-                    &uri,
-                    emmylua_codestyle::FormattingOptions::default(),
-                )
-            }
-        };
+    format_files(
+        lua_files.chain(rockspec.exists().then_some(rockspec)),
+        &configs,
+        &args.backend,
+    )
+}
 
-        std::fs::write(rockspec, formatted_code)?;
+fn is_lua_file(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "lua")
+}
+
+fn ensure_no_package(args: &Fmt) -> Result<()> {
+    if args.package.is_some() {
+        bail!("--package is only valid within a workspace");
     }
     Ok(())
+}
+
+/// Format files that are not part of a workspace, resolving backend configs from `root`.
+fn format_loose(
+    files: impl Iterator<Item = PathBuf>,
+    root: &Path,
+    backend: &FmtBackend,
+    config: &Config,
+) -> Result<()> {
+    let configs = FmtConfig::resolve(root, config.lua_version().cloned());
+    format_files(files, &configs, backend)
 }
 
 fn lua_version_to_luafmt_syntax_level(lua_version: LuaVersion) -> luafmt::LuaSyntaxLevel {
@@ -227,7 +269,7 @@ mod tests {
 
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let fmt = Fmt {
-            workspace_or_file: Some(unformatted_project_root.to_path_buf()),
+            path: Some(unformatted_project_root.to_path_buf()),
             backend: FmtBackend::Stylua,
             package: None,
         };
@@ -241,5 +283,65 @@ mod tests {
         assert!(content.contains("print(1 * 2)"));
 
         std::env::set_current_dir(&cwd).unwrap();
+    }
+
+    fn loose_lua_temp_dir() -> TempDir {
+        let fixture: PathBuf = "resources/test/sample-projects/loose-lua/".into();
+        let dir = TempDir::new().unwrap();
+        dir.copy_from(&fixture, &["**"]).unwrap();
+        dir
+    }
+
+    fn fmt(path: Option<PathBuf>) -> Fmt {
+        Fmt {
+            path,
+            backend: FmtBackend::Stylua,
+            package: None,
+        }
+    }
+
+    #[test]
+    fn test_format_plain_directory_without_lux_toml() {
+        let dir = loose_lua_temp_dir();
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+
+        format(fmt(Some(dir.to_path_buf())), config).unwrap();
+
+        let top = std::fs::read_to_string(dir.child("a.lua")).unwrap();
+        let nested = std::fs::read_to_string(dir.child("nested").child("b.lua")).unwrap();
+        let other = std::fs::read_to_string(dir.child("notes.txt")).unwrap();
+        assert!(top.contains("print(1 * 2)"));
+        assert!(nested.contains("print(3 + 4)"));
+        // non-Lua files are left untouched
+        assert!(other.contains("print( 5 *    6 )"));
+    }
+
+    #[test]
+    fn test_format_single_lua_file() {
+        let dir = loose_lua_temp_dir();
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+
+        format(fmt(Some(dir.child("a.lua").to_path_buf())), config).unwrap();
+
+        let top = std::fs::read_to_string(dir.child("a.lua")).unwrap();
+        let nested = std::fs::read_to_string(dir.child("nested").child("b.lua")).unwrap();
+        assert!(top.contains("print(1 * 2)"));
+        // a sibling file is not touched when a single file is targeted
+        assert!(nested.contains("print( 3 +    4 )"));
+    }
+
+    #[test]
+    fn test_format_nonexistent_path_errors() {
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let result = format(fmt(Some("/no/such/path".into())), config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_format_non_lua_file_errors() {
+        let dir = loose_lua_temp_dir();
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let result = format(fmt(Some(dir.child("notes.txt").to_path_buf())), config);
+        assert!(result.is_err());
     }
 }
