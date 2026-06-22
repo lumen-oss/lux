@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.43.1...lux-lib-v0.43.2) `lux-lib` - 2026-06-22
+
+### Added
+- *(lua)* build as a DLL on windows ([#1607](https://github.com/lumen-oss/lux/pull/1607))
+
 ## [0.33.2](https://github.com/lumen-oss/lux/compare/v0.33.1...v0.33.2) `lux-cli` - 2026-06-22
 
 ### Other
