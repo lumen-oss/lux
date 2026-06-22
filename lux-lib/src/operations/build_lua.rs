@@ -492,9 +492,9 @@ stderr:
                 .arg("generic")
                 .output()
                 .await;
-            guard_success(fallback_output, config)?;
+            guard_success(fallback_output, config, "build (generic)")?;
         }
-        output => guard_success(output, config)?,
+        output => guard_success(output, config, &format!("build ({build_target})"))?,
     };
 
     progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
@@ -527,29 +527,6 @@ stderr:
     };
 
     Ok(())
-}
-
-fn guard_success(
-    output: io::Result<std::process::Output>,
-    config: &Config,
-) -> Result<(), BuildLuaError> {
-    match output {
-        Ok(output) if output.status.success() => {
-            utils::log_command_output(&output, config);
-            Ok(())
-        }
-        Ok(output) => Err(BuildLuaError::CommandFailure {
-            name: "build".into(),
-            status: output.status,
-            stdout: String::from_utf8_lossy(&output.stdout).into(),
-            stderr: String::from_utf8_lossy(&output.stderr).into(),
-        }),
-        Err(err) => Err(BuildLuaError::Io(io::Error::other(format!(
-            "Failed to run `{} build`:\n{}",
-            config.make_cmd(),
-            err,
-        )))),
-    }
 }
 
 async fn do_build_lua_msvc(
@@ -591,6 +568,18 @@ async fn do_build_lua_msvc(
 
     let src_dir = build_dir.join("src");
 
+    let lua_bin_name = "lua";
+    let lua_c_bin_name = "luac";
+
+    let dll_name = match lua_version {
+        LuaVersion::Lua51 => "lua51",
+        LuaVersion::Lua52 => "lua52",
+        LuaVersion::Lua53 => "lua53",
+        LuaVersion::Lua54 => "lua54",
+        LuaVersion::Lua55 => "lua55",
+        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+    };
+
     let lib_name = match lua_version {
         LuaVersion::Lua51 => "lua5.1",
         LuaVersion::Lua52 => "lua5.2",
@@ -599,6 +588,7 @@ async fn do_build_lua_msvc(
         LuaVersion::Lua55 => "lua5.5",
         LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
     };
+
     let host = Triple::host();
     let mut cc = cc::Build::new();
     cc.cargo_output(false)
@@ -610,6 +600,7 @@ async fn do_build_lua_msvc(
         .target(&host.to_string());
 
     cc.define("LUA_USE_WINDOWS", None);
+    cc.define("LUA_BUILD_AS_DLL", None);
 
     let mut lib_c_files = Vec::new();
     let mut read_dir = fs::read_dir(&src_dir).await.map_err(|err| {
@@ -630,17 +621,35 @@ async fn do_build_lua_msvc(
             lib_c_files.push(path);
         }
     }
-    cc.include(&src_dir)
+
+    let lib_objects = cc
+        .include(&src_dir)
         .files(lib_c_files)
         .out_dir(&lib_dir)
-        .try_compile(lib_name)?;
+        .try_compile_intermediates()?;
 
     let bin_objects = cc
         .include(&src_dir)
-        .file(src_dir.join("lua.c"))
-        .file(src_dir.join("luac.c"))
+        .file(src_dir.join(format!("{lua_bin_name}.c")))
+        .file(src_dir.join(format!("{lua_c_bin_name}.c")))
         .out_dir(&src_dir)
         .try_compile_intermediates()?;
+
+    let lua_bin_objects = bin_objects.iter().filter(|file| {
+        file.file_stem().is_some_and(|fname| {
+            fname
+                .to_string_lossy()
+                .ends_with(&format!("-{lua_bin_name}"))
+        })
+    });
+
+    let lua_c_bin_objects = bin_objects.iter().filter(|file| {
+        file.file_stem().is_some_and(|fname| {
+            fname
+                .to_string_lossy()
+                .ends_with(&format!("-{lua_c_bin_name}"))
+        })
+    });
 
     progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
 
@@ -648,39 +657,76 @@ async fn do_build_lua_msvc(
     let link =
         cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
 
-    for name in ["lua", "luac"] {
-        let bin = bin_dir.join(format!("{name}.exe"));
-        let objects = bin_objects.iter().filter(|file| {
-            file.with_extension("").file_name().is_some_and(|fname| {
-                fname
-                    .to_string_lossy()
-                    .to_string()
-                    .ends_with(&format!("-{name}"))
-            })
-        });
-        match Command::new(link.path())
-            .arg(format!("/OUT:{}", bin.display()))
-            .args(objects)
-            .arg(format!("{}.lib", lib_dir.join(lib_name).display()))
+    let dll_path = bin_dir.join(format!("{dll_name}.dll"));
+    let lua_bin_path = bin_dir.join(format!("{lua_bin_name}.exe"));
+    let lua_c_bin_path = bin_dir.join(format!("{lua_c_bin_name}.exe"));
+
+    let implib_path = lib_dir.join(format!("{lib_name}.lib"));
+
+    // lua.dll
+    guard_success(
+        Command::new(link.path())
+            .arg("/DLL")
+            .arg(format!("/OUT:{}", dll_path.display()))
+            .arg(format!("/IMPLIB:{}", implib_path.display()))
+            .args(&lib_objects)
             .output()
-            .await
-        {
-            Ok(output) if output.status.success() => utils::log_command_output(&output, config),
-            Ok(output) => {
-                return Err(BuildLuaError::CommandFailure {
-                    name: format!("install {name}.exe"),
-                    status: output.status,
-                    stdout: String::from_utf8_lossy(&output.stdout).into(),
-                    stderr: String::from_utf8_lossy(&output.stderr).into(),
-                });
-            }
-            Err(err) => return Err(BuildLuaError::Io(err)),
-        };
-    }
+            .await,
+        config,
+        &format!("link {dll_name}.dll"),
+    )?;
+
+    // lua.exe
+    guard_success(
+        Command::new(link.path())
+            .arg(format!("/OUT:{}", lua_bin_path.display()))
+            .arg(&implib_path)
+            .args(lua_bin_objects)
+            .output()
+            .await,
+        config,
+        &format!("link {}", lua_bin_path.display()),
+    )?;
+
+    // luac.exe
+    guard_success(
+        Command::new(link.path())
+            .arg(format!("/OUT:{}", lua_c_bin_path.display()))
+            .args(&lib_objects)
+            .args(lua_c_bin_objects)
+            .output()
+            .await,
+        config,
+        &format!("link {}", lua_c_bin_path.display()),
+    )?;
 
     copy_includes(&src_dir, &include_dir).await?;
 
     Ok(())
+}
+
+fn guard_success(
+    output: io::Result<std::process::Output>,
+    config: &Config,
+    cmd_name: &str,
+) -> Result<(), BuildLuaError> {
+    match output {
+        Ok(output) if output.status.success() => {
+            utils::log_command_output(&output, config);
+            Ok(())
+        }
+        Ok(output) => Err(BuildLuaError::CommandFailure {
+            name: cmd_name.to_string(),
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).into(),
+            stderr: String::from_utf8_lossy(&output.stderr).into(),
+        }),
+        Err(err) => Err(BuildLuaError::Io(io::Error::other(format!(
+            "Failed to run `{} build`:\n{}",
+            config.make_cmd(),
+            err,
+        )))),
+    }
 }
 
 async fn copy_includes(src_dir: &Path, include_dir: &Path) -> Result<(), io::Error> {
