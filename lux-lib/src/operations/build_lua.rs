@@ -685,7 +685,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        &format!("install {}", lua_bin_path.display()),
+        &format!("link {}", lua_bin_path.display()),
     )?;
 
     // luac.exe
