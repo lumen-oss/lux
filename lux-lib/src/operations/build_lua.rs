@@ -492,9 +492,9 @@ stderr:
                 .arg("generic")
                 .output()
                 .await;
-            guard_success(fallback_output, config, "build (generic)".to_string())?;
+            guard_success(fallback_output, config, "build (generic)")?;
         }
-        output => guard_success(output, config, format!("build ({build_target})"))?,
+        output => guard_success(output, config, &format!("build ({build_target})"))?,
     };
 
     progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
@@ -673,7 +673,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        format!("install {dll_name}.dll"),
+        &format!("link {dll_name}.dll"),
     )?;
 
     // lua.exe
@@ -685,7 +685,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        format!("install {}", lua_bin_path.display()),
+        &format!("install {}", lua_bin_path.display()),
     )?;
 
     // luac.exe
@@ -697,7 +697,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        format!("install {}", lua_c_bin_path.display()),
+        &format!("install {}", lua_c_bin_path.display()),
     )?;
 
     copy_includes(&src_dir, &include_dir).await?;
@@ -708,7 +708,7 @@ async fn do_build_lua_msvc(
 fn guard_success(
     output: io::Result<std::process::Output>,
     config: &Config,
-    message: String,
+    cmd_name: &str,
 ) -> Result<(), BuildLuaError> {
     match output {
         Ok(output) if output.status.success() => {
@@ -716,7 +716,7 @@ fn guard_success(
             Ok(())
         }
         Ok(output) => Err(BuildLuaError::CommandFailure {
-            name: message,
+            name: cmd_name.to_string(),
             status: output.status,
             stdout: String::from_utf8_lossy(&output.stdout).into(),
             stderr: String::from_utf8_lossy(&output.stderr).into(),
