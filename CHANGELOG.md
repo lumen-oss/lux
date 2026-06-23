@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.3](https://github.com/lumen-oss/lux/compare/v0.33.2...v0.33.3) `lux-cli` - 2026-06-23
+
+### Added
+- *(fmt)* add support for specifying directories and files ([#1609](https://github.com/lumen-oss/lux/pull/1609))
+
 ## [0.33.2](https://github.com/lumen-oss/lux/compare/v0.33.1...v0.33.2) `lux-cli` - 2026-06-22
 
 ### Other
