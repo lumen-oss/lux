@@ -76,9 +76,6 @@ pub fn format(args: Fmt, config: Config) -> Result<()> {
         }
         PathTarget::File(file) => {
             ensure_no_package(&args)?;
-            if !is_lua_file(&file) {
-                bail!("not a Lua (.lua) file: {}", file.display());
-            }
             let root = file
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
@@ -92,7 +89,7 @@ pub fn format(args: Fmt, config: Config) -> Result<()> {
                 .filter_map(Result::ok)
                 .filter(|entry| entry.file_type().is_file())
                 .map(|entry| entry.into_path())
-                .filter(|path| is_lua_file(path));
+                .filter(|path| is_lua_source(path));
             format_loose(files, &dir, &args.backend, &config)?;
         }
     }
@@ -182,19 +179,12 @@ fn format_project(
         workspace.lua_version(config).ok(),
     );
 
-    let path_filter = args.path.as_ref().map(std::path::absolute).transpose()?;
-
     let lua_files = ["src", "lua", "lib", "spec", "test", "tests"]
         .iter()
         .flat_map(|dir| WalkDir::new(project.root().join(dir)))
         .filter_map(Result::ok)
         .map(walkdir::DirEntry::into_path)
-        .filter(|path| is_lua_file(path))
-        .filter(|path| {
-            path_filter
-                .as_ref()
-                .is_none_or(|path_filter| path.starts_with(path_filter))
-        });
+        .filter(|path| is_lua_source(path));
 
     let rockspec = project.root().join("extra.rockspec");
 
@@ -205,8 +195,9 @@ fn format_project(
     )
 }
 
-fn is_lua_file(path: &Path) -> bool {
-    path.extension().is_some_and(|ext| ext == "lua")
+fn is_lua_source(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext == "lua" || ext == "rockspec")
 }
 
 fn ensure_no_package(args: &Fmt) -> Result<()> {
@@ -216,14 +207,20 @@ fn ensure_no_package(args: &Fmt) -> Result<()> {
     Ok(())
 }
 
-/// Format files that are not part of a workspace, resolving backend configs from `root`.
 fn format_loose(
     files: impl Iterator<Item = PathBuf>,
     root: &Path,
     backend: &FmtBackend,
     config: &Config,
 ) -> Result<()> {
-    let configs = FmtConfig::resolve(root, config.lua_version().cloned());
+    let (config_root, lua_version) = match Workspace::from(root)? {
+        Some(workspace) => (
+            workspace.root().as_ref().to_path_buf(),
+            workspace.lua_version(config).ok(),
+        ),
+        None => (root.to_path_buf(), config.lua_version().cloned()),
+    };
+    let configs = FmtConfig::resolve(&config_root, lua_version);
     format_files(files, &configs, backend)
 }
 
@@ -286,7 +283,7 @@ mod tests {
     }
 
     fn loose_lua_temp_dir() -> TempDir {
-        let fixture: PathBuf = "resources/test/sample-projects/loose-lua/".into();
+        let fixture: PathBuf = "resources/test/loose-lua/".into();
         let dir = TempDir::new().unwrap();
         dir.copy_from(&fixture, &["**"]).unwrap();
         dir
@@ -338,10 +335,17 @@ mod tests {
     }
 
     #[test]
-    fn test_format_non_lua_file_errors() {
-        let dir = loose_lua_temp_dir();
+    fn test_format_subdir_inherits_workspace_config() {
+        // must resolve workspace's stylua.toml (Spaces/2-width), not stylua default.
+        let fixture: PathBuf = "resources/test/sample-projects/stylua-config/".into();
+        let workspace = TempDir::new().unwrap();
+        workspace.copy_from(&fixture, &["**"]).unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        let result = format(fmt(Some(dir.child("notes.txt").to_path_buf())), config);
-        assert!(result.is_err());
+
+        format(fmt(Some(workspace.child("src").to_path_buf())), config).unwrap();
+
+        let content = std::fs::read_to_string(workspace.child("src").child("main.lua")).unwrap();
+        assert!(content.contains("\n  print(1 * 2)"));
+        assert!(!content.contains('\t'));
     }
 }

@@ -1,0 +1,11 @@
+package = "workspace-stylua"
+version = "0.1.0"
+lua = ">=5.1"
+
+[description]
+summary = ""
+maintainer = "mrcjkb"
+labels = [""]
+
+[build]
+type = "builtin"
