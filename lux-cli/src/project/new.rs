@@ -111,13 +111,17 @@ fn clap_parse_list(input: &str) -> std::result::Result<Vec<String>, String> {
     }
 }
 
+fn parse_license(input: &str) -> Option<LicenseId> {
+    spdx::license_id(input).or_else(|| spdx::imprecise_license_id(input).map(|li| li.0))
+}
+
 /// Parses a license.
 ///
 /// # Security
 ///
 /// WARNING: This should only be invoked after validating the license with [`validate_license`].
 unsafe fn parse_license_unchecked(input: &str) -> LicenseId {
-    spdx::imprecise_license_id(input).unwrap_unchecked().0
+    parse_license(input).unwrap_unchecked()
 }
 
 fn validate_license(input: &str) -> std::result::Result<Validation, Box<dyn Error + Send + Sync>> {
@@ -126,8 +130,15 @@ fn validate_license(input: &str) -> std::result::Result<Validation, Box<dyn Erro
     }
 
     Ok(
-        match spdx::imprecise_license_id(input).ok_or(format!(
-            "Unable to identify license '{input}', please try again!",
+        match parse_license(input).ok_or(format!(
+            r#"Unable to identify SPDX license '{input}', please try again!
+Supported SPDX license IDs are:
+{}
+            "#,
+            spdx::identifiers::LICENSES
+                .iter()
+                .map(|license| license.name)
+                .join(", ")
         )) {
             Ok(_) => Validation::Valid,
             Err(err) => Validation::Invalid(err.into()),
@@ -368,4 +379,16 @@ type = "builtin"
     Ok(())
 }
 
-// TODO(vhyrro): Add tests
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_license() {
+        // non-regression for #1612
+        assert!(parse_license("EUPL-1.2").is_some());
+        assert!(parse_license("agplv3").is_some());
+    }
+}
+
+// TODO(vhyrro): Add more tests
