@@ -207,6 +207,28 @@ Libs: -L${{libdir}}"#
     println!("writing {}", pc_file.display());
     fs::write(pc_file, pc_content)?;
 
+    // Generate Lua definitions
+    let definitions_dir = output_dir.join("definitions");
+    let status = Command::new(cargo)
+        .current_dir(&project_root)
+        .args([
+            "run",
+            "--package",
+            "lux-definitions",
+            "--",
+            definitions_dir.to_string_lossy().as_ref(),
+        ])
+        .status()?;
+    if !status.success() {
+        Err("lux-definitions failed")?;
+    }
+    // We don't build lux-lua for luau yet
+    let definitions_src = definitions_dir.join("lua/lux.d.lua");
+    let definitions_dest = lib_dir.join("lux.d.lua");
+    if !definitions_src.is_file() {
+        Err(format!("{} does not exist", definitions_src.display()))?;
+    }
+    fs::copy(definitions_src, definitions_dest)?;
     Ok(())
 }
 
