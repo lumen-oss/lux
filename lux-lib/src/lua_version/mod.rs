@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use strum_macros::EnumIter;
 use thiserror::Error;
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
     package::{PackageVersion, PackageVersionReq},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumIter)]
 pub enum LuaVersion {
     #[serde(rename = "5.1")]
     Lua51,

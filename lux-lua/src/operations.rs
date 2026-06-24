@@ -15,7 +15,7 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::{
     ConfigLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua, PackageInstallSpecLua,
-    PinnedStateLua, SyncReportLua, TreeLua, WorkspaceLua,
+    PackageNameLua, PinnedStateLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone, mlua_extras::UserData)]
@@ -29,6 +29,12 @@ impl Typed for OperationsModule {
 
 impl TypedUserData for OperationsModule {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Search for a remote package");
+        methods.param(
+            "query",
+            "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
+        );
+        methods.param("config", "Lux config");
         methods.add_async_function(
             "search",
             |_, (query, config): (String, ConfigLua)| async move {
@@ -37,6 +43,10 @@ impl TypedUserData for OperationsModule {
             },
         );
 
+        methods.document("Install one or multiple package(s)");
+        methods.param("packages", "List of packages to install");
+        methods.param("tree", "Install tree");
+        methods.param("config", "Lux config");
         methods.add_async_function(
             "install",
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
@@ -52,21 +62,27 @@ impl TypedUserData for OperationsModule {
             },
         );
 
+        methods.document("Uninstall one or multiple package(s)");
+        methods.param("packages", "IDs of packages to uninstall");
+        methods.param("tree", "Install tree");
+        methods.param("config", "Lux config");
         methods.add_async_function(
             "uninstall",
-            |_, (packages, tree, config): (Vec<LocalPackageIdLua>, TreeLua, ConfigLua)| async move {
+            |_, (packages, tree, config): (Vec<LocalPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
                 Uninstall::new()
                     .config(&config.0)
                     .packages(ids)
-                    .tree(tree.0)
+                    .maybe_tree(tree.map(|tree| tree.0))
                     .remove()
                     .await
                     .into_lua_err()
             },
         );
 
+        methods.document("Update installed packages");
+        methods.param("config", "Lux config");
         methods.add_async_function("update", |_, config: ConfigLua| async move {
             let _runtime = lua_runtime().enter();
             Update::new(&config.0)
@@ -76,8 +92,37 @@ impl TypedUserData for OperationsModule {
                 .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
         });
 
+        methods.document("Sync all workspace dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
         methods.add_async_function(
             "sync",
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                Sync::new(&workspace.0, &config.0)
+                    .sync_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)?;
+                Sync::new(&workspace.0, &config.0)
+                    .sync_build_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)?;
+                Sync::new(&workspace.0, &config.0)
+                    .sync_test_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)?;
+                Ok(())
+            },
+        );
+
+        methods.document("Sync workspace dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "sync_dependencies",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
@@ -88,11 +133,46 @@ impl TypedUserData for OperationsModule {
             },
         );
 
+        methods.document("Sync workspace build dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
         methods.add_async_function(
-            "build",
+            "sync_build_dependencies",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
+                Sync::new(&workspace.0, &config.0)
+                    .sync_build_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)
+            },
+        );
+
+        methods.document("Sync workspace test dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "sync_test_dependencies",
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                Sync::new(&workspace.0, &config.0)
+                    .sync_test_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)
+            },
+        );
+
+        methods.document("Build a workspace");
+        methods.param("workspace", "Workspace to build");
+        methods.param("package", "Build only this package");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "build",
+            |_, (workspace, package, config): (WorkspaceLua, Option<PackageNameLua>, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
                 BuildWorkspace::new(&workspace.0, &config.0)
+                    .maybe_package(package.map(|p| p.0))
                     .no_lock(false)
                     .only_deps(false)
                     .build()
@@ -102,8 +182,14 @@ impl TypedUserData for OperationsModule {
             },
         );
 
+        methods.document("Download the RockSpec for a package");
+        methods.param(
+            "package_req",
+            "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
+        );
+        methods.param("config", "Lux config");
         methods.add_async_function(
-            "download",
+            "download_rockspec",
             |_, (package_req, config): (String, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let req = package_req.parse().into_lua_err()?;
@@ -116,12 +202,20 @@ impl TypedUserData for OperationsModule {
             },
         );
 
+        methods.document("Set the pinned state of a package");
+        methods.param("package_id", "ID of the package to pin");
+        methods.param("tree", "Install tree");
+        methods.param("pin_state", "The pinned state to set");
         methods.add_function(
             "pin",
             |_, (package_id, tree, pin_state): (LocalPackageIdLua, TreeLua, PinnedStateLua)| {
                 set_pinned_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
             },
         );
+    }
+
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for Lux operations");
     }
 }
 

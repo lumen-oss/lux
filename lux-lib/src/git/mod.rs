@@ -13,6 +13,7 @@ impl DisplayAsLuaValue for RemoteGitUrl {
     }
 }
 
+/// Specifies a source to be fetched from a git forge
 #[derive(Debug, PartialEq, Eq, Hash, Clone, lux_macros::DisplayAsLuaKV)]
 #[display_lua(key = "source")]
 pub struct GitSource {

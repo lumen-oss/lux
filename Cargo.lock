@@ -3499,6 +3499,7 @@ dependencies = [
  "serde",
  "serde-enum-str",
  "ssri",
+ "strum 0.28.0",
  "tokio",
  "url",
  "zip 8.6.0",

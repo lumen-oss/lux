@@ -239,8 +239,10 @@ impl<'de> Deserialize<'de> for TestSpec {
     }
 }
 
+/// Specification for running a test suite with busted
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct BustedTestSpec {
+    /// Additional CLI flags to pass to Busted when running
     pub(crate) flags: Vec<String>,
 }
 
@@ -250,9 +252,12 @@ impl BustedTestSpec {
     }
 }
 
+/// Specification for running a test suite with a command
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandTestSpec {
+    /// The command to run
     pub(crate) command: String,
+    /// Additional CLI flags to pass to Busted when running
     pub(crate) flags: Vec<String>,
 }
 
@@ -266,9 +271,12 @@ impl CommandTestSpec {
     }
 }
 
+/// Specification for running a test suite with a Lua script
 #[derive(Clone, Debug, PartialEq)]
 pub struct LuaScriptTestSpec {
+    /// The script to run
     pub(crate) script: PathBuf,
+    /// Additional CLI flags to pass to the script when running
     pub(crate) flags: Vec<String>,
 }
 

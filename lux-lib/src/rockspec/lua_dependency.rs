@@ -17,6 +17,7 @@ pub enum LuaDependencySpecParseError {
     PackageReq(#[from] PackageReqParseError),
 }
 
+/// Specification for a Lua dependency in a Lux project
 #[derive(Debug, Clone, PartialEq)]
 pub struct LuaDependencySpec {
     pub(crate) package_req: PackageReq,

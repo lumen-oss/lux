@@ -17,6 +17,7 @@ impl Typed for ConfigModule {
 
 impl TypedUserData for ConfigModule {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Create a config builder that builds the default `Config`");
         methods.add_function("default", |_, ()| {
             ConfigBuilder::default()
                 .user_agent(Some(DEFAULT_USER_AGENT.into()))
@@ -24,9 +25,22 @@ impl TypedUserData for ConfigModule {
                 .map(ConfigLua)
                 .into_lua_err()
         });
+
+        methods.document("Create a new config builder, starting with a blank slate");
         methods.add_function("builder", |_, ()| {
             Ok(ConfigBuilderLua(ConfigBuilder::default()))
         });
+
+        methods.document(
+            r#"Create a new config builder by deserializing from a config file
+if present, or otherwise by instantiating the default config"#,
+        );
+        methods.add_function("new", |_, ()| {
+            ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for building a Lux `Config`");
     }
 }
 
@@ -44,6 +58,7 @@ mod definitions_registry {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use mlua::prelude::*;
@@ -84,7 +99,6 @@ mod tests {
                 :dev(true)
                 :server("https://example.com")
                 :extra_servers({"https://example.com", "https://example2.com"})
-                :only_sources("example")
                 :namespace("example")
                 :lua_dir("lua")
                 :lua_version("5.1")
@@ -102,7 +116,6 @@ mod tests {
             assert(#full_config:extra_servers() == 2, "extra_servers should have 2 elements")
             assert(full_config:extra_servers()[1] == "https://example.com/", "first extra server should be https://example.com")
             assert(full_config:extra_servers()[2] == "https://example2.com/", "second extra server should be https://example2.com")
-            assert(full_config:only_sources() == "example", "only_sources should be https://example.com")
             assert(full_config:namespace() == "example", "namespace should be example")
             assert(full_config:lua_dir() == "lua", "lua_dir should be lua")
             assert(full_config:user_tree("5.1"), "tree should be not nil")

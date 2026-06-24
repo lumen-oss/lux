@@ -17,11 +17,16 @@ impl Typed for ProjectModule {
 
 impl TypedUserData for ProjectModule {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Load a project at the specified path, if it exists");
+        methods.param("path", "project root");
         methods.add_function("new", |_, path: String| {
             Ok(Project::from_exact(PathBuf::from(path))
                 .into_lua_err()?
                 .map(ProjectLua))
         });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for interacting with a Lux project");
     }
 }
 

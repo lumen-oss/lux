@@ -841,6 +841,7 @@ impl HasIntegrity for LocalProjectToml {
     }
 }
 
+/// The `lux.toml`, after being validated and prepared for upload
 #[derive(Debug)]
 pub struct RemoteProjectToml {
     local: LocalProjectToml,

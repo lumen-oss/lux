@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+/// Specification for building a rock with the `rust-mlua` build backend
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct RustMluaBuildSpec {
     /// Keys are module names in the format normally used by the `require()` function.

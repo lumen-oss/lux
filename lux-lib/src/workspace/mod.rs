@@ -85,6 +85,7 @@ pub enum WorkspaceTreeError {
     LuaVersionError(#[from] LuaVersionError),
 }
 
+/// A workspace, which can contain one or many Lux projects
 #[derive(Clone, Debug)]
 pub struct Workspace {
     root: WorkspaceRoot,

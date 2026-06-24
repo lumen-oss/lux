@@ -16,12 +16,14 @@ use super::{
     PlatformOverridable,
 };
 
+/// Specifies the source of a rock that has been fetched
 #[derive(Default, Deserialize, Clone, Debug, PartialEq)]
 pub struct LocalRockSource {
     pub archive_name: Option<PathBuf>,
     pub unpack_dir: Option<PathBuf>,
 }
 
+/// Specifies the source of a remote rock to be fetched
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct RemoteRockSource {
     pub(crate) local: LocalRockSource,
@@ -100,6 +102,7 @@ impl<'de> Deserialize<'de> for PerPlatform<RemoteRockSource> {
     }
 }
 
+/// Specifies a rock's source
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum RockSourceSpec {
     Git(GitSource),

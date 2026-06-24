@@ -15,17 +15,28 @@ impl Typed for WorkspaceModule {
 
 impl TypedUserData for WorkspaceModule {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Load the current workspace, if in a workspace");
         methods.add_function("current", |_, ()| {
             Ok(Workspace::current().into_lua_err()?.map(WorkspaceLua))
         });
+
+        methods.document("Load the workspace in the given directory, if present");
+        methods.param("path", "The workspace root");
         methods.add_function("new", |_, path: String| {
             Ok(Workspace::from_exact(path)
                 .into_lua_err()?
                 .map(WorkspaceLua))
         });
+        methods.document(
+            "Search for a workspace upwards from the given directory and load it, if present",
+        );
+        methods.param("path", "The directory to search upwards from");
         methods.add_function("new_fuzzy", |_, path: String| {
             Ok(Workspace::from(path).into_lua_err()?.map(WorkspaceLua))
         });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for interacting with a Lux workspace");
     }
 }
 

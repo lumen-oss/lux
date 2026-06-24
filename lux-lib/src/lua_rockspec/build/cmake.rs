@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+/// Specification for building a rock with the `cmake` build backend
 #[derive(Debug, PartialEq, Clone)]
 pub struct CMakeBuildSpec {
     pub cmake_lists_content: Option<String>,

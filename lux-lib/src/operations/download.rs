@@ -144,6 +144,7 @@ pub struct DownloadedPackedRock {
     pub path: PathBuf,
 }
 
+/// Remote Lua RockSpec that has been downloaded from a remote server, along with its source metadata
 #[derive(Clone, Debug)]
 pub struct DownloadedRockspec {
     pub rockspec: RemoteLuaRockspec,

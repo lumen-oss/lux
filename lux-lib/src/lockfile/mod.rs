@@ -155,6 +155,12 @@ pub(crate) struct LocalPackageSpec {
     pub binaries: RockBinaries,
 }
 
+/// ID of a local package, a hash that is comprised of:
+/// - name
+/// - version
+/// - pinned state
+/// - opt state
+/// - lock constraint
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Clone)]
 pub struct LocalPackageId(String);
 
@@ -298,6 +304,8 @@ pub(crate) enum RemotePackageSourceUrl {
 }
 
 // TODO(vhyrro): Move to `package/local.rs`
+
+/// A locally installed rock
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalPackage {
     pub(crate) spec: LocalPackageSpec,
@@ -1229,6 +1237,7 @@ impl WorkspaceLockfile<ReadWrite> {
     }
 }
 
+/// Flushes a lockfile automatically when it goes out of scope
 pub struct LockfileGuard(Lockfile<ReadWrite>);
 
 pub struct ProjectLockfileGuard(WorkspaceLockfile<ReadWrite>);

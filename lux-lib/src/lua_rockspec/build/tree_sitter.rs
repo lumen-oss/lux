@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+/// Specification for building a rock with the `treesitter-parser` build backend
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct TreesitterParserBuildSpec {
     /// Name of the parser language, e.g. "haskell"
