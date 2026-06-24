@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.4](https://github.com/lumen-oss/lux/compare/v0.33.3...v0.33.4) `lux-cli` - 2026-06-24
+
+### Fixed
+- *(cli/new)* properly parse precise SPDX license IDs ([#1614](https://github.com/lumen-oss/lux/pull/1614))
+
 ## [0.33.3](https://github.com/lumen-oss/lux/compare/v0.33.2...v0.33.3) `lux-cli` - 2026-06-23
 
 ### Added
