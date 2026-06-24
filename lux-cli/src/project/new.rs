@@ -131,7 +131,14 @@ fn validate_license(input: &str) -> std::result::Result<Validation, Box<dyn Erro
 
     Ok(
         match parse_license(input).ok_or(format!(
-            "Unable to identify license '{input}', please try again!",
+            r#"Unable to identify SPDX license '{input}', please try again!
+Supported SPDX license IDs are:
+{}
+            "#,
+            spdx::identifiers::LICENSES
+                .iter()
+                .map(|license| license.name)
+                .join(", ")
         )) {
             Ok(_) => Validation::Valid,
             Err(err) => Validation::Invalid(err.into()),
