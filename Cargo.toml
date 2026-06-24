@@ -22,7 +22,7 @@ mlua = { version = "0.11", features = [
   "error-send",
   "async",
 ] }
-mlua-extras = { git = "https://github.com/Tired-Fox/mlua-extras", features = [
+mlua-extras = { version = "11", features = [
   "mlua",
   "derive",
   "async",
