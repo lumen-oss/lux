@@ -11,4 +11,3 @@ path = "src/main.rs"
 [dependencies]
 lux-lua = { path = "../lux-lua", features = ["definitions", "test"] }
 mlua-extras = { workspace = true }
-lux-workspace-hack = { version = "0.1", path = "../lux-workspace-hack" }

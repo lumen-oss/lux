@@ -3447,7 +3447,6 @@ name = "lux-definitions"
 version = "0.1.0"
 dependencies = [
  "lux-lua",
- "lux-workspace-hack",
  "mlua-extras",
 ]
 

@@ -27,4 +27,5 @@ platforms = [
 # exact-versions = true
 
 [traversal-excludes]
+workspace-members = ["lux-definitions"]
 third-party = [{ name = "mlua" }]
