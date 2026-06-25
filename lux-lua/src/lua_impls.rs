@@ -766,7 +766,7 @@ impl FromLua for PackageInstallSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PackageSpecLua(pub PackageSpec);
+pub struct PackageSpecLua(#[field(skip)] pub PackageSpec);
 
 impl Typed for PackageSpecLua {
     fn ty() -> Type {
@@ -806,7 +806,7 @@ impl TypedUserData for PackageSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PackageReqLua(pub PackageReq);
+pub struct PackageReqLua(#[field(skip)] pub PackageReq);
 
 impl Typed for PackageReqLua {
     fn ty() -> Type {
@@ -839,7 +839,7 @@ impl TypedUserData for PackageReqLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LocalPackageHashesLua(pub LocalPackageHashes);
+pub struct LocalPackageHashesLua(#[field(skip)] pub LocalPackageHashes);
 
 impl Typed for LocalPackageHashesLua {
     fn ty() -> Type {
@@ -862,7 +862,7 @@ impl TypedUserData for LocalPackageHashesLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LocalPackageLua(pub LocalPackage);
+pub struct LocalPackageLua(#[field(skip)] pub LocalPackage);
 
 impl Typed for LocalPackageLua {
     fn ty() -> Type {
@@ -920,7 +920,7 @@ impl TypedUserData for LocalPackageLua {
 }
 
 #[derive(mlua_extras::UserData)]
-pub struct RockLayoutLua(pub RockLayout);
+pub struct RockLayoutLua(#[field(skip)] pub RockLayout);
 
 impl Typed for RockLayoutLua {
     fn ty() -> Type {
@@ -958,7 +958,7 @@ impl TypedUserData for RockLayoutLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct TreeLua(pub Tree);
+pub struct TreeLua(#[field(skip)] pub Tree);
 
 impl Typed for TreeLua {
     fn ty() -> Type {
@@ -1023,7 +1023,7 @@ struct RockLayoutConfigInput {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RockLayoutConfigLua(pub RockLayoutConfig);
+pub struct RockLayoutConfigLua(#[field(skip)] pub RockLayoutConfig);
 
 impl Typed for RockLayoutConfigLua {
     fn ty() -> Type {
@@ -1058,7 +1058,7 @@ impl TypedUserData for RockLayoutConfigLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct ConfigLua(pub Config);
+pub struct ConfigLua(#[field(skip)] pub Config);
 
 impl Typed for ConfigLua {
     fn ty() -> Type {
@@ -1181,7 +1181,7 @@ configuration sources (config file, CLI flags, environment variables)
 }
 
 #[derive(Clone, mlua_extras::UserData)]
-pub struct ConfigBuilderLua(pub ConfigBuilder);
+pub struct ConfigBuilderLua(#[field(skip)] pub ConfigBuilder);
 
 impl Typed for ConfigBuilderLua {
     fn ty() -> Type {
@@ -1342,7 +1342,7 @@ If set to `true`, individual rocks can still disable wrapping of their own bin s
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LuaDependencySpecLua(pub LuaDependencySpec);
+pub struct LuaDependencySpecLua(#[field(skip)] pub LuaDependencySpec);
 
 impl Typed for LuaDependencySpecLua {
     fn ty() -> Type {
@@ -1394,7 +1394,7 @@ impl TypedUserData for LuaDependencySpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PlatformSupportLua(pub PlatformSupport);
+pub struct PlatformSupportLua(#[field(skip)] pub PlatformSupport);
 
 impl Typed for PlatformSupportLua {
     fn ty() -> Type {
@@ -1417,7 +1417,7 @@ impl TypedUserData for PlatformSupportLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RockDescriptionLua(pub RockDescription);
+pub struct RockDescriptionLua(#[field(skip)] pub RockDescription);
 
 impl Typed for RockDescriptionLua {
     fn ty() -> Type {
@@ -1458,7 +1458,7 @@ impl TypedUserData for RockDescriptionLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct GitSourceLua(pub GitSource);
+pub struct GitSourceLua(#[field(skip)] pub GitSource);
 
 impl Typed for GitSourceLua {
     fn ty() -> Type {
@@ -1479,7 +1479,7 @@ impl TypedUserData for GitSourceLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RemoteRockSourceLua(pub RemoteRockSource);
+pub struct RemoteRockSourceLua(#[field(skip)] pub RemoteRockSource);
 
 impl Typed for RemoteRockSourceLua {
     fn ty() -> Type {
@@ -1513,7 +1513,7 @@ impl TypedUserData for RemoteRockSourceLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct BustedTestSpecLua(pub BustedTestSpec);
+pub struct BustedTestSpecLua(#[field(skip)] pub BustedTestSpec);
 
 impl Typed for BustedTestSpecLua {
     fn ty() -> Type {
@@ -1532,7 +1532,7 @@ impl TypedUserData for BustedTestSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct CommandTestSpecLua(pub CommandTestSpec);
+pub struct CommandTestSpecLua(#[field(skip)] pub CommandTestSpec);
 
 impl Typed for CommandTestSpecLua {
     fn ty() -> Type {
@@ -1554,7 +1554,7 @@ impl TypedUserData for CommandTestSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LuaScriptTestSpecLua(pub LuaScriptTestSpec);
+pub struct LuaScriptTestSpecLua(#[field(skip)] pub LuaScriptTestSpec);
 
 impl Typed for LuaScriptTestSpecLua {
     fn ty() -> Type {
@@ -1578,7 +1578,7 @@ impl TypedUserData for LuaScriptTestSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct ModulePathsLua(pub ModulePaths);
+pub struct ModulePathsLua(#[field(skip)] pub ModulePaths);
 
 impl Typed for ModulePathsLua {
     fn ty() -> Type {
@@ -1645,7 +1645,7 @@ impl TypedUserData for ModulePathsLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct CMakeBuildSpecLua(pub CMakeBuildSpec);
+pub struct CMakeBuildSpecLua(#[field(skip)] pub CMakeBuildSpec);
 
 impl Typed for CMakeBuildSpecLua {
     fn ty() -> Type {
@@ -1673,7 +1673,7 @@ impl TypedUserData for CMakeBuildSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct MakeBuildSpecLua(pub MakeBuildSpec);
+pub struct MakeBuildSpecLua(#[field(skip)] pub MakeBuildSpec);
 
 impl Typed for MakeBuildSpecLua {
     fn ty() -> Type {
@@ -1723,7 +1723,7 @@ impl TypedUserData for MakeBuildSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct TreesitterParserBuildSpecLua(pub TreesitterParserBuildSpec);
+pub struct TreesitterParserBuildSpecLua(#[field(skip)] pub TreesitterParserBuildSpec);
 
 impl Typed for TreesitterParserBuildSpecLua {
     fn ty() -> Type {
@@ -1767,7 +1767,7 @@ impl TypedUserData for TreesitterParserBuildSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RustMluaBuildSpecLua(pub RustMluaBuildSpec);
+pub struct RustMluaBuildSpecLua(#[field(skip)] pub RustMluaBuildSpec);
 
 impl Typed for RustMluaBuildSpecLua {
     fn ty() -> Type {
@@ -1834,7 +1834,7 @@ Keys are the sources, values the destinations (relative to the `lua` directory).
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct CommandBuildSpecLua(pub CommandBuildSpec);
+pub struct CommandBuildSpecLua(#[field(skip)] pub CommandBuildSpec);
 
 impl Typed for CommandBuildSpecLua {
     fn ty() -> Type {
@@ -1857,7 +1857,7 @@ impl TypedUserData for CommandBuildSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct InstallSpecLua(pub InstallSpec);
+pub struct InstallSpecLua(#[field(skip)] pub InstallSpec);
 
 impl Typed for InstallSpecLua {
     fn ty() -> Type {
@@ -1923,7 +1923,7 @@ to the foo directory under the rock's Lua files directory.
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct BuildSpecLua(pub BuildSpec);
+pub struct BuildSpecLua(#[field(skip)] pub BuildSpec);
 
 impl Typed for BuildSpecLua {
     fn ty() -> Type {
@@ -1970,7 +1970,7 @@ impl TypedUserData for BuildSpecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LocalLuaRockspecLua(pub LocalLuaRockspec);
+pub struct LocalLuaRockspecLua(#[field(skip)] pub LocalLuaRockspec);
 
 impl Typed for LocalLuaRockspecLua {
     fn ty() -> Type {
@@ -2058,7 +2058,7 @@ impl TypedUserData for LocalLuaRockspecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RemoteLuaRockspecLua(pub RemoteLuaRockspec);
+pub struct RemoteLuaRockspecLua(#[field(skip)] pub RemoteLuaRockspec);
 
 impl Typed for RemoteLuaRockspecLua {
     fn ty() -> Type {
@@ -2155,7 +2155,7 @@ impl TypedUserData for RemoteLuaRockspecLua {
 }
 
 #[derive(mlua_extras::UserData)]
-pub struct PartialLuaRockspecLua(pub PartialLuaRockspec);
+pub struct PartialLuaRockspecLua(#[field(skip)] pub PartialLuaRockspec);
 
 impl Typed for PartialLuaRockspecLua {
     fn ty() -> Type {
@@ -2179,7 +2179,7 @@ impl TypedUserData for PartialLuaRockspecLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PartialProjectTomlLua(pub PartialProjectToml);
+pub struct PartialProjectTomlLua(#[field(skip)] pub PartialProjectToml);
 
 impl Typed for PartialProjectTomlLua {
     fn ty() -> Type {
@@ -2215,7 +2215,7 @@ The rest of the fields are optional, but are required to build a rockspec.
 }
 
 #[derive(mlua_extras::UserData)]
-pub struct LocalProjectTomlLua(pub LocalProjectToml);
+pub struct LocalProjectTomlLua(#[field(skip)] pub LocalProjectToml);
 
 impl Typed for LocalProjectTomlLua {
     fn ty() -> Type {
@@ -2291,7 +2291,7 @@ To build a rockspec, use `RemoteProjectToml`.
 }
 
 #[derive(mlua_extras::UserData)]
-pub struct RemoteProjectTomlLua(pub RemoteProjectToml);
+pub struct RemoteProjectTomlLua(#[field(skip)] pub RemoteProjectToml);
 
 impl Typed for RemoteProjectTomlLua {
     fn ty() -> Type {
@@ -2346,7 +2346,7 @@ impl TypedUserData for RemoteProjectTomlLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RemotePackageDBLua(pub RemotePackageDB);
+pub struct RemotePackageDBLua(#[field(skip)] pub RemotePackageDB);
 
 impl Typed for RemotePackageDBLua {
     fn ty() -> Type {
@@ -2407,7 +2407,7 @@ impl TypedUserData for RemotePackageDBLua {
 }
 
 #[derive(Clone, mlua_extras::UserData)]
-pub struct LockfileReadOnlyLua(pub Lockfile<ReadOnly>);
+pub struct LockfileReadOnlyLua(#[field(skip)] pub Lockfile<ReadOnly>);
 
 impl Typed for LockfileReadOnlyLua {
     fn ty() -> Type {
@@ -2453,7 +2453,7 @@ impl TypedUserData for LockfileReadOnlyLua {
 }
 
 #[derive(mlua_extras::UserData)]
-pub struct LockfileGuardLua(pub LockfileGuard);
+pub struct LockfileGuardLua(#[field(skip)] pub LockfileGuard);
 
 impl Typed for LockfileGuardLua {
     fn ty() -> Type {
@@ -2489,7 +2489,7 @@ impl TypedUserData for LockfileGuardLua {
 }
 
 #[derive(Clone, mlua_extras::UserData)]
-pub struct LockfileReadWriteLua(pub Lockfile<ReadWrite>);
+pub struct LockfileReadWriteLua(#[field(skip)] pub Lockfile<ReadWrite>);
 
 impl Typed for LockfileReadWriteLua {
     fn ty() -> Type {
@@ -2542,7 +2542,7 @@ impl TypedUserData for LockfileReadWriteLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct WorkspaceLua(pub Workspace);
+pub struct WorkspaceLua(#[field(skip)] pub Workspace);
 
 impl Typed for WorkspaceLua {
     fn ty() -> Type {
@@ -2599,7 +2599,7 @@ impl TypedUserData for WorkspaceLua {
 }
 
 #[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct ProjectLua(pub Project);
+pub struct ProjectLua(#[field(skip)] pub Project);
 
 impl Typed for ProjectLua {
     fn ty() -> Type {
@@ -2709,7 +2709,7 @@ impl TypedUserData for ProjectLua {
 }
 
 #[derive(Clone, mlua_extras::UserData)]
-pub struct DownloadedRockspecLua(pub DownloadedRockspec);
+pub struct DownloadedRockspecLua(#[field(skip)] pub DownloadedRockspec);
 
 impl Typed for DownloadedRockspecLua {
     fn ty() -> Type {
@@ -2754,7 +2754,7 @@ mod definitions_registry {
                 inventory::submit! {
                     LuxDefinition {
                         name: $name,
-                        build: || Type::class(TypedClassBuilder::new::<$ty>()),
+                        build: || Type::class(TypedClassBuilder::new::<$ty>().build()),
                     }
                 }
             )+

@@ -50,7 +50,7 @@ mod definitions_registry {
     inventory::submit! {
         LuxDefinition {
             name: "WorkspaceModule",
-            build: || Type::class(TypedClassBuilder::new::<WorkspaceModule>()),
+            build: || Type::class(TypedClassBuilder::new::<WorkspaceModule>().build()),
         }
     }
 }

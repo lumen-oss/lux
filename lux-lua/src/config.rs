@@ -54,7 +54,7 @@ mod definitions_registry {
     inventory::submit! {
         LuxDefinition {
             name: "ConfigModule",
-            build: || Type::class(TypedClassBuilder::new::<ConfigModule>()),
+            build: || Type::class(TypedClassBuilder::new::<ConfigModule>().build()),
         }
     }
 }

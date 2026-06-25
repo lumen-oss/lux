@@ -22,9 +22,9 @@ mlua = { version = "0.11", features = [
   "error-send",
   "async",
 ] }
-mlua-extras = { version = "11", features = [
+mlua-extras = { version = "11.6", features = [
   "mlua",
-  "derive",
+  "macros",
   "async",
 ] }
 git2 = { version = "0.21", features = ["ssh", "https"] }

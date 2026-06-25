@@ -229,7 +229,7 @@ mod definitions_registry {
     inventory::submit! {
         LuxDefinition {
             name: "OperationsModule",
-            build: || Type::class(TypedClassBuilder::new::<OperationsModule>()),
+            build: || Type::class(TypedClassBuilder::new::<OperationsModule>().build()),
         }
     }
 }

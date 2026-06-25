@@ -48,7 +48,6 @@ lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
-mlua-extras = { git = "https://github.com/Tired-Fox/mlua-extras", default-features = false, features = ["async", "derive", "lua51", "lua52", "lua53", "lua54", "luajit", "vendored"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
@@ -65,12 +64,14 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
+strum = { version = "0.28", features = ["derive"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
 toml = { version = "0.8" }
-toml_datetime = { version = "1", features = ["serde"] }
+toml_datetime-3b31131e45eafb45 = { package = "toml_datetime", version = "0.6", default-features = false, features = ["serde"] }
+toml_datetime-dff4ba8e3ae991db = { package = "toml_datetime", version = "1", features = ["serde"] }
 toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
@@ -92,6 +93,8 @@ cc = { version = "1", default-features = false, features = ["parallel"] }
 clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 crossbeam-utils = { version = "0.8" }
+darling = { version = "0.23" }
+darling_core = { version = "0.23", default-features = false, features = ["suggestions"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
 flate2 = { version = "1", features = ["zlib-rs"] }
@@ -115,7 +118,6 @@ lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
-mlua-extras = { git = "https://github.com/Tired-Fox/mlua-extras", default-features = false, features = ["async", "derive", "lua51", "lua52", "lua53", "lua54", "luajit", "vendored"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
@@ -132,14 +134,15 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
+strum = { version = "0.28", features = ["derive"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
-syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "full"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+syn = { version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
 toml = { version = "0.8" }
-toml_datetime = { version = "1", features = ["serde"] }
+toml_datetime-3b31131e45eafb45 = { package = "toml_datetime", version = "0.6", default-features = false, features = ["serde"] }
+toml_datetime-dff4ba8e3ae991db = { package = "toml_datetime", version = "1", features = ["serde"] }
 toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }

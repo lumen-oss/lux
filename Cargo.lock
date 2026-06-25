@@ -440,7 +440,7 @@ version = "3.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "519bd3116aeeb42d5372c29d982d16d0170d3d4a5ed85fc7dd91642ffff3c67c"
 dependencies = [
- "darling 0.23.0",
+ "darling 0.20.11",
  "ident_case",
  "prettyplease",
  "proc-macro2",
@@ -3447,7 +3447,8 @@ name = "lux-definitions"
 version = "0.1.0"
 dependencies = [
  "lux-lua",
- "mlua-extras 11.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lux-workspace-hack",
+ "mlua-extras",
 ]
 
 [[package]]
@@ -3540,7 +3541,7 @@ dependencies = [
  "lux-lib",
  "lux-workspace-hack",
  "mlua",
- "mlua-extras 11.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mlua-extras",
  "path-absolutize",
  "path-slash",
  "serde",
@@ -3575,6 +3576,8 @@ dependencies = [
  "clap 4.6.1",
  "clap_builder",
  "crossbeam-utils",
+ "darling 0.23.0",
+ "darling_core 0.23.0",
  "digest 0.10.7",
  "either",
  "flate2",
@@ -3598,7 +3601,6 @@ dependencies = [
  "log",
  "memchr",
  "miniz_oxide",
- "mlua-extras 11.6.1 (git+https://github.com/Tired-Fox/mlua-extras)",
  "num-traits",
  "openssl",
  "openssl-sys",
@@ -3615,13 +3617,14 @@ dependencies = [
  "simd-adler32",
  "slab",
  "smallvec",
+ "strum 0.28.0",
  "subtle",
- "syn 1.0.109",
  "syn 2.0.117",
  "time",
  "tokio",
  "tokio-util",
  "toml 0.8.23",
+ "toml_datetime 0.6.11",
  "toml_datetime 1.1.1+spec-1.1.0",
  "toml_edit 0.22.27",
  "toml_parser",
@@ -3798,35 +3801,15 @@ dependencies = [
 
 [[package]]
 name = "mlua-extras"
-version = "11.6.1"
+version = "11.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7a571dbf09e8a33de80dab18d812298b09a5d4ce204beee63c7605239086710"
+checksum = "cf598189f6ef6c8b7577da726f8115cb64d740ccdb179098665e03bd8a7903b6"
 dependencies = [
  "mlua",
- "mlua-extras-derive 11.6.1",
+ "mlua-extras-derive",
+ "ryu",
+ "serde",
  "strum 0.27.2",
-]
-
-[[package]]
-name = "mlua-extras"
-version = "11.6.1"
-source = "git+https://github.com/Tired-Fox/mlua-extras#a8017464ea863617f6c9d78fceee4b8143850b22"
-dependencies = [
- "mlua",
- "mlua-extras-derive 11.6.0",
- "strum 0.27.2",
-]
-
-[[package]]
-name = "mlua-extras-derive"
-version = "11.6.0"
-source = "git+https://github.com/Tired-Fox/mlua-extras#a8017464ea863617f6c9d78fceee4b8143850b22"
-dependencies = [
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
- "venial",
 ]
 
 [[package]]
@@ -6009,7 +5992,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
