@@ -6,7 +6,7 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::ProjectLua;
 
-#[derive(Clone, mlua_extras::UserData)]
+#[derive(Clone)]
 pub(crate) struct ProjectModule;
 
 impl Typed for ProjectModule {
@@ -27,6 +27,18 @@ impl TypedUserData for ProjectModule {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Module for interacting with a Lux project");
+    }
+}
+
+impl mlua::UserData for ProjectModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 

@@ -4,7 +4,7 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::WorkspaceLua;
 
-#[derive(Clone, mlua_extras::UserData)]
+#[derive(Clone)]
 pub(crate) struct WorkspaceModule;
 
 impl Typed for WorkspaceModule {
@@ -37,6 +37,18 @@ impl TypedUserData for WorkspaceModule {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Module for interacting with a Lux workspace");
+    }
+}
+
+impl mlua::UserData for WorkspaceModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 

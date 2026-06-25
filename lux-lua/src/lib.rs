@@ -12,7 +12,7 @@ mod operations;
 mod project;
 mod workspace;
 
-#[derive(Clone, mlua_extras::UserData)]
+#[derive(Clone)]
 pub(crate) struct LuxModule;
 
 impl Typed for LuxModule {
@@ -31,6 +31,18 @@ impl TypedUserData for LuxModule {
         fields.add_field("workspace", workspace::WorkspaceModule);
         fields.add_field("project", project::ProjectModule);
         fields.add_field("operations", operations::OperationsModule);
+    }
+}
+
+impl mlua::UserData for LuxModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 

@@ -18,7 +18,7 @@ use crate::lua_impls::{
     PackageNameLua, PinnedStateLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
-#[derive(Clone, mlua_extras::UserData)]
+#[derive(Clone)]
 pub(crate) struct OperationsModule;
 
 impl Typed for OperationsModule {
@@ -99,22 +99,23 @@ impl TypedUserData for OperationsModule {
             "sync",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
-                Sync::new(&workspace.0, &config.0)
+                let deps = Sync::new(&workspace.0, &config.0)
                     .sync_dependencies()
                     .await
-                    .into_lua_err()
-                    .map(SyncReportLua)?;
-                Sync::new(&workspace.0, &config.0)
+                    .into_lua_err()?;
+                let build = Sync::new(&workspace.0, &config.0)
                     .sync_build_dependencies()
                     .await
-                    .into_lua_err()
-                    .map(SyncReportLua)?;
-                Sync::new(&workspace.0, &config.0)
+                    .into_lua_err()?;
+                let test = Sync::new(&workspace.0, &config.0)
                     .sync_test_dependencies()
                     .await
-                    .into_lua_err()
-                    .map(SyncReportLua)?;
-                Ok(())
+                    .into_lua_err()?;
+                Ok((
+                    SyncReportLua(deps),
+                    SyncReportLua(build),
+                    SyncReportLua(test),
+                ))
             },
         );
 
@@ -219,6 +220,18 @@ impl TypedUserData for OperationsModule {
     }
 }
 
+impl mlua::UserData for OperationsModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
 #[cfg(feature = "definitions")]
 mod definitions_registry {
     use mlua_extras::typed::{Type, TypedClassBuilder};
@@ -308,8 +321,8 @@ type = "builtin"
             assert(type(ops.uninstall) == "function")
             assert(type(ops.update)    == "function")
             assert(type(ops.sync)      == "function")
-            assert(type(ops.build)     == "function")
-            assert(type(ops.download)  == "function")
+            assert(type(ops.build)             == "function")
+            assert(type(ops.download_rockspec) == "function")
             assert(type(ops.pin)       == "function")
             assert(type(ops.search)    == "function")
         "#,
@@ -387,8 +400,8 @@ type = "builtin"
                     :lua_version("5.1")
                     :user_tree(tree)
                     :build()
-                local project = lux.project.new(project_location)
-                report = lux.operations.sync(project, config)
+                local workspace = lux.workspace.new(project_location)
+                report = lux.operations.sync(workspace, config)
             end)
 
             while coroutine.status(co) ~= "dead" do
@@ -416,7 +429,7 @@ type = "builtin"
             local downloaded
             local co = coroutine.create(function()
                 local config = lux.config.default()
-                downloaded = lux.operations.download("say >= 1.3", config)
+                downloaded = lux.operations.download_rockspec("say >= 1.3", config)
             end)
 
             while coroutine.status(co) ~= "dead" do

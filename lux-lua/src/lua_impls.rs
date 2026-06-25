@@ -957,8 +957,8 @@ impl TypedUserData for RockLayoutLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct TreeLua(#[field(skip)] pub Tree);
+#[derive(Debug, Clone)]
+pub struct TreeLua(pub Tree);
 
 impl Typed for TreeLua {
     fn ty() -> Type {
@@ -1006,6 +1006,18 @@ impl TypedUserData for TreeLua {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("A collection of files where installed rocks are located");
+    }
+}
+
+impl mlua::UserData for TreeLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -1057,8 +1069,8 @@ impl TypedUserData for RockLayoutConfigLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct ConfigLua(#[field(skip)] pub Config);
+#[derive(Debug, Clone)]
+pub struct ConfigLua(pub Config);
 
 impl Typed for ConfigLua {
     fn ty() -> Type {
@@ -1180,8 +1192,20 @@ configuration sources (config file, CLI flags, environment variables)
     }
 }
 
-#[derive(Clone, mlua_extras::UserData)]
-pub struct ConfigBuilderLua(#[field(skip)] pub ConfigBuilder);
+impl mlua::UserData for ConfigLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Clone)]
+pub struct ConfigBuilderLua(pub ConfigBuilder);
 
 impl Typed for ConfigBuilderLua {
     fn ty() -> Type {
@@ -1338,6 +1362,18 @@ If set to `true`, individual rocks can still disable wrapping of their own bin s
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Incrementally builds a `Config` by layering configuration sources.");
+    }
+}
+
+impl mlua::UserData for ConfigBuilderLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -2057,8 +2093,8 @@ impl TypedUserData for LocalLuaRockspecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RemoteLuaRockspecLua(#[field(skip)] pub RemoteLuaRockspec);
+#[derive(Debug, Clone)]
+pub struct RemoteLuaRockspecLua(pub RemoteLuaRockspec);
 
 impl Typed for RemoteLuaRockspecLua {
     fn ty() -> Type {
@@ -2151,6 +2187,18 @@ impl TypedUserData for RemoteLuaRockspecLua {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("RockSpec for a remote rock, deserialized from a `.rockspec` file");
+    }
+}
+
+impl mlua::UserData for RemoteLuaRockspecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -2541,8 +2589,8 @@ impl TypedUserData for LockfileReadWriteLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct WorkspaceLua(#[field(skip)] pub Workspace);
+#[derive(Debug, Clone)]
+pub struct WorkspaceLua(pub Workspace);
 
 impl Typed for WorkspaceLua {
     fn ty() -> Type {
@@ -2598,8 +2646,20 @@ impl TypedUserData for WorkspaceLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct ProjectLua(#[field(skip)] pub Project);
+impl mlua::UserData for WorkspaceLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectLua(pub Project);
 
 impl Typed for ProjectLua {
     fn ty() -> Type {
@@ -2708,8 +2768,20 @@ impl TypedUserData for ProjectLua {
     }
 }
 
-#[derive(Clone, mlua_extras::UserData)]
-pub struct DownloadedRockspecLua(#[field(skip)] pub DownloadedRockspec);
+impl mlua::UserData for ProjectLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Clone)]
+pub struct DownloadedRockspecLua(pub DownloadedRockspec);
 
 impl Typed for DownloadedRockspecLua {
     fn ty() -> Type {
@@ -2729,6 +2801,19 @@ impl TypedUserData for DownloadedRockspecLua {
         docs.add("Remote Lua RockSpec that has been downloaded from a remote server, along with its source metadata");
     }
 }
+
+impl mlua::UserData for DownloadedRockspecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
 // Definition registrations
 
 #[cfg(feature = "definitions")]
