@@ -34,10 +34,7 @@ use super::{
     PartialOverride, PerPlatform, PlatformOverridable,
 };
 
-/// The build specification for a given rock, serialized from `rockspec.build = { ... }`.
-///
-/// See [the rockspec format](https://github.com/luarocks/luarocks/wiki/Rockspec-format) for more
-/// info.
+/// The build specification for a given rock, serialized from `build = { ... }`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BuildSpec {
     /// Determines the build backend to use.
@@ -266,6 +263,7 @@ impl BuildBackendSpec {
     }
 }
 
+/// Specification for building a rock with the `command` build backend
 #[derive(Debug, PartialEq, Clone)]
 pub struct CommandBuildSpec {
     pub build_command: Option<String>,
@@ -345,7 +343,7 @@ impl LibPathBufTable {
 /// where the array part is a list of filenames to be copied.
 /// For module directories only, in the hash part, other keys are identifiers in Lua module format,
 /// to indicate which subdirectory the file should be copied to.
-/// For example, build.install.lua = {["foo.bar"] = {"src/bar.lua"}} will copy src/bar.lua
+/// For example, lua = {["foo.bar"] = "src/bar.lua"} will copy src/bar.lua
 /// to the foo directory under the rock's Lua files directory.
 #[derive(Debug, PartialEq, Default, Deserialize, Clone, lux_macros::DisplayAsLuaKV)]
 #[display_lua(key = "install")]

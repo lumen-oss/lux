@@ -36,27 +36,22 @@ futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["js", "std"] }
-git2 = { version = "0.21", features = ["https", "ssh", "vendored-libgit2"] }
 hashbrown = { version = "0.17" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
 indexmap = { version = "1", default-features = false, features = ["std"] }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
-libgit2-sys = { version = "0.18", default-features = false, features = ["https", "ssh", "vendored"] }
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
-openssl = { version = "0.10", features = ["vendored"] }
-openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
 percent-encoding = { version = "2" }
 predicates = { version = "3" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
-reqwest = { version = "0.13", default-features = false, features = ["charset", "http2", "json", "multipart", "native-tls", "native-tls-vendored", "query", "system-proxy"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
@@ -91,6 +86,8 @@ cc = { version = "1", default-features = false, features = ["parallel"] }
 clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
 crossbeam-utils = { version = "0.8" }
+darling = { version = "0.23" }
+darling_core = { version = "0.23", default-features = false, features = ["suggestions"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
 flate2 = { version = "1", features = ["zlib-rs"] }
@@ -102,27 +99,22 @@ futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["js", "std"] }
-git2 = { version = "0.21", features = ["https", "ssh", "vendored-libgit2"] }
 hashbrown = { version = "0.17" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "server"] }
 indexmap = { version = "1", default-features = false, features = ["std"] }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
-libgit2-sys = { version = "0.18", default-features = false, features = ["https", "ssh", "vendored"] }
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
-openssl = { version = "0.10", features = ["vendored"] }
-openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
 percent-encoding = { version = "2" }
 predicates = { version = "3" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
-reqwest = { version = "0.13", default-features = false, features = ["charset", "http2", "json", "multipart", "native-tls", "native-tls-vendored", "query", "system-proxy"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }

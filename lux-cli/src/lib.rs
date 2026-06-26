@@ -90,21 +90,16 @@ pub struct Cli {
     #[arg(long, value_name = "server")]
     pub server: Option<Url>,
 
-    /// Fetch rocks/rockspecs from this server in addition to the main server{n}
+    /// Fetch rocks/rockspecs from these servers in addition to the main server{n}
     /// (overrides any entries in the config file).
     #[arg(long, value_name = "extra-server")]
     pub extra_servers: Option<Vec<Url>>,
-
-    /// Restrict downloads to paths matching the given URL.
-    #[arg(long, value_name = "url")]
-    pub only_sources: Option<String>,
 
     /// Specify the luarocks server namespace to use.
     #[arg(long, value_name = "namespace")]
     pub namespace: Option<String>,
 
-    /// Specify the directory in which to install Lua{n}
-    /// if not found.
+    /// Specify the directory in which to install Lua if not found.
     #[arg(long, value_name = "prefix")]
     pub lua_dir: Option<PathBuf>,
 
@@ -117,11 +112,13 @@ pub struct Cli {
     #[arg(long, value_name = "tree")]
     pub tree: Option<PathBuf>,
 
-    /// Specifies the cache directory for e.g. luarocks manifests.
+    /// Specifies the cache directory, e.g. for luarocks manifests.
     #[arg(long, value_name = "cache-dir")]
     pub cache_dir: Option<PathBuf>,
 
-    /// Specifies the data directory (e.g. ~/.local/share/lux).
+    /// Specifies the data directory,{n}
+    /// in which the default user install tree resides{n}
+    /// (e.g. ~/.local/share/lux).
     #[arg(long, value_name = "data-dir")]
     pub data_dir: Option<PathBuf>,
 

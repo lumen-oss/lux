@@ -11,26 +11,44 @@ use lux_lib::{
     remote_package_db::RemotePackageDB,
 };
 use mlua::prelude::*;
+use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::{
     ConfigLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua, PackageInstallSpecLua,
-    PinnedStateLua, SyncReportLua, TreeLua, WorkspaceLua,
+    PackageNameLua, PinnedStateLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
-pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
-    let table = lua.create_table()?;
+#[derive(Clone)]
+pub(crate) struct OperationsModule;
 
-    table.set(
-        "search",
-        lua.create_async_function(|_, (query, config): (String, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            search(query, config).await
-        })?,
-    )?;
+impl Typed for OperationsModule {
+    fn ty() -> Type {
+        Type::named("OperationsModule")
+    }
+}
 
-    table.set(
-        "install",
-        lua.create_async_function(
+impl TypedUserData for OperationsModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Search for a remote package");
+        methods.param(
+            "query",
+            "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
+        );
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "search",
+            |_, (query, config): (String, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                search(query, config).await
+            },
+        );
+
+        methods.document("Install one or multiple package(s)");
+        methods.param("packages", "List of packages to install");
+        methods.param("tree", "Install tree");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "install",
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
@@ -42,41 +60,70 @@ pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
                     .into_lua_err()
                     .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
             },
-        )?,
-    )?;
+        );
 
-    table.set(
-        "uninstall",
-        lua.create_async_function(
-            |_, (packages, tree, config): (Vec<LocalPackageIdLua>, TreeLua, ConfigLua)| async move {
+        methods.document("Uninstall one or multiple package(s)");
+        methods.param("packages", "IDs of packages to uninstall");
+        methods.param("tree", "Install tree");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "uninstall",
+            |_, (packages, tree, config): (Vec<LocalPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
                 Uninstall::new()
                     .config(&config.0)
                     .packages(ids)
-                    .tree(tree.0)
+                    .maybe_tree(tree.map(|tree| tree.0))
                     .remove()
                     .await
                     .into_lua_err()
             },
-        )?,
-    )?;
+        );
 
-    table.set(
-        "update",
-        lua.create_async_function(|_, config: ConfigLua| async move {
+        methods.document("Update installed packages");
+        methods.param("config", "Lux config");
+        methods.add_async_function("update", |_, config: ConfigLua| async move {
             let _runtime = lua_runtime().enter();
             Update::new(&config.0)
                 .update()
                 .await
                 .into_lua_err()
                 .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
-        })?,
-    )?;
+        });
 
-    table.set(
-        "sync",
-        lua.create_async_function(
+        methods.document("Sync all workspace dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "sync",
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                let deps = Sync::new(&workspace.0, &config.0)
+                    .sync_dependencies()
+                    .await
+                    .into_lua_err()?;
+                let build = Sync::new(&workspace.0, &config.0)
+                    .sync_build_dependencies()
+                    .await
+                    .into_lua_err()?;
+                let test = Sync::new(&workspace.0, &config.0)
+                    .sync_test_dependencies()
+                    .await
+                    .into_lua_err()?;
+                Ok((
+                    SyncReportLua(deps),
+                    SyncReportLua(build),
+                    SyncReportLua(test),
+                ))
+            },
+        );
+
+        methods.document("Sync workspace dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "sync_dependencies",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
@@ -85,15 +132,48 @@ pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
                     .into_lua_err()
                     .map(SyncReportLua)
             },
-        )?,
-    )?;
+        );
 
-    table.set(
-        "build",
-        lua.create_async_function(
+        methods.document("Sync workspace build dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "sync_build_dependencies",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
+                Sync::new(&workspace.0, &config.0)
+                    .sync_build_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)
+            },
+        );
+
+        methods.document("Sync workspace test dependencies");
+        methods.param("workspace", "Workspace to sync");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "sync_test_dependencies",
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                Sync::new(&workspace.0, &config.0)
+                    .sync_test_dependencies()
+                    .await
+                    .into_lua_err()
+                    .map(SyncReportLua)
+            },
+        );
+
+        methods.document("Build a workspace");
+        methods.param("workspace", "Workspace to build");
+        methods.param("package", "Build only this package");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "build",
+            |_, (workspace, package, config): (WorkspaceLua, Option<PackageNameLua>, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
                 BuildWorkspace::new(&workspace.0, &config.0)
+                    .maybe_package(package.map(|p| p.0))
                     .no_lock(false)
                     .only_deps(false)
                     .build()
@@ -101,33 +181,70 @@ pub fn operations(lua: &Lua) -> mlua::Result<LuaTable> {
                     .into_lua_err()
                     .map(|packages: Vec<_>| packages.into_iter().map(LocalPackageLua).collect_vec())
             },
-        )?,
-    )?;
+        );
 
-    table.set(
-        "download",
-        lua.create_async_function(|_, (package_req, config): (String, ConfigLua)| async move {
-            let _runtime = lua_runtime().enter();
-            let req = package_req.parse().into_lua_err()?;
-            let progress = Progress::<ProgressBar>::no_progress();
-            Download::new(&req, &config.0, &progress)
-                .download_rockspec()
-                .await
-                .into_lua_err()
-                .map(DownloadedRockspecLua)
-        })?,
-    )?;
+        methods.document("Download the RockSpec for a package");
+        methods.param(
+            "package_req",
+            "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
+        );
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "download_rockspec",
+            |_, (package_req, config): (String, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                let req = package_req.parse().into_lua_err()?;
+                let progress = Progress::<ProgressBar>::no_progress();
+                Download::new(&req, &config.0, &progress)
+                    .download_rockspec()
+                    .await
+                    .into_lua_err()
+                    .map(DownloadedRockspecLua)
+            },
+        );
 
-    table.set(
-        "pin",
-        lua.create_function(
+        methods.document("Set the pinned state of a package");
+        methods.param("package_id", "ID of the package to pin");
+        methods.param("tree", "Install tree");
+        methods.param("pin_state", "The pinned state to set");
+        methods.add_function(
+            "pin",
             |_, (package_id, tree, pin_state): (LocalPackageIdLua, TreeLua, PinnedStateLua)| {
                 set_pinned_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
             },
-        )?,
-    )?;
+        );
+    }
 
-    Ok(table)
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for Lux operations");
+    }
+}
+
+impl mlua::UserData for OperationsModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::OperationsModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "OperationsModule",
+            build: || Type::class(TypedClassBuilder::new::<OperationsModule>().build()),
+        }
+    }
 }
 
 async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String, Vec<String>>> {
@@ -204,8 +321,8 @@ type = "builtin"
             assert(type(ops.uninstall) == "function")
             assert(type(ops.update)    == "function")
             assert(type(ops.sync)      == "function")
-            assert(type(ops.build)     == "function")
-            assert(type(ops.download)  == "function")
+            assert(type(ops.build)             == "function")
+            assert(type(ops.download_rockspec) == "function")
             assert(type(ops.pin)       == "function")
             assert(type(ops.search)    == "function")
         "#,
@@ -283,8 +400,8 @@ type = "builtin"
                     :lua_version("5.1")
                     :user_tree(tree)
                     :build()
-                local project = lux.project.new(project_location)
-                report = lux.operations.sync(project, config)
+                local workspace = lux.workspace.new(project_location)
+                report = lux.operations.sync(workspace, config)
             end)
 
             while coroutine.status(co) ~= "dead" do
@@ -312,7 +429,7 @@ type = "builtin"
             local downloaded
             local co = coroutine.create(function()
                 local config = lux.config.default()
-                downloaded = lux.operations.download("say >= 1.3", config)
+                downloaded = lux.operations.download_rockspec("say >= 1.3", config)
             end)
 
             while coroutine.status(co) ~= "dead" do

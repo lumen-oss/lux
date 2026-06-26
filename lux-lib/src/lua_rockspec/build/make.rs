@@ -7,6 +7,7 @@ const MAKEFILE: &str = "Makefile";
 #[cfg(target_env = "msvc")]
 const MAKEFILE: &str = "Makefile.win";
 
+/// Specification for building a rock with the `make` build backend
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct MakeBuildSpec {
     /// Makefile to be used.

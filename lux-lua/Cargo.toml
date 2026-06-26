@@ -8,20 +8,21 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-lux-workspace-hack = { workspace = true }
 mlua = { workspace = true }
 path-absolutize = { workspace = true }
 itertools = { workspace = true }
 path-slash = { workspace = true }
+strum = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 ssri = "9.2"
 url = "2.5"
 serde-enum-str = "0.5.0"
+inventory = { version = "0.3", optional = true }
+mlua-extras.workspace = true
 
 [dependencies.lux-lib]
 version = "0.43.2"
 path = "../lux-lib"
-default-features = false
 
 [dev-dependencies]
 assert_fs = "1.1"
@@ -29,16 +30,18 @@ tokio = { workspace = true }
 zip = { workspace = true }
 
 [features]
-lua51 = ["mlua/module", "mlua/lua51"]
-lua52 = ["mlua/module", "mlua/lua52"]
-lua53 = ["mlua/module", "mlua/lua53"]
-lua54 = ["mlua/module", "mlua/lua54"]
-lua55 = ["mlua/module", "mlua/lua55"]
-luajit = ["mlua/module", "mlua/luajit"]
-vendored = ["lux-lib/vendored-openssl", "lux-lib/vendored-libgit2"]
+module = ["mlua/module"]
+lua51 = ["mlua/lua51"]
+lua52 = ["mlua/lua52"]
+lua53 = ["mlua/lua53"]
+lua54 = ["mlua/lua54"]
+lua55 = ["mlua/lua55"]
+luajit = ["mlua/luajit"]
+vendored = ["lux-lib/vendored", "mlua/vendored"]
 # Run tests without module mode so we can link against Lua and run the tests.
-test = ["mlua/vendored", "mlua/lua51"]
+test = ["lua51"]
 ssh-tests = ["lux-lib/ssh-tests"]
+definitions = ["dep:inventory"]
 
 [lints.clippy]
 panic = "warn"

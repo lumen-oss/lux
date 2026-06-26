@@ -27,4 +27,14 @@ platforms = [
 # exact-versions = true
 
 [traversal-excludes]
-third-party = [{ name = "mlua" }]
+workspace-members = ["lux-definitions", "lux-lua"]
+
+# NOTE: We have to exclude crates that can have mutually exclusive feature sets
+# (vendored | non-vendored, Lua version, ...)
+third-party = [
+  { name = "git2" },      # vendored/non-vendored libgit2
+  { name = "mlua" },      # vendored/non-vendored, conflicing lua features
+  { name = "openssl" },   # vendored/non-vendored
+  { name = "reqwest" },   # vendored/non-vendored TLS
+  { name = "hyper-tls" }, # vendored/non-vendored TLS
+]

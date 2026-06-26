@@ -32,9 +32,9 @@ const LOCKFILE_NAME: &str = "lux.lock";
 pub trait InstallTree {
     /// The Lua version for which to install packages.
     fn version(&self) -> &LuaVersion;
-    /// The root of the tree
+    /// The root directory of the tree
     fn root(&self) -> PathBuf;
-    /// The root of a package
+    /// The root directory of a package in this tree
     fn root_for(&self, package: &LocalPackage) -> PathBuf;
     /// Where wrapped package binaries are installed
     fn bin(&self) -> PathBuf;
@@ -60,6 +60,8 @@ pub trait InstallTree {
     fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, TreeError>;
 }
 
+/// A Lux install tree that supports multiple versions of the same dependency,
+/// with packages addressed by their [`LocalPackageId`]
 #[derive(Clone, Debug)]
 pub struct Tree {
     /// The Lua version of the tree.
@@ -84,7 +86,7 @@ pub enum TreeError {
     Lockfile(#[from] LockfileError),
 }
 
-/// Change-agnostic way of referencing various paths for a rock.
+/// Change-agnostic way of referencing various paths for a rock
 #[derive(Debug, PartialEq)]
 pub struct RockLayout {
     /// The local installation directory.

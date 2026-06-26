@@ -33,6 +33,7 @@ pub enum PackageSpecFromPackageReqError {
     },
 }
 
+/// Specification for a package with an exact name and version
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct PackageSpec {
@@ -56,6 +57,7 @@ impl PackageSpec {
     pub fn version(&self) -> &PackageVersion {
         &self.version
     }
+    /// Note that the version requirement loses the specrev information.
     pub fn into_package_req(self) -> PackageReq {
         PackageReq {
             name: self.name,
@@ -238,8 +240,7 @@ impl PackageReq {
     pub fn version_req(&self) -> &PackageVersionReq {
         &self.version_req
     }
-    /// Evaluate whether the given package satisfies the package requirement
-    /// given by `self`.
+    /// Evaluate whether the given package satisfies the package requirement given by `self`.
     pub fn matches(&self, package: &PackageSpec) -> bool {
         self.name == package.name && self.version_req.matches(&package.version)
     }

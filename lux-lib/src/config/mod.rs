@@ -31,7 +31,6 @@ pub struct Config {
     enable_development_packages: bool,
     server: Url,
     extra_servers: Vec<Url>,
-    only_sources: Option<String>,
     namespace: Option<String>,
     lua_dir: Option<PathBuf>,
     lua_version: Option<LuaVersion>,
@@ -45,42 +44,37 @@ pub struct Config {
     max_jobs: usize,
     variables: HashMap<String, String>,
     external_deps: ExternalDependencySearchConfig,
-    /// The rock layout for entrypoints of new install trees.
-    /// Does not affect existing install trees or dependency rock layouts.
     entrypoint_layout: RockLayoutConfig,
 
     cache_dir: PathBuf,
     data_dir: PathBuf,
     vendor_dir: Option<PathBuf>,
 
-    /// The user agent to set when making web requests.
-    /// Default: "lux-lib/<version>".
     user_agent: String,
 
     generate_luarc: bool,
-    /// Whether to wrap installed Lua bin scripts to be executed with
-    /// the detected or configured Lua installation.
-    /// Setting this to `false` disables wrapping globally.
-    /// If set to `true`, individual rocks can still disable wrapping of their own bin scripts.
-    /// Default: `true`.
     wrap_bin_scripts: bool,
 }
 
 impl Config {
-    pub fn get_project_dirs() -> Result<ProjectDirs, NoValidHomeDirectory> {
+    /// Lux application directories
+    fn project_dirs() -> Result<ProjectDirs, NoValidHomeDirectory> {
         directories::ProjectDirs::from("org", "lumenlabs", "lux").ok_or(NoValidHomeDirectory)
     }
 
-    pub fn get_default_cache_path() -> Result<PathBuf, NoValidHomeDirectory> {
-        let project_dirs = Config::get_project_dirs()?;
+    /// Lux cache directory
+    fn default_cache_path() -> Result<PathBuf, NoValidHomeDirectory> {
+        let project_dirs = Config::project_dirs()?;
         Ok(project_dirs.cache_dir().to_path_buf())
     }
 
-    pub fn get_default_data_path() -> Result<PathBuf, NoValidHomeDirectory> {
-        let project_dirs = Config::get_project_dirs()?;
+    /// Lux data directory
+    fn default_data_path() -> Result<PathBuf, NoValidHomeDirectory> {
+        let project_dirs = Config::project_dirs()?;
         Ok(project_dirs.data_local_dir().to_path_buf())
     }
 
+    /// Create a copy of this config for the specified Lua version
     pub fn with_lua_version(self, lua_version: LuaVersion) -> Self {
         Self {
             lua_version: Some(lua_version),
@@ -88,6 +82,7 @@ impl Config {
         }
     }
 
+    /// Create a copy of this config with the specified install tree
     pub fn with_tree(self, tree: PathBuf) -> Self {
         Self {
             user_tree: tree,
@@ -95,14 +90,17 @@ impl Config {
         }
     }
 
+    /// The luarocks repository server
     pub fn server(&self) -> &Url {
         &self.server
     }
 
+    /// Additional luarocks repository servers
     pub fn extra_servers(&self) -> &Vec<Url> {
         self.extra_servers.as_ref()
     }
 
+    /// Enabled luarocks repository servers that provide dev/scm rocks
     pub fn enabled_dev_servers(&self) -> Result<Vec<Url>, ConfigError> {
         let mut enabled_dev_servers = Vec::new();
         if self.enable_development_packages {
@@ -114,14 +112,12 @@ impl Config {
         Ok(enabled_dev_servers)
     }
 
-    pub fn only_sources(&self) -> Option<&String> {
-        self.only_sources.as_ref()
-    }
-
+    /// The luarocks server namespace to use
     pub fn namespace(&self) -> Option<&String> {
         self.namespace.as_ref()
     }
 
+    /// The directory in which to install Lua{n} if not found
     pub fn lua_dir(&self) -> Option<&PathBuf> {
         self.lua_dir.as_ref()
     }
@@ -132,31 +128,39 @@ impl Config {
     }
 
     /// The tree in which to install rocks.
-    /// If installing packges for a project, use `Project::tree` instead.
+    /// If installing packages for a project, use `Project::tree` instead.
     pub fn user_tree(&self, version: LuaVersion) -> Result<Tree, TreeError> {
         Tree::new(self.user_tree.clone(), version, self)
     }
 
+    /// Whether to display verbose output of commands executed
     pub fn verbose(&self) -> bool {
         self.verbose
     }
 
+    /// Whether to disable printing progress bars and spinners
     pub fn no_progress(&self) -> bool {
         self.no_progress
     }
 
+    /// Whether to skip prompts, selecting the default option
     pub fn no_prompt(&self) -> bool {
         self.no_prompt
     }
 
+    /// Timeout on network operations, in seconds.
+    /// 0 means no timeout (wait forever).
     pub fn timeout(&self) -> &Duration {
         &self.timeout
     }
 
+    /// Maximum buffer size for parallel jobs, such as downloading rockspecs and installing rocks.
+    /// 0 means no limit.
     pub fn max_jobs(&self) -> usize {
         self.max_jobs
     }
 
+    /// Command to use for running `make` builds
     pub fn make_cmd(&self) -> String {
         match self.variables.get("MAKE") {
             Some(make) => make.clone(),
@@ -164,6 +168,7 @@ impl Config {
         }
     }
 
+    /// Command to use for running `cmake` builds
     pub fn cmake_cmd(&self) -> String {
         match self.variables.get("CMAKE") {
             Some(cmake) => cmake.clone(),
@@ -171,6 +176,9 @@ impl Config {
         }
     }
 
+    /// Variable names, mapped to their values.
+    /// Lux populates variables in the `lux.toml` and in RockSpecs
+    /// with these before building.
     pub fn variables(&self) -> &HashMap<String, String> {
         &self.variables
     }
@@ -179,30 +187,42 @@ impl Config {
         &self.external_deps
     }
 
+    /// The rock layout for entrypoints of new install trees.
+    /// Does not affect existing install trees or dependency rock layouts.
     pub fn entrypoint_layout(&self) -> &RockLayoutConfig {
         &self.entrypoint_layout
     }
 
+    /// The Lux cache directory
     pub fn cache_dir(&self) -> &PathBuf {
         &self.cache_dir
     }
 
+    /// The Lux data directory
     pub fn data_dir(&self) -> &PathBuf {
         &self.data_dir
     }
 
+    /// Specifies a directory with locally vendored sources and RockSpecs.
+    /// When building or installing a package with this flag,
+    /// Lux will fetch sources from the <vendor-dir> instead of from a remote server.
     pub fn vendor_dir(&self) -> Option<&PathBuf> {
         self.vendor_dir.as_ref()
     }
 
+    /// The user agent to use when making web requests.
     pub fn user_agent(&self) -> &str {
         &self.user_agent
     }
 
+    /// Whether to generate a `.luarc.json` on build.
     pub fn generate_luarc(&self) -> bool {
         self.generate_luarc
     }
 
+    /// Whether to wrap installed Lua bin scripts to be executed with
+    /// the detected or configured Lua installation.
+    /// If `true`, individual rocks can still disable wrapping of their own bin scripts.
     pub fn wrap_bin_scripts(&self) -> bool {
         self.wrap_bin_scripts
     }
@@ -248,7 +268,6 @@ pub struct ConfigBuilder {
         serialize_with = "serialize_url_vec"
     )]
     extra_servers: Option<Vec<Url>>,
-    only_sources: Option<String>,
     namespace: Option<String>,
     lua_version: Option<LuaVersion>,
     user_tree: Option<PathBuf>,
@@ -265,23 +284,16 @@ pub struct ConfigBuilder {
     variables: Option<HashMap<String, String>>,
     #[serde(default)]
     external_deps: ExternalDependencySearchConfig,
-    /// The rock layout for new install trees.
-    /// Does not affect existing install trees.
     #[serde(default)]
     entrypoint_layout: RockLayoutConfig,
     user_agent: Option<String>,
     generate_luarc: Option<bool>,
-    /// Whether to wrap installed Lua bin scripts to be executed with
-    /// the detected or configured Lua installation.
-    /// Setting this to `false` disables wrapping globally.
-    /// If set to `true`, individual rocks can still disable wrapping of their own bin scripts.
-    /// Default: `true`.
     wrap_bin_scripts: Option<bool>,
 }
 
 /// A builder for the lux `Config`.
 impl ConfigBuilder {
-    /// Create a new `ConfigBuilder` from a config file by deserializing from a config file
+    /// Create a new `ConfigBuilder` by deserializing from a config file
     /// if present, or otherwise by instantiating the default config.
     pub fn new() -> Result<Self, ConfigError> {
         let config_file = Self::config_file()?;
@@ -299,6 +311,8 @@ impl ConfigBuilder {
         Ok(project_dirs.config_dir().join("config.toml").to_path_buf())
     }
 
+    /// Whether to enable development packages
+    /// Default: `false`
     pub fn dev(self, dev: Option<bool>) -> Self {
         Self {
             enable_development_packages: dev.or(self.enable_development_packages),
@@ -306,6 +320,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// Fetch rocks/rockspecs from this luarocks server
+    /// Default: `"https://luarocks.org/"`
     pub fn server(self, server: Option<Url>) -> Self {
         Self {
             server: server.or(self.server),
@@ -313,6 +329,7 @@ impl ConfigBuilder {
         }
     }
 
+    /// Fetch rocks/rockspecs from these servers in addition to the main server
     pub fn extra_servers(self, extra_servers: Option<Vec<Url>>) -> Self {
         Self {
             extra_servers: extra_servers.or(self.extra_servers),
@@ -320,13 +337,7 @@ impl ConfigBuilder {
         }
     }
 
-    pub fn only_sources(self, sources: Option<String>) -> Self {
-        Self {
-            only_sources: sources.or(self.only_sources),
-            ..self
-        }
-    }
-
+    /// The luarocks server namespace to use
     pub fn namespace(self, namespace: Option<String>) -> Self {
         Self {
             namespace: namespace.or(self.namespace),
@@ -334,6 +345,7 @@ impl ConfigBuilder {
         }
     }
 
+    /// The directory in which to install Lua if not found
     pub fn lua_dir(self, lua_dir: Option<PathBuf>) -> Self {
         Self {
             lua_dir: lua_dir.or(self.lua_dir),
@@ -341,6 +353,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// Which Lua version to use.
+    /// Default: The installed Lua version, if detected
     pub fn lua_version(self, lua_version: Option<LuaVersion>) -> Self {
         Self {
             lua_version: lua_version.or(self.lua_version),
@@ -348,6 +362,7 @@ impl ConfigBuilder {
         }
     }
 
+    /// Which tree to operate on
     pub fn user_tree(self, tree: Option<PathBuf>) -> Self {
         Self {
             user_tree: tree.or(self.user_tree),
@@ -355,6 +370,9 @@ impl ConfigBuilder {
         }
     }
 
+    /// Variable names, mapped to their values.
+    /// Lux populates variables in the `lux.toml` and in RockSpecs
+    /// with these before building.
     pub fn variables(self, variables: Option<HashMap<String, String>>) -> Self {
         Self {
             variables: variables.or(self.variables),
@@ -362,6 +380,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// Whether to display verbose output of commands executed.
+    /// Default: `false`
     pub fn verbose(self, verbose: Option<bool>) -> Self {
         Self {
             verbose: verbose.or(self.verbose),
@@ -369,6 +389,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// Whether to disable printing progress bars and spinners
+    /// Default: `false`
     pub fn no_progress(self, no_progress: Option<bool>) -> Self {
         Self {
             no_progress: no_progress.or(self.no_progress),
@@ -376,6 +398,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// Whether to disable user prompts
+    /// Default: `false`
     pub fn no_prompt(self, no_prompt: Option<bool>) -> Self {
         Self {
             no_prompt: no_prompt.or(self.no_prompt),
@@ -383,6 +407,9 @@ impl ConfigBuilder {
         }
     }
 
+    /// Timeout on network operations, in seconds.
+    /// 0 means no timeout (wait forever).
+    /// Default: 30 s
     pub fn timeout(self, timeout: Option<Duration>) -> Self {
         Self {
             timeout: timeout.or(self.timeout),
@@ -390,6 +417,9 @@ impl ConfigBuilder {
         }
     }
 
+    /// Maximum buffer size for parallel jobs, such as downloading rockspecs and installing rocks.
+    /// 0 means no limit.
+    /// Default: 0
     pub fn max_jobs(self, max_jobs: Option<usize>) -> Self {
         Self {
             max_jobs: max_jobs.or(self.max_jobs),
@@ -397,6 +427,7 @@ impl ConfigBuilder {
         }
     }
 
+    /// The cache directory, e.g. for luarocks manifests.
     pub fn cache_dir(self, cache_dir: Option<PathBuf>) -> Self {
         Self {
             cache_dir: cache_dir.or(self.cache_dir),
@@ -404,6 +435,7 @@ impl ConfigBuilder {
         }
     }
 
+    /// The data directory, in which the default user install tree resides.
     pub fn data_dir(self, data_dir: Option<PathBuf>) -> Self {
         Self {
             data_dir: data_dir.or(self.data_dir),
@@ -411,6 +443,9 @@ impl ConfigBuilder {
         }
     }
 
+    /// Specifies a directory with locally vendored sources and RockSpecs.
+    /// When building or installing a package with this flag,
+    /// Lux will fetch sources from the <vendor-dir> instead of from a remote server.
     pub fn vendor_dir(self, vendor_dir: Option<PathBuf>) -> Self {
         Self {
             vendor_dir: vendor_dir.or(self.vendor_dir),
@@ -418,6 +453,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// The rock layout for entrypoints of new install trees.
+    /// Does not affect existing install trees or dependency rock layouts.
     pub fn entrypoint_layout(self, rock_layout: RockLayoutConfig) -> Self {
         Self {
             entrypoint_layout: rock_layout,
@@ -425,6 +462,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// The user agent to set when making web requests.
+    /// Default: "lux-lib/<version>".
     pub fn user_agent(self, user_agent: Option<String>) -> Self {
         Self {
             user_agent: user_agent.or(self.user_agent),
@@ -432,6 +471,8 @@ impl ConfigBuilder {
         }
     }
 
+    /// Whether to generate a `.luarc.json` on build.
+    /// Default: `true`
     pub fn generate_luarc(self, generate: Option<bool>) -> Self {
         Self {
             generate_luarc: generate.or(self.generate_luarc),
@@ -439,6 +480,11 @@ impl ConfigBuilder {
         }
     }
 
+    /// Whether to wrap installed Lua bin scripts to be executed with
+    /// the detected or configured Lua installation.
+    /// Setting this to `false` disables wrapping globally.
+    /// If set to `true`, individual rocks can still disable wrapping of their own bin scripts.
+    /// Default: `true`.
     pub fn wrap_bin_scripts(self, generate: Option<bool>) -> Self {
         Self {
             wrap_bin_scripts: generate.or(self.generate_luarc),
@@ -447,8 +493,8 @@ impl ConfigBuilder {
     }
 
     pub fn build(self) -> Result<Config, ConfigError> {
-        let data_dir = self.data_dir.unwrap_or(Config::get_default_data_path()?);
-        let cache_dir = self.cache_dir.unwrap_or(Config::get_default_cache_path()?);
+        let data_dir = self.data_dir.unwrap_or(Config::default_data_path()?);
+        let cache_dir = self.cache_dir.unwrap_or(Config::default_cache_path()?);
         let user_tree = self.user_tree.unwrap_or(data_dir.join("tree"));
 
         let lua_version = self
@@ -461,7 +507,6 @@ impl ConfigBuilder {
                 Url::parse("https://luarocks.org/").unwrap_unchecked()
             }),
             extra_servers: self.extra_servers.unwrap_or_default(),
-            only_sources: self.only_sources,
             namespace: self.namespace,
             lua_dir: self.lua_dir,
             lua_version,
@@ -496,7 +541,6 @@ impl From<Config> for ConfigBuilder {
             enable_development_packages: Some(value.enable_development_packages),
             server: Some(value.server),
             extra_servers: Some(value.extra_servers),
-            only_sources: value.only_sources,
             namespace: value.namespace,
             lua_dir: value.lua_dir,
             lua_version: value.lua_version,

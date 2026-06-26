@@ -1,21 +1,60 @@
 use std::path::PathBuf;
 
 use lux_lib::project::Project;
-use mlua::{ExternalResult, Lua, Table};
+use mlua::ExternalResult;
+use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::ProjectLua;
 
-pub fn project(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+#[derive(Clone)]
+pub(crate) struct ProjectModule;
 
-    table.set(
-        "new",
-        lua.create_function(|_, path: PathBuf| {
-            Ok(Project::from_exact(path).into_lua_err()?.map(ProjectLua))
-        })?,
-    )?;
+impl Typed for ProjectModule {
+    fn ty() -> Type {
+        Type::named("ProjectModule")
+    }
+}
 
-    Ok(table)
+impl TypedUserData for ProjectModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Load a project at the specified path, if it exists");
+        methods.param("path", "project root");
+        methods.add_function("new", |_, path: String| {
+            Ok(Project::from_exact(PathBuf::from(path))
+                .into_lua_err()?
+                .map(ProjectLua))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for interacting with a Lux project");
+    }
+}
+
+impl mlua::UserData for ProjectModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::ProjectModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "ProjectModule",
+            build: || Type::class(TypedClassBuilder::new::<ProjectModule>().build()),
+        }
+    }
 }
 
 #[cfg(test)]

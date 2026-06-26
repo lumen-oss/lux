@@ -97,6 +97,7 @@ pub enum LuaRockspecError {
     ProjectToml(#[from] ProjectTomlError),
 }
 
+/// RockSpec for a local rock installation, deserialized from a `.rockspec` file
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct LocalLuaRockspec {
@@ -364,6 +365,7 @@ impl HasIntegrity for LocalLuaRockspec {
     }
 }
 
+/// RockSpec for a remote rock, deserialized from a `.rockspec` file
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct RemoteLuaRockspec {
@@ -569,6 +571,7 @@ impl HasIntegrity for RemoteLuaRockspec {
     }
 }
 
+/// A rock's metadata, to be displayed on the remote package server
 #[derive(Clone, Deserialize, Debug, PartialEq, Default, lux_macros::DisplayAsLuaKV)]
 #[display_lua(key = "description")]
 pub struct RockDescription {

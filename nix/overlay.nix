@@ -222,12 +222,12 @@ in {
       buildInputs =
         commonArgs.buildInputs
         ++ [
-          # make sure this is the same as the nativeCheckInputs lua
+          # Must be the same as the nativeCheckInputs lua
           final.lua5_4
         ];
 
       nativeCheckInputs = with final; [
-        # make sure this is the same as the buildInputs lua, otherwise pkg-config won't find it
+        # Must be the same as the buildInputs lua, otherwise pkg-config won't find it
         lua5_4
         cacert
         cargo-nextest
@@ -248,12 +248,18 @@ in {
       version = "0.1.0";
       src = self;
       cargoExtraArgs = "-p lux-lua --locked --features test";
-      buildInputs = commonArgs.buildInputs;
+      buildInputs =
+        commonArgs.buildInputs
+        ++ [
+          # Must be the same as the nativeCheckInputs lua
+          final.lua5_1
+        ];
 
       nativeCheckInputs = with final; [
         cacert
         cargo-nextest
         zlib # used for checking external dependencies
+        # Must be the same as the buildInputs lua, otherwise pkg-config won't find it
         lua5_1
         nix # we use nix-hash in tests
       ];

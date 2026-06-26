@@ -1,16 +1,69 @@
 #![cfg_attr(feature = "test", allow(unused_imports, dead_code))]
 
+#[cfg(not(feature = "definitions"))]
 use mlua::prelude::*;
+use mlua_extras::typed::{Type, Typed, TypedDataFields, TypedDataMethods, TypedUserData};
 
 mod config;
+#[cfg(feature = "definitions")]
+pub mod definitions;
 mod loader;
 pub mod lua_impls;
 mod operations;
 mod project;
 mod workspace;
 
-#[cfg_attr(not(feature = "test"), mlua::lua_module)]
-fn lux(lua: &Lua) -> LuaResult<LuaTable> {
+#[derive(Clone)]
+pub(crate) struct LuxModule;
+
+impl Typed for LuxModule {
+    fn ty() -> Type {
+        Type::named("LuxModule")
+    }
+}
+
+impl TypedUserData for LuxModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("loader", |lua, ()| loader::load_loader(lua));
+    }
+
+    fn add_fields<F: TypedDataFields<Self>>(fields: &mut F) {
+        fields.add_field("config", config::ConfigModule);
+        fields.add_field("workspace", workspace::WorkspaceModule);
+        fields.add_field("project", project::ProjectModule);
+        fields.add_field("operations", operations::OperationsModule);
+    }
+}
+
+impl mlua::UserData for LuxModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "LuxModule",
+            build: || Type::class(TypedClassBuilder::new::<super::LuxModule>().build()),
+        }
+    }
+}
+
+#[cfg(not(feature = "definitions"))]
+#[cfg_attr(not(any(feature = "test", feature = "definitions")), mlua::lua_module)]
+fn lux(lua: &Lua) -> LuaResult<LuaAnyUserData> {
     #[cfg(not(any(
         feature = "lua51",
         feature = "lua52",
@@ -22,21 +75,10 @@ fn lux(lua: &Lua) -> LuaResult<LuaTable> {
     )))]
     compile_error!(
         "
-        At least one Lua version feature must be enabled. \
+        At least one Lua version feature or the definitions feature must be enabled. \
         Please enable one of the following features: \
-        lua51, lua52, lua53, lua54, lua55, luajit."
+        lua51, lua52, lua53, lua54, lua55, luajit, definitions."
     );
 
-    let exports = lua.create_table()?;
-
-    exports.set(
-        "loader",
-        lua.create_function(|lua, ()| loader::load_loader(lua))?,
-    )?;
-    exports.set("config", config::config(lua)?)?;
-    exports.set("workspace", workspace::workspace(lua)?)?;
-    exports.set("project", project::project(lua)?)?;
-    exports.set("operations", operations::operations(lua)?)?;
-
-    Ok(exports)
+    lua.create_userdata(LuxModule)
 }

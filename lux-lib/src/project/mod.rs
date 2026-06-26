@@ -134,6 +134,7 @@ impl Deref for ProjectRoot {
     }
 }
 
+/// Lux project, with methods for managing dependencies, etc.
 #[derive(Clone, Debug)]
 pub struct Project {
     /// The path where the `lux.toml` resides.
@@ -143,6 +144,7 @@ pub struct Project {
 }
 
 impl Project {
+    /// Load a project at the specified path, if it exists
     pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, ProjectError> {
         if !start.as_ref().exists() {
             return Ok(None);

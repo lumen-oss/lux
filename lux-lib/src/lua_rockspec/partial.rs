@@ -14,6 +14,7 @@ use super::{
     PlatformSupport, RockDescription, TestSpecInternal,
 };
 
+/// Deserialized from a Lua `.rockspec`, not yet validated
 #[derive(Debug)]
 pub struct PartialLuaRockspec {
     pub(crate) rockspec_format: Option<RockspecFormat>,

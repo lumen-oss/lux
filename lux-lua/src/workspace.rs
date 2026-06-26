@@ -1,35 +1,70 @@
-use std::path::PathBuf;
-
 use lux_lib::workspace::Workspace;
-use mlua::{ExternalResult, Lua, Table};
+use mlua::ExternalResult;
+use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
 use crate::lua_impls::WorkspaceLua;
 
-pub fn workspace(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+#[derive(Clone)]
+pub(crate) struct WorkspaceModule;
 
-    table.set(
-        "current",
-        lua.create_function(|_, ()| Ok(Workspace::current().into_lua_err()?.map(WorkspaceLua)))?,
-    )?;
+impl Typed for WorkspaceModule {
+    fn ty() -> Type {
+        Type::named("WorkspaceModule")
+    }
+}
 
-    table.set(
-        "new",
-        lua.create_function(|_, path: PathBuf| {
+impl TypedUserData for WorkspaceModule {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Load the current workspace, if in a workspace");
+        methods.add_function("current", |_, ()| {
+            Ok(Workspace::current().into_lua_err()?.map(WorkspaceLua))
+        });
+
+        methods.document("Load the workspace in the given directory, if present");
+        methods.param("path", "The workspace root");
+        methods.add_function("new", |_, path: String| {
             Ok(Workspace::from_exact(path)
                 .into_lua_err()?
                 .map(WorkspaceLua))
-        })?,
-    )?;
-
-    table.set(
-        "new_fuzzy",
-        lua.create_function(|_, path: PathBuf| {
+        });
+        methods.document(
+            "Search for a workspace upwards from the given directory and load it, if present",
+        );
+        methods.param("path", "The directory to search upwards from");
+        methods.add_function("new_fuzzy", |_, path: String| {
             Ok(Workspace::from(path).into_lua_err()?.map(WorkspaceLua))
-        })?,
-    )?;
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Module for interacting with a Lux workspace");
+    }
+}
 
-    Ok(table)
+impl mlua::UserData for WorkspaceModule {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::WorkspaceModule;
+    use crate::definitions::LuxDefinition;
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "WorkspaceModule",
+            build: || Type::class(TypedClassBuilder::new::<WorkspaceModule>().build()),
+        }
+    }
 }
 
 #[cfg(test)]

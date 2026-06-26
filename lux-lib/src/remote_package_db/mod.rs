@@ -12,6 +12,7 @@ use itertools::Itertools;
 
 use thiserror::Error;
 
+/// Package database, used to look up remote rocks
 #[derive(Clone, Debug)]
 pub struct RemotePackageDB(Impl);
 

@@ -107,6 +107,7 @@ impl PlatformIdentifier {
     }
 }
 
+/// Used to specify which platforms a rock can be built for
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlatformSupport {
     /// Do not match this platform

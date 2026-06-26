@@ -7,8 +7,13 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
 use itertools::Itertools;
 use mlua::prelude::*;
+use mlua_extras::typed::{
+    IntoLuaTypeLiteral, Type, Typed, TypedDataFields, TypedDataMethods, TypedUserData,
+};
+use path_slash::PathBufExt;
 use serde::{Deserialize, Serialize};
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
+use strum::IntoEnumIterator;
 use url::Url;
 
 use lux_lib::{
@@ -64,6 +69,12 @@ macro_rules! impl_from_lua_userdata {
 #[derive(Debug, Clone)]
 pub struct LuaUrl(pub Url);
 
+impl Typed for LuaUrl {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
 impl FromLua for LuaUrl {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let url_str: String = FromLua::from_lua(value, lua)?;
@@ -79,6 +90,18 @@ impl IntoLua for LuaUrl {
 
 #[derive(Debug, Clone)]
 pub struct LuaVersionLua(pub LuaVersion);
+
+impl IntoLuaTypeLiteral for LuaVersionLua {
+    fn into_lua_type_literal(self) -> String {
+        format!("'{}'", self.0)
+    }
+}
+
+impl Typed for LuaVersionLua {
+    fn ty() -> Type {
+        Type::union(LuaVersion::iter().map(|v| Type::literal(LuaVersionLua(v))))
+    }
+}
 
 impl FromLua for LuaVersionLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
@@ -98,6 +121,12 @@ impl IntoLua for LuaVersionLua {
 #[derive(Debug, Clone)]
 pub struct PackageVersionLua(pub PackageVersion);
 
+impl Typed for PackageVersionLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
 impl IntoLua for PackageVersionLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         self.0.to_string().into_lua(lua)
@@ -115,6 +144,12 @@ impl FromLua for PackageVersionLua {
 
 #[derive(Debug, Clone)]
 pub struct SpecRevLua(pub SpecRev);
+
+impl Typed for SpecRevLua {
+    fn ty() -> Type {
+        Type::integer()
+    }
+}
 
 impl FromLua for SpecRevLua {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
@@ -136,6 +171,12 @@ impl FromLua for SpecRevLua {
 #[derive(Debug, Clone)]
 pub struct PackageVersionReqLua(pub PackageVersionReq);
 
+impl Typed for PackageVersionReqLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
 impl FromLua for PackageVersionReqLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         PackageVersionReq::parse(&String::from_lua(value, lua)?)
@@ -153,6 +194,12 @@ impl IntoLua for PackageVersionReqLua {
 #[derive(Debug, Clone)]
 pub struct PackageNameLua(pub PackageName);
 
+impl Typed for PackageNameLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
 impl IntoLua for PackageNameLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         self.0.to_string().into_lua(lua)
@@ -167,57 +214,14 @@ impl FromLua for PackageNameLua {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PackageSpecLua(pub PackageSpec);
-
-impl FromLua for PackageSpecLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<PackageSpecLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "PackageSpecLua".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-
-impl LuaUserData for PackageSpecLua {
-    fn add_fields<F: LuaUserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("name", |_, this| Ok(this.0.name().to_string()));
-        fields.add_field_method_get("version", |_, this| Ok(this.0.version().to_string()));
-    }
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("to_package_req", |_, this, ()| {
-            Ok(PackageReqLua(this.0.clone().into_package_req()))
-        });
-    }
-}
-
-pub struct PackageReqLua(pub PackageReq);
-
-impl FromLua for PackageReqLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let str: String = lua.from_value(value)?;
-        PackageReq::parse(&str).map(PackageReqLua).into_lua_err()
-    }
-}
-
-impl LuaUserData for PackageReqLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| Ok(this.0.name().to_string()));
-        methods.add_method("version_req", |_, this, ()| {
-            Ok(this.0.version_req().to_string())
-        });
-        methods.add_method("matches", |_, this, package: PackageSpecLua| {
-            Ok(this.0.matches(&package.0))
-        });
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct PinnedStateLua(pub PinnedState);
+
+impl Typed for PinnedStateLua {
+    fn ty() -> Type {
+        Type::boolean()
+    }
+}
 
 impl FromLua for PinnedStateLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
@@ -239,6 +243,12 @@ impl IntoLua for PinnedStateLua {
 #[derive(Debug, Clone, Copy)]
 pub struct OptStateLua(pub OptState);
 
+impl Typed for OptStateLua {
+    fn ty() -> Type {
+        Type::boolean()
+    }
+}
+
 impl FromLua for OptStateLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         Ok(OptStateLua(OptState::from(bool::from_lua(value, lua)?)))
@@ -257,6 +267,12 @@ impl IntoLua for OptStateLua {
 #[derive(Debug, Clone)]
 pub struct LocalPackageIdLua(pub LocalPackageId);
 
+impl Typed for LocalPackageIdLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
 impl FromLua for LocalPackageIdLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         Ok(LocalPackageIdLua(unsafe {
@@ -273,6 +289,12 @@ impl IntoLua for LocalPackageIdLua {
 
 #[derive(Debug, Clone)]
 pub struct LockConstraintLua(pub LockConstraint);
+
+impl Typed for LockConstraintLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
 
 impl IntoLua for LockConstraintLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
@@ -296,343 +318,129 @@ impl FromLua for LockConstraintLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalPackageHashesLua(pub LocalPackageHashes);
+pub struct ExternalDependencySpecLua(pub ExternalDependencySpec);
 
-impl LuaUserData for LocalPackageHashesLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("rockspec", |_, this, ()| Ok(this.0.rockspec.to_hex().1));
-        methods.add_method("source", |_, this, ()| Ok(this.0.source.to_hex().1));
-    }
-}
-impl_from_lua_userdata!(LocalPackageHashesLua);
-
-#[derive(Debug, Clone)]
-pub struct LocalPackageLua(pub LocalPackage);
-
-impl FromLua for LocalPackageLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<LocalPackageLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "LocalPackageLua".to_string(),
-                message: None,
-            }),
-        }
+impl Typed for ExternalDependencySpecLua {
+    fn ty() -> Type {
+        Type::named("table")
     }
 }
 
-impl LuaUserData for LocalPackageLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("id", |_, this, ()| Ok(LocalPackageIdLua(this.0.id())));
-        methods.add_method("name", |_, this, ()| {
-            Ok(PackageNameLua(this.0.name().clone()))
-        });
-        methods.add_method("version", |_, this, ()| {
-            Ok(PackageVersionLua(this.0.version().clone()))
-        });
-        methods.add_method("pinned", |_, this, ()| Ok(PinnedStateLua(this.0.pinned())));
-        methods.add_method("dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .dependencies()
-                .into_iter()
-                .map(|id| LocalPackageIdLua(id.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("constraint", |_, this, ()| {
-            Ok(LockConstraintLua(this.0.constraint()))
-        });
-        methods.add_method("hashes", |_, this, ()| {
-            Ok(LocalPackageHashesLua(this.0.hashes().clone()))
-        });
-        methods.add_method("to_package", |_, this, ()| {
-            Ok(PackageSpecLua(this.0.to_package()))
-        });
-        methods.add_method("to_package_req", |_, this, ()| {
-            Ok(PackageReqLua(this.0.clone().into_package_req()))
-        });
-    }
-}
-
-pub struct RockLayoutLua(pub RockLayout);
-
-impl LuaUserData for RockLayoutLua {
-    fn add_fields<F: LuaUserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("rock_path", |_, this| Ok(this.0.rock_path.clone()));
-        fields.add_field_method_get("etc", |_, this| Ok(this.0.etc.clone()));
-        fields.add_field_method_get("lib", |_, this| Ok(this.0.lib.clone()));
-        fields.add_field_method_get("src", |_, this| Ok(this.0.src.clone()));
-        fields.add_field_method_get("bin", |_, this| Ok(this.0.bin.clone()));
-        fields.add_field_method_get("conf", |_, this| Ok(this.0.conf.clone()));
-        fields.add_field_method_get("doc", |_, this| Ok(this.0.doc.clone()));
-    }
-}
-
-pub struct RockMatchesLua(pub RockMatches);
-
-impl IntoLua for RockMatchesLua {
+impl IntoLua for ExternalDependencySpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
-        let is_found = self.0.is_found();
-        table.set("is_found", lua.create_function(move |_, ()| Ok(is_found))?)?;
-        match self.0 {
-            RockMatches::NotFound(req) => table.set("not_found", PackageReqLua(req))?,
-            RockMatches::Single(id) => table.set("single", LocalPackageIdLua(id))?,
-            RockMatches::Many(ids) => table.set(
-                "many",
-                ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>(),
-            )?,
+        if let Some(path) = self.0.header {
+            table.set("header", path.to_slash_lossy().to_string())?;
+        }
+        if let Some(path) = self.0.library {
+            table.set("library", path.to_slash_lossy().to_string())?;
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct TreeLua(pub Tree);
-
-impl LuaUserData for TreeLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("root", |_, this, ()| Ok(this.0.root()));
-        methods.add_method("root_for", |_, this, package: LocalPackageLua| {
-            Ok(this.0.root_for(&package.0))
-        });
-        methods.add_method("bin", |_, this, ()| Ok(this.0.bin()));
-        methods.add_method("match_rocks", |lua, this, req: PackageReqLua| {
-            this.0
-                .match_rocks(&req.0)
-                .map(|m| RockMatchesLua(m).into_lua(lua))
-                .map_err(|err| LuaError::RuntimeError(err.to_string()))?
-        });
-        methods.add_method("rock_layout", |_, this, package: LocalPackageLua| {
-            this.0
-                .installed_rock_layout(&package.0)
-                .map(RockLayoutLua)
-                .map_err(|err| LuaError::RuntimeError(err.to_string()))
-        });
-        methods.add_method("lockfile", |_, this, ()| {
-            this.0.lockfile().map(LockfileReadOnlyLua).into_lua_err()
-        });
-    }
-}
-impl_from_lua_userdata!(TreeLua);
-
-#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
-#[serde(rename_all = "snake_case")]
-enum RockLayoutVariant {
-    #[default]
-    Default,
-    Nvim,
-}
-
-#[derive(Deserialize)]
-struct RockLayoutConfigInput {
-    layout: RockLayoutVariant,
-}
-
-#[derive(Debug, Clone)]
-pub struct RockLayoutConfigLua(pub RockLayoutConfig);
-
-impl LuaUserData for RockLayoutConfigLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_function("new", |_, ()| {
-            Ok(RockLayoutConfigLua(RockLayoutConfig::default()))
-        });
-        methods.add_function("new_nvim_layout", |_, ()| {
-            Ok(RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()))
-        });
-    }
-}
-
-impl FromLua for RockLayoutConfigLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let input: RockLayoutConfigInput = lua.from_value(value)?;
-        Ok(match input.layout {
-            RockLayoutVariant::Default => RockLayoutConfigLua(RockLayoutConfig::default()),
-            RockLayoutVariant::Nvim => RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()),
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ConfigLua(pub Config);
-
-impl LuaUserData for ConfigLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_function("builder", |_, ()| {
-            ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
-        });
-        methods.add_method("server", |_, this, ()| Ok(this.0.server().to_string()));
-        methods.add_method("extra_servers", |_, this, ()| {
-            Ok(this
-                .0
-                .extra_servers()
-                .iter()
-                .map(|url| url.to_string())
-                .collect_vec())
-        });
-        methods.add_method("only_sources", |_, this, ()| {
-            Ok(this.0.only_sources().cloned())
-        });
-        methods.add_method("namespace", |_, this, ()| Ok(this.0.namespace().cloned()));
-        methods.add_method("lua_dir", |_, this, ()| Ok(this.0.lua_dir().cloned()));
-        methods.add_method("user_tree", |_, this, lua_version: LuaVersionLua| {
-            this.0.user_tree(lua_version.0).map(TreeLua).into_lua_err()
-        });
-        methods.add_method("verbose", |_, this, ()| Ok(this.0.verbose()));
-        methods.add_method("no_progress", |_, this, ()| Ok(this.0.no_progress()));
-        methods.add_method("timeout", |_, this, ()| Ok(this.0.timeout().as_secs()));
-        methods.add_method("cache_dir", |_, this, ()| Ok(this.0.cache_dir().clone()));
-        methods.add_method("data_dir", |_, this, ()| Ok(this.0.data_dir().clone()));
-        methods.add_method("entrypoint_layout", |_, this, ()| {
-            Ok(RockLayoutConfigLua(this.0.entrypoint_layout().clone()))
-        });
-        methods.add_method("variables", |_, this, ()| Ok(this.0.variables().clone()));
-        methods.add_method("make_cmd", |_, this, ()| Ok(this.0.make_cmd()));
-        methods.add_method("cmake_cmd", |_, this, ()| Ok(this.0.cmake_cmd()));
-        methods.add_method("enabled_dev_servers", |_, this, ()| {
-            Ok(this
-                .0
-                .enabled_dev_servers()
-                .into_lua_err()?
-                .into_iter()
-                .map(|url| url.to_string())
-                .collect_vec())
-        });
-    }
-}
-
-impl FromLua for ConfigLua {
+impl FromLua for ExternalDependencySpecLua {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<ConfigLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "ConfigLua".to_string(),
-                message: None,
-            }),
+        if let LuaValue::Table(table) = value {
+            let header: Option<PathBuf> = table.get("header")?;
+            let library: Option<PathBuf> = table.get("library")?;
+            Ok(ExternalDependencySpecLua(ExternalDependencySpec {
+                header,
+                library,
+            }))
+        } else {
+            Err(LuaError::FromLuaConversionError {
+                from: "non-table",
+                to: "ExternalDependencySpecLua".to_string(),
+                message: Some("Expected a table".to_string()),
+            })
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct ConfigBuilderLua(pub ConfigBuilder);
-
-impl LuaUserData for ConfigBuilderLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("dev", |_, this, dev: Option<bool>| {
-            Ok(ConfigBuilderLua(this.0.clone().dev(dev)))
-        });
-        methods.add_method("server", |_, this, server: Option<LuaUrl>| {
-            Ok(ConfigBuilderLua(
-                this.0.clone().server(server.map(|url| url.0)),
-            ))
-        });
-        methods.add_method("extra_servers", |_, this, servers: Option<Vec<LuaUrl>>| {
-            Ok(ConfigBuilderLua(this.0.clone().extra_servers(
-                servers.map(|urls| urls.into_iter().map(|url| url.0).collect()),
-            )))
-        });
-        methods.add_method("only_sources", |_, this, sources: Option<String>| {
-            Ok(ConfigBuilderLua(this.0.clone().only_sources(sources)))
-        });
-        methods.add_method("namespace", |_, this, namespace: Option<String>| {
-            Ok(ConfigBuilderLua(this.0.clone().namespace(namespace)))
-        });
-        methods.add_method("lua_dir", |_, this, lua_dir: Option<PathBuf>| {
-            Ok(ConfigBuilderLua(this.0.clone().lua_dir(lua_dir)))
-        });
-        methods.add_method(
-            "lua_version",
-            |_, this, lua_version: Option<LuaVersionLua>| {
-                Ok(ConfigBuilderLua(
-                    this.0.clone().lua_version(lua_version.map(|v| v.0)),
-                ))
-            },
-        );
-        methods.add_method("user_tree", |_, this, tree: Option<PathBuf>| {
-            Ok(ConfigBuilderLua(this.0.clone().user_tree(tree)))
-        });
-        methods.add_method("verbose", |_, this, verbose: Option<bool>| {
-            Ok(ConfigBuilderLua(this.0.clone().verbose(verbose)))
-        });
-        methods.add_method("no_progress", |_, this, no_progress: Option<bool>| {
-            Ok(ConfigBuilderLua(this.0.clone().no_progress(no_progress)))
-        });
-        methods.add_method("no_prompt", |_, this, no_prompt: Option<bool>| {
-            Ok(ConfigBuilderLua(this.0.clone().no_prompt(no_prompt)))
-        });
-        methods.add_method("timeout", |_, this, timeout: Option<u64>| {
-            Ok(ConfigBuilderLua(
-                this.0.clone().timeout(timeout.map(Duration::from_secs)),
-            ))
-        });
-        methods.add_method("cache_dir", |_, this, cache_dir: Option<PathBuf>| {
-            Ok(ConfigBuilderLua(this.0.clone().cache_dir(cache_dir)))
-        });
-        methods.add_method("data_dir", |_, this, data_dir: Option<PathBuf>| {
-            Ok(ConfigBuilderLua(this.0.clone().data_dir(data_dir)))
-        });
-        methods.add_method(
-            "entrypoint_layout",
-            |_, this, layout: Option<RockLayoutConfigLua>| {
-                Ok(ConfigBuilderLua(this.0.clone().entrypoint_layout(
-                    layout.map(|l| l.0).unwrap_or_default(),
-                )))
-            },
-        );
-        methods.add_method("generate_luarc", |_, this, generate: Option<bool>| {
-            Ok(ConfigBuilderLua(this.0.clone().generate_luarc(generate)))
-        });
-        methods.add_method("wrap_bin_scripts", |_, this, wrap: Option<bool>| {
-            Ok(ConfigBuilderLua(this.0.clone().wrap_bin_scripts(wrap)))
-        });
-        methods.add_method("build", |_, this, ()| {
-            this.0.clone().build().map(ConfigLua).into_lua_err()
-        });
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaDependencySpecLua(pub LuaDependencySpec);
+pub struct PlatformIdentifierLua(pub PlatformIdentifier);
 
-impl FromLua for LuaDependencySpecLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ref ud) => {
-                if let Ok(borrowed) = ud.borrow::<LuaDependencySpecLua>() {
-                    return Ok(borrowed.clone());
-                }
-
-                let s: String = lua.from_value(value)?;
-                s.parse::<LuaDependencySpec>()
-                    .map(LuaDependencySpecLua)
-                    .into_lua_err()
-            }
-            _ => {
-                let package_req: PackageReq = lua.from_value(value)?;
-                Ok(LuaDependencySpecLua(LuaDependencySpec::from(package_req)))
-            }
-        }
+impl IntoLuaTypeLiteral for PlatformIdentifierLua {
+    fn into_lua_type_literal(self) -> String {
+        self.0.to_string()
     }
 }
 
-impl LuaUserData for LuaDependencySpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("name", |_, this, ()| Ok(this.0.name().to_string()));
-        methods.add_method("version_req", |_, this, ()| {
-            Ok(this.0.version_req().to_string())
-        });
-        methods.add_method("matches", |_, this, package: PackageSpecLua| {
-            Ok(this.0.matches(&package.0))
-        });
-        methods.add_method("package_req", |_, this, ()| {
-            Ok(PackageReqLua(this.0.package_req().clone()))
-        });
+impl Typed for PlatformIdentifierLua {
+    fn ty() -> Type {
+        Type::union(PlatformIdentifier::iter().map(|p| Type::literal(PlatformIdentifierLua(p))))
+    }
+}
+
+impl FromLua for PlatformIdentifierLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let s = String::from_lua(value, lua)?;
+        Ok(PlatformIdentifierLua(
+            s.parse().unwrap_or(PlatformIdentifier::Unknown(s)),
+        ))
+    }
+}
+
+impl IntoLua for PlatformIdentifierLua {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        self.0.to_string().into_lua(lua)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RockspecFormatLua(pub RockspecFormat);
+
+impl Typed for RockspecFormatLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
+impl FromLua for RockspecFormatLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let s = String::from_lua(value, lua)?;
+        RockspecFormat::from_str(&s)
+            .map(RockspecFormatLua)
+            .map_err(|err| LuaError::DeserializeError(err.to_string()))
+    }
+}
+
+impl IntoLua for RockspecFormatLua {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        self.0.to_string().into_lua(lua)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LuaModuleLua(pub LuaModule);
+
+impl Typed for LuaModuleLua {
+    fn ty() -> Type {
+        Type::string()
+    }
+}
+
+impl IntoLua for LuaModuleLua {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        self.0.as_str().to_string().into_lua(lua)
+    }
+}
+
+impl FromLua for LuaModuleLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let s = String::from_lua(value, lua)?;
+        Ok(LuaModuleLua(LuaModule::from_str(&s).into_lua_err()?))
     }
 }
 
 pub struct DependencyTypeLua<T>(pub DependencyType<T>);
+
+impl<T: Typed> Typed for DependencyTypeLua<T> {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
 
 impl<T> IntoLua for DependencyTypeLua<T>
 where
@@ -693,6 +501,12 @@ where
 
 pub struct LuaDependencyTypeLua<T>(pub LuaDependencyType<T>);
 
+impl<T: Typed> Typed for LuaDependencyTypeLua<T> {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
+
 impl<T> IntoLua for LuaDependencyTypeLua<T>
 where
     T: IntoLua,
@@ -737,107 +551,38 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ExternalDependencySpecLua(pub ExternalDependencySpec);
+pub struct RockMatchesLua(pub RockMatches);
 
-impl IntoLua for ExternalDependencySpecLua {
+impl Typed for RockMatchesLua {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
+
+impl IntoLua for RockMatchesLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
-        if let Some(path) = self.0.header {
-            table.set("header", path.to_string_lossy().to_string())?;
-        }
-        if let Some(path) = self.0.library {
-            table.set("library", path.to_string_lossy().to_string())?;
+        let is_found = self.0.is_found();
+        table.set("is_found", lua.create_function(move |_, ()| Ok(is_found))?)?;
+        match self.0 {
+            RockMatches::NotFound(req) => table.set("not_found", PackageReqLua(req))?,
+            RockMatches::Single(id) => table.set("single", LocalPackageIdLua(id))?,
+            RockMatches::Many(ids) => table.set(
+                "many",
+                ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>(),
+            )?,
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-impl FromLua for ExternalDependencySpecLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        if let LuaValue::Table(table) = value {
-            let header: Option<PathBuf> = table.get("header")?;
-            let library: Option<PathBuf> = table.get("library")?;
-            Ok(ExternalDependencySpecLua(ExternalDependencySpec {
-                header,
-                library,
-            }))
-        } else {
-            Err(LuaError::FromLuaConversionError {
-                from: "non-table",
-                to: "ExternalDependencySpecLua".to_string(),
-                message: Some("Expected a table".to_string()),
-            })
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PlatformIdentifierLua(pub PlatformIdentifier);
-
-impl FromLua for PlatformIdentifierLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let s = String::from_lua(value, lua)?;
-        Ok(PlatformIdentifierLua(
-            s.parse().unwrap_or(PlatformIdentifier::Unknown(s)),
-        ))
-    }
-}
-
-impl IntoLua for PlatformIdentifierLua {
-    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
-        self.0.to_string().into_lua(lua)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PlatformSupportLua(pub PlatformSupport);
-
-impl LuaUserData for PlatformSupportLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method(
-            "is_supported",
-            |_, this, platform: PlatformIdentifierLua| Ok(this.0.is_supported(&platform.0)),
-        );
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RockspecFormatLua(pub RockspecFormat);
-
-impl FromLua for RockspecFormatLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let s = String::from_lua(value, lua)?;
-        RockspecFormat::from_str(&s)
-            .map(RockspecFormatLua)
-            .map_err(|err| LuaError::DeserializeError(err.to_string()))
-    }
-}
-
-impl IntoLua for RockspecFormatLua {
-    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
-        self.0.to_string().into_lua(lua)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RockDescriptionLua(pub RockDescription);
-
-impl LuaUserData for RockDescriptionLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("summary", |_, this, ()| Ok(this.0.summary.clone()));
-        methods.add_method("detailed", |_, this, ()| Ok(this.0.detailed.clone()));
-        methods.add_method("license", |_, this, ()| Ok(this.0.license.clone()));
-        methods.add_method("homepage", |_, this, ()| {
-            Ok(this.0.homepage.as_ref().map(|url| url.to_string()))
-        });
-        methods.add_method("issues_url", |_, this, ()| Ok(this.0.issues_url.clone()));
-        methods.add_method("maintainer", |_, this, ()| Ok(this.0.maintainer.clone()));
-        methods.add_method("labels", |_, this, ()| Ok(this.0.labels.clone()));
-    }
-}
-
 pub struct RockSourceSpecLua(pub RockSourceSpec);
+
+impl Typed for RockSourceSpecLua {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
 
 impl IntoLua for RockSourceSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
@@ -847,7 +592,7 @@ impl IntoLua for RockSourceSpecLua {
                 table.set("git", GitSourceLua(git))?;
             }
             RockSourceSpec::File(path) => {
-                table.set("file", path.to_string_lossy().to_string())?;
+                table.set("file", path.to_slash_lossy().to_string())?;
             }
             RockSourceSpec::Url(url) => {
                 table.set("url", url.to_string())?;
@@ -857,63 +602,13 @@ impl IntoLua for RockSourceSpecLua {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct GitSourceLua(pub GitSource);
-
-impl LuaUserData for GitSourceLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("url", |_, this, ()| Ok(this.0.url.to_string()));
-        methods.add_method("checkout_ref", |_, this, ()| {
-            Ok(this.0.checkout_ref.clone())
-        });
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RemoteRockSourceLua(pub RemoteRockSource);
-
-impl LuaUserData for RemoteRockSourceLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("source_spec", |_, this, ()| {
-            Ok(RockSourceSpecLua(this.0.source_spec.clone()))
-        });
-        methods.add_method("archive_name", |_, this, ()| {
-            Ok(this.0.archive_name.clone())
-        });
-        methods.add_method("unpack_dir", |_, this, ()| Ok(this.0.unpack_dir.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BustedTestSpecLua(pub BustedTestSpec);
-
-impl LuaUserData for BustedTestSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("flags", |_, this, ()| Ok(this.0.flags().clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CommandTestSpecLua(pub CommandTestSpec);
-
-impl LuaUserData for CommandTestSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("command", |_, this, ()| Ok(this.0.command().to_string()));
-        methods.add_method("flags", |_, this, ()| Ok(this.0.flags().clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LuaScriptTestSpecLua(pub LuaScriptTestSpec);
-
-impl LuaUserData for LuaScriptTestSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("script", |_, this, ()| Ok(this.0.script().clone()));
-        methods.add_method("flags", |_, this, ()| Ok(this.0.flags().clone()));
-    }
-}
-
 pub struct TestSpecLua(pub TestSpec);
+
+impl Typed for TestSpecLua {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
 
 impl IntoLua for TestSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
@@ -929,58 +624,41 @@ impl IntoLua for TestSpecLua {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LuaModuleLua(pub LuaModule);
-
-impl IntoLua for LuaModuleLua {
-    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
-        self.0.as_str().to_string().into_lua(lua)
-    }
-}
-
-impl FromLua for LuaModuleLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let s = String::from_lua(value, lua)?;
-        Ok(LuaModuleLua(LuaModule::from_str(&s).into_lua_err()?))
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct ModuleSpecLua(pub ModuleSpec);
+
+impl Typed for ModuleSpecLua {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
 
 impl IntoLua for ModuleSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            ModuleSpec::SourcePath(path) => table.set("source", path)?,
-            ModuleSpec::SourcePaths(paths) => table.set("sources", paths)?,
+            ModuleSpec::SourcePath(path) => {
+                table.set("source", path.to_slash_lossy().to_string())?
+            }
+            ModuleSpec::SourcePaths(paths) => table.set(
+                "sources",
+                paths
+                    .into_iter()
+                    .map(|p| p.to_slash_lossy().into_owned())
+                    .collect::<Vec<_>>(),
+            )?,
             ModuleSpec::ModulePaths(mp) => table.set("modules", ModulePathsLua(mp))?,
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ModulePathsLua(pub ModulePaths);
+pub struct BuiltinBuildSpecLua(pub BuiltinBuildSpec);
 
-impl LuaUserData for ModulePathsLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("sources", |_, this, ()| Ok(this.0.sources.clone()));
-        methods.add_method("libraries", |_, this, ()| Ok(this.0.libraries.clone()));
-        methods.add_method("defines", |_, this, ()| {
-            Ok(this
-                .0
-                .defines
-                .iter()
-                .cloned()
-                .collect::<HashMap<_, Option<_>>>())
-        });
-        methods.add_method("incdirs", |_, this, ()| Ok(this.0.incdirs.clone()));
-        methods.add_method("libdirs", |_, this, ()| Ok(this.0.libdirs.clone()));
+impl Typed for BuiltinBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("table")
     }
 }
-
-pub struct BuiltinBuildSpecLua(pub BuiltinBuildSpec);
 
 impl IntoLua for BuiltinBuildSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
@@ -992,90 +670,13 @@ impl IntoLua for BuiltinBuildSpecLua {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CMakeBuildSpecLua(pub CMakeBuildSpec);
-
-impl LuaUserData for CMakeBuildSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("cmake_lists_content", |_, this, ()| {
-            Ok(this.0.cmake_lists_content.clone())
-        });
-        methods.add_method("build_pass", |_, this, ()| Ok(this.0.build_pass));
-        methods.add_method("install_pass", |_, this, ()| Ok(this.0.install_pass));
-        methods.add_method("variables", |_, this, ()| Ok(this.0.variables.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MakeBuildSpecLua(pub MakeBuildSpec);
-
-impl LuaUserData for MakeBuildSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("makefile", |_, this, ()| Ok(this.0.makefile.clone()));
-        methods.add_method("build_target", |_, this, ()| {
-            Ok(this.0.build_target.clone())
-        });
-        methods.add_method("build_pass", |_, this, ()| Ok(this.0.build_pass));
-        methods.add_method("install_target", |_, this, ()| {
-            Ok(this.0.install_target.clone())
-        });
-        methods.add_method("install_pass", |_, this, ()| Ok(this.0.install_pass));
-        methods.add_method("build_variables", |_, this, ()| {
-            Ok(this.0.build_variables.clone())
-        });
-        methods.add_method("install_variables", |_, this, ()| {
-            Ok(this.0.install_variables.clone())
-        });
-        methods.add_method("variables", |_, this, ()| Ok(this.0.variables.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct TreesitterParserBuildSpecLua(pub TreesitterParserBuildSpec);
-
-impl LuaUserData for TreesitterParserBuildSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("lang", |_, this, ()| Ok(this.0.lang.clone()));
-        methods.add_method("parser", |_, this, ()| Ok(this.0.parser));
-        methods.add_method("generate", |_, this, ()| Ok(this.0.generate));
-        methods.add_method("location", |_, this, ()| Ok(this.0.location.clone()));
-        methods.add_method("queries", |_, this, ()| Ok(this.0.queries.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RustMluaBuildSpecLua(pub RustMluaBuildSpec);
-
-impl LuaUserData for RustMluaBuildSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("modules", |_, this, ()| Ok(this.0.modules.clone()));
-        methods.add_method("target_path", |_, this, ()| Ok(this.0.target_path.clone()));
-        methods.add_method("default_features", |_, this, ()| {
-            Ok(this.0.default_features)
-        });
-        methods.add_method("features", |_, this, ()| Ok(this.0.features.clone()));
-        methods.add_method("cargo_extra_args", |_, this, ()| {
-            Ok(this.0.cargo_extra_args.clone())
-        });
-        methods.add_method("include", |_, this, ()| Ok(this.0.include.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CommandBuildSpecLua(pub CommandBuildSpec);
-
-impl LuaUserData for CommandBuildSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("build_command", |_, this, ()| {
-            Ok(this.0.build_command.clone())
-        });
-        methods.add_method("install_command", |_, this, ()| {
-            Ok(this.0.install_command.clone())
-        });
-    }
-}
-
 pub struct BuildBackendSpecLua(pub BuildBackendSpec);
+
+impl Typed for BuildBackendSpecLua {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
 
 impl IntoLua for BuildBackendSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
@@ -1094,673 +695,46 @@ impl IntoLua for BuildBackendSpecLua {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct InstallSpecLua(pub InstallSpec);
+pub struct SyncReportLua(pub SyncReport);
 
-impl LuaUserData for InstallSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("lua", |_, this, ()| {
-            Ok(this
-                .0
-                .lua
-                .iter()
-                .map(|(k, v)| (k.as_str().to_string(), v.clone()))
-                .collect::<HashMap<String, PathBuf>>())
-        });
-        methods.add_method("lib", |_, this, ()| Ok(this.0.lib.clone()));
-        methods.add_method("conf", |_, this, ()| Ok(this.0.conf.clone()));
-        methods.add_method("bin", |_, this, ()| Ok(this.0.bin.clone()));
+impl Typed for SyncReportLua {
+    fn ty() -> Type {
+        Type::named("table")
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct BuildSpecLua(pub BuildSpec);
-
-impl LuaUserData for BuildSpecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("build_backend", |_, this, ()| {
-            Ok(this.0.build_backend.clone().map(BuildBackendSpecLua))
-        });
-        methods.add_method("install", |_, this, ()| {
-            Ok(InstallSpecLua(this.0.install.clone()))
-        });
-        methods.add_method("copy_directories", |_, this, ()| {
-            Ok(this.0.copy_directories.clone())
-        });
-        methods.add_method("patches", |_, this, ()| Ok(this.0.patches.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LocalLuaRockspecLua(pub LocalLuaRockspec);
-
-impl LuaUserData for LocalLuaRockspecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, ()| {
-            Ok(PackageNameLua(this.0.package().clone()))
-        });
-        methods.add_method("version", |_, this, ()| {
-            Ok(PackageVersionLua(this.0.version().clone()))
-        });
-        methods.add_method("description", |_, this, ()| {
-            Ok(RockDescriptionLua(this.0.description().clone()))
-        });
-        methods.add_method("supported_platforms", |_, this, ()| {
-            Ok(PlatformSupportLua(this.0.supported_platforms().clone()))
-        });
-        methods.add_method("lua", |_, this, ()| {
-            Ok(PackageVersionReqLua(this.0.lua().clone()))
-        });
-        methods.add_method("dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .dependencies()
-                .current_platform()
+impl IntoLua for SyncReportLua {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        let table = lua.create_table()?;
+        table.set(
+            "added",
+            self.0
+                .added()
                 .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("build_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .build_dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("test_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .test_dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("external_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .external_dependencies()
-                .current_platform()
-                .iter()
-                .map(|(k, v)| (k.clone(), ExternalDependencySpecLua(v.clone())))
-                .collect::<HashMap<_, _>>())
-        });
-        methods.add_method("build", |_, this, ()| {
-            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
-        });
-        methods.add_method("source", |_, this, ()| {
-            Ok(RemoteRockSourceLua(
-                this.0.source().current_platform().clone(),
-            ))
-        });
-        methods.add_method("test", |_, this, ()| {
-            Ok(TestSpecLua(this.0.test().current_platform().clone()))
-        });
-        methods.add_method("format", |_, this, ()| {
-            Ok(this.0.format().clone().map(RockspecFormatLua))
-        });
-        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
-            Ok(this
-                .0
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
-        });
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RemoteLuaRockspecLua(pub RemoteLuaRockspec);
-
-impl LuaUserData for RemoteLuaRockspecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, ()| {
-            Ok(PackageNameLua(this.0.package().clone()))
-        });
-        methods.add_method("version", |_, this, ()| {
-            Ok(PackageVersionLua(this.0.version().clone()))
-        });
-        methods.add_method("description", |_, this, ()| {
-            Ok(RockDescriptionLua(this.0.description().clone()))
-        });
-        methods.add_method("supported_platforms", |_, this, ()| {
-            Ok(PlatformSupportLua(this.0.supported_platforms().clone()))
-        });
-        methods.add_method("lua", |_, this, ()| {
-            Ok(PackageVersionReqLua(this.0.lua().clone()))
-        });
-        methods.add_method("dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("build_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .build_dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("test_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .test_dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("external_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .external_dependencies()
-                .current_platform()
-                .iter()
-                .map(|(k, v)| (k.clone(), ExternalDependencySpecLua(v.clone())))
-                .collect::<HashMap<_, _>>())
-        });
-        methods.add_method("build", |_, this, ()| {
-            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
-        });
-        methods.add_method("source", |_, this, ()| {
-            Ok(RemoteRockSourceLua(
-                this.0.source().current_platform().clone(),
-            ))
-        });
-        methods.add_method("test", |_, this, ()| {
-            Ok(TestSpecLua(this.0.test().current_platform().clone()))
-        });
-        methods.add_method("format", |_, this, ()| {
-            Ok(this.0.format().clone().map(RockspecFormatLua))
-        });
-        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
-            Ok(this
-                .0
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
-        });
-    }
-}
-
-impl FromLua for RemoteLuaRockspecLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let content = String::from_lua(value, lua)?;
-        RemoteLuaRockspec::new(&content)
-            .map(RemoteLuaRockspecLua)
-            .into_lua_err()
-    }
-}
-
-pub struct PartialLuaRockspecLua(pub PartialLuaRockspec);
-
-impl LuaUserData for PartialLuaRockspecLua {}
-
-impl FromLua for PartialLuaRockspecLua {
-    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        let content = String::from_lua(value, lua)?;
-        PartialLuaRockspec::new(&content)
-            .map(PartialLuaRockspecLua)
-            .into_lua_err()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PartialProjectTomlLua(pub PartialProjectToml);
-
-impl LuaUserData for PartialProjectTomlLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, ()| {
-            Ok(PackageNameLua(this.0.package().clone()))
-        });
-        methods.add_method("to_local", |_, this, ()| {
-            this.0.into_local().map(LocalProjectTomlLua).into_lua_err()
-        });
-        methods.add_method("to_remote", |_, this, specrev: Option<SpecRevLua>| {
-            this.0
-                .into_remote(specrev.map(|s| s.0))
-                .map(RemoteProjectTomlLua)
-                .into_lua_err()
-        });
-    }
-}
-impl_from_lua_userdata!(PartialProjectTomlLua);
-
-pub struct LocalProjectTomlLua(pub LocalProjectToml);
-
-impl LuaUserData for LocalProjectTomlLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, ()| {
-            Ok(PackageNameLua(this.0.package().clone()))
-        });
-        methods.add_method("version", |_, this, ()| {
-            Ok(PackageVersionLua(this.0.version().clone()))
-        });
-        methods.add_method("description", |_, this, ()| {
-            Ok(RockDescriptionLua(this.0.description().clone()))
-        });
-        methods.add_method("dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("build_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .build_dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("test_dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .test_dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("build", |_, this, ()| {
-            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
-        });
-        methods.add_method("test", |_, this, ()| {
-            Ok(TestSpecLua(this.0.test().current_platform().clone()))
-        });
-        methods.add_method("to_lua_rockspec", |_, this, ()| {
-            this.0
-                .to_lua_rockspec()
-                .map(LocalLuaRockspecLua)
-                .into_lua_err()
-        });
-        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
-            let rockspec = this.0.to_lua_rockspec().into_lua_err()?;
-            Ok(rockspec
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
-        });
-    }
-}
-
-pub struct RemoteProjectTomlLua(pub RemoteProjectToml);
-
-impl LuaUserData for RemoteProjectTomlLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("package", |_, this, ()| {
-            Ok(PackageNameLua(this.0.package().clone()))
-        });
-        methods.add_method("version", |_, this, ()| {
-            Ok(PackageVersionLua(this.0.version().clone()))
-        });
-        methods.add_method("description", |_, this, ()| {
-            Ok(RockDescriptionLua(this.0.description().clone()))
-        });
-        methods.add_method("dependencies", |_, this, ()| {
-            Ok(this
-                .0
-                .dependencies()
-                .current_platform()
-                .iter()
-                .map(|d| LuaDependencySpecLua(d.clone()))
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("build", |_, this, ()| {
-            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
-        });
-        methods.add_method("source", |_, this, ()| {
-            Ok(RemoteRockSourceLua(
-                this.0.source().current_platform().clone(),
-            ))
-        });
-        methods.add_method("to_lua_rockspec", |_, this, ()| {
-            this.0
-                .to_lua_rockspec()
-                .map(RemoteLuaRockspecLua)
-                .into_lua_err()
-        });
-        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
-            let rockspec = this.0.to_lua_rockspec().into_lua_err()?;
-            Ok(rockspec
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
-        });
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RemotePackageDBLua(pub RemotePackageDB);
-
-impl LuaUserData for RemotePackageDBLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("search", |_, this, package_req: PackageReqLua| {
-            let results: HashMap<String, Vec<String>> = this
-                .0
-                .search(&package_req.0)
-                .into_iter()
-                .map(|(name, versions)| {
-                    (
-                        name.to_string(),
-                        versions.into_iter().map(|v| v.to_string()).collect(),
-                    )
-                })
-                .collect();
-            Ok(results)
-        });
-        methods.add_method("latest_match", |_, this, package_req: PackageReqLua| {
-            Ok(this
-                .0
-                .latest_match(&package_req.0, None)
-                .map(PackageSpecLua))
-        });
-    }
-}
-
-impl FromLua for RemotePackageDBLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<RemotePackageDBLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "RemotePackageDBLua".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct LockfileReadOnlyLua(pub Lockfile<ReadOnly>);
-
-impl LuaUserData for LockfileReadOnlyLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("version", |_, this, ()| Ok(this.0.version().clone()));
-        methods.add_method("rocks", |_, this, ()| {
-            Ok(this
-                .0
-                .rocks()
-                .iter()
-                .map(|(id, rock)| {
-                    (
-                        id.clone().into_string().clone(),
-                        LocalPackageLua(rock.clone()),
-                    )
-                })
-                .collect::<HashMap<_, _>>())
-        });
-        methods.add_method("get", |_, this, id: LocalPackageIdLua| {
-            Ok(this.0.get(&id.0).cloned().map(LocalPackageLua))
-        });
-        methods.add_method("map_then_flush", |_, this, f: LuaFunction| {
-            let lockfile = this.0.clone().write_guard();
-            f.call::<()>(LockfileGuardLua(lockfile))?;
-            Ok(())
-        });
-    }
-}
-
-pub struct LockfileGuardLua(pub LockfileGuard);
-
-impl LuaUserData for LockfileGuardLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("version", |_, this, ()| Ok(this.0.version().clone()));
-        methods.add_method("rocks", |_, this, ()| {
-            Ok(this
-                .0
-                .rocks()
-                .iter()
-                .map(|(id, rock)| {
-                    (
-                        id.clone().into_string().clone(),
-                        LocalPackageLua(rock.clone()),
-                    )
-                })
-                .collect::<HashMap<_, _>>())
-        });
-        methods.add_method("get", |_, this, id: LocalPackageIdLua| {
-            Ok(this.0.get(&id.0).cloned().map(LocalPackageLua))
-        });
-    }
-}
-
-#[derive(Clone)]
-pub struct LockfileReadWriteLua(pub Lockfile<ReadWrite>);
-
-impl LuaUserData for LockfileReadWriteLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("version", |_, this, ()| Ok(this.0.version().to_owned()));
-        methods.add_method("rocks", |_, this, ()| {
-            Ok(this
-                .0
-                .rocks()
-                .iter()
-                .map(|(id, rock)| {
-                    (
-                        id.clone().into_string().clone(),
-                        LocalPackageLua(rock.clone()),
-                    )
-                })
-                .collect::<HashMap<_, _>>())
-        });
-        methods.add_method("get", |_, this, id: String| {
-            Ok(this
-                .0
-                .get(unsafe { &LocalPackageId::from_unchecked(id) })
                 .cloned()
-                .map(LocalPackageLua))
-        });
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkspaceLua(pub Workspace);
-
-impl LuaUserData for WorkspaceLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("root", |_, this, ()| Ok(this.0.root().as_ref().to_owned()));
-        methods.add_method("members", |_, this, ()| {
-            Ok(this
-                .0
-                .members()
+                .map(LocalPackageLua)
+                .collect::<Vec<_>>(),
+        )?;
+        table.set(
+            "removed",
+            self.0
+                .removed()
                 .iter()
-                .map(|project| ProjectLua(project.to_owned()))
-                .collect_vec()
-                .to_owned())
-        });
-        methods.add_method(
-            "single_member_or_select",
-            |_, mut this, name: Option<PackageNameLua>| {
-                Ok(this
-                    .0
-                    .single_member_or_select(&name.map(|name| name.0))
-                    .map(|project| ProjectLua(project.to_owned()))
-                    .map_err(|err| LuaError::RuntimeError(err.to_string()))?)
-            },
-        );
-        methods.add_method("lockfile_path", |_, this, ()| Ok(this.0.lockfile_path()));
-        methods.add_method("tree", |_, this, config: ConfigLua| {
-            this.0.tree(&config.0).map(TreeLua).into_lua_err()
-        });
-        methods.add_method("test_tree", |_, this, config: ConfigLua| {
-            this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
-        });
-        methods.add_method("luarc_path", |_, this, ()| Ok(this.0.luarc_path()));
+                .cloned()
+                .map(LocalPackageLua)
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(LuaValue::Table(table))
     }
-}
-
-impl FromLua for WorkspaceLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<WorkspaceLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "WorkspaceLua".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ProjectLua(pub Project);
-
-impl LuaUserData for ProjectLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("root", |_, this, ()| Ok(this.0.root().as_ref().to_owned()));
-        methods.add_method("toml_path", |_, this, ()| Ok(this.0.toml_path()));
-        methods.add_method("extra_rockspec_path", |_, this, ()| {
-            Ok(this.0.extra_rockspec_path())
-        });
-        methods.add_method("toml", |_, this, ()| {
-            Ok(PartialProjectTomlLua(this.0.toml().clone()))
-        });
-        methods.add_method("local_rockspec", |_, this, ()| {
-            this.0
-                .local_rockspec()
-                .map(LocalLuaRockspecLua)
-                .into_lua_err()
-        });
-        methods.add_method("remote_rockspec", |_, this, specrev: Option<SpecRevLua>| {
-            this.0
-                .remote_rockspec(specrev.map(|s| s.0))
-                .map(RemoteLuaRockspecLua)
-                .into_lua_err()
-        });
-        methods.add_method("lua_version", |_, this, config: ConfigLua| {
-            this.0
-                .lua_version(&config.0)
-                .map(|v| v.to_string())
-                .into_lua_err()
-        });
-        methods.add_method("extra_rockspec", |_, this, ()| {
-            this.0
-                .extra_rockspec()
-                .map(|opt| opt.map(PartialLuaRockspecLua))
-                .into_lua_err()
-        });
-        methods.add_async_method_mut(
-            "add",
-            |_, mut this, (deps, config): (DependencyTypeLua<PackageReqLua>, ConfigLua)| async move {
-                let _guard = lux_lib::lua::lua_runtime().enter();
-                let deps = map_dependency_type(deps.0);
-                let package_db =
-                    RemotePackageDB::from_config(&config.0, &Progress::<ProgressBar>::no_progress())
-                        .await
-                        .into_lua_err()?;
-                this.0.add(deps.as_ref(), &package_db).await.into_lua_err()
-            },
-        );
-        methods.add_async_method_mut(
-            "remove",
-            |_, mut this, deps: DependencyTypeLua<PackageNameLua>| async move {
-                let _guard = lux_lib::lua::lua_runtime().enter();
-                let deps = map_dependency_type_names(deps.0);
-                this.0.remove(deps.as_ref()).await.into_lua_err()
-            },
-        );
-        methods.add_method("project_files", |_, this, ()| Ok(this.0.project_files()));
-    }
-}
-
-impl FromLua for ProjectLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<ProjectLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "ProjectLua".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-
-fn map_dependency_type(deps: DependencyType<PackageReqLua>) -> DependencyType<PackageReq> {
-    match deps {
-        DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::External(m) => DependencyType::External(m),
-    }
-}
-
-fn map_dependency_type_names(deps: DependencyType<PackageNameLua>) -> DependencyType<PackageName> {
-    match deps {
-        DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::External(m) => DependencyType::External(m),
-    }
-}
-
-#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
-#[serde(rename_all = "snake_case")]
-enum EntryTypeLua {
-    #[default]
-    Entrypoint,
-    DependencyOnly,
-}
-
-impl Into<EntryType> for EntryTypeLua {
-    fn into(self) -> EntryType {
-        match self {
-            EntryTypeLua::Entrypoint => EntryType::Entrypoint,
-            EntryTypeLua::DependencyOnly => EntryType::DependencyOnly,
-        }
-    }
-}
-
-#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
-#[serde(rename_all = "snake_case")]
-enum BuildBehaviourLua {
-    #[default]
-    NoForce,
-    Force,
-}
-
-impl Into<BuildBehaviour> for BuildBehaviourLua {
-    fn into(self) -> BuildBehaviour {
-        match self {
-            Self::NoForce => BuildBehaviour::NoForce,
-            Self::Force => BuildBehaviour::Force,
-        }
-    }
-}
-
-/// Intermediate struct for deserialization. Takes on two variants:
-/// ```lua
-/// "say >= 1.3"
-///
-/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "no_force" }
-/// ```
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum PackageInstallSpecInput {
-    Simple(String),
-    Full {
-        package: String,
-        #[serde(default)]
-        entry_type: EntryTypeLua,
-        #[serde(default)]
-        pin: bool,
-        #[serde(default)]
-        opt: bool,
-        #[serde(default)]
-        build_behaviour: BuildBehaviourLua,
-    },
 }
 
 pub struct PackageInstallSpecLua(pub PackageInstallSpec);
+
+impl Typed for PackageInstallSpecLua {
+    fn ty() -> Type {
+        Type::named("table")
+    }
+}
 
 impl FromLua for PackageInstallSpecLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
@@ -1791,41 +765,2199 @@ impl FromLua for PackageInstallSpecLua {
     }
 }
 
-pub struct SyncReportLua(pub SyncReport);
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct PackageSpecLua(#[field(skip)] pub PackageSpec);
 
-impl IntoLua for SyncReportLua {
-    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
-        let table = lua.create_table()?;
-        table.set(
-            "added",
-            self.0
-                .added()
+impl Typed for PackageSpecLua {
+    fn ty() -> Type {
+        Type::named("PackageSpec")
+    }
+}
+
+impl FromLua for PackageSpecLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<PackageSpecLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "PackageSpecLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+impl TypedUserData for PackageSpecLua {
+    fn add_fields<F: TypedDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("name", |_, this| Ok(this.0.name().to_string()));
+        fields.add_field_method_get("version", |_, this| Ok(this.0.version().to_string()));
+    }
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document(
+            "Convert this spec to a package requirement (with an exact version requirement)",
+        );
+        methods.add_method("to_package_req", |_, this, ()| {
+            Ok(PackageReqLua(this.0.clone().into_package_req()))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for a package with an exact name and version");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct PackageReqLua(#[field(skip)] pub PackageReq);
+
+impl Typed for PackageReqLua {
+    fn ty() -> Type {
+        Type::named("PackageReq")
+    }
+}
+
+impl FromLua for PackageReqLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let str: String = lua.from_value(value)?;
+        PackageReq::parse(&str).map(PackageReqLua).into_lua_err()
+    }
+}
+
+impl TypedUserData for PackageReqLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("name", |_, this, ()| Ok(this.0.name().to_string()));
+        methods.add_method("version_req", |_, this, ()| {
+            Ok(this.0.version_req().to_string())
+        });
+        methods.document("Evaluate whether the given package satisfies this package requirement.");
+        methods.param("package", "package spec to check");
+        methods.add_method("matches", |_, this, package: PackageSpecLua| {
+            Ok(this.0.matches(&package.0))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("A lua package requirement with a name and an optional version requirement");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct LocalPackageHashesLua(#[field(skip)] pub LocalPackageHashes);
+
+impl Typed for LocalPackageHashesLua {
+    fn ty() -> Type {
+        Type::named("LocalPackageHashes")
+    }
+}
+
+impl_from_lua_userdata!(LocalPackageHashesLua);
+
+impl TypedUserData for LocalPackageHashesLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.param("rockspec", "sha256sum of the rockspec");
+        methods.add_method("rockspec", |_, this, ()| Ok(this.0.rockspec.to_hex().1));
+        methods.param("source", "sha256sum of the package source");
+        methods.add_method("source", |_, this, ()| Ok(this.0.source.to_hex().1));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Rockspec and source integrities of an installed rock");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct LocalPackageLua(#[field(skip)] pub LocalPackage);
+
+impl Typed for LocalPackageLua {
+    fn ty() -> Type {
+        Type::named("LocalPackage")
+    }
+}
+
+impl FromLua for LocalPackageLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<LocalPackageLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "LocalPackageLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+impl TypedUserData for LocalPackageLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("id", |_, this, ()| Ok(LocalPackageIdLua(this.0.id())));
+        methods.add_method("name", |_, this, ()| {
+            Ok(PackageNameLua(this.0.name().clone()))
+        });
+        methods.add_method("version", |_, this, ()| {
+            Ok(PackageVersionLua(this.0.version().clone()))
+        });
+        methods.add_method("pinned", |_, this, ()| Ok(PinnedStateLua(this.0.pinned())));
+        methods.add_method("dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .dependencies()
+                .into_iter()
+                .map(|id| LocalPackageIdLua(id.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("constraint", |_, this, ()| {
+            Ok(LockConstraintLua(this.0.constraint()))
+        });
+        methods.add_method("hashes", |_, this, ()| {
+            Ok(LocalPackageHashesLua(this.0.hashes().clone()))
+        });
+        methods.add_method("to_package", |_, this, ()| {
+            Ok(PackageSpecLua(this.0.to_package()))
+        });
+        methods.add_method("to_package_req", |_, this, ()| {
+            Ok(PackageReqLua(this.0.clone().into_package_req()))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("A locally installed rock");
+    }
+}
+
+#[derive(mlua_extras::UserData)]
+pub struct RockLayoutLua(#[field(skip)] pub RockLayout);
+
+impl Typed for RockLayoutLua {
+    fn ty() -> Type {
+        Type::named("RockLayout")
+    }
+}
+
+impl TypedUserData for RockLayoutLua {
+    fn add_fields<F: TypedDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("rock_path", |_, this| {
+            Ok(this.0.rock_path.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("etc", |_, this| {
+            Ok(this.0.etc.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("lib", |_, this| {
+            Ok(this.0.lib.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("src", |_, this| {
+            Ok(this.0.src.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("bin", |_, this| {
+            Ok(this.0.bin.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("conf", |_, this| {
+            Ok(this.0.conf.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("doc", |_, this| {
+            Ok(this.0.doc.to_slash_lossy().into_owned())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Change-agnostic way of referencing various paths for a rock");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeLua(pub Tree);
+
+impl Typed for TreeLua {
+    fn ty() -> Type {
+        Type::named("Tree")
+    }
+}
+
+impl_from_lua_userdata!(TreeLua);
+
+impl TypedUserData for TreeLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("The root directory of the tree");
+        methods.add_method("root", |_, this, ()| {
+            Ok(this.0.root().to_slash_lossy().into_owned())
+        });
+        methods.document("The root directory of a package in this tree");
+        methods.param("package", "");
+        methods.add_method("root_for", |_, this, package: LocalPackageLua| {
+            Ok(this.0.root_for(&package.0).to_slash_lossy().into_owned())
+        });
+        methods.document("Where wrapped package binaries are installed");
+        methods.add_method("bin", |_, this, ()| {
+            Ok(this.0.bin().to_slash_lossy().into_owned())
+        });
+        methods.document("Find installed rocks that match the given `PackageReq`");
+        methods.param("req", "");
+        methods.add_method("match_rocks", |lua, this, req: PackageReqLua| {
+            this.0
+                .match_rocks(&req.0)
+                .map(|m| RockMatchesLua(m).into_lua(lua))
+                .map_err(|err| LuaError::RuntimeError(err.to_string()))?
+        });
+        methods.document("Get the `RockLayout` for an installed package.");
+        methods.param("package", "");
+        methods.add_method("rock_layout", |_, this, package: LocalPackageLua| {
+            this.0
+                .installed_rock_layout(&package.0)
+                .map(RockLayoutLua)
+                .map_err(|err| LuaError::RuntimeError(err.to_string()))
+        });
+        methods.document("Create a `LockfileReadOnly` for this tree.");
+        methods.add_method("lockfile", |_, this, ()| {
+            this.0.lockfile().map(LockfileReadOnlyLua).into_lua_err()
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("A collection of files where installed rocks are located");
+    }
+}
+
+impl mlua::UserData for TreeLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
+#[serde(rename_all = "snake_case")]
+enum RockLayoutVariant {
+    #[default]
+    Default,
+    Nvim,
+}
+
+#[derive(Deserialize)]
+struct RockLayoutConfigInput {
+    layout: RockLayoutVariant,
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct RockLayoutConfigLua(#[field(skip)] pub RockLayoutConfig);
+
+impl Typed for RockLayoutConfigLua {
+    fn ty() -> Type {
+        Type::named("RockLayoutConfig")
+    }
+}
+
+impl FromLua for RockLayoutConfigLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let input: RockLayoutConfigInput = lua.from_value(value)?;
+        Ok(match input.layout {
+            RockLayoutVariant::Default => RockLayoutConfigLua(RockLayoutConfig::default()),
+            RockLayoutVariant::Nvim => RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()),
+        })
+    }
+}
+
+impl TypedUserData for RockLayoutConfigLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Instantiate the default rock layout");
+        methods.add_function("new", |_, ()| {
+            Ok(RockLayoutConfigLua(RockLayoutConfig::default()))
+        });
+        methods.document("Instantiate the a rock layout for Neovim plugins");
+        methods.add_function("new_nvim_layout", |_, ()| {
+            Ok(RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Template configuration for a rock's tree layout");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfigLua(pub Config);
+
+impl Typed for ConfigLua {
+    fn ty() -> Type {
+        Type::named("Config")
+    }
+}
+
+impl FromLua for ConfigLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<ConfigLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "ConfigLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+impl TypedUserData for ConfigLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("builder", |_, ()| {
+            ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
+        });
+        methods.document("The luarocks repository server");
+        methods.add_method("server", |_, this, ()| Ok(this.0.server().to_string()));
+        methods.document("Additional luarocks repository servers");
+        methods.add_method("extra_servers", |_, this, ()| {
+            Ok(this
+                .0
+                .extra_servers()
+                .iter()
+                .map(|url| url.to_string())
+                .collect_vec())
+        });
+
+        methods.document("The luarocks server namespace to use");
+        methods.add_method("namespace", |_, this, ()| Ok(this.0.namespace().cloned()));
+
+        methods.document("The directory in which to install Lua{n} if not found");
+        methods.add_method("lua_dir", |_, this, ()| {
+            Ok(this.0.lua_dir().map(|p| p.to_slash_lossy().into_owned()))
+        });
+
+        methods.document(
+            r#"The tree in which to install rocks.
+If installing packages for a project, use `project:tree(config)` instead"#,
+        );
+        methods.param("lua_version", "");
+        methods.add_method("user_tree", |_, this, lua_version: LuaVersionLua| {
+            this.0.user_tree(lua_version.0).map(TreeLua).into_lua_err()
+        });
+
+        methods.document("Whether to display verbose output of commands executed");
+        methods.add_method("verbose", |_, this, ()| Ok(this.0.verbose()));
+
+        methods.document("Whether to disable printing progress bars and spinners");
+        methods.add_method("no_progress", |_, this, ()| Ok(this.0.no_progress()));
+
+        methods.document("Whether to skip prompts, selecting the default option");
+        methods.add_method("no_prompt", |_, this, ()| Ok(this.0.no_prompt()));
+
+        methods.document(
+            r#"Timeout on network operations, in seconds.
+0 means no timeout (wait forever)."#,
+        );
+        methods.add_method("timeout", |_, this, ()| Ok(this.0.timeout().as_secs()));
+
+        methods.document("The Lux cache directory");
+        methods.add_method("cache_dir", |_, this, ()| {
+            Ok(this.0.cache_dir().to_slash_lossy().into_owned())
+        });
+
+        methods.document("The Lux data directory");
+        methods.add_method("data_dir", |_, this, ()| {
+            Ok(this.0.data_dir().to_slash_lossy().into_owned())
+        });
+
+        methods.document(
+            r#"The rock layout for entrypoints of new install trees.
+Does not affect existing install trees or dependency rock layouts."#,
+        );
+        methods.add_method("entrypoint_layout", |_, this, ()| {
+            Ok(RockLayoutConfigLua(this.0.entrypoint_layout().clone()))
+        });
+
+        methods.document(
+            r#"Variable names, mapped to their values.
+Lux populates variables in the `lux.toml` and in RockSpecs
+with these before building."#,
+        );
+        methods.add_method("variables", |_, this, ()| Ok(this.0.variables().clone()));
+
+        methods.document("Command to use for running `make` builds");
+        methods.add_method("make_cmd", |_, this, ()| Ok(this.0.make_cmd()));
+
+        methods.document("Command to use for running `cmake` builds");
+        methods.add_method("cmake_cmd", |_, this, ()| Ok(this.0.cmake_cmd()));
+
+        methods.document("Enabled luarocks repository servers that provide dev/scm rocks");
+        methods.add_method("enabled_dev_servers", |_, this, ()| {
+            Ok(this
+                .0
+                .enabled_dev_servers()
+                .into_lua_err()?
+                .into_iter()
+                .map(|url| url.to_string())
+                .collect_vec())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add(
+            r#"The resolved configuration for a Lux session.
+Can be constructed via `ConfigBuilder`, which supports layering multiple
+configuration sources (config file, CLI flags, environment variables)
+        "#,
+        );
+    }
+}
+
+impl mlua::UserData for ConfigLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Clone)]
+pub struct ConfigBuilderLua(pub ConfigBuilder);
+
+impl Typed for ConfigBuilderLua {
+    fn ty() -> Type {
+        Type::named("ConfigBuilder")
+    }
+}
+
+impl TypedUserData for ConfigBuilderLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Whether to development packages");
+        methods.param("dev", "Default: false");
+        methods.add_method("dev", |_, this, dev: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().dev(dev)))
+        });
+
+        methods.document("Fetch rocks/rockspecs from this luarocks server");
+        methods.param("server", "Default: 'https://luarocks.org/'");
+
+        methods.add_method("server", |_, this, server: Option<LuaUrl>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().server(server.map(|url| url.0)),
+            ))
+        });
+
+        methods.document("Fetch rocks/rockspecs from these servers in addition to the main server");
+        methods.param("servers", "List of server URLs");
+        methods.add_method("extra_servers", |_, this, servers: Option<Vec<LuaUrl>>| {
+            Ok(ConfigBuilderLua(this.0.clone().extra_servers(
+                servers.map(|urls| urls.into_iter().map(|url| url.0).collect()),
+            )))
+        });
+
+        methods.document("Specify the luarocks server namespace to use");
+        methods.param("namespace", "");
+        methods.add_method("namespace", |_, this, namespace: Option<String>| {
+            Ok(ConfigBuilderLua(this.0.clone().namespace(namespace)))
+        });
+
+        methods.document("Specify the directory in which to install Lua if not found");
+        methods.param("lua_dir", "<path>");
+        methods.add_method("lua_dir", |_, this, lua_dir: Option<String>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().lua_dir(lua_dir.map(PathBuf::from)),
+            ))
+        });
+
+        methods.document("Which Lua version to use");
+        methods.param(
+            "lua_version",
+            "Default: The installed Lua version, if detected",
+        );
+        methods.add_method(
+            "lua_version",
+            |_, this, lua_version: Option<LuaVersionLua>| {
+                Ok(ConfigBuilderLua(
+                    this.0.clone().lua_version(lua_version.map(|v| v.0)),
+                ))
+            },
+        );
+
+        methods.document("Which tree to operate on");
+        methods.param("tree", "Tree root directory");
+        methods.add_method("user_tree", |_, this, tree: Option<String>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().user_tree(tree.map(PathBuf::from)),
+            ))
+        });
+
+        methods.document("Whether to display verbose output of commands executed");
+        methods.param("verbose", "Default: false");
+        methods.add_method("verbose", |_, this, verbose: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().verbose(verbose)))
+        });
+
+        methods.document("Whether to disable printing progress bars and spinners");
+        methods.param("no_progress", "Default: false");
+        methods.add_method("no_progress", |_, this, no_progress: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().no_progress(no_progress)))
+        });
+
+        methods.document("Whether to disable user prompts");
+        methods.param("no_progress", "Default: false");
+        methods.add_method("no_prompt", |_, this, no_prompt: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().no_prompt(no_prompt)))
+        });
+
+        methods.document(
+            r#"Timeout on network operations, in seconds.
+0 means no timeout (wait forever)."#,
+        );
+        methods.param("timeout", "Default: 30 s");
+        methods.add_method("timeout", |_, this, timeout: Option<u64>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().timeout(timeout.map(Duration::from_secs)),
+            ))
+        });
+
+        methods.document("The cache directory, e.g. for luarocks manifests.");
+        methods.param("cache_dir", "");
+        methods.add_method("cache_dir", |_, this, cache_dir: Option<String>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().cache_dir(cache_dir.map(PathBuf::from)),
+            ))
+        });
+
+        methods.document("The data directory, in which the default user install tree resides.");
+        methods.param("data_dir", "");
+        methods.add_method("data_dir", |_, this, data_dir: Option<String>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().data_dir(data_dir.map(PathBuf::from)),
+            ))
+        });
+
+        methods.document(
+            r#"The rock layout for entrypoints of new install trees.
+Does not affect existing install trees or dependency rock layouts."#,
+        );
+        methods.param("layout", "");
+        methods.add_method(
+            "entrypoint_layout",
+            |_, this, layout: Option<RockLayoutConfigLua>| {
+                Ok(ConfigBuilderLua(this.0.clone().entrypoint_layout(
+                    layout.map(|l| l.0).unwrap_or_default(),
+                )))
+            },
+        );
+
+        methods.document("The user agent to set when making web requests.");
+        methods.param("user_agent", "Default: 'lux-lua/<version>'");
+        methods.add_method("user_agent", |_, this, user_agent: Option<String>| {
+            Ok(ConfigBuilderLua(this.0.clone().user_agent(user_agent)))
+        });
+
+        methods.document("Whether to generate a `.luarc.json` on build.");
+        methods.param("generate", "Default: true");
+        methods.add_method("generate_luarc", |_, this, generate: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().generate_luarc(generate)))
+        });
+
+        methods.document(
+            r#"Whether to wrap installed Lua bin scripts to be executed with
+the detected or configured Lua installation.
+Setting this to `false` disables wrapping globally.
+If set to `true`, individual rocks can still disable wrapping of their own bin scripts.
+        "#,
+        );
+        methods.param("wrap", "Default: true");
+        methods.add_method("wrap_bin_scripts", |_, this, wrap: Option<bool>| {
+            Ok(ConfigBuilderLua(this.0.clone().wrap_bin_scripts(wrap)))
+        });
+        methods.add_method("build", |_, this, ()| {
+            this.0.clone().build().map(ConfigLua).into_lua_err()
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Incrementally builds a `Config` by layering configuration sources.");
+    }
+}
+
+impl mlua::UserData for ConfigBuilderLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct LuaDependencySpecLua(#[field(skip)] pub LuaDependencySpec);
+
+impl Typed for LuaDependencySpecLua {
+    fn ty() -> Type {
+        Type::named("LuaDependencySpec")
+    }
+}
+
+impl FromLua for LuaDependencySpecLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ref ud) => {
+                if let Ok(borrowed) = ud.borrow::<LuaDependencySpecLua>() {
+                    return Ok(borrowed.clone());
+                }
+
+                let s: String = lua.from_value(value)?;
+                s.parse::<LuaDependencySpec>()
+                    .map(LuaDependencySpecLua)
+                    .into_lua_err()
+            }
+            _ => {
+                let package_req: PackageReq = lua.from_value(value)?;
+                Ok(LuaDependencySpecLua(LuaDependencySpec::from(package_req)))
+            }
+        }
+    }
+}
+
+impl TypedUserData for LuaDependencySpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("name", |_, this, ()| Ok(this.0.name().to_string()));
+        methods.add_method("version_req", |_, this, ()| {
+            Ok(this.0.version_req().to_string())
+        });
+        methods.document(
+            "Evaluate whether the given package satisfies this dependency's requirement.",
+        );
+        methods.param("package", "package spec to check");
+        methods.add_method("matches", |_, this, package: PackageSpecLua| {
+            Ok(this.0.matches(&package.0))
+        });
+        methods.add_method("package_req", |_, this, ()| {
+            Ok(PackageReqLua(this.0.package_req().clone()))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for a Lua dependency in a Lux project");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct PlatformSupportLua(#[field(skip)] pub PlatformSupport);
+
+impl Typed for PlatformSupportLua {
+    fn ty() -> Type {
+        Type::named("PlatformSupport")
+    }
+}
+
+impl TypedUserData for PlatformSupportLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Is the given platform supported?");
+        methods.param("platform", "");
+        methods.add_method(
+            "is_supported",
+            |_, this, platform: PlatformIdentifierLua| Ok(this.0.is_supported(&platform.0)),
+        );
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Used to specify which platforms a rock can be built for");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct RockDescriptionLua(#[field(skip)] pub RockDescription);
+
+impl Typed for RockDescriptionLua {
+    fn ty() -> Type {
+        Type::named("RockDescription")
+    }
+}
+
+impl TypedUserData for RockDescriptionLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("A one-line description of the package");
+        methods.add_method("summary", |_, this, ()| Ok(this.0.summary.clone()));
+
+        methods.document("A longer description of the package");
+        methods.add_method("detailed", |_, this, ()| Ok(this.0.detailed.clone()));
+
+        methods.document("The license used by the package");
+        methods.add_method("license", |_, this, ()| Ok(this.0.license.clone()));
+
+        methods.document("An URL for the project. This is not the URL for the tarball, but the address of a website");
+        methods.add_method("homepage", |_, this, ()| {
+            Ok(this.0.homepage.as_ref().map(|url| url.to_string()))
+        });
+
+        methods.document("An URL for the project's issue tracker");
+        methods.add_method("issues_url", |_, this, ()| Ok(this.0.issues_url.clone()));
+
+        methods.document("Contact information for the rockspec maintainer");
+        methods.add_method("maintainer", |_, this, ()| Ok(this.0.maintainer.clone()));
+
+        methods.document(
+            "A list of short strings that specify labels for categorization of this rock",
+        );
+        methods.add_method("labels", |_, this, ()| Ok(this.0.labels.clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("A rock's metadata, to be displayed on the remote package server");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct GitSourceLua(#[field(skip)] pub GitSource);
+
+impl Typed for GitSourceLua {
+    fn ty() -> Type {
+        Type::named("GitSource")
+    }
+}
+
+impl TypedUserData for GitSourceLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("url", |_, this, ()| Ok(this.0.url.to_string()));
+        methods.add_method("checkout_ref", |_, this, ()| {
+            Ok(this.0.checkout_ref.clone())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specifies a source to be fetched from a git forge");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct RemoteRockSourceLua(#[field(skip)] pub RemoteRockSource);
+
+impl Typed for RemoteRockSourceLua {
+    fn ty() -> Type {
+        Type::named("RemoteRockSource")
+    }
+}
+
+impl TypedUserData for RemoteRockSourceLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("source_spec", |_, this, ()| {
+            Ok(RockSourceSpecLua(this.0.source_spec.clone()))
+        });
+        methods.add_method("archive_name", |_, this, ()| {
+            Ok(this
+                .0
+                .archive_name
+                .as_ref()
+                .map(|p| p.to_slash_lossy().into_owned()))
+        });
+        methods.add_method("unpack_dir", |_, this, ()| {
+            Ok(this
+                .0
+                .unpack_dir
+                .as_ref()
+                .map(|p| p.to_slash_lossy().into_owned()))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specifies the source of a remote rock to be fetched");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct BustedTestSpecLua(#[field(skip)] pub BustedTestSpec);
+
+impl Typed for BustedTestSpecLua {
+    fn ty() -> Type {
+        Type::named("BustedTestSpec")
+    }
+}
+
+impl TypedUserData for BustedTestSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Additional CLI flags to pass to busted when running");
+        methods.add_method("flags", |_, this, ()| Ok(this.0.flags().clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for running a test suite with busted");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct CommandTestSpecLua(#[field(skip)] pub CommandTestSpec);
+
+impl Typed for CommandTestSpecLua {
+    fn ty() -> Type {
+        Type::named("CommandTestSpec")
+    }
+}
+
+impl TypedUserData for CommandTestSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("The command to run");
+        methods.add_method("command", |_, this, ()| Ok(this.0.command().to_string()));
+
+        methods.document("Additional CLI flags to pass to the command when running");
+        methods.add_method("flags", |_, this, ()| Ok(this.0.flags().clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for running a test suite with a command");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct LuaScriptTestSpecLua(#[field(skip)] pub LuaScriptTestSpec);
+
+impl Typed for LuaScriptTestSpecLua {
+    fn ty() -> Type {
+        Type::named("LuaScriptTestSpec")
+    }
+}
+
+impl TypedUserData for LuaScriptTestSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("The script to run");
+        methods.add_method("script", |_, this, ()| {
+            Ok(this.0.script().to_slash_lossy().into_owned())
+        });
+
+        methods.document("Additional CLI flags to pass to the script when running");
+        methods.add_method("flags", |_, this, ()| Ok(this.0.flags().clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for running a test suite with a Lua script");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct ModulePathsLua(#[field(skip)] pub ModulePaths);
+
+impl Typed for ModulePathsLua {
+    fn ty() -> Type {
+        Type::named("ModulePaths")
+    }
+}
+
+impl TypedUserData for ModulePathsLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Path names of C sources, mandatory field");
+        methods.add_method("sources", |_, this, ()| {
+            Ok(this
+                .0
+                .sources
+                .iter()
+                .map(|p| p.to_slash_lossy().into_owned())
+                .collect::<Vec<_>>())
+        });
+
+        methods.document("External libraries to be linked");
+        methods.add_method("libraries", |_, this, ()| {
+            Ok(this
+                .0
+                .libraries
+                .iter()
+                .map(|p| p.to_slash_lossy().into_owned())
+                .collect::<Vec<_>>())
+        });
+
+        methods.document("C defines, e.g. { 'FOO=bar', 'USE_BLA' }");
+        methods.add_method("defines", |_, this, ()| {
+            Ok(this
+                .0
+                .defines
                 .iter()
                 .cloned()
-                .map(LocalPackageLua)
-                .collect::<Vec<_>>(),
-        )?;
-        table.set(
-            "removed",
-            self.0
-                .removed()
+                .collect::<HashMap<_, Option<_>>>())
+        });
+
+        methods
+            .document("Directories to be added to the compiler's headers lookup directory list.");
+        methods.add_method("incdirs", |_, this, ()| {
+            Ok(this
+                .0
+                .incdirs
                 .iter()
+                .map(|p| p.to_slash_lossy().into_owned())
+                .collect::<Vec<_>>())
+        });
+
+        methods.document("Directories to be added to the linker's library lookup directory list.");
+        methods.add_method("libdirs", |_, this, ()| {
+            Ok(this
+                .0
+                .libdirs
+                .iter()
+                .map(|p| p.to_slash_lossy().into_owned())
+                .collect::<Vec<_>>())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a Lua module from various sources");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct CMakeBuildSpecLua(#[field(skip)] pub CMakeBuildSpec);
+
+impl Typed for CMakeBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("CMakeBuildSpec")
+    }
+}
+
+impl TypedUserData for CMakeBuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("cmake_lists_content", |_, this, ()| {
+            Ok(this.0.cmake_lists_content.clone())
+        });
+
+        methods.document("Whether to perform a build pass");
+        methods.add_method("build_pass", |_, this, ()| Ok(this.0.build_pass));
+
+        methods.document("Whether to perform an install pass");
+        methods.add_method("install_pass", |_, this, ()| Ok(this.0.install_pass));
+
+        methods.add_method("variables", |_, this, ()| Ok(this.0.variables.clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a rock with the `cmake` build backend");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct MakeBuildSpecLua(#[field(skip)] pub MakeBuildSpec);
+
+impl Typed for MakeBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("MakeBuildSpec")
+    }
+}
+
+impl TypedUserData for MakeBuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Makefile to be used");
+        methods.add_method("makefile", |_, this, ()| {
+            Ok(this.0.makefile.to_slash_lossy().into_owned())
+        });
+
+        methods.add_method("build_target", |_, this, ()| {
+            Ok(this.0.build_target.clone())
+        });
+
+        methods
+            .document("Whether to perform a make pass on the target indicated by `build_target`");
+        methods.add_method("build_pass", |_, this, ()| Ok(this.0.build_pass));
+
+        methods.add_method("install_target", |_, this, ()| {
+            Ok(this.0.install_target.clone())
+        });
+
+        methods
+            .document("Whether to perform a make pass on the target indicated by `install_target`");
+        methods.add_method("install_pass", |_, this, ()| Ok(this.0.install_pass));
+
+        methods.document("Assignments to be passed to make during the build pass");
+        methods.add_method("build_variables", |_, this, ()| {
+            Ok(this.0.build_variables.clone())
+        });
+
+        methods.document("Assignments to be passed to make during the install pass");
+        methods.add_method("install_variables", |_, this, ()| {
+            Ok(this.0.install_variables.clone())
+        });
+
+        methods.document("Assignments to be passed to make during both passes");
+        methods.add_method("variables", |_, this, ()| Ok(this.0.variables.clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a rock with the `make` build backend");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct TreesitterParserBuildSpecLua(#[field(skip)] pub TreesitterParserBuildSpec);
+
+impl Typed for TreesitterParserBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("TreesitterParserBuildSpec")
+    }
+}
+
+impl TypedUserData for TreesitterParserBuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Name of the parser language, e.g. 'haskell'");
+        methods.add_method("lang", |_, this, ()| Ok(this.0.lang.clone()));
+
+        methods.document("Won't build the parser if `false`");
+        methods.add_method("parser", |_, this, ()| Ok(this.0.parser));
+
+        methods.document("Must the sources be generated?");
+        methods.add_method("generate", |_, this, ()| Ok(this.0.generate));
+
+        methods.document("tree-sitter grammar's location (relative to the source root)");
+        methods.add_method("location", |_, this, ()| {
+            Ok(this
+                .0
+                .location
+                .as_ref()
+                .map(|p| p.to_slash_lossy().into_owned()))
+        });
+
+        methods.document("Embedded queries to be installed in the `etc/queries` directory");
+        methods.add_method("queries", |_, this, ()| {
+            Ok(this
+                .0
+                .queries
+                .iter()
+                .map(|(k, v)| (k.to_slash_lossy().into_owned(), v.clone()))
+                .collect::<HashMap<_, _>>())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a rock with the `treesitter-parser` build backend");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct RustMluaBuildSpecLua(#[field(skip)] pub RustMluaBuildSpec);
+
+impl Typed for RustMluaBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("RustMluaBuildSpec")
+    }
+}
+
+impl TypedUserData for RustMluaBuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document(
+            r#"Keys are module names in the format normally used by the `require()` function.
+values are the library names in the target directory (without the `lib` prefix).
+        "#,
+        );
+        methods.add_method("modules", |_, this, ()| {
+            Ok(this
+                .0
+                .modules
+                .iter()
+                .map(|(k, v)| (k.clone(), v.to_slash_lossy().into_owned()))
+                .collect::<HashMap<_, _>>())
+        });
+
+        methods.document("Set if the cargo `target` directory is not in the source root");
+        methods.add_method("target_path", |_, this, ()| {
+            Ok(this.0.target_path.to_slash_lossy().into_owned())
+        });
+
+        methods.document("If set to `false` pass `--no-default-features` to cargo.");
+        methods.add_method("default_features", |_, this, ()| {
+            Ok(this.0.default_features)
+        });
+
+        methods.document("Pass additional features");
+        methods.add_method("features", |_, this, ()| Ok(this.0.features.clone()));
+
+        methods.document("Additional flags to be passed in the cargo invocation");
+        methods.add_method("cargo_extra_args", |_, this, ()| {
+            Ok(this.0.cargo_extra_args.clone())
+        });
+
+        methods.document(
+            r#"Copy additional files to the `lua` directory.
+Keys are the sources, values the destinations (relative to the `lua` directory).
+        "#,
+        );
+        methods.add_method("include", |_, this, ()| {
+            Ok(this
+                .0
+                .include
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_slash_lossy().into_owned(),
+                        v.to_slash_lossy().into_owned(),
+                    )
+                })
+                .collect::<HashMap<_, _>>())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a rock with the `rust-mlua` build backend");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct CommandBuildSpecLua(#[field(skip)] pub CommandBuildSpec);
+
+impl Typed for CommandBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("CommandBuildSpec")
+    }
+}
+
+impl TypedUserData for CommandBuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("build_command", |_, this, ()| {
+            Ok(this.0.build_command.clone())
+        });
+        methods.add_method("install_command", |_, this, ()| {
+            Ok(this.0.install_command.clone())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a rock with the `command` build backend");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct InstallSpecLua(#[field(skip)] pub InstallSpec);
+
+impl Typed for InstallSpecLua {
+    fn ty() -> Type {
+        Type::named("InstallSpec")
+    }
+}
+
+impl TypedUserData for InstallSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Lua modules written in Lua");
+        methods.add_method("lua", |_, this, ()| {
+            Ok(this
+                .0
+                .lua
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_slash_lossy().into_owned()))
+                .collect::<HashMap<String, String>>())
+        });
+
+        methods.document("Dynamic libraries implemented compiled Lua modules");
+        methods.add_method("lib", |_, this, ()| {
+            Ok(this
+                .0
+                .lib
+                .iter()
+                .map(|(k, v)| (k.clone(), v.to_slash_lossy().into_owned()))
+                .collect::<HashMap<String, String>>())
+        });
+
+        methods.document("Configuration files");
+        methods.add_method("conf", |_, this, ()| {
+            Ok(this
+                .0
+                .conf
+                .iter()
+                .map(|(k, v)| (k.clone(), v.to_slash_lossy().into_owned()))
+                .collect::<HashMap<String, String>>())
+        });
+
+        methods.document("Lua command-line scripts");
+        methods.add_method("bin", |_, this, ()| {
+            Ok(this
+                .0
+                .bin
+                .iter()
+                .map(|(k, v)| (k.clone(), v.to_slash_lossy().into_owned()))
+                .collect::<HashMap<String, String>>())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add(
+            r#"For packages which don't provide means to install modules
+and expect the user to copy the .lua or library files by hand to the proper locations.
+This struct contains categories of files. Each category is itself a table,
+where the array part is a list of filenames to be copied.
+For module directories only, in the hash part, other keys are identifiers in Lua module format,
+to indicate which subdirectory the file should be copied to.
+For example, lua = {["foo.bar"] = "src/bar.lua"} will copy src/bar.lua
+to the foo directory under the rock's Lua files directory.
+        "#,
+        );
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct BuildSpecLua(#[field(skip)] pub BuildSpec);
+
+impl Typed for BuildSpecLua {
+    fn ty() -> Type {
+        Type::named("BuildSpec")
+    }
+}
+
+impl TypedUserData for BuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Determines the build backend to use");
+        methods.add_method("build_backend", |_, this, ()| {
+            Ok(this.0.build_backend.clone().map(BuildBackendSpecLua))
+        });
+
+        methods.document("A set of instructions on how/where to copy files from the project");
+        methods.add_method("install", |_, this, ()| {
+            Ok(InstallSpecLua(this.0.install.clone()))
+        });
+
+        methods
+            .document("A list of directories that should be copied as-is into the resulting rock");
+        methods.add_method("copy_directories", |_, this, ()| {
+            Ok(this
+                .0
+                .copy_directories
+                .iter()
+                .map(|p| p.to_slash_lossy().into_owned())
+                .collect::<Vec<_>>())
+        });
+
+        methods.document("A list of patches to apply to the project before packaging it");
+        methods.add_method("patches", |_, this, ()| {
+            Ok(this
+                .0
+                .patches
+                .iter()
+                .map(|(k, v)| (k.to_slash_lossy().into_owned(), v.clone()))
+                .collect::<HashMap<String, String>>())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("The build specification for a given rock, serialized from `build = { ... }`.");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct LocalLuaRockspecLua(#[field(skip)] pub LocalLuaRockspec);
+
+impl Typed for LocalLuaRockspecLua {
+    fn ty() -> Type {
+        Type::named("LocalLuaRockspec")
+    }
+}
+
+impl TypedUserData for LocalLuaRockspecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("package", |_, this, ()| {
+            Ok(PackageNameLua(this.0.package().clone()))
+        });
+        methods.add_method("version", |_, this, ()| {
+            Ok(PackageVersionLua(this.0.version().clone()))
+        });
+        methods.add_method("description", |_, this, ()| {
+            Ok(RockDescriptionLua(this.0.description().clone()))
+        });
+        methods.add_method("supported_platforms", |_, this, ()| {
+            Ok(PlatformSupportLua(this.0.supported_platforms().clone()))
+        });
+        methods.add_method("lua", |_, this, ()| {
+            Ok(PackageVersionReqLua(this.0.lua().clone()))
+        });
+        methods.add_method("dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("build_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .build_dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("test_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .test_dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("external_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .external_dependencies()
+                .current_platform()
+                .iter()
+                .map(|(k, v)| (k.clone(), ExternalDependencySpecLua(v.clone())))
+                .collect::<HashMap<_, _>>())
+        });
+        methods.add_method("build", |_, this, ()| {
+            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
+        });
+        methods.add_method("source", |_, this, ()| {
+            Ok(RemoteRockSourceLua(
+                this.0.source().current_platform().clone(),
+            ))
+        });
+        methods.add_method("test", |_, this, ()| {
+            Ok(TestSpecLua(this.0.test().current_platform().clone()))
+        });
+        methods.add_method("format", |_, this, ()| {
+            Ok(this.0.format().clone().map(RockspecFormatLua))
+        });
+        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
+            Ok(this
+                .0
+                .to_lua_remote_rockspec_string()
+                .unwrap_or_else(|e| match e {}))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("RockSpec for a local rock installation, deserialized from a `.rockspec` file");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteLuaRockspecLua(pub RemoteLuaRockspec);
+
+impl Typed for RemoteLuaRockspecLua {
+    fn ty() -> Type {
+        Type::named("RemoteLuaRockspec")
+    }
+}
+
+impl FromLua for RemoteLuaRockspecLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let content = String::from_lua(value, lua)?;
+        RemoteLuaRockspec::new(&content)
+            .map(RemoteLuaRockspecLua)
+            .into_lua_err()
+    }
+}
+
+impl TypedUserData for RemoteLuaRockspecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("package", |_, this, ()| {
+            Ok(PackageNameLua(this.0.package().clone()))
+        });
+        methods.add_method("version", |_, this, ()| {
+            Ok(PackageVersionLua(this.0.version().clone()))
+        });
+        methods.add_method("description", |_, this, ()| {
+            Ok(RockDescriptionLua(this.0.description().clone()))
+        });
+        methods.add_method("supported_platforms", |_, this, ()| {
+            Ok(PlatformSupportLua(this.0.supported_platforms().clone()))
+        });
+        methods.add_method("lua", |_, this, ()| {
+            Ok(PackageVersionReqLua(this.0.lua().clone()))
+        });
+        methods.add_method("dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("build_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .build_dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("test_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .test_dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("external_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .external_dependencies()
+                .current_platform()
+                .iter()
+                .map(|(k, v)| (k.clone(), ExternalDependencySpecLua(v.clone())))
+                .collect::<HashMap<_, _>>())
+        });
+        methods.add_method("build", |_, this, ()| {
+            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
+        });
+        methods.add_method("source", |_, this, ()| {
+            Ok(RemoteRockSourceLua(
+                this.0.source().current_platform().clone(),
+            ))
+        });
+        methods.add_method("test", |_, this, ()| {
+            Ok(TestSpecLua(this.0.test().current_platform().clone()))
+        });
+        methods.add_method("format", |_, this, ()| {
+            Ok(this.0.format().clone().map(RockspecFormatLua))
+        });
+        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
+            Ok(this
+                .0
+                .to_lua_remote_rockspec_string()
+                .unwrap_or_else(|e| match e {}))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("RockSpec for a remote rock, deserialized from a `.rockspec` file");
+    }
+}
+
+impl mlua::UserData for RemoteLuaRockspecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(mlua_extras::UserData)]
+pub struct PartialLuaRockspecLua(#[field(skip)] pub PartialLuaRockspec);
+
+impl Typed for PartialLuaRockspecLua {
+    fn ty() -> Type {
+        Type::named("PartialLuaRockspec")
+    }
+}
+
+impl FromLua for PartialLuaRockspecLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        let content = String::from_lua(value, lua)?;
+        PartialLuaRockspec::new(&content)
+            .map(PartialLuaRockspecLua)
+            .into_lua_err()
+    }
+}
+
+impl TypedUserData for PartialLuaRockspecLua {
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Deserialized from a Lua `.rockspec`, not yet validated");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct PartialProjectTomlLua(#[field(skip)] pub PartialProjectToml);
+
+impl Typed for PartialProjectTomlLua {
+    fn ty() -> Type {
+        Type::named("PartialProjectToml")
+    }
+}
+
+impl_from_lua_userdata!(PartialProjectTomlLua);
+
+impl TypedUserData for PartialProjectTomlLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("package", |_, this, ()| {
+            Ok(PackageNameLua(this.0.package().clone()))
+        });
+        methods.add_method("to_local", |_, this, ()| {
+            this.0.into_local().map(LocalProjectTomlLua).into_lua_err()
+        });
+
+        methods.param("specrev", "The revision of the RockSpec");
+        methods.add_method("to_remote", |_, this, specrev: Option<SpecRevLua>| {
+            this.0
+                .into_remote(specrev.map(|s| s.0))
+                .map(RemoteProjectTomlLua)
+                .into_lua_err()
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add(r#"The `lux.toml` file for a project.
+The only required fields are `package` and `build`, which are required to build a project using `lux build`.
+The rest of the fields are optional, but are required to build a rockspec.
+"#);
+    }
+}
+
+#[derive(mlua_extras::UserData)]
+pub struct LocalProjectTomlLua(#[field(skip)] pub LocalProjectToml);
+
+impl Typed for LocalProjectTomlLua {
+    fn ty() -> Type {
+        Type::named("LocalProjectToml")
+    }
+}
+
+impl TypedUserData for LocalProjectTomlLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("package", |_, this, ()| {
+            Ok(PackageNameLua(this.0.package().clone()))
+        });
+        methods.add_method("version", |_, this, ()| {
+            Ok(PackageVersionLua(this.0.version().clone()))
+        });
+        methods.add_method("description", |_, this, ()| {
+            Ok(RockDescriptionLua(this.0.description().clone()))
+        });
+        methods.add_method("dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("build_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .build_dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("test_dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .test_dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("build", |_, this, ()| {
+            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
+        });
+        methods.add_method("test", |_, this, ()| {
+            Ok(TestSpecLua(this.0.test().current_platform().clone()))
+        });
+        methods.add_method("to_lua_rockspec", |_, this, ()| {
+            this.0
+                .to_lua_rockspec()
+                .map(LocalLuaRockspecLua)
+                .into_lua_err()
+        });
+        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
+            let rockspec = this.0.to_lua_rockspec().into_lua_err()?;
+            Ok(rockspec
+                .to_lua_remote_rockspec_string()
+                .unwrap_or_else(|e| match e {}))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add(
+            r#"The `lux.toml` file, after being properly deserialized.
+This struct may be used to build a local version of a project.
+To build a rockspec, use `RemoteProjectToml`.
+"#,
+        );
+    }
+}
+
+#[derive(mlua_extras::UserData)]
+pub struct RemoteProjectTomlLua(#[field(skip)] pub RemoteProjectToml);
+
+impl Typed for RemoteProjectTomlLua {
+    fn ty() -> Type {
+        Type::named("RemoteProjectToml")
+    }
+}
+
+impl TypedUserData for RemoteProjectTomlLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("package", |_, this, ()| {
+            Ok(PackageNameLua(this.0.package().clone()))
+        });
+        methods.add_method("version", |_, this, ()| {
+            Ok(PackageVersionLua(this.0.version().clone()))
+        });
+        methods.add_method("description", |_, this, ()| {
+            Ok(RockDescriptionLua(this.0.description().clone()))
+        });
+        methods.add_method("dependencies", |_, this, ()| {
+            Ok(this
+                .0
+                .dependencies()
+                .current_platform()
+                .iter()
+                .map(|d| LuaDependencySpecLua(d.clone()))
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("build", |_, this, ()| {
+            Ok(BuildSpecLua(this.0.build().current_platform().clone()))
+        });
+        methods.add_method("source", |_, this, ()| {
+            Ok(RemoteRockSourceLua(
+                this.0.source().current_platform().clone(),
+            ))
+        });
+        methods.add_method("to_lua_rockspec", |_, this, ()| {
+            this.0
+                .to_lua_rockspec()
+                .map(RemoteLuaRockspecLua)
+                .into_lua_err()
+        });
+        methods.add_method("to_lua_rockspec_string", |_, this, ()| {
+            let rockspec = this.0.to_lua_rockspec().into_lua_err()?;
+            Ok(rockspec
+                .to_lua_remote_rockspec_string()
+                .unwrap_or_else(|e| match e {}))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("The `lux.toml`, after being validated and prepared for upload");
+    }
+}
+
+#[derive(Debug, Clone, mlua_extras::UserData)]
+pub struct RemotePackageDBLua(#[field(skip)] pub RemotePackageDB);
+
+impl Typed for RemotePackageDBLua {
+    fn ty() -> Type {
+        Type::named("RemotePackageDB")
+    }
+}
+
+impl FromLua for RemotePackageDBLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<RemotePackageDBLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "RemotePackageDBLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+impl TypedUserData for RemotePackageDBLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document("Search for all packages that match the requirement");
+        methods.param(
+            "package_req",
+            "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
+        );
+        methods.add_method("search", |_, this, package_req: PackageReqLua| {
+            let results: HashMap<String, Vec<String>> = this
+                .0
+                .search(&package_req.0)
+                .into_iter()
+                .map(|(name, versions)| {
+                    (
+                        name.to_string(),
+                        versions.into_iter().map(|v| v.to_string()).collect(),
+                    )
+                })
+                .collect();
+            Ok(results)
+        });
+
+        methods.document("Find the latest package that matches the requirement.");
+        methods.param(
+            "package_req",
+            "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
+        );
+        methods.add_method("latest_match", |_, this, package_req: PackageReqLua| {
+            Ok(this
+                .0
+                .latest_match(&package_req.0, None)
+                .map(PackageSpecLua))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Package database, used to look up remote rocks");
+    }
+}
+
+#[derive(Clone, mlua_extras::UserData)]
+pub struct LockfileReadOnlyLua(#[field(skip)] pub Lockfile<ReadOnly>);
+
+impl Typed for LockfileReadOnlyLua {
+    fn ty() -> Type {
+        Type::named("LockfileReadOnly")
+    }
+}
+
+impl TypedUserData for LockfileReadOnlyLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("version", |_, this, ()| Ok(this.0.version().clone()));
+        methods.add_method("rocks", |_, this, ()| {
+            Ok(this
+                .0
+                .rocks()
+                .iter()
+                .map(|(id, rock)| {
+                    (
+                        id.clone().into_string().clone(),
+                        LocalPackageLua(rock.clone()),
+                    )
+                })
+                .collect::<HashMap<_, _>>())
+        });
+
+        methods.param("id", "");
+        methods.add_method("get", |_, this, id: LocalPackageIdLua| {
+            Ok(this.0.get(&id.0).cloned().map(LocalPackageLua))
+        });
+
+        methods.document(
+            "Converts the current lockfile into a writeable one, executes `f` and flushes",
+        );
+        methods.param("f", "Takes the writable lockfile");
+        methods.add_method("map_then_flush", |_, this, f: LuaFunction| {
+            let lockfile = this.0.clone().write_guard();
+            f.call::<()>(LockfileGuardLua(lockfile))?;
+            Ok(())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Read-only lockfile for an install tree");
+    }
+}
+
+#[derive(mlua_extras::UserData)]
+pub struct LockfileGuardLua(#[field(skip)] pub LockfileGuard);
+
+impl Typed for LockfileGuardLua {
+    fn ty() -> Type {
+        Type::named("LockfileGuard")
+    }
+}
+
+impl TypedUserData for LockfileGuardLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("version", |_, this, ()| Ok(this.0.version().clone()));
+        methods.add_method("rocks", |_, this, ()| {
+            Ok(this
+                .0
+                .rocks()
+                .iter()
+                .map(|(id, rock)| {
+                    (
+                        id.clone().into_string().clone(),
+                        LocalPackageLua(rock.clone()),
+                    )
+                })
+                .collect::<HashMap<_, _>>())
+        });
+
+        methods.param("id", "");
+        methods.add_method("get", |_, this, id: LocalPackageIdLua| {
+            Ok(this.0.get(&id.0).cloned().map(LocalPackageLua))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Flushes a lockfile automatically when it goes out of scope");
+    }
+}
+
+#[derive(Clone, mlua_extras::UserData)]
+pub struct LockfileReadWriteLua(#[field(skip)] pub Lockfile<ReadWrite>);
+
+impl Typed for LockfileReadWriteLua {
+    fn ty() -> Type {
+        Type::named("LockfileReadWrite")
+    }
+}
+
+impl FromLua for WorkspaceLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<WorkspaceLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "WorkspaceLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+impl TypedUserData for LockfileReadWriteLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("version", |_, this, ()| Ok(this.0.version().to_owned()));
+        methods.add_method("rocks", |_, this, ()| {
+            Ok(this
+                .0
+                .rocks()
+                .iter()
+                .map(|(id, rock)| {
+                    (
+                        id.clone().into_string().clone(),
+                        LocalPackageLua(rock.clone()),
+                    )
+                })
+                .collect::<HashMap<_, _>>())
+        });
+
+        methods.param("id", "");
+        methods.add_method("get", |_, this, id: String| {
+            Ok(this
+                .0
+                .get(unsafe { &LocalPackageId::from_unchecked(id) })
                 .cloned()
-                .map(LocalPackageLua)
-                .collect::<Vec<_>>(),
-        )?;
-        Ok(LuaValue::Table(table))
+                .map(LocalPackageLua))
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Writable lockfile for an install tree");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceLua(pub Workspace);
+
+impl Typed for WorkspaceLua {
+    fn ty() -> Type {
+        Type::named("Workspace")
+    }
+}
+
+impl TypedUserData for WorkspaceLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("root", |_, this, ()| {
+            Ok(this.0.root().to_slash_lossy().into_owned())
+        });
+        methods.add_method("members", |_, this, ()| {
+            Ok(this
+                .0
+                .members()
+                .iter()
+                .map(|project| ProjectLua(project.to_owned()))
+                .collect_vec()
+                .to_owned())
+        });
+
+        methods.param("name", "Package name of the member to select");
+        methods.add_method(
+            "single_member_or_select",
+            |_, mut this, name: Option<PackageNameLua>| {
+                this.0
+                    .single_member_or_select(&name.map(|name| name.0))
+                    .map(|project| ProjectLua(project.to_owned()))
+                    .map_err(|err| LuaError::RuntimeError(err.to_string()))
+            },
+        );
+        methods.add_method("lockfile_path", |_, this, ()| {
+            Ok(this.0.lockfile_path().to_slash_lossy().into_owned())
+        });
+
+        methods.param("config", "Lux config");
+        methods.add_method("tree", |_, this, config: ConfigLua| {
+            this.0.tree(&config.0).map(TreeLua).into_lua_err()
+        });
+
+        methods.param("config", "Lux config");
+        methods.add_method("test_tree", |_, this, config: ConfigLua| {
+            this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
+        });
+
+        methods.add_method("luarc_path", |_, this, ()| {
+            Ok(this.0.luarc_path().to_slash_lossy().into_owned())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("A workspace, which can contain one or many Lux projects");
+    }
+}
+
+impl mlua::UserData for WorkspaceLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectLua(pub Project);
+
+impl Typed for ProjectLua {
+    fn ty() -> Type {
+        Type::named("Project")
+    }
+}
+
+impl FromLua for ProjectLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<ProjectLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "ProjectLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
+impl TypedUserData for ProjectLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("toml_path", |_, this, ()| {
+            Ok(this.0.toml_path().to_slash_lossy().into_owned())
+        });
+        methods.add_method("extra_rockspec_path", |_, this, ()| {
+            Ok(this.0.extra_rockspec_path().to_slash_lossy().into_owned())
+        });
+        methods.add_method("root", |_, this, ()| {
+            Ok(this
+                .0
+                .root()
+                .as_ref()
+                .to_owned()
+                .to_slash_lossy()
+                .into_owned())
+        });
+        methods.add_method("toml", |_, this, ()| {
+            Ok(PartialProjectTomlLua(this.0.toml().clone()))
+        });
+        methods.add_method("local_rockspec", |_, this, ()| {
+            this.0
+                .local_rockspec()
+                .map(LocalLuaRockspecLua)
+                .into_lua_err()
+        });
+
+        methods.param("specrev", "The revision of the RockSpec");
+        methods.add_method("remote_rockspec", |_, this, specrev: Option<SpecRevLua>| {
+            this.0
+                .remote_rockspec(specrev.map(|s| s.0))
+                .map(RemoteLuaRockspecLua)
+                .into_lua_err()
+        });
+
+        methods.param("config", "Lux config");
+        methods.add_method("lua_version", |_, this, config: ConfigLua| {
+            this.0
+                .lua_version(&config.0)
+                .map(|v| v.to_string())
+                .into_lua_err()
+        });
+        methods.add_method("extra_rockspec", |_, this, ()| {
+            this.0
+                .extra_rockspec()
+                .map(|opt| opt.map(PartialLuaRockspecLua))
+                .into_lua_err()
+        });
+
+        methods.param("deps", "Dependencies to add");
+        methods.param("config", "Lux config");
+        methods.add_async_method_mut(
+            "add",
+            |_, mut this, (deps, config): (DependencyTypeLua<PackageReqLua>, ConfigLua)| async move {
+                let _guard = lux_lib::lua::lua_runtime().enter();
+                let deps = map_dependency_type(deps.0);
+                let package_db =
+                    RemotePackageDB::from_config(&config.0, &Progress::<ProgressBar>::no_progress())
+                        .await
+                        .into_lua_err()?;
+                this.0.add(deps.as_ref(), &package_db).await.into_lua_err()
+            },
+        );
+
+        methods.param("deps", "Dependencies to remove");
+        methods.add_async_method_mut(
+            "remove",
+            |_, mut this, deps: DependencyTypeLua<PackageNameLua>| async move {
+                let _guard = lux_lib::lua::lua_runtime().enter();
+                let deps = map_dependency_type_names(deps.0);
+                this.0.remove(deps.as_ref()).await.into_lua_err()
+            },
+        );
+
+        methods.add_method("project_files", |_, this, ()| {
+            Ok(this
+                .0
+                .project_files()
+                .into_iter()
+                .map(|p| p.to_slash_lossy().into_owned())
+                .collect::<Vec<_>>())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Lux project, with methods for managing dependencies, etc.");
+    }
+}
+
+impl mlua::UserData for ProjectLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
 #[derive(Clone)]
 pub struct DownloadedRockspecLua(pub DownloadedRockspec);
 
-impl LuaUserData for DownloadedRockspecLua {
-    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
+impl Typed for DownloadedRockspecLua {
+    fn ty() -> Type {
+        Type::named("DownloadedRockspec")
+    }
+}
+
+impl_from_lua_userdata!(DownloadedRockspecLua);
+
+impl TypedUserData for DownloadedRockspecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.add_method("rockspec", |_, this, ()| {
             Ok(RemoteLuaRockspecLua(this.0.rockspec.clone()))
         });
     }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Remote Lua RockSpec that has been downloaded from a remote server, along with its source metadata");
+    }
 }
-impl_from_lua_userdata!(DownloadedRockspecLua);
+
+impl mlua::UserData for DownloadedRockspecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+// Definition registrations
+
+#[cfg(feature = "definitions")]
+mod definitions_registry {
+    use mlua_extras::typed::{Type, TypedClassBuilder};
+
+    use super::{
+        BuildSpecLua, BustedTestSpecLua, CMakeBuildSpecLua, CommandBuildSpecLua,
+        CommandTestSpecLua, ConfigBuilderLua, ConfigLua, DownloadedRockspecLua, GitSourceLua,
+        InstallSpecLua, LocalLuaRockspecLua, LocalPackageHashesLua, LocalPackageLua,
+        LocalProjectTomlLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
+        LuaDependencySpecLua, LuaScriptTestSpecLua, MakeBuildSpecLua, ModulePathsLua,
+        PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
+        PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
+        RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutConfigLua,
+        RockLayoutLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua,
+    };
+    use crate::definitions::LuxDefinition;
+
+    macro_rules! submit_definitions {
+        ($($name:literal => $ty:ty),+ $(,)?) => {
+            $(
+                inventory::submit! {
+                    LuxDefinition {
+                        name: $name,
+                        build: || Type::class(TypedClassBuilder::new::<$ty>().build()),
+                    }
+                }
+            )+
+        };
+    }
+
+    submit_definitions! {
+        "PackageSpec" => PackageSpecLua,
+        "PackageReq" => PackageReqLua,
+        "LocalPackageHashes" => LocalPackageHashesLua,
+        "LocalPackage" => LocalPackageLua,
+        "RockLayout" => RockLayoutLua,
+        "Tree" => TreeLua,
+        "RockLayoutConfig" => RockLayoutConfigLua,
+        "Config" => ConfigLua,
+        "ConfigBuilder" => ConfigBuilderLua,
+        "LuaDependencySpec" => LuaDependencySpecLua,
+        "PlatformSupport" => PlatformSupportLua,
+        "RockDescription" => RockDescriptionLua,
+        "GitSource" => GitSourceLua,
+        "RemoteRockSource" => RemoteRockSourceLua,
+        "BustedTestSpec" => BustedTestSpecLua,
+        "CommandTestSpec" => CommandTestSpecLua,
+        "LuaScriptTestSpec" => LuaScriptTestSpecLua,
+        "ModulePaths" => ModulePathsLua,
+        "CMakeBuildSpec" => CMakeBuildSpecLua,
+        "MakeBuildSpec" => MakeBuildSpecLua,
+        "TreesitterParserBuildSpec" => TreesitterParserBuildSpecLua,
+        "RustMluaBuildSpec" => RustMluaBuildSpecLua,
+        "CommandBuildSpec" => CommandBuildSpecLua,
+        "InstallSpec" => InstallSpecLua,
+        "BuildSpec" => BuildSpecLua,
+        "LocalLuaRockspec" => LocalLuaRockspecLua,
+        "RemoteLuaRockspec" => RemoteLuaRockspecLua,
+        "PartialLuaRockspec" => PartialLuaRockspecLua,
+        "PartialProjectToml" => PartialProjectTomlLua,
+        "LocalProjectToml" => LocalProjectTomlLua,
+        "RemoteProjectToml" => RemoteProjectTomlLua,
+        "RemotePackageDB" => RemotePackageDBLua,
+        "LockfileReadOnly" => LockfileReadOnlyLua,
+        "LockfileGuard" => LockfileGuardLua,
+        "LockfileReadWrite" => LockfileReadWriteLua,
+        "Project" => ProjectLua,
+        "DownloadedRockspec" => DownloadedRockspecLua,
+    }
+}
+
+fn map_dependency_type(deps: DependencyType<PackageReqLua>) -> DependencyType<PackageReq> {
+    match deps {
+        DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
+        DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
+        DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
+        DependencyType::External(m) => DependencyType::External(m),
+    }
+}
+
+fn map_dependency_type_names(deps: DependencyType<PackageNameLua>) -> DependencyType<PackageName> {
+    match deps {
+        DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
+        DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
+        DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
+        DependencyType::External(m) => DependencyType::External(m),
+    }
+}
+
+#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
+#[serde(rename_all = "snake_case")]
+enum EntryTypeLua {
+    #[default]
+    Entrypoint,
+    DependencyOnly,
+}
+
+impl From<EntryTypeLua> for EntryType {
+    fn from(val: EntryTypeLua) -> Self {
+        match val {
+            EntryTypeLua::Entrypoint => Self::Entrypoint,
+            EntryTypeLua::DependencyOnly => Self::DependencyOnly,
+        }
+    }
+}
+
+#[derive(Deserialize_enum_str, Serialize_enum_str, Default)]
+#[serde(rename_all = "snake_case")]
+enum BuildBehaviourLua {
+    #[default]
+    NoForce,
+    Force,
+}
+
+impl From<BuildBehaviourLua> for BuildBehaviour {
+    fn from(val: BuildBehaviourLua) -> Self {
+        match val {
+            BuildBehaviourLua::NoForce => Self::NoForce,
+            BuildBehaviourLua::Force => Self::Force,
+        }
+    }
+}
+
+/// Intermediate struct for deserialization. Takes on two variants:
+/// ```lua
+/// "say >= 1.3"
+///
+/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "no_force" }
+/// ```
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PackageInstallSpecInput {
+    Simple(String),
+    Full {
+        package: String,
+        #[serde(default)]
+        entry_type: EntryTypeLua,
+        #[serde(default)]
+        pin: bool,
+        #[serde(default)]
+        opt: bool,
+        #[serde(default)]
+        build_behaviour: BuildBehaviourLua,
+    },
+}

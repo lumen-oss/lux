@@ -271,6 +271,7 @@ impl PlatformOverridable for ModuleSpecInternal {
 #[error("missing or empty field `sources`")]
 pub struct ModulePathsMissingSources;
 
+/// Specification for building a Lua module from various sources
 #[derive(Debug, PartialEq, Clone)]
 pub struct ModulePaths {
     /// Path names of C sources, mandatory field
