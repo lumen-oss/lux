@@ -3398,7 +3398,7 @@ dependencies = [
 
 [[package]]
 name = "lux-cli"
-version = "0.33.4"
+version = "0.33.5"
 dependencies = [
  "assert_fs",
  "clap 4.6.1",
@@ -3452,7 +3452,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lib"
-version = "0.43.2"
+version = "0.43.3"
 dependencies = [
  "assert_fs",
  "async-recursion",
@@ -3532,7 +3532,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lua"
-version = "0.33.4"
+version = "0.33.5"
 dependencies = [
  "assert_fs",
  "inventory",
@@ -3553,7 +3553,7 @@ dependencies = [
 
 [[package]]
 name = "lux-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "lux-workspace-hack",
  "proc-macro2",
