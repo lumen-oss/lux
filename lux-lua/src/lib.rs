@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "test", allow(unused_imports, dead_code))]
 
+#[cfg(not(feature = "definitions"))]
 use mlua::prelude::*;
 use mlua_extras::typed::{Type, Typed, TypedDataFields, TypedDataMethods, TypedUserData};
 
@@ -60,7 +61,8 @@ mod definitions_registry {
     }
 }
 
-#[cfg_attr(not(feature = "test"), mlua::lua_module)]
+#[cfg(not(feature = "definitions"))]
+#[cfg_attr(not(any(feature = "test", feature = "definitions")), mlua::lua_module)]
 fn lux(lua: &Lua) -> LuaResult<LuaAnyUserData> {
     #[cfg(not(any(
         feature = "lua51",
@@ -73,9 +75,9 @@ fn lux(lua: &Lua) -> LuaResult<LuaAnyUserData> {
     )))]
     compile_error!(
         "
-        At least one Lua version feature must be enabled. \
+        At least one Lua version feature or the definitions feature must be enabled. \
         Please enable one of the following features: \
-        lua51, lua52, lua53, lua54, lua55, luajit."
+        lua51, lua52, lua53, lua54, lua55, luajit, definitions."
     );
 
     lua.create_userdata(LuxModule)

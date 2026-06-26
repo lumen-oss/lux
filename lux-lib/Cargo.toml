@@ -76,8 +76,8 @@ git2 = { workspace = true }
 ignore = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
-lux-workspace-hack = { workspace = true }
 lux-macros = { workspace = true }
+lux-workspace-hack = { workspace = true }
 path-slash = { workspace = true }
 pathdiff = { workspace = true }
 serde_json = { workspace = true }
@@ -114,11 +114,7 @@ default = [
 ]
 clap = ["dep:clap"]
 gpgme = ["dep:gpgme"]
-vendored = [
-  "openssl/vendored",
-  "git2/vendored-libgit2",
-  "reqwest/native-tls-vendored",
-]
+vendored = ["vendored-openssl", "vendored-libgit2"]
 vendored-openssl = ["openssl/vendored", "reqwest/native-tls-vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
 ssh-tests = []

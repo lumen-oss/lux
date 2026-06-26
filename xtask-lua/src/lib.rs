@@ -99,6 +99,8 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
         target_dir.to_string_lossy().to_string(),
         "--no-default-features".into(),
         "--features".into(),
+        "module".into(),
+        "--features".into(),
         lua_feature_flag.into(),
     ];
 
@@ -111,6 +113,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
         args.push("--release".into());
     }
 
+    println!("Building lux-lua...");
     let status = Command::new(&cargo)
         .current_dir(&project_root)
         .args(args)
@@ -209,15 +212,26 @@ Libs: -L${{libdir}}"#
 
     // Generate Lua definitions
     let definitions_dir = output_dir.join("definitions");
+    let mut args = vec![
+        "run".into(),
+        "--package".into(),
+        "lux-definitions".into(),
+        "--locked".into(),
+        "--no-default-features".into(),
+        "--features".into(),
+        lua_feature_flag.into(),
+    ];
+    if opts.vendored {
+        args.push("--features".into());
+        args.push("vendored".into());
+    }
+    args.push("--".into());
+    args.push(definitions_dir.to_string_lossy().to_string());
+
+    println!("Generating lux-lua definitions...");
     let status = Command::new(cargo)
         .current_dir(&project_root)
-        .args([
-            "run",
-            "--package",
-            "lux-definitions",
-            "--",
-            definitions_dir.to_string_lossy().as_ref(),
-        ])
+        .args(args)
         .status()?;
     if !status.success() {
         Err("lux-definitions failed")?;

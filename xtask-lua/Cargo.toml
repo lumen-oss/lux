@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-lux-workspace-hack = { version = "0.1", path = "../lux-workspace-hack" }
+lux-workspace-hack = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 target-lexicon = { workspace = true }

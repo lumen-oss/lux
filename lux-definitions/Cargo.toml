@@ -8,9 +8,20 @@ publish = false
 name = "lux-definitions"
 path = "src/main.rs"
 
+[dependencies.lux-lua]
+path = "../lux-lua"
+default-features = false
+features = ["definitions"]
+
 [dependencies]
-lux-lua = { path = "../lux-lua", features = ["definitions"] }
 mlua-extras = { workspace = true }
 
 [features]
+default = ["vendored"]
+lua51 = ["lux-lua/lua51"]
+lua52 = ["lux-lua/lua52"]
+lua53 = ["lux-lua/lua53"]
+lua54 = ["lux-lua/lua54"]
+lua55 = ["lux-lua/lua55"]
+luajit = ["lux-lua/luajit"]
 vendored = ["lux-lua/vendored"]

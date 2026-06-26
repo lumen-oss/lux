@@ -153,3 +153,17 @@ cargo lx --help
 > [!NOTE]
 >
 > If your contribution was tested manually, we will likely ask you to write some tests :)
+
+### Workspace hack
+
+We use [a hakari-managed workspace hack](https://docs.rs/cargo-hakari/latest/cargo_hakari/about/) to speed up compilation times.
+When adding, updating or modifying dependencies, make sure to run
+
+```console
+cargo hakari generate
+```
+
+> [!IMPORTANT]
+>
+> Dependencies that can have mutually exclusive features
+> (e.g. vendored vs. non-vendored) must be excluded via [the hakari config](./config/hakari.toml).
