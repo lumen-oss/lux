@@ -106,7 +106,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
 
     if opts.vendored {
         args.push("--features".into());
-        args.push("vendored".into());
+        args.push("vendored-module".into());
     }
 
     if release {
@@ -221,10 +221,12 @@ Libs: -L${{libdir}}"#
         "--features".into(),
         lua_feature_flag.into(),
     ];
+
     if opts.vendored {
         args.push("--features".into());
         args.push("vendored".into());
     }
+
     args.push("--".into());
     args.push(definitions_dir.to_string_lossy().to_string());
 

@@ -37,7 +37,19 @@ lua53 = ["mlua/lua53"]
 lua54 = ["mlua/lua54"]
 lua55 = ["mlua/lua55"]
 luajit = ["mlua/luajit"]
-vendored = ["lux-lib/vendored", "mlua/vendored"]
+# NOTE: mlua/vendored and mlua/module are mutually exclusive,
+# so we have two different vendored features
+vendored-module = [
+  "module",
+  "lux-lib/vendored-openssl",
+  "lux-lib/vendored-libgit2",
+]
+vendored-definitions = [
+  "definitions",
+  "mlua/vendored",
+  "lux-lib/vendored-openssl",
+  "lux-lib/vendored-libgit2",
+]
 # Run tests without module mode so we can link against Lua and run the tests.
 test = ["lua51"]
 ssh-tests = ["lux-lib/ssh-tests"]
