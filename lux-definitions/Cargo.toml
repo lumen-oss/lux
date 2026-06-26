@@ -11,3 +11,6 @@ path = "src/main.rs"
 [dependencies]
 lux-lua = { path = "../lux-lua", features = ["definitions", "test"] }
 mlua-extras = { workspace = true }
+
+[features]
+vendored = ["lux-lua/vendored"]
