@@ -1,0 +1,48 @@
+name: dist-package dry-run (binary artifacts)
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened, synchronize]
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  dist-package-dry-run:
+    name: dist-package dry-run
+    continue-on-error: true
+    timeout-minutes: 120
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgpgme11-dev \
+            libgpg-error-dev \
+
+      - name: Build binary distributions
+        run: |
+          cargo xtask dist-package-dry-run
+        env:
+          SYSTEM_DEPS_LINK: static
+          LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
+          LUX_SIGN_PRIVATE_KEY_PASS: ${{ secrets.LUX_SIGN_PRIVATE_KEY_PASS }}
