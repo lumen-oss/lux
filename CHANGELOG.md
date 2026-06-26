@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.5](https://github.com/lumen-oss/lux/compare/v0.33.4...v0.33.5) `lux-cli` - 2026-06-26
+
+### Added
+- *(lux-lua)* distribute Lua type definitions ([#1522](https://github.com/lumen-oss/lux/pull/1522))
+
+## [0.43.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.43.2...lux-lib-v0.43.3) `lux-lib` - 2026-06-26
+
+### Added
+- *(lux-lua)* distribute Lua type definitions ([#1522](https://github.com/lumen-oss/lux/pull/1522))
+
+## [0.1.1](https://github.com/lumen-oss/lux/compare/lux-macros-v0.1.0...lux-macros-v0.1.1) `lux-macros` - 2026-06-26
+
+### Added
+- *(lux-lua)* distribute Lua type definitions ([#1522](https://github.com/lumen-oss/lux/pull/1522))
+
 ## [0.33.4](https://github.com/lumen-oss/lux/compare/v0.33.3...v0.33.4) `lux-cli` - 2026-06-24
 
 ### Fixed
