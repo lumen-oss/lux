@@ -9,7 +9,7 @@ name = "lux-definitions"
 path = "src/main.rs"
 
 [dependencies]
-lux-lua = { path = "../lux-lua", features = ["definitions", "test"] }
+lux-lua = { path = "../lux-lua", features = ["definitions"] }
 mlua-extras = { workspace = true }
 
 [features]
