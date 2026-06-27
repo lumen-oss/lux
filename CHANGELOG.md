@@ -7,7 +7,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.33.8](https://github.com/lumen-oss/lux/compare/v0.33.7...v0.33.8) `lux-cli` - 2026-06-27
 
 ### Other
-- update Cargo.lock dependencies
+- roll back `http` dependency to 1.4.0.
+  Note: 1.4.2 causes a test failure.
 
 ## [0.33.7](https://github.com/lumen-oss/lux/compare/v0.33.6...v0.33.7) `lux-cli` - 2026-06-26
 
