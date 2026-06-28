@@ -454,4 +454,54 @@ members = [ "glob:projects/*" ]
         let work_dir = assert_fs::TempDir::new().unwrap();
         assert!(Workspace::from(&work_dir).unwrap().is_none())
     }
+
+    #[tokio::test]
+    async fn test_luarc_path_custom_config() {
+        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+
+        let workspace = Workspace::from(&project_root).unwrap().unwrap();
+
+        let mut builder = crate::config::ConfigBuilder::default();
+        builder = builder.ls_config_file(Some("custom_config.json".to_string()));
+        let config = builder.build().unwrap();
+
+        let path = workspace.luarc_path(&config);
+        assert_eq!(path, workspace.root().join("custom_config.json"));
+    }
+
+    #[tokio::test]
+    async fn test_luarc_path_fallback_luarc() {
+        use assert_fs::prelude::*;
+
+        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+
+        project_root.child(".luarc.json").touch().unwrap();
+
+        let workspace = Workspace::from(&project_root).unwrap().unwrap();
+        let config = crate::config::ConfigBuilder::default().build().unwrap();
+
+        let path = workspace.luarc_path(&config);
+        assert_eq!(path, workspace.root().join(".luarc.json"));
+    }
+
+    #[tokio::test]
+    async fn test_luarc_path_fallback_emmyrc() {
+        use assert_fs::prelude::*;
+
+        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+
+        project_root.child(".emmyrc.json").touch().unwrap();
+
+        let workspace = Workspace::from(&project_root).unwrap().unwrap();
+        let config = crate::config::ConfigBuilder::default().build().unwrap();
+
+        let path = workspace.luarc_path(&config);
+        assert_eq!(path, workspace.root().join(".emmyrc.json"));
+    }
 }
