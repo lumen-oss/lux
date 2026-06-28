@@ -2638,7 +2638,7 @@ impl TypedUserData for WorkspaceLua {
         });
 
         methods.add_method("luarc_path", |_, this, ()| {
-            Ok(this.0.luarc_path().to_slash_lossy().into_owned())
+            Ok(this.0.luarc_path(config).to_slash_lossy().into_owned())
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
