@@ -16,7 +16,7 @@ dev = "git+https://github.com/lumen-oss/lux.git"
 [build]
 type = "rust-mlua"
 cargo_extra_args = ["--package", "lux-lua", "--locked"]
-features = ["vendored", "module"]
+features = ["vendored-module"]
 
 [build.modules]
 lux = "lux_lua"
