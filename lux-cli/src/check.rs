@@ -74,7 +74,7 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
         return Ok(());
     }
 
-    let luarc_path = workspace.luarc_path();
+    let luarc_path = workspace.luarc_path(&config);
     let rc_files = if luarc_path.is_file() {
         Some(vec![luarc_path])
     } else {

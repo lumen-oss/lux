@@ -245,7 +245,11 @@ impl Workspace {
     }
 
     /// Get the `.luarc.json` or `.emmyrc.json` path.
-    pub fn luarc_path(&self) -> PathBuf {
+    pub fn luarc_path(&self, config: &Config) -> PathBuf {
+        if let Some(custom_ls_file) = config.ls_config_file() {
+            return self.root.join(custom_ls_file);
+        }
+
         let luarc_path = self.root.join(LUARC);
         if luarc_path.is_file() {
             luarc_path

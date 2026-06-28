@@ -72,7 +72,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
     }
     let workspace = args.workspace;
     let lockfile = workspace.lockfile()?;
-    let luarc_path = workspace.luarc_path();
+    let luarc_path = workspace.luarc_path(config);
 
     // read the existing .luarc file or initialise a new one if it doesn't exist
     let luarc_content = fs::read_to_string(&luarc_path)
