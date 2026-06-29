@@ -35,7 +35,14 @@ fn try_main() -> Result<(), DynError> {
         Some("dist") => dist(true)?,
         Some("dist-man") => dist_man()?,
         Some("dist-completions") => dist_completions()?,
-        Some("dist-package") => dist_package()?,
+        Some("dist-package") => dist_package(BuildOpts {
+            release: true,
+            vendored: true,
+        })?,
+        Some("dist-package-dry-run") => dist_package(BuildOpts {
+            release: false,
+            vendored: true,
+        })?,
         Some("build") => build(BuildOpts {
             release: false,
             vendored: false,
@@ -76,6 +83,7 @@ fn dist(release: bool) -> Result<(), DynError> {
     dist_completions()
 }
 
+#[derive(Clone)]
 struct BuildOpts {
     release: bool,
     vendored: bool,
@@ -124,16 +132,15 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
     if !dest_bin.is_file() {
         Err(format!("{} not found", dest_bin.display()))?;
     }
-    if opts.release {
-        #[cfg(not(target_env = "msvc"))]
-        let dist_file = dist_dir().join("lx");
 
-        #[cfg(target_env = "msvc")]
-        let dist_file = dist_dir().join("lx.exe");
+    #[cfg(not(target_env = "msvc"))]
+    let dist_file = dist_dir().join("lx");
 
-        fs::create_dir_all(dist_dir())?;
-        fs::copy(&dest_bin, dist_file)?;
-    }
+    #[cfg(target_env = "msvc")]
+    let dist_file = dist_dir().join("lx.exe");
+
+    fs::create_dir_all(dist_dir())?;
+    fs::copy(&dest_bin, dist_file)?;
 
     if opts.release
         && Command::new("strip")
@@ -191,7 +198,7 @@ struct LuxPackage {
     version: String,
 }
 
-fn dist_package() -> Result<(), DynError> {
+fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
     let signing_config = SigningConfig::new()
         .private_key(std::env::var("LUX_SIGN_PRIVATE_KEY").expect("LUX_SIGN_PRIVATE_KEY not set"))
         .password(
@@ -207,19 +214,16 @@ fn dist_package() -> Result<(), DynError> {
         let (_, canonical_lua_version) = lua_feature.lua_feature_strs();
         println!("building lux-lua for Lua {canonical_lua_version}...");
         xtask_lua::dist(
-            true,
+            opts.release,
             Some(xtask_lua::DistOpts {
                 lua_feature: Some(lua_feature),
                 clean_dist_dir: false,
-                vendored: true,
+                vendored: opts.vendored,
             }),
         )?;
     }
     println!("building lux-cli...");
-    build(BuildOpts {
-        release: true,
-        vendored: true,
-    })?;
+    build(opts.clone())?;
     println!("building man pages...");
     dist_man()?;
     println!("building shell completions...");

@@ -123,10 +123,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
         Err("cargo build failed")?;
     }
 
-    let dest_dir = target_dir.join(profile);
-    let output_dir = if release { dist_dir } else { dest_dir.clone() };
-
-    let lib_dir = output_dir
+    let lib_dir = dist_dir
         .join("share")
         .join("lux-lua")
         .join(canonical_lua_version);
@@ -149,7 +146,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     let (src_file, dest_file, dest_arch_file) = (
         target_profile_dir.join(format!("liblux_lua.{DLL_EXTENSION}")),
         lib_dir.join("lux.so"),
-        output_dir.join(format!("lux-{lua_feature_flag}-{host}.so")),
+        dist_dir.join(format!("lux-{lua_feature_flag}-{host}.so")),
     );
 
     #[cfg(target_env = "msvc")]
@@ -183,7 +180,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     };
 
     // Create and write the pkg-config file
-    let pkg_config_dir = output_dir.join("lib").join("pkgconfig");
+    let pkg_config_dir = dist_dir.join("lib").join("pkgconfig");
     println!("creating {}", pkg_config_dir.display());
     fs::create_dir_all(&pkg_config_dir)?;
 
@@ -211,7 +208,7 @@ Libs: -L${{libdir}}"#
     fs::write(pc_file, pc_content)?;
 
     // Generate Lua definitions
-    let definitions_dir = output_dir.join("definitions");
+    let definitions_dir = dist_dir.join("definitions");
     let mut args = vec![
         "run".into(),
         "--package".into(),
