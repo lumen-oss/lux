@@ -53,7 +53,7 @@ pub struct Config {
     user_agent: String,
 
     generate_luarc: bool,
-    ls_config_file: Option<String>,
+    luarc_file_name: String,
     wrap_bin_scripts: bool,
 }
 
@@ -221,9 +221,9 @@ impl Config {
         self.generate_luarc
     }
 
-    /// The custom language server configuration file name, if specified
-    pub fn ls_config_file(&self) -> Option<&String> {
-        self.ls_config_file.as_ref()
+    // Lua runtime configuration file name
+    pub fn luarc_file_name(&self) -> &str {
+        &self.luarc_file_name
     }
 
     /// Whether to wrap installed Lua bin scripts to be executed with
@@ -294,7 +294,7 @@ pub struct ConfigBuilder {
     entrypoint_layout: RockLayoutConfig,
     user_agent: Option<String>,
     generate_luarc: Option<bool>,
-    ls_config_file: Option<String>,
+    luarc_file_name: Option<String>,
     wrap_bin_scripts: Option<bool>,
 }
 
@@ -487,9 +487,11 @@ impl ConfigBuilder {
         }
     }
 
-    pub fn ls_config_file(self, file: Option<String>) -> Self {
+    /// Lua runtime configuration file name
+    /// Default: `.luarc.json`
+    pub fn luarc_file_name(self, file: Option<String>) -> Self {
         Self {
-            ls_config_file: file.or(self.ls_config_file),
+            luarc_file_name: file.or(self.luarc_file_name),
             ..self
         }
     }
@@ -543,7 +545,9 @@ impl ConfigBuilder {
             vendor_dir: self.vendor_dir,
             user_agent: self.user_agent.unwrap_or(DEFAULT_USER_AGENT.into()),
             generate_luarc: self.generate_luarc.unwrap_or(true),
-            ls_config_file: self.ls_config_file,
+            luarc_file_name: self
+                .luarc_file_name
+                .unwrap_or_else(|| ".luarc.json".to_string()),
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
         })
     }
@@ -577,7 +581,7 @@ impl From<Config> for ConfigBuilder {
             entrypoint_layout: value.entrypoint_layout,
             user_agent: Some(value.user_agent),
             generate_luarc: Some(value.generate_luarc),
-            ls_config_file: value.ls_config_file,
+            luarc_file_name: Some(value.luarc_file_name),
             wrap_bin_scripts: Some(value.wrap_bin_scripts),
         }
     }

@@ -26,7 +26,6 @@ pub mod workspace_toml;
 
 pub const WORKSPACE_TOML: &str = PROJECT_TOML;
 pub(crate) const LUX_DIR_NAME: &str = ".lux";
-const LUARC: &str = ".luarc.json";
 const EMMYRC: &str = ".emmyrc.json";
 
 /// A newtype for the workspace root directory.
@@ -246,19 +245,17 @@ impl Workspace {
 
     /// Get the `.luarc.json` or `.emmyrc.json` path.
     pub fn luarc_path(&self, config: &Config) -> PathBuf {
-        if let Some(custom_ls_file) = config.ls_config_file() {
-            return self.root.join(custom_ls_file);
-        }
+        let configured_name = config.luarc_file_name();
+        let file_path = self.root.join(configured_name);
 
-        let luarc_path = self.root.join(LUARC);
-        if luarc_path.is_file() {
-            luarc_path
+        if file_path.is_file() {
+            file_path
         } else {
             let emmy_path = self.root.join(EMMYRC);
             if emmy_path.is_file() {
                 emmy_path
             } else {
-                luarc_path
+                file_path
             }
         }
     }
@@ -463,9 +460,10 @@ members = [ "glob:projects/*" ]
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
 
-        let mut builder = crate::config::ConfigBuilder::default();
-        builder = builder.ls_config_file(Some("custom_config.json".to_string()));
-        let config = builder.build().unwrap();
+        let config = crate::config::ConfigBuilder::default()
+            .luarc_file_name(Some("custom_config.json".to_string()))
+            .build()
+            .unwrap();
 
         let path = workspace.luarc_path(&config);
         assert_eq!(path, workspace.root().join("custom_config.json"));
