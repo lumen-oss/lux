@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.34.0](https://github.com/lumen-oss/lux/compare/v0.33.8...v0.34.0) `lux-cli` - 2026-06-29
 
 ### Added
+- *(config)* [**breaking**] add `luarc_file_name` option ([#1626](https://github.com/lumen-oss/lux/pull/1626))
+
+## [0.44.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.43.3...lux-lib-v0.44.0) `lux-lib` - 2026-06-29
+
+### Added
+- *(config)* [**breaking**] add `luarc_file_name` option ([#1626](https://github.com/lumen-oss/lux/pull/1626))
+
+## [0.34.0](https://github.com/lumen-oss/lux/compare/v0.33.8...v0.34.0) `lux-cli` - 2026-06-29
+
+### Added
 - *(config)* add `luarc_file_name` option ([#1626](https://github.com/lumen-oss/lux/pull/1626))
 
 ## [0.44.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.43.3...lux-lib-v0.44.0) `lux-lib` - 2026-06-29
