@@ -377,9 +377,10 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ConfigBuilder;
     use std::path::PathBuf;
 
-    use assert_fs::prelude::PathCopy;
+    use assert_fs::prelude::*;
 
     #[tokio::test]
     async fn find_single_project_workspace() {
@@ -460,7 +461,7 @@ members = [ "glob:projects/*" ]
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
 
-        let config = crate::config::ConfigBuilder::default()
+        let config = ConfigBuilder::default()
             .luarc_file_name(Some("custom_config.json".to_string()))
             .build()
             .unwrap();
@@ -471,35 +472,33 @@ members = [ "glob:projects/*" ]
 
     #[tokio::test]
     async fn test_luarc_path_fallback_luarc() {
-        use assert_fs::prelude::*;
-
         let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
 
-        project_root.child(".luarc.json").touch().unwrap();
+        let luarc_file = project_root.child(".luarc.json");
+        luarc_file.touch().unwrap();
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
-        let config = crate::config::ConfigBuilder::default().build().unwrap();
+        let config = ConfigBuilder::default().build().unwrap();
 
         let path = workspace.luarc_path(&config);
-        assert_eq!(path, workspace.root().join(".luarc.json"));
+        assert_eq!(path, luarc_file.path().to_path_buf());
     }
 
     #[tokio::test]
     async fn test_luarc_path_fallback_emmyrc() {
-        use assert_fs::prelude::*;
-
         let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
 
-        project_root.child(".emmyrc.json").touch().unwrap();
+        let emmyrc_file = project_root.child(".emmyrc.json");
+        emmyrc_file.touch().unwrap();
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
-        let config = crate::config::ConfigBuilder::default().build().unwrap();
+        let config = ConfigBuilder::default().build().unwrap();
 
         let path = workspace.luarc_path(&config);
-        assert_eq!(path, workspace.root().join(".emmyrc.json"));
+        assert_eq!(path, emmyrc_file.path().to_path_buf());
     }
 }

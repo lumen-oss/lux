@@ -2637,7 +2637,7 @@ impl TypedUserData for WorkspaceLua {
             this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
         });
 
-        methods.add_method("luarc_path", |_, this, ()| {
+        methods.add_method("luarc_path", |_, this, config: ConfigLua| {
             Ok(this.0.luarc_path(&config.0).to_slash_lossy().into_owned())
         });
     }
