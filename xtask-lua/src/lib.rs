@@ -153,7 +153,7 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
     let (src_file, dest_file, dest_arch_file) = (
         target_profile_dir.join(format!("lux_lua.{DLL_EXTENSION}")),
         lib_dir.join(format!("lux.{DLL_EXTENSION}")),
-        output_dir.join(format!("lux-{lua_feature_flag}-{host}.{DLL_EXTENSION}")),
+        dist_dir.join(format!("lux-{lua_feature_flag}-{host}.{DLL_EXTENSION}")),
     );
 
     if !src_file.is_file() {
