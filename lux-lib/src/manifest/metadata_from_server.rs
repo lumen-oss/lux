@@ -233,8 +233,8 @@ mod tests {
     pub async fn get_manifest_luajit() {
         let cache_dir = assert_fs::TempDir::new().unwrap().to_path_buf();
         let server = start_test_server("manifest-5.1".into());
-        let mut url_str = server.url_str(""); // Remove trailing "/"
-        url_str.pop();
+        let mut url_str = server.url_str("/");
+        url_str.pop(); // Remove trailing "/"
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
@@ -254,8 +254,8 @@ mod tests {
     pub async fn get_manifest_for_5_1() {
         let cache_dir = assert_fs::TempDir::new().unwrap().to_path_buf();
         let server = start_test_server("manifest-5.1".into());
-        let mut url_str = server.url_str(""); // Remove trailing "/"
-        url_str.pop();
+        let mut url_str = server.url_str("/");
+        url_str.pop(); // Remove trailing "/"
 
         let config = ConfigBuilder::new()
             .unwrap()
@@ -276,8 +276,8 @@ mod tests {
     #[serial]
     pub async fn get_cached_manifest() {
         let server = start_test_server("manifest-5.1".into());
-        let mut url_str = server.url_str(""); // Remove trailing "/"
-        url_str.pop();
+        let mut url_str = server.url_str("/");
+        url_str.pop(); // Remove trailing "/"
         let manifest_content = std::fs::read_to_string(
             format!("{}/resources/test/manifest-5.1", env!("CARGO_MANIFEST_DIR")).as_str(),
         )
