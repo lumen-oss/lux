@@ -10,6 +10,7 @@ use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
 
 use bon::Builder;
+use itertools::Itertools;
 use reqwest::multipart::{Form, Part};
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -22,6 +23,8 @@ use gpgme::{Context, Data};
 #[cfg(feature = "gpgme")]
 use std::io::Read;
 
+const TFA_TOKEN_HEADER: &str = "X-TFA-Token";
+
 /// A rocks package uploader, providing fine-grained control
 /// over how a package should be uploaded.
 #[derive(Builder)]
@@ -29,6 +32,7 @@ use std::io::Read;
 pub struct ProjectUpload<'a> {
     project: &'a Project,
     api_key: Option<ApiKey>,
+    tfa_code: Option<String>,
     #[cfg(feature = "gpgme")]
     sign_protocol: SignatureProtocol,
     config: &'a Config,
@@ -92,8 +96,8 @@ pub enum UploadError {
     Request(#[from] reqwest::Error),
     #[error("server {0} responded with error status: {1}")]
     Server(Url, StatusCode),
-    #[error("client error when requesting {0}\nStatus code: {1}")]
-    Client(Url, StatusCode),
+    #[error("client error when requesting {0}:\n{1}")]
+    Client(Url, String),
     RockCheck(#[from] RockCheckError),
     #[error("a package with the same rockspec content already exists on the server: {0}")]
     RockExists(Url),
@@ -124,6 +128,8 @@ pub enum UploadError {
     SearchAndDownload(#[from] SearchAndDownloadError),
     #[error("error computing rockspec hash:\n{0}")]
     Hash(io::Error),
+    #[error("the 2FA code '{0}' was rejected by the server: {1}")]
+    TfaCodeRejected(String, String),
 }
 
 pub struct ApiKey(String);
@@ -141,7 +147,7 @@ impl ApiKey {
         ))
     }
 
-    /// Creates an API key from a String.
+    /// Creates an API key from a [`String`].
     ///
     /// # Safety
     ///
@@ -150,8 +156,8 @@ impl ApiKey {
     ///
     /// Ensure that you do not do anything else with the API key string prior to sealing it in this
     /// struct.
-    pub unsafe fn from(str: String) -> Self {
-        Self(str)
+    pub fn from(str: &str) -> Self {
+        Self(str.to_string())
     }
 
     /// Retrieves the underlying API key as a [`String`].
@@ -160,9 +166,53 @@ impl ApiKey {
     ///
     /// Strings may accidentally be printed as part of its [`Display`](std::fmt::Display)
     /// implementation. Ensure that you never pass this variable somewhere it may be displayed.
-    pub unsafe fn get(&self) -> &String {
+    pub unsafe fn get(&self) -> &str {
         &self.0
     }
+}
+
+/// 2FA token.
+/// This struct is designed to be sealed without a [`Display`](std::fmt::Display) implementation
+/// so that it can never accidentally be printed.
+struct TfaToken(String);
+
+impl TfaToken {
+    /// Retrieves the underlying 2FA token as a [`String`].
+    ///
+    /// # Safety
+    ///
+    /// Strings may accidentally be printed as part of its [`Display`](std::fmt::Display)
+    /// implementation. Ensure that you never pass this variable somewhere it may be displayed.
+    unsafe fn get(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for TfaToken {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(Self)
+    }
+}
+
+#[derive(Deserialize)]
+struct LuarocksTfaVerificationSuccess {
+    tfa_token: TfaToken,
+}
+
+/// Models the response received from luarocks.org
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum LuarocksTfaVerificationResponse {
+    Success(LuarocksTfaVerificationSuccess),
+    Failure(LuarocksErrorResponse),
+}
+
+#[derive(Deserialize)]
+struct LuarocksErrorResponse {
+    errors: Vec<String>,
 }
 
 #[derive(Serialize_enum_str, Clone, PartialEq, Eq)]
@@ -269,19 +319,26 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
         }
     };
 
-    let response = client
+    let mut request = client
         .post(unsafe { helpers::url_for_method(config.server(), &api_key, "upload")? })
-        .multipart(multipart)
-        .send()
-        .await?;
+        .multipart(multipart);
+
+    if let Some(code) = args.tfa_code {
+        let token = helpers::verify_tfa_code(&client, config.server(), &api_key, &code).await?;
+        request = request.header(TFA_TOKEN_HEADER, unsafe { token.get() });
+    }
+
+    let response = request.send().await?;
 
     let status = response.status();
-    if status.is_client_error() {
-        Err(UploadError::Client(config.server().clone(), status))
-    } else if status.is_server_error() {
+    if status.is_server_error() {
         Err(UploadError::Server(config.server().clone(), status))
-    } else {
+    } else if status.is_success() {
         Ok(())
+    } else {
+        let response = response.json::<LuarocksErrorResponse>().await?;
+        let errors = response.errors.into_iter().join("\n");
+        Err(UploadError::Client(config.server().clone(), errors))
     }
 }
 
@@ -295,6 +352,7 @@ mod helpers {
     use crate::project::project_toml::RemoteProjectToml;
     use crate::upload::RockCheckError;
     use crate::upload::{ToolCheckError, UserCheckError};
+    use itertools::Itertools;
     use reqwest::Client;
     use ssri::Integrity;
     use url::Url;
@@ -334,6 +392,35 @@ mod helpers {
                 server_url.to_string(),
                 response,
             ))
+        }
+    }
+
+    pub(crate) async fn verify_tfa_code(
+        client: &Client,
+        server_url: &Url,
+        api_key: &ApiKey,
+        tfa_code: &str,
+    ) -> Result<TfaToken, UploadError> {
+        let response = client
+            .get(unsafe { url_for_method(server_url, api_key, "verify_tfa")? })
+            .query(&(("code", tfa_code.to_string()),))
+            .send()
+            .await?;
+        let status = response.status();
+        if status.is_server_error() {
+            Err(UploadError::Server(server_url.clone(), status))
+        } else {
+            match response.json::<LuarocksTfaVerificationResponse>().await? {
+                LuarocksTfaVerificationResponse::Success(LuarocksTfaVerificationSuccess {
+                    tfa_token,
+                }) => Ok(tfa_token),
+                LuarocksTfaVerificationResponse::Failure(LuarocksErrorResponse { errors }) => {
+                    Err(UploadError::TfaCodeRejected(
+                        tfa_code.to_string(),
+                        errors.into_iter().join("\n"),
+                    ))
+                }
+            }
         }
     }
 
@@ -428,5 +515,52 @@ mod helpers {
         Ok(response_map.is_some_and(|response_map| {
             response_map.contains_key("module") && response_map.contains_key("version")
         }))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_tfa_success() {
+        let response_str = r#"{
+    "success": true,
+    "expires": 1782939987,
+    "tfa_token": "dummy_token"
+}
+"#;
+        let result = serde_json::from_str(response_str).unwrap();
+        assert!(matches!(
+            result,
+            LuarocksTfaVerificationResponse::Success(LuarocksTfaVerificationSuccess { .. })
+        ));
+    }
+
+    #[test]
+    fn test_deserialize_tfa_failure() {
+        let response_str = r#"{
+    "errors": [
+        "Invalid verification code"
+    ]
+}
+"#;
+        let result = serde_json::from_str(response_str).unwrap();
+        assert!(matches!(
+            result,
+            LuarocksTfaVerificationResponse::Failure(LuarocksErrorResponse { .. })
+        ));
+    }
+
+    #[test]
+    fn test_deserialize_luarocks_error_response() {
+        let response_str = r#"{
+    "errors": [
+        "Invalid verification code"
+    ]
+}
+"#;
+        let result = serde_json::from_str(response_str).unwrap();
+        assert!(matches!(result, LuarocksErrorResponse { .. }));
     }
 }
