@@ -336,8 +336,14 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
         .log_level(cargo_packager::config::LogLevel::Trace);
     // NOTE: The AppImage/linuxdeploy-<target>.AppImage will fail on NixOS.
     println!("building binary package...");
-    cargo_packager::package_and_sign(config_builder.config(), &signing_config)
-        .inspect_err(|err| eprintln!("failed to package lux:\n{err:?}"))?;
+    if opts.release {
+        cargo_packager::package_and_sign(config_builder.config(), &signing_config)
+            .inspect_err(|err| eprintln!("failed to package lux:\n{err:?}"))?;
+    } else {
+        // GitHub Actions doesn't expose secrets on PR, so we don't sign the dry-run build.
+        cargo_packager::package(config_builder.config())
+            .inspect_err(|err| eprintln!("failed to package lux:\n{err:?}"))?;
+    }
     Ok(())
 }
 
