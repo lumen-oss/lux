@@ -1,4 +1,4 @@
-package = "lux-lua"
+package = "lux-lua-test"
 lua = ">=5.1,< 5.6"
 
 [description]

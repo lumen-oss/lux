@@ -267,11 +267,12 @@ impl Iterator for SpecRevIterator {
     type Item = SpecRev;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current;
         self.current += 1;
         if self.current == 0 {
             None // overflow
         } else {
-            Some(SpecRev(self.current))
+            Some(SpecRev(current))
         }
     }
 }
