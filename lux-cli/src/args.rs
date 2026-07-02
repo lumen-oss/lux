@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use eyre::{eyre, Result};
 use lux_lib::package::PackageReq;
 use std::{path::PathBuf, str::FromStr};
@@ -6,6 +7,12 @@ use std::{path::PathBuf, str::FromStr};
 pub enum PackageOrRockspec {
     Package(PackageReq),
     RockSpec(PathBuf),
+}
+
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
+pub enum OutputFormat {
+    Json,
+    Text,
 }
 
 impl FromStr for PackageOrRockspec {

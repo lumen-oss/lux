@@ -1,5 +1,6 @@
 pub mod build;
 pub mod config;
+pub mod dependencies;
 pub mod git;
 pub mod hash;
 pub mod lockfile;

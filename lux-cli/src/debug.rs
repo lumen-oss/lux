@@ -1,8 +1,15 @@
 use crate::{
+    args::OutputFormat,
     project::DebugProject,
     unpack::{Unpack, UnpackRemote},
 };
-use clap::Subcommand;
+use clap::{Args, Subcommand};
+
+#[derive(Args)]
+pub struct Toolchains {
+    #[arg(long, default_value = "text")]
+    pub format: OutputFormat,
+}
 
 #[derive(Subcommand)]
 pub enum Debug {
@@ -14,4 +21,6 @@ pub enum Debug {
     UnpackRemote(UnpackRemote),
     /// View information about the current project.
     Project(DebugProject),
+    /// Check for available toolchains.
+    Toolchains(Toolchains),
 }
