@@ -35,6 +35,8 @@
 - Add/remove dependencies with simple CLI commands.
 - Integrated code formatting, type checking and powerful code linting.
 - Good DX - automatically adds project dependencies to [`.luarc.json`](https://luals.github.io/wiki/configuration/#luarcjson-file) for rich LSP diagnostics.
+- Distribute projects (including dependencies) as install tree archives
+  or as static binaries without the need for a Lua installation.
 
 #### :tada: Automatic Generation of Rockspecs
 
@@ -108,6 +110,8 @@ The following table provides a brief comparison:
 | Local dependencies in local projects                                                    | :white_check_mark:           | :x:                |
 | Multiple projects in a single workspace                                                 | :white_check_mark:           | :x:                |
 | Vendor sources for offline use                                                          | :white_check_mark:           | :x:                |
+| Distribute install tree archives                                                        | :white_check_mark:           | :x:                |
+| Distribute static binaries                                                              | :white_check_mark:           | :x:                |
 | Load RockSpecs and LuaRocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:       | :x:                |
 
 [^1]: Supported via a compatibility layer that uses LuaRocks as a backend.

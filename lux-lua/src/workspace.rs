@@ -69,7 +69,7 @@ mod definitions_registry {
 
 #[cfg(test)]
 mod tests {
-    use assert_fs::{assert::PathAssert, prelude::PathChild, TempDir};
+    use assert_fs::TempDir;
     use mlua::Lua;
 
     fn create_fake_single_project_workspace() -> (TempDir, Lua) {

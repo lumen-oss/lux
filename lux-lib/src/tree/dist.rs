@@ -11,6 +11,9 @@ use crate::{
     tree::mk_rock_layout,
 };
 
+const SRC_DIR_NAME: &str = "lua";
+const LIB_DIR_NAME: &str = "lib";
+
 #[derive(Error, Debug)]
 #[error(
     r#"cannot install conflicting packages in flat tree:
@@ -105,8 +108,8 @@ impl InstallTree for FlatDistTree {
     fn entrypoint(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         self.guard_no_conflicting_package(package)?;
         Ok(mk_rock_layout(
-            "lua",
-            "lib",
+            SRC_DIR_NAME,
+            LIB_DIR_NAME,
             self,
             package,
             &self.0.entrypoint_layout,
@@ -116,8 +119,8 @@ impl InstallTree for FlatDistTree {
     fn dependency(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         self.guard_no_conflicting_package(package)?;
         Ok(mk_rock_layout(
-            "lua",
-            "lib",
+            SRC_DIR_NAME,
+            LIB_DIR_NAME,
             self,
             package,
             &RockLayoutConfig::default(),
@@ -141,7 +144,19 @@ impl InstallTree for FlatDistTree {
     }
 
     fn installed_rock_layout(&self, package: &LocalPackage) -> Result<RockLayout, TreeError> {
-        self.0.installed_rock_layout(package)
+        let lockfile = self.lockfile()?;
+        let layout_config = if lockfile.is_entrypoint(&package.id()) {
+            self.0.entrypoint_layout.clone()
+        } else {
+            RockLayoutConfig::default()
+        };
+        Ok(mk_rock_layout(
+            SRC_DIR_NAME,
+            LIB_DIR_NAME,
+            self,
+            package,
+            &layout_config,
+        ))
     }
 
     fn list(&self) -> Result<HashMap<PackageName, Vec<LocalPackage>>, TreeError> {

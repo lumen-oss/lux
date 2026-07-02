@@ -89,6 +89,8 @@ impl TryFrom<String> for RemotePackageSource {
                     "luarocks_src_rock" => Ok(Self::LuarocksSrcRock(Url::parse(str)?)),
                     "luarocks_rock" => Ok(Self::LuarocksBinaryRock(Url::parse(str)?)),
                     "rockspec" => Ok(Self::RockspecContent(str.into())),
+                    #[cfg(test)]
+                    "test" => Ok(Self::Test),
                     _ => Err(RemotePackageSourceError::UnknownRemoteSourceType(
                         remote_source_type.into(),
                     )),

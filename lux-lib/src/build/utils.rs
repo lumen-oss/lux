@@ -482,7 +482,7 @@ async fn link_c_artifacts(
         cmd.arg("/link")
             .arg(format!("/DEF:{}", def_file.display()))
             .arg(format!("/OUT:{}", output_path.display()))
-            .args(lua.lib_link_args(&compiler))
+            .args(lua_lib_link_args(lua, &compiler))
             .args(
                 external_dependencies
                     .values()
@@ -495,7 +495,7 @@ async fn link_c_artifacts(
     } else {
         add_variable_if_set(config, "LDFLAGS", &mut cmd);
         cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
-            .args(lua.lib_link_args(&build.try_get_compiler()?))
+            .args(lua_lib_link_args(lua, &build.try_get_compiler()?))
             .args(
                 external_dependencies
                     .values()
@@ -525,6 +525,16 @@ async fn link_c_artifacts(
         Err(LinkCModulesError::LibOutputNotCreated(
             output_path.to_slash_lossy().to_string(),
         ))
+    }
+}
+
+/// NOTE: In luarocks, these are behind a link_lua_explicity config option
+fn lua_lib_link_args(lua: &LuaInstallation, compiler: &cc::Tool) -> Vec<String> {
+    if cfg!(target_os = "macos") {
+        // On macos, linking Lua can lead to duplicate symbol errors
+        Vec::new()
+    } else {
+        lua.lib_link_args(compiler)
     }
 }
 

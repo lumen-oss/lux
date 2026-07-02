@@ -1,21 +1,25 @@
 //! Functions for interacting with global state (currently installed packages user-wide,
 //! getting all packages from the manifest, etc.)
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use itertools::Itertools;
 use lux_lib::{
     lua::lua_runtime,
-    operations::{set_pinned_state, BuildWorkspace, Download, Install, Sync, Uninstall, Update},
+    operations::{
+        set_pinned_state, BuildWorkspace, DistProjectBin, Download, Install, Sync, Uninstall,
+        Update,
+    },
     progress::{Progress, ProgressBar},
     remote_package_db::RemotePackageDB,
 };
 use mlua::prelude::*;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
+use path_slash::PathBufExt;
 
 use crate::lua_impls::{
     ConfigLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua, PackageInstallSpecLua,
-    PackageNameLua, PinnedStateLua, SyncReportLua, TreeLua, WorkspaceLua,
+    PackageNameLua, PinnedStateLua, ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone)]
@@ -180,6 +184,28 @@ impl TypedUserData for OperationsModule {
                     .await
                     .into_lua_err()
                     .map(|packages: Vec<_>| packages.into_iter().map(LocalPackageLua).collect_vec())
+            },
+        );
+
+        methods.document("Distribute a project as a single static binary");
+        methods.param("project", "Project to compile");
+        methods.param("tree", "Install tree");
+        methods.param("output", "Destination path for the compiled binary");
+        methods.param("config", "Lux config");
+        methods.ret("the path to the compiled binary");
+        methods.add_async_function(
+            "dist_bin",
+            |_, (project, tree, output, config): (ProjectLua, TreeLua, String, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                DistProjectBin::new()
+                    .project(&project.0)
+                    .tree(&tree.0)
+                    .output(PathBuf::from(output))
+                    .config(&config.0)
+                    .compile()
+                    .await
+                    .into_lua_err()
+                    .map(|path| path.to_slash_lossy().to_string())
             },
         );
 
