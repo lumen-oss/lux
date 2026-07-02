@@ -1,8 +1,8 @@
 use crate::{args::OutputFormat, debug::Toolchains};
 use eyre::Result;
-use lux_lib::dependencies::{Tool, ToolchainReport};
+use lux_lib::toolchains::{Tool, ToolchainReport};
 
-pub fn check_dependencies(args: Toolchains) -> Result<()> {
+pub fn check_toolchains(args: Toolchains) -> Result<()> {
     let report = ToolchainReport::generate();
 
     match args.format {
@@ -17,11 +17,11 @@ fn print_human_readable(report: &ToolchainReport) {
     println!("Toolchains Report");
     println!("=======================\n");
 
-    print_dependency(report.c_compiler());
-    print_dependency(report.make());
-    print_dependency(report.cmake());
-    print_dependency(report.cargo());
-    print_dependency(report.pkg_config());
+    print_toolchains(report.c_compiler());
+    print_toolchains(report.make());
+    print_toolchains(report.cmake());
+    print_toolchains(report.cargo());
+    print_toolchains(report.pkg_config());
 
     println!("\nSummary:");
     let total = 5;
@@ -41,7 +41,7 @@ fn print_human_readable(report: &ToolchainReport) {
     println!("  Missing: {}/{}", total - found, total);
 }
 
-fn print_dependency(dep: &Tool) {
+fn print_toolchains(dep: &Tool) {
     match dep.info() {
         Some(info) => {
             print!("✓ {}: Found ({})", dep.name(), info.path().display());

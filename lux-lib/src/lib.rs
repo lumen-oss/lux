@@ -1,6 +1,5 @@
 pub mod build;
 pub mod config;
-pub mod dependencies;
 pub mod git;
 pub mod hash;
 pub mod lockfile;
@@ -17,6 +16,7 @@ pub mod progress;
 pub mod project;
 pub mod remote_package_db;
 pub mod rockspec;
+pub mod toolchains;
 pub mod tree;
 pub mod upload;
 pub mod which;
