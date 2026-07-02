@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0](https://github.com/lumen-oss/lux/compare/v0.34.2...v0.35.0) `lux-cli` - 2026-07-02
+
+### Added
+- *(upload)* support generating TOTP codes in CI ([#1643](https://github.com/lumen-oss/lux/pull/1643))
+- *(upload)* [**breaking**] support two-factor authentication ([#1642](https://github.com/lumen-oss/lux/pull/1642))
+
+## [0.45.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.44.2...lux-lib-v0.45.0) `lux-lib` - 2026-07-02
+
+### Added
+- *(upload)* [**breaking**] support two-factor authentication ([#1642](https://github.com/lumen-oss/lux/pull/1642))
+
 ## [0.44.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.44.1...lux-lib-v0.44.2) `lux-lib` - 2026-07-02
 
 ### Dependencies
