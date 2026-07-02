@@ -384,7 +384,8 @@ mod tests {
 
     #[tokio::test]
     async fn find_single_project_workspace() {
-        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let sample_project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let work_dir: PathBuf = project_root.join("src");
@@ -396,7 +397,8 @@ mod tests {
 
     #[tokio::test]
     async fn find_multi_project_workspace() {
-        let sample_workspace: PathBuf = "resources/test/sample-projects/multi-project/".into();
+        let sample_workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/multi-project/");
         let workspace_root = assert_fs::TempDir::new().unwrap();
         workspace_root
             .copy_from(&sample_workspace, &["**"])
@@ -418,7 +420,8 @@ mod tests {
 
     #[tokio::test]
     async fn find_multi_project_workspace_members_glob() {
-        let sample_workspace: PathBuf = "resources/test/sample-projects/multi-project/".into();
+        let sample_workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/multi-project/");
         let workspace_root = assert_fs::TempDir::new().unwrap();
         workspace_root
             .copy_from(&sample_workspace, &["**"])
@@ -455,7 +458,8 @@ members = [ "glob:projects/*" ]
 
     #[tokio::test]
     async fn test_luarc_path_custom_config() {
-        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let sample_project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
 
@@ -472,7 +476,8 @@ members = [ "glob:projects/*" ]
 
     #[tokio::test]
     async fn test_luarc_path_fallback_luarc() {
-        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let sample_project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
 
@@ -488,7 +493,8 @@ members = [ "glob:projects/*" ]
 
     #[tokio::test]
     async fn test_luarc_path_fallback_emmyrc() {
-        let sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let sample_project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
 

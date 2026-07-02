@@ -24,9 +24,14 @@ use lux_lib::build::BuildBehaviour;
 async fn builtin_build() {
     let dir = TempDir::new().unwrap();
 
-    let content =
-        String::from_utf8(std::fs::read("resources/test/lua-cjson-2.1.0-1.rockspec").unwrap())
-            .unwrap();
+    let content = String::from_utf8(
+        std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/test/lua-cjson-2.1.0-1.rockspec"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
@@ -66,7 +71,11 @@ async fn make_build() {
     let dir = TempDir::new().unwrap();
 
     let content = String::from_utf8(
-        std::fs::read("resources/test/make-project/make-project-scm-1.rockspec").unwrap(),
+        std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/test/make-project/make-project-scm-1.rockspec"),
+        )
+        .unwrap(),
     )
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
@@ -103,7 +112,9 @@ async fn make_build() {
 
 #[tokio::test]
 async fn cmake_build() {
-    test_build_rockspec("resources/test/luv-1.48.0-2.rockspec".into()).await
+    let rockspec =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luv-1.48.0-2.rockspec");
+    test_build_rockspec(rockspec).await
 }
 
 #[cfg(not(target_env = "msvc"))] // luaposix does not build on msvc
@@ -116,7 +127,9 @@ async fn command_build() {
         println!("luaposix is broken on macos/luajit! Skipping...");
         return;
     }
-    test_build_rockspec("resources/test/luaposix-35.1-1.rockspec".into()).await
+    let rockspec =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luaposix-35.1-1.rockspec");
+    test_build_rockspec(rockspec).await
 }
 
 #[cfg(test)]
@@ -165,10 +178,9 @@ async fn treesitter_parser_build() {
 
     let dir = TempDir::new().unwrap();
 
-    let content = String::from_utf8(
-        std::fs::read("resources/test/tree-sitter-rust-0.0.43.rockspec").unwrap(),
-    )
-    .unwrap();
+    let rockspec = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/tree-sitter-rust-0.0.43.rockspec");
+    let content = String::from_utf8(std::fs::read(rockspec).unwrap()).unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
@@ -205,7 +217,8 @@ async fn treesitter_parser_build() {
 
 #[tokio::test]
 async fn test_build_local_project_no_source() {
-    let sample_project: PathBuf = "resources/test/sample-projects/no-source/".into();
+    let sample_project =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/no-source/");
     let workspace_root = TempDir::new().unwrap();
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
@@ -249,7 +262,8 @@ async fn test_build_local_project_no_source() {
 
 #[tokio::test]
 async fn test_build_local_project_only_src() {
-    let sample_project: PathBuf = "resources/test/sample-projects/only-src/".into();
+    let sample_project =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/only-src/");
     let workspace_root = assert_fs::TempDir::new().unwrap();
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
@@ -294,7 +308,11 @@ fn test_build_multiple_treesitter_parsers() {
     let dir = TempDir::new().unwrap();
 
     let content = String::from_utf8(
-        std::fs::read("resources/test/tree-sitter-rust-0.0.43.rockspec").unwrap(),
+        std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/test/tree-sitter-rust-0.0.43.rockspec"),
+        )
+        .unwrap(),
     )
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
@@ -350,7 +368,8 @@ fn test_build_multiple_treesitter_parsers() {
 
 #[tokio::test]
 async fn build_project_with_git_dependency() {
-    let sample_project: PathBuf = "resources/test/sample-projects/git-dependency/".into();
+    let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/sample-projects/git-dependency/");
     let workspace_root = assert_fs::TempDir::new().unwrap();
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
@@ -388,7 +407,8 @@ async fn build_project_with_git_dependency() {
 #[cfg(not(target_env = "msvc"))]
 #[tokio::test]
 async fn test_multiline_command_build() {
-    let sample_project: PathBuf = "resources/test/sample-projects/command-build/".into();
+    let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/sample-projects/command-build/");
     let workspace_root = TempDir::new().unwrap();
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
@@ -430,8 +450,13 @@ async fn test_multiline_command_build() {
 async fn builtin_build_install_include() {
     let dir = TempDir::new().unwrap();
 
-    let content =
-        String::from_utf8(std::fs::read("resources/test/luyoga-1.3-3.rockspec").unwrap()).unwrap();
+    let content = String::from_utf8(
+        std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luyoga-1.3-3.rockspec"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));

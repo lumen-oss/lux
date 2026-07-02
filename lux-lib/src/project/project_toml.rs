@@ -1564,7 +1564,8 @@ mod tests {
     }
 
     fn init_sample_project_repo(temp_dir: &assert_fs::TempDir) -> Repository {
-        let sample_project: PathBuf = "resources/test/sample-projects/source-template/".into();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/source-template/");
         temp_dir.copy_from(&sample_project, &["**"]).unwrap();
         let repo = Repository::init(temp_dir).unwrap();
         let mut opts = RepositoryInitOptions::new();
@@ -1674,7 +1675,8 @@ mod tests {
     #[test]
     fn test_git_project_in_subdirectory() {
         let temp_dir = assert_fs::TempDir::new().unwrap();
-        let sample_project: PathBuf = "resources/test/sample-projects/source-template/".into();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/source-template/");
         let project_dir = temp_dir.child("lux");
         project_dir.create_dir_all().unwrap();
         project_dir.copy_from(&sample_project, &["**"]).unwrap();

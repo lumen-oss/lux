@@ -634,7 +634,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_various_dependencies() {
-        let sample_project: PathBuf = "resources/test/sample-projects/no-build-spec/".into();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/no-build-spec/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
@@ -719,7 +720,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_dependencies() {
-        let sample_project: PathBuf = "resources/test/sample-projects/dependencies/".into();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/dependencies/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
@@ -750,7 +752,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_extra_rockspec_parsing() {
-        let sample_project: PathBuf = "resources/test/sample-projects/extra-rockspec/".into();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/extra-rockspec/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
@@ -776,7 +779,8 @@ mod tests {
     }
 
     async fn test_pin_unpin_dependencies(pin: PinnedState) {
-        let sample_project: PathBuf = "resources/test/sample-projects/dependencies/".into();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/dependencies/");
         let project_root = assert_fs::TempDir::new().unwrap();
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();

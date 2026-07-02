@@ -248,14 +248,15 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_format_while_in_another_workspace() {
-        let unformatted_sample_project: PathBuf =
-            "resources/test/sample-projects/unformatted/".into();
+        let unformatted_sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/unformatted/");
         let unformatted_project_root = TempDir::new().unwrap();
         unformatted_project_root
             .copy_from(&unformatted_sample_project, &["**"])
             .unwrap();
 
-        let cwd_sample_project: PathBuf = "resources/test/sample-projects/init/".into();
+        let cwd_sample_project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let cwd_project_root = TempDir::new().unwrap();
         cwd_project_root
             .copy_from(&cwd_sample_project, &["**"])
@@ -283,7 +284,7 @@ mod tests {
     }
 
     fn loose_lua_temp_dir() -> TempDir {
-        let fixture: PathBuf = "resources/test/loose-lua/".into();
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/loose-lua/");
         let dir = TempDir::new().unwrap();
         dir.copy_from(&fixture, &["**"]).unwrap();
         dir
@@ -337,7 +338,8 @@ mod tests {
     #[test]
     fn test_format_subdir_inherits_workspace_config() {
         // must resolve workspace's stylua.toml (Spaces/2-width), not stylua default.
-        let fixture: PathBuf = "resources/test/sample-projects/stylua-config/".into();
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/stylua-config/");
         let workspace = TempDir::new().unwrap();
         workspace.copy_from(&fixture, &["**"]).unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
