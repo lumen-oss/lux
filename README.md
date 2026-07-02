@@ -24,39 +24,39 @@
 
 ## :star2: Key Features
 
-* Create and manage Lua projects
-  - Easily manage dependencies, build steps and more through the `lux.toml` file.
-* Parallel builds and installs :rocket:
-* Add/remove dependencies with simple CLI commands
-* Automatic generation of rockspecs
-  - Say goodbye to managing 10 different rockspec files in your source code :tada:
-* Integrated code formatting via `lx fmt`
-  - Powered by [`stylua`](https://github.com/JohnnyMorganz/StyLua),
-    [`emmylua_formatter`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/tree/main/crates/emmylua_formatter#emmylua-formatter),
-    or [`emmylua_codestyle`](https://github.com/CppCXY/EmmyLuaCodeStyle).
-* Easily specify compatible Lua versions
-  - Lux will take care of Lua header installation automatically
-  - Forget about users complaining they have the wrong Lua headers installed on their system
-* Automatic EmmyLua/LuaCATS based type checking via `lx check`
-  - Powered by [`emmylua-analyzer-rust`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust)
-* Automatic code linting via `lx lint`
-  - Powered by [`luacheck`](https://github.com/lunarmodules/luacheck)
-* Powerful lockfile support
-  - Makes for fully reproducible developer environments.
-  - Makes Lux easy to integrate with Nix!
-* Fully compatible
-  - Works with existing LuaRocks packages.
-  - Have a complex rockspec that you don't want to rewrite to TOML? No problem!
-    Lux allows the creation of an `extra.rockspec` file, everything just works.
-  - Have a very complex build script? Lux can shell out to `luarocks` if it knows it has
-    to preserve maximum compatibility.
-* Automatically adds project dependencies to a [`.luarc.json`](https://luals.github.io/wiki/configuration/#luarcjson-file)
-  file so they can be picked up by [`lua-language-server`](https://luals.github.io/).
+#### :package: Create and Manage Lua Projects
 
-> [!WARNING]
->
-> **Lux, while generally functional, is a work in progress
-> and does not have a `1.0` release yet.**
+- Easily manage dependencies, build steps and more through the `lux.toml` file.
+- Full support for existing `.rockspec` files.
+
+#### :gear: Modern, Comfortable Tooling
+
+- Parallel builds and installs.
+- Add/remove dependencies with simple CLI commands.
+- Integrated code formatting, type checking and powerful code linting.
+- Good DX - automatically adds project dependencies to [`.luarc.json`](https://luals.github.io/wiki/configuration/#luarcjson-file) for rich LSP diagnostics.
+
+#### :tada: Automatic Generation of Rockspecs
+
+- Say goodbye to managing 10 different rockspec files in your source code!
+
+#### :jigsaw: Lua Versioning Done Easy
+
+- Lux takes care of installing the right versions of Lua headers automatically.
+- Forget about users complaining they have the wrong Lua installed on their system.
+
+#### :lock: Advanced Lockfile Support
+
+- Fully reproducible developer environments.
+- Makes Lux easy to integrate with Nix!
+
+#### :globe_with_meridians: Fully Compatible with the Ecosystem
+
+- Works with existing LuaRocks packages.
+- Have a complex rockspec that you don't want to rewrite to TOML? No problem!
+  Lux allows the creation of an `extra.rockspec` file, everything just works.
+- Have a very complex build script? Lux can shell out to `luarocks` if it detects it has
+  to preserve maximum compatibility.
 
 ## :gear: How To Use
 
@@ -64,10 +64,15 @@ Feel free to consult the [documentation](https://lux.lumen-labs.org/tutorial/get
 
 It features a tutorial and several guides to make you good at managing Lua projects.
 
+> [!NOTE]
+>
+> **Lux, while fully functional, is a work in progress
+> and does not have a `1.0` release yet.**
+
 ## :bar_chart: Comparison with LuaRocks
 
 As this project is still a work in progress, some LuaRocks features
-have not been (fully) implemented yet.
+have not been fully implemented yet.
 On the other hand, Lux has some features that are not present in LuaRocks.
 
 The following table provides a brief comparison:
