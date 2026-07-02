@@ -1,10 +1,13 @@
-use clap::{Args, ValueEnum};
+use clap::Args;
 use emmylua_check::OutputDestination;
 use eyre::{eyre, Result};
 use itertools::Itertools;
 use lux_lib::{config::Config, progress::MultiProgress, workspace::Workspace};
 
-use crate::workspace::{sync_dependencies_if_locked, sync_test_dependencies_if_locked};
+use crate::{
+    args::OutputFormat,
+    workspace::{sync_dependencies_if_locked, sync_test_dependencies_if_locked},
+};
 
 #[derive(Args)]
 pub struct Check {
@@ -26,12 +29,6 @@ pub struct Check {
     /// Treat warnings as errors.
     #[arg(long)]
     warnings_as_errors: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
-enum OutputFormat {
-    Json,
-    Text,
 }
 
 impl From<OutputFormat> for emmylua_check::OutputFormat {
