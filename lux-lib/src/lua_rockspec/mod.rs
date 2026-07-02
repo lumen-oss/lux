@@ -1450,9 +1450,14 @@ mod tests {
 
     #[test]
     pub fn regression_luasystem() {
-        let rockspec_content =
-            String::from_utf8(std::fs::read("resources/test/luasystem-0.4.4-1.rockspec").unwrap())
-                .unwrap();
+        let rockspec_content = String::from_utf8(
+            std::fs::read(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("resources/test/luasystem-0.4.4-1.rockspec"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let rockspec = RemoteLuaRockspec::new(&rockspec_content).unwrap();
         let build_spec = rockspec.local.build.current_platform();
         assert!(matches!(
@@ -1598,9 +1603,14 @@ mod tests {
 
     #[tokio::test]
     pub async fn regression_ltui() {
-        let content =
-            String::from_utf8(std::fs::read("resources/test/ltui-2.8-2.rockspec").unwrap())
-                .unwrap();
+        let content = String::from_utf8(
+            std::fs::read(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("resources/test/ltui-2.8-2.rockspec"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         RemoteLuaRockspec::new(&content).unwrap();
     }
 
@@ -1637,9 +1647,14 @@ mod tests {
 
     #[test]
     pub fn regression_external_dependencies() {
-        let content =
-            String::from_utf8(std::fs::read("resources/test/luaossl-20220711-0.rockspec").unwrap())
-                .unwrap();
+        let content = String::from_utf8(
+            std::fs::read(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("resources/test/luaossl-20220711-0.rockspec"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let rockspec = RemoteLuaRockspec::new(&content).unwrap();
         if cfg!(target_family = "unix") {
             assert_eq!(

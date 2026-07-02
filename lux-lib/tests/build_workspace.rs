@@ -9,7 +9,8 @@ use lux_lib::{config::ConfigBuilder, lua_installation::detect_installed_lua_vers
 
 #[tokio::test]
 async fn test_build_multi_workspace_local_dependencies() {
-    let sample_project: PathBuf = "resources/test/sample-projects/multi-project-local-deps".into();
+    let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/sample-projects/multi-project-local-deps");
     let workspace_root = TempDir::new().unwrap();
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 

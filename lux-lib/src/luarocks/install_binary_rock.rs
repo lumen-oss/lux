@@ -260,7 +260,9 @@ mod tests {
 
     #[tokio::test]
     async fn install_binary_rock() {
-        let content = std::fs::read("resources/test/sample-project-0.1.0-1.all.rock").unwrap();
+        let rock = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-project-0.1.0-1.all.rock");
+        let content = std::fs::read(rock).unwrap();
         let rock_bytes = Bytes::copy_from_slice(&content);
         let packed_rock_file_name = "sample-project-0.1.0-1.all.rock".to_string();
         let cursor = Cursor::new(rock_bytes.clone());
@@ -324,7 +326,9 @@ mod tests {
             println!("Skipping impure test");
             return;
         }
-        let content = std::fs::read("resources/test/toml-edit-0.6.0-1.linux-x86_64.rock").unwrap();
+        let rock = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/toml-edit-0.6.0-1.linux-x86_64.rock");
+        let content = std::fs::read(rock).unwrap();
         let rock_bytes = Bytes::copy_from_slice(&content);
         let packed_rock_file_name = "toml-edit-0.6.0-1.linux-x86_64.rock".to_string();
         let cursor = Cursor::new(rock_bytes.clone());
