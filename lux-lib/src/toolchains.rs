@@ -133,3 +133,44 @@ fn try_parse_version(stdout: &str) -> Option<String> {
         .find(|line| !line.trim().is_empty())
         .map(|line| line.trim().to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_try_parse_version() {
+        let gcc_output = "gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software...";
+        assert_eq!(
+            try_parse_version(gcc_output),
+            Some("gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0".to_string())
+        );
+
+        let loose_output = "\n\n   cmake version 3.22.1   \nConfigured safely";
+        assert_eq!(
+            try_parse_version(loose_output),
+            Some("cmake version 3.22.1".to_string())
+        );
+
+        assert_eq!(try_parse_version("   \n\n  "), None);
+    }
+
+    #[test]
+    fn test_live_environment_smoke() {
+        let report = ToolchainReport::generate();
+
+        let tools = [
+            report.c_compiler(),
+            report.make(),
+            report.cmake(),
+            report.cargo(),
+            report.pkg_config(),
+        ];
+
+        for tool in tools {
+            if let Some(info) = tool.info() {
+                assert!(!info.path().as_os_str().is_empty());
+            }
+        }
+    }
+}
