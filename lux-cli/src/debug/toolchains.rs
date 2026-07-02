@@ -1,11 +1,25 @@
-use crate::{args::OutputFormat, debug::Toolchains};
+use crate::args::OutputFormat;
+use clap::Args;
 use eyre::Result;
 use lux_lib::toolchains::{Tool, ToolchainReport};
+
+#[derive(Args)]
+pub struct Toolchains {
+    /// The output format.
+    #[arg(long, default_value = "text", value_enum, ignore_case = true)]
+    output_format: OutputFormat,
+}
+
+impl Toolchains {
+    pub fn output_format(&self) -> OutputFormat {
+        self.output_format.clone()
+    }
+}
 
 pub fn check_toolchains(args: Toolchains) -> Result<()> {
     let report = ToolchainReport::generate();
 
-    match args.format {
+    match args.output_format() {
         OutputFormat::Text => print_human_readable(&report),
         OutputFormat::Json => print_json(&report)?,
     }

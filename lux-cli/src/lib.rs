@@ -69,7 +69,6 @@ pub mod search;
 pub mod shell;
 pub mod sync;
 pub mod test;
-pub mod toolchains;
 pub mod uninstall;
 pub mod unpack;
 pub mod update;
