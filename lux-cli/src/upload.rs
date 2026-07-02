@@ -18,6 +18,10 @@ pub struct Upload {
     /// Package to upload.
     #[arg(short, long, visible_short_alias = 'p')]
     package: Option<PackageName>,
+
+    /// Code to use for two-factor authentication
+    #[arg(short, long, visible_short_alias = 'c')]
+    tfa_code: Option<String>,
 }
 
 #[cfg(feature = "gpgme")]
@@ -33,6 +37,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
             .project(project)
             .config(&config)
             .sign_protocol(data.sign_protocol.clone())
+            .maybe_tfa_code(data.tfa_code)
             .progress(&bar)
             .package_db(&package_db)
             .upload_to_luarocks()
@@ -43,6 +48,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
                 .project(project)
                 .config(&config)
                 .sign_protocol(data.sign_protocol.clone())
+                .maybe_tfa_code(data.tfa_code.clone())
                 .progress(&bar)
                 .package_db(&package_db)
                 .upload_to_luarocks()
@@ -65,6 +71,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
         ProjectUpload::new()
             .project(project)
             .config(&config)
+            .maybe_tfa_code(data.tfa_code)
             .progress(&bar)
             .package_db(&package_db)
             .upload_to_luarocks()
@@ -74,6 +81,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
             ProjectUpload::new()
                 .project(project)
                 .config(&config)
+                .maybe_tfa_code(data.tfa_code.clone())
                 .progress(&bar)
                 .package_db(&package_db)
                 .upload_to_luarocks()
