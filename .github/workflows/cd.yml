@@ -290,16 +290,6 @@ jobs:
           overwrite: true
           file_glob: true
 
-      - name: Upload lux-lua definitions to release
-        uses: svenstaro/upload-release-action@v2
-        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/dist/lux-definitions/lua/lux.d.lua
-          tag: ${{ github.ref }}
-          overwrite: true
-          file_glob: true
-
       - name: Upload lux-luajit.so to release
         uses: svenstaro/upload-release-action@v2
         if: github.event_name == 'release'
@@ -309,3 +299,13 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
           file_glob: true
+      
+      - name: Upload lux-lua definitions to release
+        uses: svenstaro/upload-release-action@v2
+        if: startsWith(matrix.os, 'ubuntu') && github.event_name == 'release'
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/dist/lux-definitions/lua/lux.d.lua
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: false
