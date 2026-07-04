@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.1](https://github.com/lumen-oss/lux/compare/v0.35.0...v0.35.1) `lux-cli` - 2026-07-04
+
+### Added
+- *(debug)* add `debug toolchains` subcommand ([#1645](https://github.com/lumen-oss/lux/pull/1645))
+
+## [0.45.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.45.0...lux-lib-v0.45.1) `lux-lib` - 2026-07-04
+
+### Added
+- *(debug)* add `debug toolchains` subcommand ([#1645](https://github.com/lumen-oss/lux/pull/1645))
+
 ## [0.35.1](https://github.com/lumen-oss/lux/compare/v0.35.0...v0.35.1) `lux-cli` - 2026-07-02
 
 ### Added
