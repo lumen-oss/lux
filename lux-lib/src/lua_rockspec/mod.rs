@@ -585,7 +585,8 @@ pub struct RockDescription {
     #[serde(default, deserialize_with = "deserialize_url")]
     pub homepage: Option<Url>,
     /// An URL for the project's issue tracker.
-    pub issues_url: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_url")]
+    pub issues_url: Option<Url>,
     /// Contact information for the rockspec maintainer.
     pub maintainer: Option<String>,
     /// A list of short strings that specify labels for categorization of this rock.
@@ -737,7 +738,7 @@ mod tests {
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
             homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
-            issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
+            issues_url: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim/issues").unwrap()),
             maintainer: Some("Lumen Labs".into()),
             labels: Vec::new(),
         };
@@ -770,7 +771,7 @@ mod tests {
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
             homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
-            issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
+            issues_url: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim/issues").unwrap()),
             maintainer: Some("Lumen Labs".into()),
             labels: Vec::new(),
         };
@@ -820,7 +821,7 @@ mod tests {
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
             homepage: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim").unwrap()),
-            issues_url: Some("https://github.com/lumen-oss/rocks.nvim/issues".into()),
+            issues_url: Some(Url::parse("https://github.com/lumen-oss/rocks.nvim/issues").unwrap()),
             maintainer: Some("Lumen Labs".into()),
             labels: vec!["package management".into()],
         };
@@ -1753,7 +1754,7 @@ mod tests {
             detailed: Some("Detailed description here".into()),
             license: Some("MIT".into()),
             homepage: Some("https://example.com".parse().unwrap()),
-            issues_url: Some("https://example.com/issues".into()),
+            issues_url: Some("https://example.com/issues".parse().unwrap()),
             maintainer: Some("Some Maintainer <maintainer@example.com>".into()),
             labels: vec!["neovim".into(), "lua".into()],
         };
