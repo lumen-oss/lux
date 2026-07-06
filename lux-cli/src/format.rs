@@ -10,6 +10,8 @@ use lux_lib::{
 use path_slash::PathExt;
 use walkdir::WalkDir;
 
+use crate::utils::path::{classify_path, PathTarget};
+
 #[derive(Args)]
 pub struct Fmt {
     /// Path to a workspace, directory, or Lua file to format. Defaults to the current workspace.
@@ -34,28 +36,6 @@ enum FmtBackend {
     Luafmt,
     /// The default formatter used by [lua-language-server](https://luals.github.io/).
     EmmyluaCodestyle,
-}
-
-// TODO: For `lx check` #1407 and `lx lint` #1409, move `PathTarget` + `classify_path` into a shared module.
-enum PathTarget {
-    Workspace(Box<Workspace>),
-    Directory(PathBuf),
-    File(PathBuf),
-}
-
-fn classify_path(path: &Path) -> Result<PathTarget> {
-    if !path.exists() {
-        bail!("path does not exist: {}", path.display());
-    }
-    if let Some(workspace) = Workspace::from_exact(path)? {
-        return Ok(PathTarget::Workspace(Box::new(workspace)));
-    }
-    let path = std::path::absolute(path)?;
-    if path.is_file() {
-        Ok(PathTarget::File(path))
-    } else {
-        Ok(PathTarget::Directory(path))
-    }
 }
 
 pub fn format(args: Fmt, config: Config) -> Result<()> {

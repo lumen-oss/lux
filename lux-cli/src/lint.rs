@@ -1,13 +1,18 @@
+use std::path::PathBuf;
+
 use clap::Args;
 use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{config::Config, operations::Exec, workspace::Workspace};
-use path_slash::PathBufExt;
+use path_slash::PathExt;
 
+use crate::utils::path::{classify_path, PathTarget};
 use crate::workspace::top_level_ignored_files;
 
 #[derive(Args)]
 pub struct Lint {
+    /// Path to a workspace, directory, or Lua file to lint. Defaults to the current workspace.
+    path: Option<PathBuf>,
     /// Arguments to pass to the luacheck command.{n}
     /// If you pass arguments to luacheck, Lux will not pass any default arguments.
     args: Option<Vec<String>>,
@@ -19,10 +24,27 @@ pub struct Lint {
 }
 
 pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
-    let workspace = Workspace::current()?;
-    let root_dir = match &workspace {
-        Some(workspace) => workspace.root().to_slash_lossy().to_string(),
-        None => std::env::current_dir()?.to_slash_lossy().to_string(),
+    let target = match lint_args.path.as_deref() {
+        Some(path) => classify_path(path)?,
+        None => match Workspace::current()? {
+            Some(workspace) => PathTarget::Workspace(Box::new(workspace)),
+            None => PathTarget::Directory(std::env::current_dir()?),
+        },
+    };
+
+    let (target_path, workspace) = match target {
+        PathTarget::Workspace(ws) => (ws.root().to_slash_lossy().to_string(), Some(*ws)),
+        PathTarget::Directory(dir) => {
+            let ws = Workspace::from(&dir)?;
+            (dir.to_slash_lossy().to_string(), ws)
+        }
+        PathTarget::File(file) => {
+            let ws = match file.parent() {
+                Some(parent) => Workspace::from(parent)?,
+                None => None,
+            };
+            (file.to_slash_lossy().to_string(), ws)
+        }
     };
 
     let check_args: Vec<String> = match lint_args.args {
@@ -41,7 +63,7 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
     };
 
     Exec::new("luacheck", None, &config)
-        .arg(root_dir)
+        .arg(target_path)
         .args(check_args)
         .disable_loader(true)
         .exec()
