@@ -1478,7 +1478,9 @@ impl TypedUserData for RockDescriptionLua {
         });
 
         methods.document("An URL for the project's issue tracker");
-        methods.add_method("issues_url", |_, this, ()| Ok(this.0.issues_url.clone()));
+        methods.add_method("issues_url", |_, this, ()| {
+            Ok(this.0.issues_url.as_ref().map(|url| url.to_string()))
+        });
 
         methods.document("Contact information for the rockspec maintainer");
         methods.add_method("maintainer", |_, this, ()| Ok(this.0.maintainer.clone()));
