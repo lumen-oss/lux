@@ -29,7 +29,7 @@ eyre = "0.6"
 color-eyre = "0.6"
 inquire = "0.9"
 nucleo = "0.5"
-octocrab = "0.53"
+octocrab = "0.54"
 open = "5.3"
 spdx = "0.13"
 spinners = { version = "4.2", features = ["osc-progress"] }
