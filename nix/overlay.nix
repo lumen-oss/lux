@@ -17,6 +17,7 @@
     nativeBuildInputs = [
       pkg-config
       installShellFiles
+      writableTmpDirAsHomeHook
     ];
 
     buildInputs = [
@@ -89,8 +90,8 @@
         pname = "lux-lua";
         inherit (luxCargo) version;
 
-        # FIXME: This fails with permission denied on darwin
         cargoBuildCommand = "xtask-lua dist";
+
         nativeBuildInputs =
           individualCrateArgs.nativeBuildInputs
           ++ [
@@ -144,25 +145,18 @@
         buildInputs =
           individualCrateArgs.buildInputs;
 
-        cargoBuildCommand = "cargo build --profile ${buildType}";
-        cargoExtraArgs = "-p lux-cli --locked";
+        cargoBuildCommand = "cargo build --locked --profile ${buildType}";
+        cargoExtraArgs = "-p lux-cli";
 
-        postBuild =
-          if final.stdenv.isDarwin
-          # For some reason, xtask errors with "permission denied" on darwin
-          then ""
-          else ''
-            xtask dist-man
-            xtask dist-completions
-          '';
+        postBuild = ''
+          xtask dist-man
+          xtask dist-completions
+        '';
 
-        postInstall =
-          if final.stdenv.isDarwin
-          then ""
-          else ''
-            installManPage target/dist/lx.1
-            installShellCompletion target/dist/lx.{bash,fish} --zsh target/dist/_lx
-          '';
+        postInstall = ''
+          installManPage target/dist/lx.1
+          installShellCompletion target/dist/lx.{bash,fish} --zsh target/dist/_lx
+        '';
 
         meta.mainProgram = "lx";
       });
