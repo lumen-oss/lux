@@ -1,2 +1,2 @@
 local foo = require("foo")
-print(tostring(foo.a))
+foo.printok()

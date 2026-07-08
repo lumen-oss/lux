@@ -12,7 +12,15 @@ pub enum Dist {
     /// The resulting archive does not include the `etc` directory or build dependencies.{n}
     /// Unlike a Lux tree, dependency conflicts are not supported/handled.
     FlatArchive(FlatArchive),
-    /// Build and distribute a standalone executable{n}
-    /// which runs on systems that do not have Lua installed.
+    /// Compile a Lux project, including its dependencies, into a single static binary,{n}
+    /// which runs on systems that do not have Lua installed.{n}
+    /// As with flat-archive, dependency conflicts are not supported/handled.{n}
+    /// {n}
+    /// The entrypoint is specified via the lux.toml's [run] field, e.g.: {n}
+    /// {n}
+    /// ```toml{n}
+    /// [run]{n}
+    /// args = ["src/main.lua"]{n}
+    /// ```
     Bin(Bin),
 }

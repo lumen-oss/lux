@@ -2,6 +2,7 @@
 
 mod build_lua;
 mod build_workspace;
+mod dist_bin;
 mod download;
 mod exec;
 mod fetch;
@@ -24,6 +25,7 @@ mod vendor;
 
 pub use build_lua::*;
 pub use build_workspace::*;
+pub use dist_bin::*;
 pub use download::*;
 pub use exec::*;
 pub use fetch::*;
