@@ -160,7 +160,7 @@
           if final.stdenv.isDarwin
           then ""
           else ''
-            installManPage target/dist/lx.1
+            installManPage target/dist/*.1
             installShellCompletion target/dist/lx.{bash,fish} --zsh target/dist/_lx
           '';
 

@@ -1,6 +1,7 @@
 use std::{
     env,
     fs::{self, File},
+    io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -11,7 +12,6 @@ use cargo_packager::{
 };
 use clap::{CommandFactory, ValueEnum};
 use clap_complete::{generate_to, Shell};
-use clap_mangen::Man;
 use lux_cli::Cli;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
@@ -163,12 +163,26 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
 fn dist_man() -> Result<(), DynError> {
     fs::create_dir_all(dist_dir())?;
 
-    let cmd = &mut Cli::command();
+    fn dist_manpage(dir: &Path, app: &clap::Command) -> Result<(), DynError> {
+        let name = app.get_display_name().unwrap_or_else(|| app.get_name());
+        let mut out = File::create(dir.join(format!("{name}.1")))?;
 
-    Man::new(cmd.clone())
-        .render(&mut File::create(dist_dir().join("lx.1")).unwrap())
-        .unwrap();
-    Ok(())
+        clap_mangen::Man::new(app.clone()).render(&mut out)?;
+        out.flush()?;
+
+        for sub in app.get_subcommands() {
+            dist_manpage(dir, sub)?;
+        }
+
+        // So that `man lx` brings up `lux-cli.1`
+        fs::copy(dist_dir().join("lux-cli.1"), dist_dir().join("lx.1"))?;
+
+        Ok(())
+    }
+
+    let mut cmd = Cli::command();
+    cmd.build();
+    dist_manpage(&dist_dir(), &cmd)
 }
 
 fn dist_completions() -> Result<(), DynError> {
