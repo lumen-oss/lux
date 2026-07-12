@@ -9,7 +9,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 - [**breaking**] replace `--porcelain` with `--output-format` ([#1674](https://github.com/lumen-oss/lux/pull/1674))
 - *(check)* support specifying directories ([#1663](https://github.com/lumen-oss/lux/pull/1663))
-- *(lint)* remove short option for `--path` flag
 - *(fmt)* [**breaking**] use `--path` flag
 
 ### Fixed
