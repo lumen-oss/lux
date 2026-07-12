@@ -398,11 +398,15 @@ where
             None => HashMap::default(),
         };
 
-        // Build a Map from remaining entries, then normalise: if all keys are
-        // integers (a Lua sequence), normalize_lua_value converts it to a
-        // Value::Seq so downstream struct deserializers work correctly.
-        let obj = normalize_lua_value(Value::Map(other_entries.into_iter().collect()));
-        let default = T::deserialize(obj.into_deserializer()).map_err(de::Error::custom)?;
+        let default = if other_entries.is_empty() {
+            T::default()
+        } else {
+            // Build a Map from remaining entries, then normalise: if all keys are
+            // integers (a Lua sequence), normalize_lua_value converts it to a
+            // Value::Seq so downstream struct deserializers work correctly.
+            let obj = normalize_lua_value(Value::Map(other_entries.into_iter().collect()));
+            T::deserialize(obj.into_deserializer()).map_err(de::Error::custom)?
+        };
         apply_per_platform_overrides(&mut per_platform, &default)
             .map_err(|err: <T as PartialOverride>::Err| de::Error::custom(err.to_string()))?;
         Ok(PerPlatform {
