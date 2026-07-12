@@ -13,6 +13,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 - *(lint)* [**breaking**] resolve CLI argument parsing regression in lx lint ([#1669](https://github.com/lumen-oss/lux/pull/1669))
+- *(lua-api)*  fix broken `UserData` instances ([#1672](https://github.com/lumen-oss/lux/pull/1672))
 
 ## [0.46.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.46.0...lux-lib-v0.46.1) `lux-lib` - 2026-07-12
 
