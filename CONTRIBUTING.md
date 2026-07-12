@@ -99,7 +99,7 @@ but that is up to you.
 > If a unit test absolutely needs a network connection, please make sure to skip
 > it if the `LUX_SKIP_IMPURE_TESTS` environment variable is set to 1.
 
-#### Running tests without nix
+#### Running tests without Nix
 
 For reproducibility, we only run tests that can be sandboxed with `nix`,
 skipping integration tests and impure tests that need a network connection.
@@ -110,6 +110,12 @@ Or, if you are using [cargo-nextest](https://nexte.st/), we provide an alias:
 
 ```bash
 cargo tt
+```
+
+To run lux-lua API tests:
+
+```bash
+cargo ttl
 ```
 
 #### Running tests and checks with Nix
@@ -130,6 +136,7 @@ For example:
 
 ```console
 nix build .#checks.x86_64-linux.tests -Lv
+nix build .#checks.x86_64-linux.lua-tests -Lv
 ```
 
 For formatting and linting:
