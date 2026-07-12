@@ -12,13 +12,14 @@ use lux_lib::{
     remote_package_db::RemotePackageDB,
 };
 
+use crate::args::OutputFormat;
+
 #[derive(Args)]
 pub struct Search {
     lua_package_req: PackageReq,
     // TODO(vhyrro): Add options.
-    /// Return a machine readable format.
-    #[arg(long)]
-    porcelain: bool,
+    #[arg(long, default_value = "text", value_enum, ignore_case = true)]
+    output_format: OutputFormat,
 }
 
 pub async fn search(data: Search, config: Config) -> Result<()> {
@@ -36,19 +37,22 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
 
     bar.map(|b| b.finish_and_clear());
 
-    if data.porcelain {
-        let rock_to_version_map: HashMap<&PackageName, Vec<&PackageVersion>> =
-            HashMap::from_iter(result);
-        println!("{}", serde_json::to_string(&rock_to_version_map)?);
-    } else {
-        for (key, versions) in result.into_iter().sorted() {
-            let mut tree = StringTreeNode::new(key.to_string().to_owned());
+    match data.output_format {
+        OutputFormat::Json => {
+            let rock_to_version_map: HashMap<&PackageName, Vec<&PackageVersion>> =
+                HashMap::from_iter(result);
+            println!("{}", serde_json::to_string(&rock_to_version_map)?);
+        }
+        OutputFormat::Text => {
+            for (key, versions) in result.into_iter().sorted() {
+                let mut tree = StringTreeNode::new(key.to_string().to_owned());
 
-            for version in versions {
-                tree.push(version.to_string());
+                for version in versions {
+                    tree.push(version.to_string());
+                }
+
+                println!("{}", tree.to_string_with_format(&formatting)?);
             }
-
-            println!("{}", tree.to_string_with_format(&formatting)?);
         }
     }
 

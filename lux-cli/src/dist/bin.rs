@@ -11,6 +11,8 @@ use lux_lib::{
 };
 use tempfile::tempdir;
 
+use crate::args::OutputFormat;
+
 #[derive(Args)]
 pub struct Bin {
     /// Output path for the compiled binary.{n}
@@ -25,9 +27,8 @@ pub struct Bin {
     #[arg(short, long, visible_short_alias = 'p')]
     package: Option<PackageName>,
 
-    /// Output a JSON path.
-    #[arg(long)]
-    pub porcelain: bool,
+    #[arg(long, default_value = "text", value_enum, ignore_case = true)]
+    output_format: OutputFormat,
 }
 
 pub async fn bin(data: Bin, config: Config) -> Result<()> {
@@ -54,10 +55,9 @@ pub async fn bin(data: Bin, config: Config) -> Result<()> {
         .compile()
         .await?;
 
-    if data.porcelain {
-        println!("{}", serde_json::to_string(&out)?);
-    } else {
-        println!("Binary written to {}", out.display());
+    match data.output_format {
+        OutputFormat::Json => println!("{}", serde_json::to_string(&out)?),
+        OutputFormat::Text => println!("Binary written to {}", out.display()),
     }
 
     Ok(())

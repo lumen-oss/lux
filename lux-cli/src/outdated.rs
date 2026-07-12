@@ -9,12 +9,12 @@ use lux_lib::{
 };
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
-use crate::workspace::sync_dependencies_if_locked;
+use crate::{args::OutputFormat, workspace::sync_dependencies_if_locked};
 
 #[derive(Args)]
 pub struct Outdated {
-    #[arg(long)]
-    porcelain: bool,
+    #[arg(long, default_value = "text", value_enum, ignore_case = true)]
+    output_format: OutputFormat,
 }
 
 /// List rocks that are outdated
@@ -61,32 +61,35 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
 
     bar.map(|b| b.finish_and_clear());
 
-    if outdated_data.porcelain {
-        let jsonified_rock_list = rock_list
-            .iter()
-            .map(|(key, values)| {
-                (
-                    key,
-                    values
-                        .iter()
-                        .map(|(k, v)| (k.version().to_string(), v.to_string()))
-                        .collect::<HashMap<_, _>>(),
-                )
-            })
-            .collect::<HashMap<_, _>>();
+    match outdated_data.output_format {
+        OutputFormat::Json => {
+            let jsonified_rock_list = rock_list
+                .iter()
+                .map(|(key, values)| {
+                    (
+                        key,
+                        values
+                            .iter()
+                            .map(|(k, v)| (k.version().to_string(), v.to_string()))
+                            .collect::<HashMap<_, _>>(),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
 
-        println!("{}", serde_json::to_string(&jsonified_rock_list)?);
-    } else {
-        let formatting = TreeFormatting::dir_tree(FormatCharacters::box_chars());
+            println!("{}", serde_json::to_string(&jsonified_rock_list)?);
+        }
+        OutputFormat::Text => {
+            let formatting = TreeFormatting::dir_tree(FormatCharacters::box_chars());
 
-        for (rock_name, updates) in rock_list {
-            let mut tree = StringTreeNode::new(rock_name.to_string());
+            for (rock_name, updates) in rock_list {
+                let mut tree = StringTreeNode::new(rock_name.to_string());
 
-            for (rock, latest_version) in updates {
-                tree.push(format!("{} => {}", rock.version(), latest_version));
+                for (rock, latest_version) in updates {
+                    tree.push(format!("{} => {}", rock.version(), latest_version));
+                }
+
+                println!("{}", tree.to_string_with_format(&formatting)?);
             }
-
-            println!("{}", tree.to_string_with_format(&formatting)?);
         }
     }
 
