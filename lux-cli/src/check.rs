@@ -15,7 +15,7 @@ use crate::{
 #[derive(Args)]
 pub struct Check {
     /// Path to a workspace, directory, or Lua file to check. Defaults to the current workspace.
-    #[arg(short, long)]
+    #[arg(long)]
     path: Option<PathBuf>,
     /// Comma-separated list of ignore patterns.
     /// Patterns must follow glob syntax.
