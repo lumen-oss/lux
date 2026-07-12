@@ -8,6 +8,7 @@ use crate::{
     variables::{self, Environment, VariableSubstitutionError},
 };
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathExt;
 use shlex::try_quote;
 use std::{
@@ -81,7 +82,7 @@ pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(),
     Ok(())
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum OutputValidationError {
     #[error("compilation failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
     CommandFailure {
@@ -102,7 +103,7 @@ fn validate_output(output: &Output) -> Result<(), OutputValidationError> {
     Ok(())
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum CompileCFilesError {
     #[error("IO operation while compiling C files:\n{0}")]
     Io(#[from] io::Error),
@@ -111,6 +112,7 @@ pub enum CompileCFilesError {
     #[error("error compiling C files (compilation failed):\n{0}")]
     Compilation(#[from] cc::Error),
     #[error("error compiling C files (linking failed):\n{0}")]
+    #[diagnostic(forward(0))]
     Link(#[from] LinkCModulesError),
 }
 
@@ -262,7 +264,7 @@ pub(crate) fn default_libflag() -> &'static str {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum CompileCModulesError {
     #[error("IO operation failed while compiling C modules:\n{0}")]
     Io(#[from] io::Error),
@@ -271,18 +273,21 @@ pub enum CompileCModulesError {
     #[error("error compiling C modules (compilation failed):\n{0}")]
     Compilation(#[from] cc::Error),
     #[error("error compiling C modules (linking failed):\n{0}")]
+    #[diagnostic(forward(0))]
     Link(#[from] LinkCModulesError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     VariableSubstitution(#[from] VariableSubstitutionError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LinkCModulesError {
     #[error("IO operation failed while linking C modules:\n{0}")]
     Io(#[from] io::Error),
     #[error(transparent)]
     CC(#[from] cc::Error),
     #[error("error compiling C modules (output validation failed): {0}")]
+    #[diagnostic(forward(0))]
     OutputValidation(#[from] OutputValidationError),
     #[error("compiling C modules succeeded, but the expected library {0} was not created")]
     LibOutputNotCreated(String),
@@ -550,17 +555,19 @@ fn add_variable_if_set(config: &Config, name: &str, cmd: &mut Command) {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum InstallBinaryError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("error wrapping binary: {0}")]
+    #[diagnostic(forward(0))]
     Wrap(#[from] WrapBinaryError),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum WrapBinaryError {
     #[error(transparent)]
     Io(#[from] io::Error),

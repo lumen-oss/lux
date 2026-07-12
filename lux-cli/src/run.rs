@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use eyre::Result;
 use lux_lib::{config::Config, operations, workspace::Workspace};
+use miette::Result;
 
 use crate::build::{self, Build};
 

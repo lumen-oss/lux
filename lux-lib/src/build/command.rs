@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use std::{
     collections::HashMap,
     io,
@@ -21,11 +22,13 @@ use crate::{
 use super::external_dependency::ExternalDependencyInfo;
 use super::utils;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum CommandError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("'build_command' and 'install_command' cannot be empty.")]
     EmptyCommand,
@@ -46,6 +49,7 @@ pub enum CommandError {
         stderr: String,
     },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     VariableSubstitutionError(#[from] VariableSubstitutionError),
 }
 

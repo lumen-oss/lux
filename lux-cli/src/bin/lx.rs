@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use clap::Parser;
-use eyre::Result;
 use lux_cli::{
     add, build, check, completion, config,
     debug::{self, Debug},
@@ -17,13 +16,35 @@ use lux_lib::{
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_version::LuaVersion,
 };
+use miette::{MietteHandlerOpts, Result};
+
+use lux_cli::utils::error::clap_to_miette;
 
 const DEFAULT_USER_AGENT: &str = concat!("lux/", env!("CARGO_PKG_VERSION"));
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    color_eyre::install()?;
-    let cli = Cli::parse();
+    miette::set_hook(Box::new(|_| {
+        Box::new(
+            MietteHandlerOpts::new()
+                .terminal_links(true)
+                .unicode(true)
+                .context_lines(3)
+                .tab_width(4)
+                .break_words(true)
+                .with_cause_chain()
+                .build(),
+        )
+    }))?;
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(err) => match clap_to_miette(err) {
+            Ok(report) => return Err(report),
+            Err(text) => {
+                print!("{text}");
+                return Err(miette::miette!("not enough arguments supplied"));
+            }
+        },
+    };
 
     let lua_version = cli.lua_version.or({
         if cli.nvim {

@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::{fmt::Display, hash::Hash, str::FromStr};
 use thiserror::Error;
@@ -12,7 +13,7 @@ pub struct RemoteGitUrl {
     url_str: String,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum RemoteGitUrlParseError {
     #[error("error parsing git URL:\n{0}")]
     GitUrlParse(#[from] url::ParseError),

@@ -2,11 +2,11 @@ use std::path::{Path, PathBuf};
 
 use clap::Args;
 use emmylua_formatter as luafmt;
-use eyre::{bail, Context, Result};
 use lux_lib::{
     config::Config, lua_version::LuaVersion, package::PackageName, project::Project,
     workspace::Workspace,
 };
+use miette::{bail, Context, IntoDiagnostic, Result};
 use path_slash::PathExt;
 use walkdir::WalkDir;
 
@@ -117,6 +117,7 @@ impl FmtConfig {
                 None,
                 stylua_lib::OutputVerification::Full,
             )
+            .into_diagnostic()
             .context(format!("error formatting {} with stylua.", path.display()))?,
             FmtBackend::Luafmt => {
                 luafmt::check_text(code, self.luafmt_syntax_level.into(), &self.luafmt).formatted
@@ -142,9 +143,10 @@ fn format_files(
     backend: &FmtBackend,
 ) -> Result<()> {
     files.into_iter().try_for_each(|file| {
-        let unformatted_code = std::fs::read_to_string(&file)?;
+        let unformatted_code = std::fs::read_to_string(&file).into_diagnostic()?;
         let formatted_code = configs.format(backend, &file, &unformatted_code)?;
         std::fs::write(&file, formatted_code)
+            .into_diagnostic()
             .context(format!("error writing formatted file {}.", file.display()))
     })
 }

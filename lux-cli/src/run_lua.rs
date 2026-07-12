@@ -4,7 +4,6 @@ use path_slash::PathExt;
 use tokio::process::Command;
 
 use clap::Args;
-use eyre::{eyre, Result};
 use itertools::Itertools;
 use lux_lib::{
     config::Config,
@@ -14,6 +13,7 @@ use lux_lib::{
     progress::MultiProgress,
     workspace::Workspace,
 };
+use miette::{IntoDiagnostic, Result, WrapErr};
 
 use crate::build::{self, Build};
 
@@ -70,7 +70,7 @@ pub async fn run_lua(run_lua: RunLua, config: Config) -> Result<()> {
             let version = LuaVersion::from(&config)?.clone();
             (
                 version.clone(),
-                std::env::current_dir()?,
+                std::env::current_dir().into_diagnostic()?,
                 config.user_tree(version)?,
                 "Welcome to the lux Lua repl.".into(),
             )
@@ -129,15 +129,13 @@ To exit type 'exit()' or <C-d>.
 
 async fn print_lua_help(lua_cmd: &LuaBinary) -> Result<()> {
     let lua_cmd_path: PathBuf = lua_cmd.clone().try_into()?;
-    let output = match Command::new(lua_cmd_path.to_string_lossy().to_string())
+    let output = Command::new(lua_cmd_path.to_string_lossy().to_string())
         // HACK: This fails with exit 1, because lua doesn't actually have a help flag (╯°□°)╯︵ ┻━┻
         .arg("-h")
         .output()
         .await
-    {
-        Ok(output) => Ok(output),
-        Err(err) => Err(eyre!("Failed to run {}: {}", lua_cmd, err)),
-    }?;
+        .into_diagnostic()
+        .wrap_err(format!("Failed to run {lua_cmd}"))?;
     let lua_help = String::from_utf8_lossy(&output.stderr)
         .lines()
         .skip(2)

@@ -1,9 +1,9 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::{
     config::Config, package::PackageName, progress::MultiProgress,
     remote_package_db::RemotePackageDB, upload::ProjectUpload, workspace::Workspace,
 };
+use miette::{IntoDiagnostic, Result};
 
 #[cfg(feature = "gpgme")]
 use lux_lib::upload::SignatureProtocol;
@@ -101,9 +101,11 @@ fn tfa_code_from_args_or_secret(data: &Upload) -> Result<Option<String>> {
         None => match std::env::var("LUAROCKS_2FA_SECRET") {
             Ok(secret) => {
                 let secret = base32::decode(base32::Alphabet::Crockford, &secret)
-                    .ok_or(totp_rs::SecretParseError::ParseBase32)?;
-                let totp = totp_rs::TOTP::new(totp_rs::Algorithm::SHA1, 6, 1, 30, secret)?;
-                Ok(Some(totp.generate_current()?))
+                    .ok_or(totp_rs::SecretParseError::ParseBase32)
+                    .into_diagnostic()?;
+                let totp = totp_rs::TOTP::new(totp_rs::Algorithm::SHA1, 6, 1, 30, secret)
+                    .into_diagnostic()?;
+                Ok(Some(totp.generate_current().into_diagnostic()?))
             }
             Err(_) => Ok(None),
         },

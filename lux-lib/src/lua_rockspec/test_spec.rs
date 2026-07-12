@@ -1,11 +1,11 @@
 use itertools::Itertools;
 
+use miette::Diagnostic;
 use path_slash::PathExt;
+use serde::{Deserialize, Deserializer};
 use serde_enum_str::Serialize_enum_str;
 use std::{convert::Infallible, path::PathBuf};
 use thiserror::Error;
-
-use serde::{Deserialize, Deserializer};
 
 use crate::lua_version::LuaVersion;
 
@@ -24,7 +24,7 @@ const NLUA_EXE: &str = "nlua";
 #[cfg(target_family = "windows")]
 const NLUA_EXE: &str = "nlua.bat";
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum TestSpecDecodeError {
     #[error("the 'command' test type must specify either a 'command' or 'script' field")]
     NoCommandOrScript,
@@ -32,11 +32,12 @@ pub enum TestSpecDecodeError {
     CommandAndScript,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum TestSpecError {
     #[error("could not auto-detect the test spec. Please add one to your lux.toml")]
     NoTestSpecDetected,
     #[error("project validation failed:\n{0}")]
+    #[diagnostic(forward(0))]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
 }
 

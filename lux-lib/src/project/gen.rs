@@ -3,16 +3,16 @@ use std::{
     str::FromStr,
 };
 
-use ::serde::Deserialize;
-use git2::Repository;
-use serde::Serialize;
-use thiserror::Error;
-
 use crate::{
     lua_rockspec::{RockSourceInternal, SourceUrl, SourceUrlError},
     package::{PackageName, PackageSpec, PackageVersion, PackageVersionParseError, SpecRev},
     variables::{self, Environment, GetVariableError, HasVariables, VariableSubstitutionError},
 };
+use ::serde::Deserialize;
+use git2::Repository;
+use miette::Diagnostic;
+use serde::Serialize;
+use thiserror::Error;
 
 use super::ProjectRoot;
 
@@ -45,7 +45,7 @@ pub(crate) struct RockSourceTemplate {
     tag: Option<String>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum GenerateSourceError {
     #[error(
         "unsupported version {0}.\nCan only generate source for SemVer versions, 'dev' or 'scm'."
@@ -56,8 +56,10 @@ pub enum GenerateSourceError {
     #[error("need a `source.dev` (dev/scm URL) in lux.toml for dev versions.")]
     MissingDevUrl(String),
     #[error("error substituting project source variables:\n{0}")]
+    #[diagnostic(forward(0))]
     VariableSubstitution(#[from] VariableSubstitutionError),
     #[error("error parsing source URL from template:\n{0}")]
+    #[diagnostic(forward(0))]
     SourceUrl(#[from] SourceUrlError),
     #[error("error generating git source URL:\n{0}")]
     Git(#[from] git2::Error),
@@ -180,11 +182,12 @@ impl RockSourceTemplate {
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone, Default)]
 pub(crate) struct PackageVersionTemplate(Option<PackageVersion>);
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum GenerateVersionError {
     #[error("error generating version from git repository metadata:\n{0}")]
     Git(#[from] git2::Error),
     #[error("error parsing version from git ref:\n{0}")]
+    #[diagnostic(forward(0))]
     PackageVersionParse(#[from] PackageVersionParseError),
 }
 

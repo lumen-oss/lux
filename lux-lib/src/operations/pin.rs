@@ -1,18 +1,18 @@
 use std::io;
 
-use fs_extra::dir::CopyOptions;
-use itertools::Itertools;
-use thiserror::Error;
-
 use crate::{
     lockfile::{FlushLockfileError, LocalPackageId, PinnedState},
     package::PackageSpec,
     tree::{InstallTree, Tree, TreeError},
 };
+use fs_extra::dir::CopyOptions;
+use itertools::Itertools;
+use miette::Diagnostic;
+use thiserror::Error;
 
 // TODO(vhyrro): Differentiate pinned LocalPackages at the type level?
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum PinError {
     #[error("package with ID {0} not found in the lockfile")]
     PackageNotFound(LocalPackageId),
@@ -27,8 +27,10 @@ pub enum PinError {
         rock: PackageSpec,
     },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error("failed to move old package: {0}")]
     MoveItemsFailure(#[from] fs_extra::error::Error),

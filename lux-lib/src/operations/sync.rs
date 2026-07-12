@@ -1,5 +1,6 @@
 use std::{io, sync::Arc};
 
+use super::{Install, InstallError, PackageInstallSpec, RemoveError, Uninstall};
 use crate::{
     build::BuildBehaviour,
     config::Config,
@@ -18,9 +19,8 @@ use crate::{
 };
 use bon::Builder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
-
-use super::{Install, InstallError, PackageInstallSpec, RemoveError, Uninstall};
 
 /// A rocks sync builder, for synchronising a tree with a lockfile.
 #[derive(Builder)]
@@ -125,29 +125,38 @@ impl SyncReport {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum SyncError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
     #[error("failed to create install tree at {0}:\n{1}")]
     FailedToCreateDirectory(String, io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Install(#[from] InstallError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Remove(#[from] RemoveError),
     #[error("integrity error for package {0}: {1}\n")]
     Integrity(PackageName, LockfileIntegrityError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Project(#[from] ProjectError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
     #[error("failed to generate `.luarc.json`:\n{0}")]
+    #[diagnostic(forward(0))]
     GenLuaRc(#[from] GenLuaRcError),
 }
 

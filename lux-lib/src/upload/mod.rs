@@ -11,6 +11,7 @@ use crate::{config::Config, project::Project};
 
 use bon::Builder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use reqwest::multipart::{Form, Part};
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -56,7 +57,7 @@ pub struct VersionCheckResponse {
     version: String,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ToolCheckError {
     #[error("error parsing tool check URL:\n{0}")]
     ParseError(#[from] url::ParseError),
@@ -67,7 +68,7 @@ pub enum ToolCheckError {
     ToolOutdated(String, VersionCheckResponse),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum UserCheckError {
     #[error("error parsing user check URL:\n{0}")]
     ParseError(#[from] url::ParseError),
@@ -79,7 +80,7 @@ pub enum UserCheckError {
     Server(Url, StatusCode),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RockCheckError {
     #[error("parse error while checking rock status on server:\n{0}")]
     ParseError(#[from] url::ParseError),
@@ -87,7 +88,7 @@ pub enum RockCheckError {
     Request(#[from] reqwest::Error),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum UploadError {
     #[error("error parsing upload URL:\n{0}")]
@@ -125,6 +126,7 @@ pub enum UploadError {
     #[error("the maximum supported number of rockspec revisions per version has been exceeded")]
     MaxSpecRevsExceeded,
     #[error("rock already exists on server. Error downloading existing rockspec:\n{0}")]
+    #[diagnostic(forward(0))]
     SearchAndDownload(#[from] SearchAndDownloadError),
     #[error("error computing rockspec hash:\n{0}")]
     Hash(io::Error),
@@ -134,7 +136,7 @@ pub enum UploadError {
 
 pub struct ApiKey(String);
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("no API key provided! Please set the $LUX_API_KEY environment variable")]
 pub struct ApiKeyUnspecified;
 

@@ -8,6 +8,7 @@ use bon::Builder;
 use bytes::Bytes;
 use futures::StreamExt;
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathExt;
 use strum::IntoEnumIterator;
 use thiserror::Error;
@@ -64,15 +65,19 @@ pub struct Vendor<'a> {
     progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum VendorError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
     #[error("project validation failed:\n{0}")]
+    #[diagnostic(forward(0))]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("error initialising remote package DB:\n{0}")]
+    #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to resolve dependencies:\n{0}")]
+    #[diagnostic(forward(0))]
     ResolveDependencies(#[from] ResolveDependenciesError),
     #[error("failed to delete vendor directory {0}:\n{1}")]
     DeleteVendorDir(String, io::Error),
@@ -85,8 +90,10 @@ pub enum VendorError {
     #[error("failed to write Lua RockSpec {0}:\n{1}")]
     WriteLuaRockSpec(String, io::Error),
     #[error("failed to unpack src.rock:\n{0}")]
+    #[diagnostic(forward(0))]
     Unpack(#[from] UnpackError),
     #[error("failed to fetch rock source:\n{0}")]
+    #[diagnostic(forward(0))]
     FetchSrc(#[from] FetchSrcError),
 }
 

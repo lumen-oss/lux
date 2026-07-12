@@ -1,13 +1,13 @@
 use std::{error::Error, fmt::Display, path::PathBuf, str::FromStr};
 
 use clap::Args;
-use eyre::{eyre, Result};
 use inquire::{
     ui::{RenderConfig, Styled},
     validator::Validation,
     Confirm, Select, Text,
 };
 use itertools::Itertools;
+use miette::{miette, IntoDiagnostic, Result};
 use spdx::LicenseId;
 use spinners::{Spinner, Spinners};
 
@@ -157,9 +157,10 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             .with_default(false)
             .with_help_message(&format!("This may overwrite your existing {PROJECT_TOML}",))
             .with_render_config(render_config)
-            .prompt()?
+            .prompt()
+            .into_diagnostic()?
     {
-        return Err(eyre!("cancelled creation of project (already exists)"));
+        return Err(miette!("cancelled creation of project (already exists)"));
     };
 
     let validated = match cli_flags {
@@ -173,7 +174,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             name: Some(name),
             license,
             target,
-        } => Ok::<_, eyre::Report>(NewProjectValidated {
+        } => Ok::<_, miette::Report>(NewProjectValidated {
             description,
             labels,
             license,
@@ -206,40 +207,48 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
 
                     RepoMetadata::default(&target)
                 }
-            }?;
+            }
+            .into_diagnostic()?;
 
             spinner.stop_and_persist("✔", "Fetched remote repository metadata.".into());
 
-            let package_name = name.map_or_else(
-                || {
-                    Text::new("Package name:")
-                        .with_default(&repo_metadata.name)
-                        .with_help_message("A folder with the same name will be created for you.")
-                        .with_render_config(render_config)
-                        .prompt()
-                },
-                Ok,
-            )?;
+            let package_name = name
+                .map_or_else(
+                    || {
+                        Text::new("Package name:")
+                            .with_default(&repo_metadata.name)
+                            .with_help_message(
+                                "A folder with the same name will be created for you.",
+                            )
+                            .with_render_config(render_config)
+                            .prompt()
+                    },
+                    Ok,
+                )
+                .into_diagnostic()?;
 
-            let description = description.map_or_else(
-                || {
-                    Text::new("Description:")
-                        .with_default(&repo_metadata.description.unwrap_or_default())
-                        .with_render_config(render_config)
-                        .prompt()
-                },
-                Ok,
-            )?;
+            let description = description
+                .map_or_else(
+                    || {
+                        Text::new("Description:")
+                            .with_default(&repo_metadata.description.unwrap_or_default())
+                            .with_render_config(render_config)
+                            .prompt()
+                    },
+                    Ok,
+                )
+                .into_diagnostic()?;
 
             let license = license.map_or_else(
                 || {
-                    Ok::<_, eyre::Error>(
+                    Ok::<_, miette::Report>(
                         match Text::new("License:")
                             .with_default(&repo_metadata.license.unwrap_or("none".into()))
                             .with_help_message("Type 'none' for no license")
                             .with_validator(validate_license)
                             .with_render_config(render_config)
-                            .prompt()?
+                            .prompt()
+                            .into_diagnostic()?
                             .as_str()
                         {
                             "none" => None,
@@ -252,11 +261,12 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
 
             let labels = labels.or(repo_metadata.labels).map_or_else(
                 || {
-                    Ok::<_, eyre::Error>(
+                    Ok::<_, miette::Report>(
                         Text::new("Labels:")
                             .with_placeholder("web,filesystem")
                             .with_help_message("Labels are comma separated")
-                            .prompt()?
+                            .prompt()
+                            .into_diagnostic()?
                             .split(',')
                             .map(|label| label.trim().to_string())
                             .collect_vec(),
@@ -265,26 +275,28 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                 Ok,
             )?;
 
-            let maintainer = maintainer.map_or_else(
-                || {
-                    let prompt = Text::new("Maintainer:");
-                    if let Some(default_maintainer) = repo_metadata
-                        .contributors
-                        .first()
-                        .cloned()
-                        .or_else(|| whoami::realname().ok())
-                    {
-                        prompt.with_default(&default_maintainer).prompt()
-                    } else {
-                        prompt.prompt()
-                    }
-                },
-                Ok,
-            )?;
+            let maintainer = maintainer
+                .map_or_else(
+                    || {
+                        let prompt = Text::new("Maintainer:");
+                        if let Some(default_maintainer) = repo_metadata
+                            .contributors
+                            .first()
+                            .cloned()
+                            .or_else(|| whoami::realname().ok())
+                        {
+                            prompt.with_default(&default_maintainer).prompt()
+                        } else {
+                            prompt.prompt()
+                        }
+                    },
+                    Ok,
+                )
+                .into_diagnostic()?;
 
             let lua_versions = lua_versions.map_or_else(
                 || {
-                    Ok::<_, eyre::Report>(
+                    Ok::<_, miette::Report>(
                         format!(
                             "lua >= {}",
                             Select::new(
@@ -296,7 +308,8 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                             .with_help_message(
                                 "This is equivalent to the 'lua >= {version}' constraint."
                             )
-                            .prompt()?
+                            .prompt()
+                            .into_diagnostic()?
                         )
                         .parse()?,
                     )
@@ -317,7 +330,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
         }
     }?;
 
-    let _ = std::fs::create_dir_all(&validated.target);
+    let _ = std::fs::create_dir_all(&validated.target).into_diagnostic();
 
     let rocks_path = validated.target.join(PROJECT_TOML);
 
@@ -361,7 +374,8 @@ type = "builtin"
             main = validated.main,
         )
         .trim(),
-    )?;
+    )
+    .into_diagnostic()?;
 
     let main_dir = validated.target.join(validated.main.to_string());
     if main_dir.exists() {
@@ -370,8 +384,8 @@ type = "builtin"
             main_dir.display()
         );
     } else {
-        std::fs::create_dir(&main_dir)?;
-        std::fs::write(main_dir.join("main.lua"), r#"print("Hello world!")"#)?;
+        std::fs::create_dir(&main_dir).into_diagnostic()?;
+        std::fs::write(main_dir.join("main.lua"), r#"print("Hello world!")"#).into_diagnostic()?;
     }
 
     println!("All done!");

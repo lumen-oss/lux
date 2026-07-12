@@ -1,7 +1,5 @@
 use std::{collections::HashMap, io, path::PathBuf};
 
-use thiserror::Error;
-
 use super::{InstallTree, RockLayout, Tree, TreeError};
 use crate::{
     config::{tree::RockLayoutConfig, Config},
@@ -10,11 +8,13 @@ use crate::{
     package::{PackageName, PackageVersion},
     tree::mk_rock_layout,
 };
+use miette::{Diagnostic, Result};
+use thiserror::Error;
 
 const SRC_DIR_NAME: &str = "lua";
 const LIB_DIR_NAME: &str = "lib";
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(
     r#"cannot install conflicting packages in flat tree:
 package: {name}

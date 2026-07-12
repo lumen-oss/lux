@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use path_slash::PathExt;
 use thiserror::Error;
 use url::Url;
@@ -17,11 +18,13 @@ pub mod metadata;
 mod metadata_from_server;
 mod metadata_from_vendor_dir;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ManifestError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lua(#[from] ManifestLuaError),
     #[error("failed to fetch manifest from server:\n{0}")]
+    #[diagnostic(forward(0))]
     Server(#[from] ManifestFromServerError),
     #[error("error parsing URL from `vendor-dir`: {0}:")]
     Vendor(String),

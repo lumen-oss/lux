@@ -1,10 +1,10 @@
 use clap::Subcommand;
-use eyre::Result;
 use lux_lib::{
     config::Config,
     path::{BinPath, PackagePath, Paths},
     tree::InstallTree,
 };
+use miette::Result;
 use strum_macros::{Display, EnumString, VariantNames};
 
 use clap::{Args, ValueEnum};

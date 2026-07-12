@@ -2,7 +2,6 @@ use std::{collections::HashSet, path::PathBuf};
 
 use std::{str::FromStr, sync::Arc};
 
-use eyre::{Context, Result};
 use itertools::Itertools;
 use lux_lib::{
     config::Config,
@@ -14,6 +13,7 @@ use lux_lib::{
     tree::Tree,
     workspace::Workspace,
 };
+use miette::{Context, Result};
 use walkdir::WalkDir;
 
 pub fn top_level_ignored_files(project: &Workspace) -> Vec<PathBuf> {
@@ -61,7 +61,7 @@ pub enum PackageReqOrGitShorthand {
 }
 
 impl FromStr for PackageReqOrGitShorthand {
-    type Err = eyre::Error;
+    type Err = miette::Report;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match RemoteGitUrlShorthand::parse_with_prefix(s) {

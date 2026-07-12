@@ -1,13 +1,13 @@
 use std::io;
 
+use crate::git::url::RemoteGitUrl;
 use git2::{AutotagOption, Cred, FetchOptions, RemoteCallbacks, Repository};
 use itertools::Itertools;
+use miette::Diagnostic;
 use tempfile::tempdir;
 use thiserror::Error;
 
-use crate::git::url::RemoteGitUrl;
-
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum GitError {
     #[error("error creating temporary directory to checkout git repositotory: {0}")]
     CreateTempDir(io::Error),

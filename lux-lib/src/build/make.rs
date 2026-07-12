@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathBufExt;
 use std::{
     io,
@@ -19,11 +20,13 @@ use crate::{
     variables::VariableSubstitutionError,
 };
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum MakeError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("{name} step failed.\n\n{status}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")]
     CommandFailure {
@@ -37,6 +40,7 @@ pub enum MakeError {
     #[error("failed to run `make` step: '{0}' command not found!")]
     CommandNotFound(String),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     VariableSubstitutionError(#[from] VariableSubstitutionError),
     #[error("{0} not found")]
     MakefileNotFound(PathBuf),

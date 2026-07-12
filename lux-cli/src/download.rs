@@ -1,6 +1,6 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::{config::Config, operations, package::PackageReq, progress::MultiProgress};
+use miette::Result;
 
 #[derive(Args)]
 pub struct Download {

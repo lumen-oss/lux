@@ -1,6 +1,6 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::workspace::Workspace;
+use miette::Result;
 
 use crate::utils::file_tree::term_tree_from_paths;
 

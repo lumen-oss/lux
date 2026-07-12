@@ -4,10 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bytes::Bytes;
-use tempfile::tempdir;
-use thiserror::Error;
-
 use crate::{
     build::{
         external_dependency::{ExternalDependencyError, ExternalDependencyInfo},
@@ -28,26 +24,35 @@ use crate::{
     tree::{self, InstallTree, TreeError},
 };
 use crate::{lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
+use bytes::Bytes;
+use miette::Diagnostic;
+use tempfile::tempdir;
+use thiserror::Error;
 
 use super::rock_manifest::RockManifestError;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum InstallBinaryRockError {
     #[error("IO operation failed: {0}")]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ExternalDependencyError(#[from] ExternalDependencyError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
     #[error("failed to unpack packed rock: {0}")]
     Zip(#[from] zip::result::ZipError),
     #[error("rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1")]
     RockManifestNotFound,
     #[error(transparent)]
+    #[diagnostic(transparent)]
     RockManifestError(#[from] RockManifestError),
     #[error(
         "the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}"

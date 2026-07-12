@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 
 use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace_member};
 use clap::Args;
-use eyre::{eyre, OptionExt, Result};
 use itertools::Itertools;
 use lux_lib::{
     build::{Build, BuildBehaviour},
@@ -17,6 +16,7 @@ use lux_lib::{
     tree::{self, InstallTree},
     workspace::Workspace,
 };
+use miette::{miette, IntoDiagnostic, Result};
 use path_slash::PathBufExt;
 use tempfile::tempdir;
 
@@ -77,7 +77,7 @@ async fn pack_workspace(
     .await?;
 
     if packages.is_empty() {
-        return Err(eyre!("build did not produce a package"));
+        return Err(miette!("build did not produce a package"));
     }
 
     let mut rock_paths = Vec::new();
@@ -94,7 +94,7 @@ async fn pack_workspace(
 
 pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let lua_version = LuaVersion::from(&config)?.clone();
-    let dest_dir = std::env::current_dir()?;
+    let dest_dir = std::env::current_dir().into_diagnostic()?;
     let progress = MultiProgress::new_arc(&config);
     let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
         Some(PackageOrRockspec::Package(package_req))
@@ -106,7 +106,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             let user_tree = config.user_tree(lua_version.clone())?;
             match user_tree.match_rocks(&package_req)? {
                 lux_lib::tree::RockMatches::NotFound(_) => {
-                    let temp_dir = tempdir()?;
+                    let temp_dir = tempdir().into_diagnostic()?;
                     let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
                     let packages = Install::new(&temp_config)
@@ -119,7 +119,9 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                         .progress(progress)
                         .install()
                         .await?;
-                    let package = packages.first().ok_or_eyre("no packages installed")?;
+                    let package = packages
+                        .first()
+                        .ok_or_else(|| miette!("no packages installed"))?;
                     let rock_path = operations::Pack::new(dest_dir, tree, package.clone())
                         .pack()
                         .await?;
@@ -127,9 +129,9 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 }
                 lux_lib::tree::RockMatches::Single(local_package_id) => {
                     let lockfile = user_tree.lockfile()?;
-                    let package = lockfile
-                        .get(&local_package_id)
-                        .ok_or_eyre("package is installed, but was not found in the lockfile")?;
+                    let package = lockfile.get(&local_package_id).ok_or_else(|| {
+                        miette!("package is installed, but was not found in the lockfile")
+                    })?;
                     let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
                         .pack()
                         .await?;
@@ -138,9 +140,11 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 lux_lib::tree::RockMatches::Many(vec) => {
                     let local_package_id = vec.first();
                     let lockfile = user_tree.lockfile()?;
-                    let package = lockfile.get(local_package_id).ok_or_eyre(
-                        "multiple package installations found, but not found in the lockfile",
-                    )?;
+                    let package = lockfile.get(local_package_id).ok_or_else(|| {
+                        miette!(
+                            "multiple package installations found, but not found in the lockfile"
+                        )
+                    })?;
                     let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
                         .pack()
                         .await?;
@@ -149,7 +153,9 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             }
         }
         Some(PackageOrRockspec::RockSpec(rockspec_path)) => {
-            let content = tokio::fs::read_to_string(&rockspec_path).await?;
+            let content = tokio::fs::read_to_string(&rockspec_path)
+                .await
+                .into_diagnostic()?;
             let rockspec = match rockspec_path
                 .extension()
                 .map(|ext| ext.to_string_lossy().to_string())
@@ -157,11 +163,11 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .as_str()
             {
                 "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
-                _ => Err(eyre!(
+                _ => Err(miette!(
                     "expected a path to a .rockspec or a package requirement."
                 )),
             }?;
-            let temp_dir = tempdir()?;
+            let temp_dir = tempdir().into_diagnostic()?;
             let bar = progress.map(|p| p.new_bar());
             let config = config.with_tree(temp_dir.path().to_path_buf());
             let lua = LuaInstallation::new(

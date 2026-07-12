@@ -15,17 +15,11 @@ use crate::lua_version::LuaVersion;
 use crate::operations::RunCommand;
 use crate::package::PackageNameList;
 use crate::package::SpecRev;
+use crate::project::TomlDeError;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::ROCKSPEC_FUEL_LIMIT;
 use std::io;
 use std::{collections::HashMap, path::PathBuf};
-
-use itertools::Itertools;
-use nonempty::NonEmpty;
-use serde::de;
-use serde::{Deserialize, Deserializer};
-use ssri::Integrity;
-use thiserror::Error;
 
 use crate::{
     config::Config,
@@ -41,6 +35,13 @@ use crate::{
     },
     rockspec::{LuaVersionCompatibility, Rockspec},
 };
+use itertools::Itertools;
+use miette::Diagnostic;
+use nonempty::NonEmpty;
+use serde::de;
+use serde::{Deserialize, Deserializer};
+use ssri::Integrity;
+use thiserror::Error;
 
 use super::gen::GenerateSourceError;
 use super::gen::RockSourceTemplate;
@@ -135,11 +136,13 @@ where
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ProjectTomlError {
     #[error("error generating rockspec source:\n{0}")]
+    #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
     #[error("error generating rockspec version:\n{0}")]
+    #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
     #[error("generated rockspec exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,
@@ -151,19 +154,23 @@ Please report this issue."#
     GeneratedInvalidLua(String),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum LocalProjectTomlValidationError {
     #[error("no lua version provided")]
     NoLuaVersion,
     #[error("could not decode the test spec:\n:{0}")]
+    #[diagnostic(forward(0))]
     TestSpecError(#[from] TestSpecDecodeError),
     #[error("could not decode the build spec:\n:{0}")]
+    #[diagnostic(forward(0))]
     BuildSpecInternal(#[from] BuildSpecInternalError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PlatformValidation(#[from] PlatformValidationError),
     #[error("{}copy_directories cannot contain a rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
     #[error("could not decode the source spec:\n:{0}")]
+    #[diagnostic(forward(0))]
     RockSource(#[from] RockSourceError),
     #[error("duplicate dependencies: {0}")]
     DuplicateDependencies(PackageNameList),
@@ -188,18 +195,23 @@ pub enum LocalProjectTomlValidationError {
     )]
     DependenciesContainLua,
     #[error("error generating rockspec source:\n{0}")]
+    #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
     #[error("error generating rockspec version:\n{0}")]
+    #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum RemoteProjectTomlValidationError {
     #[error("error generating rockspec source:\n{0}")]
+    #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
     #[error("error generating rockspec version:\n{0}")]
+    #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
 }
 
@@ -251,10 +263,14 @@ impl HasIntegrity for PartialProjectToml {
 }
 
 impl PartialProjectToml {
-    pub(crate) fn new(str: &str, project_root: ProjectRoot) -> Result<Self, toml::de::Error> {
+    pub(crate) fn new(
+        name: &str,
+        str: &str,
+        project_root: ProjectRoot,
+    ) -> Result<Self, TomlDeError> {
         Ok(Self {
             project_root,
-            ..toml::from_str(str)?
+            ..super::parse_toml(name, str)?
         })
     }
 
@@ -825,7 +841,7 @@ fn validate_generated_lua(lua_str: &str) -> Result<(), ProjectTomlError> {
     .map_err(|err| ProjectTomlError::GeneratedInvalidLua(err.to_string()))?
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum ProjectTomlIntegrityError {
     LuaRockspecError(#[from] LuaRockspecError),
@@ -1052,7 +1068,7 @@ mod tests {
     use crate::{
         git::{url::RemoteGitUrl, GitSource},
         lua_rockspec::{PartialLuaRockspec, PerPlatform, RemoteLuaRockspec, RockSourceSpec},
-        project::{Project, ProjectRoot},
+        project::{Project, ProjectRoot, PROJECT_TOML},
         rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
     };
 
@@ -1081,7 +1097,8 @@ mod tests {
         type = "builtin"
         "#;
 
-        let project = PartialProjectToml::new(project_toml, ProjectRoot::default()).unwrap();
+        let project =
+            PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default()).unwrap();
         let _ = project.into_remote(None).unwrap();
 
         let project_toml = r#"
@@ -1137,7 +1154,8 @@ mod tests {
         type = "builtin"
         "#;
 
-        let project = PartialProjectToml::new(project_toml, ProjectRoot::default()).unwrap();
+        let project =
+            PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default()).unwrap();
         let _ = project.into_remote(None).unwrap();
     }
 
@@ -1290,7 +1308,8 @@ mod tests {
 
         let expected_rockspec = RemoteLuaRockspec::new(expected_rockspec).unwrap();
 
-        let project_toml = PartialProjectToml::new(project_toml, ProjectRoot::default()).unwrap();
+        let project_toml =
+            PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default()).unwrap();
         let rockspec = project_toml
             .into_remote(None)
             .unwrap()
@@ -1440,7 +1459,8 @@ mod tests {
             &mergable_rockspec_content
         );
 
-        let project_toml = PartialProjectToml::new(project_toml, ProjectRoot::default()).unwrap();
+        let project_toml =
+            PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default()).unwrap();
         let partial_rockspec = PartialLuaRockspec::new(mergable_rockspec_content).unwrap();
         let expected_rockspec = RemoteLuaRockspec::new(&remote_rockspec_content).unwrap();
 
@@ -1495,7 +1515,7 @@ mod tests {
         type = "builtin"
         "#;
 
-        PartialProjectToml::new(project_toml, ProjectRoot::default())
+        PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default())
             .unwrap()
             .into_local()
             .unwrap_err();
@@ -1518,7 +1538,8 @@ mod tests {
                 "#,
             );
 
-            PartialProjectToml::new(&project_toml, ProjectRoot::default()).unwrap_err();
+            PartialProjectToml::new(PROJECT_TOML, &project_toml, ProjectRoot::default())
+                .unwrap_err();
         }
     }
 
@@ -1536,7 +1557,7 @@ mod tests {
             type = "builtin"
         "#;
 
-        PartialProjectToml::new(rockspec_content, ProjectRoot::default())
+        PartialProjectToml::new(PROJECT_TOML, rockspec_content, ProjectRoot::default())
             .unwrap()
             .into_remote(None)
             .unwrap_err();
@@ -1557,7 +1578,7 @@ mod tests {
             type = "builtin"
         "#;
 
-        PartialProjectToml::new(rockspec_content, ProjectRoot::default())
+        PartialProjectToml::new(PROJECT_TOML, rockspec_content, ProjectRoot::default())
             .unwrap()
             .into_remote(None)
             .unwrap();

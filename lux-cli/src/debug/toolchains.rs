@@ -1,7 +1,7 @@
 use crate::args::OutputFormat;
 use clap::Args;
-use eyre::Result;
 use lux_lib::toolchains::{Tool, ToolchainReport};
+use miette::{IntoDiagnostic, Result};
 
 #[derive(Args)]
 pub struct Toolchains {
@@ -69,7 +69,7 @@ fn print_toolchains(dep: &Tool) {
 }
 
 fn print_json(report: &ToolchainReport) -> Result<()> {
-    let json = serde_json::to_string_pretty(report)?;
+    let json = serde_json::to_string_pretty(report).into_diagnostic()?;
     println!("{}", json);
     Ok(())
 }

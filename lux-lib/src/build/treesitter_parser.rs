@@ -2,6 +2,7 @@ use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::lua_rockspec::TreesitterParserBuildSpec;
 use crate::lua_version::LuaVersionUnset;
 use crate::tree::InstallTree;
+use miette::Diagnostic;
 use std::io;
 use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
@@ -10,9 +11,10 @@ use tree_sitter_generate::GenerateError;
 
 const DEFAULT_GENERATE_ABI_VERSION: usize = tree_sitter::LANGUAGE_VERSION;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum TreesitterBuildError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error("failed to initialise the tree-sitter loader: {0}")]
     Loader(String),

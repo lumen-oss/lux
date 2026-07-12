@@ -1,8 +1,8 @@
-use eyre::Result;
 use lux_lib::{
     config::Config, lockfile::PinnedState, lua_version::LuaVersion, operations,
     package::PackageReq, progress::MultiProgress,
 };
+use miette::Result;
 
 use crate::utils::install::apply_build_behaviour;
 

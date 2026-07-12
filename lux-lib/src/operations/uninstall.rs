@@ -9,16 +9,19 @@ use crate::{config::Config, tree::Tree};
 use bon::Builder;
 use futures::StreamExt;
 use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
-
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum RemoveError {
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
 }
 

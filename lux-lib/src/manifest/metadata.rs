@@ -1,12 +1,12 @@
+use crate::package::{PackageName, PackageReq, PackageSpec, PackageVersion};
+use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
+use crate::ROCKSPEC_FUEL_LIMIT;
 use itertools::Itertools;
+use miette::Diagnostic;
 use ottavino::{Closure, Executor, Fuel, Lua};
 use ottavino_util::serde::from_value;
 use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
-
-use crate::package::{PackageName, PackageReq, PackageSpec, PackageVersion};
-use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
-use crate::ROCKSPEC_FUEL_LIMIT;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ManifestMetadata {
@@ -23,7 +23,7 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ManifestLuaError {
     #[error("failed to parse Lua manifest:\n{0}")]
     ExecutionError(#[from] ottavino::ExternError),

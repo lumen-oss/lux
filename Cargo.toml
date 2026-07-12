@@ -29,6 +29,7 @@ indicatif = "0.18"
 itertools = "0.15"
 lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
 lux-macros = { version = "0.1", path = "./lux-macros" }
+miette = { version = "7.6", features = ["derive"] }
 path-absolutize = "4.0"
 path-slash = "0.2"
 pathdiff = "0.2"

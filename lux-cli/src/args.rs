@@ -1,6 +1,6 @@
 use clap::ValueEnum;
-use eyre::{eyre, Result};
 use lux_lib::package::PackageReq;
+use miette::{miette, Result};
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Clone)]
@@ -16,7 +16,7 @@ pub enum OutputFormat {
 }
 
 impl FromStr for PackageOrRockspec {
-    type Err = eyre::Error;
+    type Err = miette::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let path = PathBuf::from(s);
@@ -24,7 +24,7 @@ impl FromStr for PackageOrRockspec {
             Ok(Self::RockSpec(path))
         } else {
             let pkg = PackageReq::from_str(s).map_err(|err| {
-                eyre!(
+                miette!(
                     "No file {0} found and cannot parse package query: {1}",
                     s,
                     err

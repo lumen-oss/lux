@@ -1,5 +1,4 @@
 use clap::Args;
-use eyre::{eyre, Context, Result};
 use inquire::Confirm;
 use itertools::Itertools;
 use lux_lib::{
@@ -12,6 +11,7 @@ use lux_lib::{
     progress::MultiProgress,
     tree::{self, InstallTree, RockMatches, TreeError},
 };
+use miette::{miette, IntoDiagnostic, Result};
 
 #[derive(Args)]
 pub struct Uninstall {
@@ -44,14 +44,14 @@ pub async fn uninstall(uninstall_args: Uninstall, config: Config) -> Result<()> 
 
     if !nonexistent_packages.is_empty() {
         // TODO(vhyrro): Render this in the form of a tree.
-        return Err(eyre!(
+        return Err(miette!(
             "The following packages were not found: {:#?}",
             nonexistent_packages
         ));
     }
 
     if !duplicate_packages.is_empty() {
-        return Err(eyre!(
+        return Err(miette!(
             "
 Multiple packages satisfying your version requirements were found:
 {:#?}
@@ -75,7 +75,7 @@ Please specify the exact package to uninstall:
         })
         .collect_vec();
     if !non_entrypoints.is_empty() {
-        return Err(eyre!(
+        return Err(miette!(
             "
 Cannot uninstall dependencies:
 {:#?}
@@ -125,7 +125,8 @@ Reinstall?
             && Confirm::new(&prompt)
                 .with_default(false)
                 .prompt()
-                .wrap_err("Error prompting for reinstall")?
+                .into_diagnostic()
+                .map_err(|_| miette!("Error prompting for reinstall"))?
         {
             operations::Uninstall::new()
                 .config(&config)
@@ -162,7 +163,7 @@ Reinstall?
                 .install()
                 .await?;
         } else {
-            return Err(eyre!("Operation cancelled."));
+            return Err(miette!("Operation cancelled."));
         }
     };
 

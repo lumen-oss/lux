@@ -1,5 +1,8 @@
 use std::{io, ops::Deref, path::PathBuf, process::Command, sync::Arc};
 
+use super::{
+    BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
+};
 use crate::tree::InstallTree;
 use crate::workspace::{WorkspaceError, WorkspaceTreeError};
 use crate::{
@@ -17,12 +20,9 @@ use crate::{
 };
 use bon::Builder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathBufExt;
 use thiserror::Error;
-
-use super::{
-    BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
-};
 
 #[cfg(target_family = "unix")]
 const BUSTED_EXE: &str = "busted";
@@ -79,13 +79,16 @@ pub enum TestEnv {
     Impure,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RunTestsError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] ConfigError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     InstallTestDependencies(#[from] InstallTestDependenciesError),
     #[error("error building project:\n{0}")]
+    #[diagnostic(forward(0))]
     BuildProject(#[from] BuildWorkspaceError),
     #[error("tests failed!")]
     TestFailure,
@@ -94,22 +97,31 @@ pub enum RunTestsError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Project(#[from] ProjectError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] WorkspaceTreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("failed to sync dependencies: {0}")]
+    #[diagnostic(forward(0))]
     Sync(#[from] SyncError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     TestSpec(#[from] TestSpecError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaBinary(#[from] LuaBinaryError),
 }
 
@@ -226,8 +238,9 @@ async fn run_project_tests(
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("error installing test dependencies: {0}")]
+#[diagnostic(forward(0))]
 pub enum InstallTestDependenciesError {
     WorkspaceTree(#[from] WorkspaceTreeError),
     Tree(#[from] TreeError),

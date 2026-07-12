@@ -1,6 +1,6 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::{package::PackageName, project::Project, rockspec::Rockspec, workspace::Workspace};
+use miette::{IntoDiagnostic, Result};
 use std::path::PathBuf;
 
 use crate::args::OutputFormat;
@@ -36,7 +36,10 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     }
 
     if data.output_format == OutputFormat::Json {
-        println!("{}", serde_json::to_string(&generated_paths)?);
+        println!(
+            "{}",
+            serde_json::to_string(&generated_paths).into_diagnostic()?
+        );
     }
 
     Ok(())
@@ -50,7 +53,7 @@ async fn generate_project_rockspec(project: &Project) -> Result<PathBuf> {
         .root()
         .join(format!("{}-{}.rockspec", toml.package(), toml.version()));
 
-    tokio::fs::write(&path, rockspec).await?;
+    tokio::fs::write(&path, rockspec).await.into_diagnostic()?;
 
     Ok(path)
 }

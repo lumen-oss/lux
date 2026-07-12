@@ -3,10 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bon::Builder;
-use path_slash::PathExt;
-use thiserror::Error;
-
 use crate::{
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec},
@@ -16,6 +12,10 @@ use crate::{
     remote_package_db::{RemotePackageDB, SearchError},
     remote_package_source::RemotePackageSource,
 };
+use bon::Builder;
+use miette::Diagnostic;
+use path_slash::PathExt;
+use thiserror::Error;
 
 /// Fetch a vendored rock from `<vendor_dir>`
 #[derive(Builder)]
@@ -27,9 +27,10 @@ pub(crate) struct FetchVendored<'a> {
     progress: &'a Progress<ProgressBar>,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum FetchVendoredError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Search(#[from] SearchError),
     #[error("could not find a vendored RockSpec for package {0} in vendor directory {1}.")]
     RockspecNotFound(PackageSpec, String),

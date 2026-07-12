@@ -1,4 +1,10 @@
+use crate::{
+    config::external_deps::ExternalDependencySearchConfig,
+    lua_rockspec::ExternalDependencySpec,
+    variables::{GetVariableError, HasVariables},
+};
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::{PathBufExt, PathExt};
 use pkg_config::{Config as PkgConfig, Library};
 use std::{
@@ -7,15 +13,9 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::{
-    config::external_deps::ExternalDependencySearchConfig,
-    lua_rockspec::ExternalDependencySpec,
-    variables::{GetVariableError, HasVariables},
-};
-
 use super::utils::{c_lib_extension, format_path};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ExternalDependencyError {
     #[error("{}", not_found_error_msg(.0))]
     NotFound(String),

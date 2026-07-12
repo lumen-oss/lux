@@ -2,6 +2,7 @@ use directories::ProjectDirs;
 use external_deps::ExternalDependencySearchConfig;
 use itertools::Itertools;
 
+use miette::Diagnostic;
 use serde::{Deserialize, Serialize, Serializer};
 use std::{collections::HashMap, env, io, path::PathBuf, time::Duration};
 use thiserror::Error;
@@ -9,6 +10,7 @@ use tree::RockLayoutConfig;
 use url::Url;
 
 use crate::lua_version::LuaVersion;
+use crate::project::TomlDeError;
 use crate::tree::{Tree, TreeError};
 use crate::variables::GetVariableError;
 use crate::{build::utils, variables::HasVariables};
@@ -19,8 +21,12 @@ pub mod tree;
 const DEV_PATH: &str = "dev/";
 const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("could not find a valid home directory")]
+#[diagnostic(
+    code(lux_lib::no_home_directory),
+    help("this usually means you're running Lux in a managed environment like LDAP or a live session.")
+)]
 pub struct NoValidHomeDirectory;
 
 /// The resolved configuration for a Lux session.
@@ -240,18 +246,18 @@ impl HasVariables for Config {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ConfigError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     NoValidHomeDirectory(#[from] NoValidHomeDirectory),
-    #[error("error deserializing lux config: {0}")]
-    Deserialize(#[from] toml::de::Error),
+    #[error("error deserializing Lux config")]
+    #[diagnostic(forward(0))]
+    Deserialize(#[from] TomlDeError),
     #[error("error parsing URL: {0}")]
     UrlParseError(#[from] url::ParseError),
-    #[error("error initializing compiler toolchain: {0}")]
-    CompilerToolchain(#[from] cc::Error),
 }
 
 /// Incrementally builds a [`Config`] by layering configuration sources.
@@ -305,7 +311,11 @@ impl ConfigBuilder {
     pub fn new() -> Result<Self, ConfigError> {
         let config_file = Self::config_file()?;
         if config_file.is_file() {
-            Ok(toml::from_str(&std::fs::read_to_string(&config_file)?)?)
+            let content = std::fs::read_to_string(&config_file)?;
+            Ok(crate::project::parse_toml(
+                config_file.to_string_lossy().as_ref(),
+                &content,
+            )?)
         } else {
             Ok(Self::default())
         }

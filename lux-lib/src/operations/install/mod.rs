@@ -25,13 +25,13 @@ use crate::{
 
 pub use crate::operations::install::spec::PackageInstallSpec;
 
+use super::{DownloadedRockspec, RemoteRockDownload};
 use bon::Builder;
 use bytes::Bytes;
 use futures::StreamExt;
 use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
-
-use super::{DownloadedRockspec, RemoteRockDownload};
 
 pub mod spec;
 
@@ -147,29 +147,38 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum InstallError {
     #[error("unable to resolve dependencies:\n{0}")]
+    #[diagnostic(forward(0))]
     ResolveDependencies(#[from] ResolveDependenciesError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("error instantiating LuaRocks compatibility layer:\n{0}")]
+    #[diagnostic(forward(0))]
     LuaRocks(#[from] LuaRocksError),
     #[error("error installing LuaRocks compatibility layer:\n{0}")]
+    #[diagnostic(forward(0))]
     LuaRocksInstall(#[from] LuaRocksInstallError),
     #[error("failed to build {0}: {1}")]
     Build(PackageName, BuildError),
     #[error("failed to install build depencency {0}:\n{1}")]
     BuildDependency(PackageName, BuildError),
     #[error("error initialising remote package DB:\n{0}")]
+    #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to install pre-built rock {0}:\n{1}")]
     InstallBinaryRock(PackageName, InstallBinaryRockError),

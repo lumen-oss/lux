@@ -1,17 +1,3 @@
-use auth_git2::{GitAuthenticator, Prompter};
-use bon::Builder;
-use git2::build::RepoBuilder;
-use git2::{FetchOptions, RemoteCallbacks};
-use remove_dir_all::remove_dir_all;
-use ssri::Integrity;
-use std::fs::File;
-use std::io;
-use std::io::Cursor;
-use std::io::Read;
-use std::path::Path;
-use std::path::PathBuf;
-use thiserror::Error;
-
 use crate::build::utils::recursive_copy_dir;
 use crate::config::Config;
 use crate::git::url::RemoteGitUrlParseError;
@@ -24,6 +10,20 @@ use crate::package::PackageSpec;
 use crate::progress::Progress;
 use crate::progress::ProgressBar;
 use crate::rockspec::Rockspec;
+use auth_git2::{GitAuthenticator, Prompter};
+use bon::Builder;
+use git2::build::RepoBuilder;
+use git2::{FetchOptions, RemoteCallbacks};
+use miette::Diagnostic;
+use remove_dir_all::remove_dir_all;
+use ssri::Integrity;
+use std::fs::File;
+use std::io;
+use std::io::Cursor;
+use std::io::Read;
+use std::path::Path;
+use std::path::PathBuf;
+use thiserror::Error;
 
 use super::DownloadSrcRockError;
 use super::UnpackError;
@@ -105,17 +105,20 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum FetchSrcError {
     #[error("failed to clone rock source:\n{0}")]
     GitClone(#[from] git2::Error),
     #[error("failed to parse git URL:\n{0}")]
+    #[diagnostic(forward(0))]
     GitUrlParse(#[from] RemoteGitUrlParseError),
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Unpack(#[from] UnpackError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FetchSrcRock(#[from] FetchSrcRockError),
     #[error("unable to remove the '.git' directory:\n{0}")]
     CleanGitDir(io::Error),
@@ -157,7 +160,7 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum FetchSrcRockError {
     DownloadSrcRock(#[from] DownloadSrcRockError),

@@ -1,8 +1,3 @@
-use reqwest::Url;
-use serde::{de, Deserialize, Deserializer};
-use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
-use thiserror::Error;
-
 use crate::{
     git::{
         url::{RemoteGitUrl, RemoteGitUrlParseError},
@@ -10,6 +5,11 @@ use crate::{
     },
     lua_rockspec::per_platform_from_intermediate,
 };
+use miette::Diagnostic;
+use reqwest::Url;
+use serde::{de, Deserialize, Deserializer};
+use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
+use thiserror::Error;
 
 use super::{
     DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, PartialOverride, PerPlatform,
@@ -47,11 +47,12 @@ impl Deref for RemoteRockSource {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RockSourceError {
     #[error("invalid rockspec source field combination")]
     InvalidCombination,
     #[error(transparent)]
+    #[diagnostic(transparent)]
     SourceUrl(#[from] SourceUrlError),
     #[error("source URL missing")]
     SourceUrlMissing,
@@ -198,7 +199,7 @@ impl PartialOverride for RockSourceInternal {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("missing source")]
 pub struct RockSourceMissingSource;
 
@@ -228,7 +229,7 @@ pub(crate) enum SourceUrl {
     Git(RemoteGitUrl),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("failed to parse source url: {0}")]
 pub enum SourceUrlError {
     Io(#[from] io::Error),

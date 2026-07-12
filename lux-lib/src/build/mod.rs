@@ -35,6 +35,7 @@ use itertools::Itertools;
 use luarocks::LuarocksBuildError;
 use make::MakeError;
 
+use miette::Diagnostic;
 use patch::{Patch, PatchError};
 use rust_mlua::RustError;
 use source::SourceBuildError;
@@ -110,39 +111,53 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum BuildError {
     #[error("builtin build failed: {0}")]
+    #[diagnostic(forward(0))]
     Builtin(#[from] BuiltinBuildError),
     #[error("cmake build failed: {0}")]
+    #[diagnostic(forward(0))]
     CMake(#[from] CMakeError),
     #[error("make build failed: {0}")]
+    #[diagnostic(forward(0))]
     Make(#[from] MakeError),
     #[error("command build failed: {0}")]
+    #[diagnostic(forward(0))]
     Command(#[from] CommandError),
     #[error("rust-mlua build failed: {0}")]
+    #[diagnostic(forward(0))]
     Rust(#[from] RustError),
     #[error("treesitter-parser build failed: {0}")]
+    #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
     #[error("luarocks build failed: {0}")]
+    #[diagnostic(forward(0))]
     LuarocksBuild(#[from] LuarocksBuildError),
     #[error("building from rock source failed: {0}")]
+    #[diagnostic(forward(0))]
     SourceBuild(#[from] SourceBuildError),
     #[error("IO operation failed: {0}")]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error("failed to create spinner: {0}")]
     SpinnerFailure(#[from] TemplateError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ExternalDependencyError(#[from] ExternalDependencyError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PatchError(#[from] PatchError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     CompileCFiles(#[from] CompileCFilesError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
     #[error("source integrity mismatch.\nExpected: {expected},\nbut got: {actual}")]
     SourceIntegrityMismatch {
@@ -150,12 +165,15 @@ pub enum BuildError {
         actual: Integrity,
     },
     #[error("failed to unpack src.rock:\n{0}")]
+    #[diagnostic(forward(0))]
     UnpackSrcRock(UnpackError),
     #[error("failed to fetch rock source:\n{0}")]
+    #[diagnostic(forward(0))]
     FetchSrcError(#[from] FetchSrcError),
     #[error("failed to install binary {0}:\n{1}")]
     InstallBinary(String, InstallBinaryError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
 }
 

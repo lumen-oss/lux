@@ -18,6 +18,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use build::*;
 pub use dependency::*;
 pub use deploy::*;
+use miette::Diagnostic;
 pub use partial::*;
 pub use platform::*;
 pub use rock_source::*;
@@ -44,7 +45,7 @@ use crate::{
     ROCKSPEC_FUEL_LIMIT,
 };
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaRockspecError {
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,
@@ -94,6 +95,7 @@ pub enum LuaRockspecError {
     #[error("cannot create Lua rockspec with off-spec test dependency: {0}")]
     OffSpecTestDependency(PackageName),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ProjectToml(#[from] ProjectTomlError),
 }
 
@@ -549,7 +551,7 @@ impl Rockspec for RemoteLuaRockspec {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaVersionError {
     #[error(
         r#"
@@ -562,6 +564,7 @@ HINT: If Lux has auto-detected an incompatible Lua installation,
     )]
     LuaVersionUnsupported(LuaVersion, PackageName, PackageVersion),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
 
@@ -603,7 +606,7 @@ where
         .transpose()
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("invalid rockspec format: {0}")]
 pub struct InvalidRockspecFormat(String);
 
@@ -641,7 +644,7 @@ impl Display for RockspecFormat {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaTableError {
     #[error("could not parse '{variable}'. Expected list, but got {invalid_type}")]
     ParseError {

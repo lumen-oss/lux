@@ -4,23 +4,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use glob::glob;
-use itertools::Itertools;
-use lets_find_up::{find_up_with, FindUpKind, FindUpOptions};
-use nonempty::NonEmpty;
-use path_slash::PathBufExt;
-use thiserror::Error;
-
 use crate::{
     config::Config,
     lockfile::{LockfileError, ReadOnly, WorkspaceLockfile},
     lua_rockspec::LuaVersionError,
     lua_version::LuaVersion,
     package::PackageName,
-    project::{Project, ProjectError, PROJECT_TOML},
+    project::{Project, ProjectError, TomlDeError, PROJECT_TOML},
     tree::{InstallTree, Tree, TreeError},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
 };
+use glob::glob;
+use itertools::Itertools;
+use lets_find_up::{find_up_with, FindUpKind, FindUpOptions};
+use miette::Diagnostic;
+use nonempty::NonEmpty;
+use path_slash::PathBufExt;
+use thiserror::Error;
 
 pub mod workspace_toml;
 
@@ -48,25 +48,28 @@ impl Deref for WorkspaceRoot {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum WorkspaceError {
     #[error("cannot get current directory: {0}")]
     GetCwd(io::Error),
     #[error("error reading lux.toml at {0}:\n{1}")]
     ReadLuxTOML(String, io::Error),
     #[error("error deserializing workspace TOML:\n{0}")]
-    TOML(String),
+    #[diagnostic(transparent)]
+    TOML(TomlDeError),
     #[error("no project found at '{0}'")]
     ProjectNotFound(PathBuf),
     #[error("glob error: '{0}'")]
     Glob(String),
     #[error("error deserializing project TOML:\n{0}")]
+    #[diagnostic(forward(0))]
     Project(#[from] ProjectError),
     #[error("no project or workspace found")]
     NoWorkspaceOrProject,
     #[error("empty workspace at '{0}'")]
     EmptyWorkspace(PathBuf),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
     #[error("not a lux project or workspace directory:\n'{0}'")]
     NotAWorkspaceDir(PathBuf),
@@ -76,11 +79,13 @@ pub enum WorkspaceError {
     PackageNotFound(PackageName, WorkspaceRoot),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum WorkspaceTreeError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
 }
 
@@ -334,8 +339,8 @@ impl Workspace {
     }
 
     fn from_toml(toml_content: &str, root: &Path) -> Result<Self, WorkspaceError> {
-        let toml = WorkspaceToml::new(toml_content)
-            .map_err(|err| WorkspaceError::TOML(err.to_string()))?;
+        let toml =
+            WorkspaceToml::new(WORKSPACE_TOML, toml_content).map_err(WorkspaceError::TOML)?;
         let mut members = Vec::new();
         for member in toml.workspace.members {
             match member {

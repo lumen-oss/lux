@@ -1,9 +1,5 @@
 use std::{io, path::PathBuf};
 
-use bon::Builder;
-use itertools::Itertools;
-use thiserror::Error;
-
 use crate::{
     config::Config,
     lua_rockspec::LuaModule,
@@ -11,6 +7,10 @@ use crate::{
     package::PackageReq,
     tree::{InstallTree, TreeError},
 };
+use bon::Builder;
+use itertools::Itertools;
+use miette::Diagnostic;
+use thiserror::Error;
 
 /// A rocks module finder.
 #[derive(Builder)]
@@ -46,13 +46,15 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum WhichError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error("lua module {0} not found.")]
     ModuleNotFound(LuaModule),

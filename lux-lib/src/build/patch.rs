@@ -1,10 +1,10 @@
 use crate::progress::{Progress, ProgressBar};
 use bon::Builder;
 use diffy::{self, ApplyError, ParsePatchError};
+use miette::Diagnostic;
 use std::io;
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
-
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub(crate) struct Patch<'a> {
@@ -25,7 +25,7 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum PatchError {
     #[error("error parsing patch {0}: {1}")]
     Parse(PathBuf, ParsePatchError),

@@ -4,14 +4,14 @@ use std::{
     str::FromStr,
 };
 
-use serde::{Deserialize, Serialize};
-use strum_macros::EnumIter;
-use thiserror::Error;
-
 use crate::{
     config::Config,
     package::{PackageVersion, PackageVersionReq},
 };
+use miette::Diagnostic;
+use serde::{Deserialize, Serialize};
+use strum_macros::EnumIter;
+use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumIter)]
 pub enum LuaVersion {
@@ -33,7 +33,7 @@ pub enum LuaVersion {
     // LuaU,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum LuaVersionError {
     #[error("unsupported Lua version: {0}")]
     UnsupportedLuaVersion(PackageVersion),
@@ -114,7 +114,7 @@ impl LuaVersion {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(
     r#"lua version not set.
 Please provide a version through `lx --lua-version <ver> <cmd>`

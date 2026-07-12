@@ -8,6 +8,7 @@ use std::{collections::HashMap, fs::File, io::ErrorKind, path::PathBuf};
 
 use itertools::Itertools;
 
+use miette::Diagnostic;
 use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
@@ -534,9 +535,10 @@ impl From<PackageVersionReq> for LockConstraint {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LockConstraintParseError {
     #[error("Invalid constraint in LuaPackage: {0}")]
+    #[diagnostic(forward(0))]
     LockConstraintParseError(#[from] PackageVersionReqError),
 }
 
@@ -763,7 +765,7 @@ pub struct WorkspaceLockfile<P: LockfilePermissions> {
     build_dependencies: LocalPackageLock,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LockfileError {
     #[error("error loading lockfile: {0}")]
     Load(io::Error),
@@ -777,7 +779,7 @@ pub enum LockfileError {
     MismatchedRockLayout,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LockfileIntegrityError {
     #[error("rockspec integirty mismatch.\nExpected: {expected}\nBut got: {got}")]
     RockspecIntegrityMismatch { expected: Integrity, got: Integrity },
@@ -787,7 +789,7 @@ pub enum LockfileIntegrityError {
     PackageNotFound(PackageName, PackageVersion, PinnedState, String),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("error flushing the lockfile ({filepath}):\n{cause}")]
 pub struct FlushLockfileError {
     filepath: String,

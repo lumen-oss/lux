@@ -1,8 +1,3 @@
-use bon::Builder;
-use itertools::Itertools;
-use std::sync::Arc;
-use thiserror::Error;
-
 use crate::{
     build::{Build, BuildBehaviour, BuildError},
     config::Config,
@@ -16,34 +11,51 @@ use crate::{
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
+use bon::Builder;
+use itertools::Itertools;
+use miette::Diagnostic;
+use std::sync::Arc;
+use thiserror::Error;
 
 use super::{InstallError, Sync, SyncError};
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum BuildWorkspaceError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaRocks(#[from] LuaRocksError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaRocksInstall(#[from] LuaRocksInstallError),
     #[error("error installind dependencies:\n{0}")]
+    #[diagnostic(forward(0))]
     InstallDependencies(InstallError),
     #[error("error installind build dependencies:\n{0}")]
+    #[diagnostic(forward(0))]
     InstallBuildDependencies(InstallError),
     #[error("syncing dependencies with the project lockfile failed.\nUse --no-lock to force a new build.\n\n{0}")]
+    #[diagnostic(forward(0))]
     SyncDependencies(SyncError),
     #[error("syncing build dependencies with the project lockfile failed.\nUse --no-lock to force a new build.\n\n{0}")]
+    #[diagnostic(forward(0))]
     SyncBuildDependencies(SyncError),
     #[error("error building project:\n{0}")]
+    #[diagnostic(forward(0))]
     Build(#[from] BuildError),
 }
 

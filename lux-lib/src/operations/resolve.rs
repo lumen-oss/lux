@@ -4,6 +4,7 @@ use async_recursion::async_recursion;
 use bon::Builder;
 use futures::StreamExt;
 use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -23,9 +24,10 @@ use crate::{
 
 use super::{Download, PackageInstallSpec, RemoteRockDownload, SearchAndDownloadError};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ResolveDependenciesError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     SearchAndDownload(#[from] SearchAndDownloadError),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependency(DependencyCycle),

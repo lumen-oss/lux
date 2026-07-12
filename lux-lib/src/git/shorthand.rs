@@ -1,17 +1,17 @@
 use std::{fmt::Display, str::FromStr};
 
+use crate::git::url::{RemoteGitUrl, RemoteGitUrlParseError};
 use chumsky::{prelude::*, Parser};
+use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer};
 use thiserror::Error;
-
-use crate::git::url::{RemoteGitUrl, RemoteGitUrlParseError};
 
 const GITHUB: &str = "github";
 const GITLAB: &str = "gitlab";
 const SOURCEHUT: &str = "sourcehut";
 const CODEBERG: &str = "codeberg";
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 #[error("error parsing git source: {0:#?}")]
 pub struct ParseError(Vec<String>);
 

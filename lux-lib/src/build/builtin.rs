@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use miette::Diagnostic;
 use std::{
     collections::{HashMap, HashSet},
     io,
@@ -19,19 +20,23 @@ use crate::{
 
 use super::utils::{CompileCFilesError, CompileCModulesError, InstallBinaryError};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum BuiltinBuildError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     CompileCFiles(#[from] CompileCFilesError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     CompileCModules(#[from] CompileCModulesError),
     #[error("failed to install binary {0}: {1}")]
     InstallBinary(String, InstallBinaryError),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ParseLuaModule(#[from] ParseLuaModuleError),
 }
 

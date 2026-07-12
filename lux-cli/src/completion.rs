@@ -6,8 +6,8 @@ use clap::Args;
 use clap::CommandFactory;
 use clap_complete::generate as clap_generate;
 use clap_complete::Shell;
-use eyre::eyre;
-use eyre::Result;
+use miette::miette;
+use miette::Result;
 
 use crate::Cli;
 
@@ -26,7 +26,7 @@ pub async fn completion(args: Completion) -> Result<()> {
         None => {
             let shell_var: PathBuf = env::var("SHELL")
                 .map_err(|_| {
-                    eyre!(
+                    miette!(
                         r#"could not auto-detect the shell
 Please make sure the SHELL environment variable is set
 or specify the shell for which to generate completions.
@@ -43,7 +43,7 @@ Supported shells: "bash", "elvish", "fish", "powershell", "zsh"
                 .unwrap_or_else(|| shell_var.as_os_str())
                 .to_string_lossy();
             Shell::from_str(&shell_name).map_err(|_| {
-                eyre!(
+                miette!(
                     r#"unsupported shell: {}.
 Please specify the shell for which to generate completions.
 

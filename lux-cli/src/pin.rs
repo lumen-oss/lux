@@ -1,7 +1,4 @@
 use clap::Args;
-use eyre::eyre;
-use eyre::Context;
-use eyre::Result;
 use itertools::Itertools;
 use lux_lib::config::Config;
 use lux_lib::lockfile::PinnedState;
@@ -13,6 +10,9 @@ use lux_lib::progress::MultiProgress;
 use lux_lib::rockspec::lua_dependency;
 use lux_lib::tree::RockMatches;
 use lux_lib::workspace::Workspace;
+use miette::miette;
+use miette::Context;
+use miette::Result;
 
 #[derive(Args)]
 pub struct ChangePin {
@@ -46,7 +46,7 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                 .iter()
                 .any(|pkg| !pkg.version_req().is_any())
             {
-                return Err(eyre!(
+                return Err(miette!(
                     "Cannot pin project dependencies using version constraints."
                 ));
             }
@@ -115,7 +115,7 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                     RockMatches::Many(_) => {
                         todo!("Add an error here about many conflicting types and to use `all:`")
                     }
-                    RockMatches::NotFound(_) => return Err(eyre!("Rock {} not found!", package)),
+                    RockMatches::NotFound(_) => return Err(miette!("Rock {} not found!", package)),
                 }
             }
         }

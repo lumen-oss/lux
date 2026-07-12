@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use serde::{de, Deserialize};
 
+use crate::project::{parse_toml, TomlDeError};
+
 /// The `lux.toml` file for a workspace.
 /// Used to deserialize a workspace with multiple projects.
 #[derive(Clone, Debug, Deserialize)]
@@ -10,8 +12,8 @@ pub(super) struct WorkspaceToml {
 }
 
 impl WorkspaceToml {
-    pub(super) fn new(toml_content: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(toml_content)
+    pub(super) fn new(name: &str, toml_content: &str) -> Result<Self, TomlDeError> {
+        parse_toml(name, toml_content)
     }
 }
 
@@ -60,7 +62,7 @@ mod tests {
                 "glob:projects/baz/*",
             ]
         "#;
-        let workspace_toml = WorkspaceToml::new(toml_content).unwrap();
+        let workspace_toml = WorkspaceToml::new("lux.toml", toml_content).unwrap();
         assert_eq!(
             workspace_toml.workspace.members,
             vec![

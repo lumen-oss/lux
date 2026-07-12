@@ -1,6 +1,5 @@
 //! Utilities for converting a list of packages into a list with the correct build behaviour.
 
-use eyre::Result;
 use inquire::Confirm;
 use itertools::Itertools;
 use lux_lib::{
@@ -11,6 +10,7 @@ use lux_lib::{
     package::PackageReq,
     tree::{self, InstallTree, RockMatches, Tree},
 };
+use miette::Result;
 
 pub fn apply_build_behaviour(
     package_reqs: Vec<PackageReq>,
