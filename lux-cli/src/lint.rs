@@ -12,6 +12,7 @@ use crate::workspace::top_level_ignored_files;
 #[derive(Args)]
 pub struct Lint {
     /// Path to a workspace, directory, or Lua file to lint. Defaults to the current workspace.
+    #[arg(short, long)]
     path: Option<PathBuf>,
     /// Arguments to pass to the luacheck command.{n}
     /// If you pass arguments to luacheck, Lux will not pass any default arguments.
