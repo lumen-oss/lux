@@ -1,5 +1,4 @@
 use clap::Args;
-use eyre::{eyre, Context, Result};
 use itertools::Itertools;
 use lux_lib::package::{PackageName, PackageReq};
 use lux_lib::progress::{MultiProgress, ProgressBar};
@@ -7,6 +6,7 @@ use lux_lib::remote_package_db::RemotePackageDB;
 use lux_lib::rockspec::lua_dependency::LuaDependencyType;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config::Config, operations};
+use miette::{miette, Context, Result};
 
 #[derive(Args)]
 pub struct Update {
@@ -129,7 +129,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
 
 fn to_package_names(packages: Option<&Vec<PackageReq>>) -> Result<Option<Vec<PackageName>>> {
     if packages.is_some_and(|pkgs| !pkgs.iter().any(|pkg| pkg.version_req().is_any())) {
-        return Err(eyre!(
+        return Err(miette!(
             "Cannot use version constraints to upgrade dependencies in lux.toml."
         ));
     }

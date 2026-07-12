@@ -1,5 +1,4 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::{
     config::Config,
     lockfile::LocalPackage,
@@ -7,6 +6,7 @@ use lux_lib::{
     package::PackageName,
     workspace::Workspace,
 };
+use miette::Result;
 
 #[derive(Args, Default)]
 pub struct Build {

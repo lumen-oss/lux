@@ -2,6 +2,7 @@ use std::{ops::Deref, path::PathBuf};
 
 use bon::Builder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use nonempty::NonEmpty;
 use serde::Deserialize;
 use thiserror::Error;
@@ -21,7 +22,7 @@ use crate::{
 
 use super::RunLuaError;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 #[error("'{0}' should not be used as a `command` as it is not cross-platform.
 You should only change the default `command` if it is a different Lua interpreter that behaves identically on all platforms.
 Consider removing the `command` field and letting Lux choose the default Lua interpreter instead.")]
@@ -62,16 +63,23 @@ impl Deref for RunCommand {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 #[error(transparent)]
 pub enum RunError {
+    #[diagnostic(transparent)]
     Toml(#[from] LocalProjectTomlValidationError),
+    #[diagnostic(transparent)]
     RunCommand(#[from] RunCommandError),
+    #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
+    #[diagnostic(transparent)]
     RunLua(#[from] RunLuaError),
+    #[diagnostic(transparent)]
     WorkspaceError(#[from] WorkspaceError),
+    #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     Io(#[from] std::io::Error),
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("No `run` field found in `lux.toml`")]
     NoRunField,

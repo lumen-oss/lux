@@ -1,9 +1,9 @@
 use itertools::Itertools;
 
+use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
-
 mod outdated;
 mod version;
 
@@ -24,7 +24,7 @@ use crate::{
     variables::{GetVariableError, HasVariables},
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum PackageSpecFromPackageReqError {
     #[error("invalid version for rock {rock}: {err}")]
     Version {
@@ -172,7 +172,7 @@ impl Default for RemotePackageTypeFilterSpec {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ParseRemotePackageError {
     #[error("unable to parse package {0}. expected format: `name@version`")]
     InvalidInput(String),
@@ -303,7 +303,7 @@ impl DisplayAsLuaKV for BuildDependencies<'_> {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum PackageReqParseError {
     #[error("could not parse dependency name from {0}")]
     InvalidDependencyName(String),

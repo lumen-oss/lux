@@ -1,6 +1,6 @@
-use eyre::Result;
 use git2::Repository;
 use lux_lib::git::url::RemoteGitUrl;
+use miette::{IntoDiagnostic, Result};
 use path_absolutize::Absolutize as _;
 use std::io;
 use std::path::Path;
@@ -37,13 +37,13 @@ impl RepoMetadata {
 /// Retrieves metadata for a given directory
 pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<RepoMetadata>> {
     let repo = match directory {
-        Some(path) => Repository::open(path)?,
-        None => Repository::open_from_env()?,
+        Some(path) => Repository::open(path).into_diagnostic()?,
+        None => Repository::open_from_env().into_diagnostic()?,
     };
 
     // NOTE(vhyrro): Temporary value is required. Thank the borrow checker.
-    let ret = if let Ok(remote) = repo.find_remote("origin")?.url() {
-        let parsed_url: RemoteGitUrl = remote.parse()?;
+    let ret = if let Ok(remote) = repo.find_remote("origin").into_diagnostic()?.url() {
+        let parsed_url: RemoteGitUrl = remote.parse().into_diagnostic()?;
 
         let owner = match parsed_url.owner() {
             Some(owner) => owner.to_owned(),
@@ -55,8 +55,12 @@ pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<Repo
         let octocrab = octocrab::instance();
         let repo_handler = octocrab.repos(owner, repo);
 
-        let contributors = repo_handler.list_contributors().send().await?;
-        let repo_data = repo_handler.get().await?;
+        let contributors = repo_handler
+            .list_contributors()
+            .send()
+            .await
+            .into_diagnostic()?;
+        let repo_data = repo_handler.get().await.into_diagnostic()?;
 
         Ok(Some(RepoMetadata {
             name: repo_data.name,

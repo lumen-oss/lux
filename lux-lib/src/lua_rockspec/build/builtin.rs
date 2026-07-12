@@ -1,9 +1,3 @@
-use itertools::Itertools;
-use path_slash::PathBufExt;
-use serde::{de, Deserialize, Deserializer};
-use std::{collections::HashMap, convert::Infallible, fmt::Display, path::PathBuf, str::FromStr};
-use thiserror::Error;
-
 use crate::{
     build::utils::c_dylib_extension,
     lua_rockspec::{
@@ -11,6 +5,12 @@ use crate::{
         PartialOverride, PerPlatform, PlatformOverridable,
     },
 };
+use itertools::Itertools;
+use miette::Diagnostic;
+use path_slash::PathBufExt;
+use serde::{de, Deserialize, Deserializer};
+use std::{collections::HashMap, convert::Infallible, fmt::Display, path::PathBuf, str::FromStr};
+use thiserror::Error;
 
 use super::{DisplayLuaKV, DisplayLuaValue};
 
@@ -73,7 +73,7 @@ impl LuaModule {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ParseLuaModuleError {
     #[error("could not parse Lua module from '{0}'.")]
     FromString(String),
@@ -229,7 +229,7 @@ where
         .try_collect()
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("cannot resolve ambiguous platform override for `build.modules`.")]
 pub struct ModuleSpecAmbiguousPlatformOverride;
 
@@ -252,7 +252,7 @@ impl PartialOverride for ModuleSpecInternal {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("could not resolve platform override for `build.modules`. THIS IS A BUG!")]
 pub struct BuildModulesPlatformOverride;
 
@@ -267,7 +267,7 @@ impl PlatformOverridable for ModuleSpecInternal {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("missing or empty field `sources`")]
 pub struct ModulePathsMissingSources;
 

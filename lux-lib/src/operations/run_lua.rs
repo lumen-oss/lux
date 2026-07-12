@@ -16,6 +16,7 @@ use std::{
     process::Stdio,
 };
 
+use miette::Diagnostic;
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -26,9 +27,10 @@ use crate::{
     tree::TreeError,
 };
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RunLuaError {
     #[error("error running lua: {0}")]
+    #[diagnostic(forward(0))]
     LuaBinary(#[from] LuaBinaryError),
     #[error("failed to run {lua_cmd}: {source}")]
     LuaCommandFailed {
@@ -42,9 +44,11 @@ pub enum RunLuaError {
         exit_code: Option<i32>,
     },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
 }
 

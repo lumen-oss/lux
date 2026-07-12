@@ -1,5 +1,4 @@
 use clap::Args;
-use eyre::{eyre, Context, OptionExt, Result};
 use inquire::{Confirm, Select};
 use itertools::Itertools;
 use lux_lib::{
@@ -11,6 +10,7 @@ use lux_lib::{
     rockspec::Rockspec,
     tree::{InstallTree, RockMatches, Tree},
 };
+use miette::{miette, Context, IntoDiagnostic, Result};
 use url::Url;
 use walkdir::WalkDir;
 
@@ -27,9 +27,9 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
     let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
     let package_id = match tree.match_rocks(&args.package)? {
         RockMatches::NotFound(package_req) => {
-            Err(eyre!("No package matching {} found.", package_req))
+            Err(miette!("No package matching {} found.", package_req))
         }
-        RockMatches::Many(_package_ids) => Err(eyre!(
+        RockMatches::Many(_package_ids) => Err(miette!(
             "
 Found multiple packages matching {}.
 Please specify an exact package (<name>@<version>) or narrow the version requirement.
@@ -41,7 +41,7 @@ Please specify an exact package (<name>@<version>) or narrow the version require
     let lockfile = tree.lockfile()?;
     let pkg = lockfile
         .get(&package_id)
-        .ok_or_eyre("package is installed, but not found in the lockfile")?
+        .ok_or_else(|| miette!("package is installed, but not found in the lockfile"))?
         .clone();
     if args.online {
         open_homepage(pkg, &tree).await
@@ -53,18 +53,18 @@ Please specify an exact package (<name>@<version>) or narrow the version require
 async fn open_homepage(pkg: LocalPackage, tree: &Tree) -> Result<()> {
     let homepage = match get_homepage(&pkg, tree)? {
         Some(homepage) => Ok(homepage),
-        None => Err(eyre!(
+        None => Err(miette!(
             "Package {} does not have a homepage in its RockSpec.",
             pkg.into_package_spec()
         )),
     }?;
-    open::that(homepage.to_string())?;
+    open::that(homepage.to_string()).into_diagnostic()?;
     Ok(())
 }
 
 fn get_homepage(pkg: &LocalPackage, tree: &Tree) -> Result<Option<Url>> {
     let layout = tree.installed_rock_layout(pkg)?;
-    let rockspec_content = std::fs::read_to_string(layout.rockspec_path())?;
+    let rockspec_content = std::fs::read_to_string(layout.rockspec_path()).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&rockspec_content)?;
     Ok(rockspec.description().homepage.clone())
 }
@@ -82,10 +82,11 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
                 None
             }
         })
-        .try_collect()?;
+        .try_collect()
+        .into_diagnostic()?;
     match files.first() {
         Some(file) if files.len() == 1 => {
-            edit::edit_file(layout.doc.join(file))?;
+            edit::edit_file(layout.doc.join(file)).into_diagnostic()?;
             Ok(())
         }
         Some(_) => {
@@ -94,27 +95,29 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
                 files,
             )
             .prompt()
+            .into_diagnostic()
             .wrap_err("error selecting from multiple files")?;
-            edit::edit_file(layout.doc.join(file))?;
+            edit::edit_file(layout.doc.join(file)).into_diagnostic()?;
             Ok(())
         }
         None => match get_homepage(&pkg, tree)? {
-            None => Err(eyre!(
+            None => Err(miette!(
                 "No documentation found for package {}",
                 pkg.into_package_spec()
             )),
             Some(homepage) => {
                 if config.no_prompt() {
-                    return Err(eyre!(
+                    return Err(miette!(
                         "No local documentation found for package {}",
                         pkg.into_package_spec()
                     ));
                 } else if Confirm::new("No local documentation found. Open homepage?")
                     .with_default(false)
                     .prompt()
+                    .into_diagnostic()
                     .wrap_err("error prompting to open homepage")?
                 {
-                    open::that(homepage.to_string())?;
+                    open::that(homepage.to_string()).into_diagnostic()?;
                 }
                 Ok(())
             }

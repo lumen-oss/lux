@@ -13,24 +13,28 @@ use crate::{
     tree::RockLayout,
 };
 
+use super::utils::recursive_copy_dir;
+use miette::Diagnostic;
 use tempfile::tempdir;
 use thiserror::Error;
 
-use super::utils::recursive_copy_dir;
-
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuarocksBuildError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error("error instantiating luarocks compatibility layer:\n{0}")]
+    #[diagnostic(forward(0))]
     LuaRocksError(#[from] LuaRocksError),
     #[error("error running 'luarocks make':\n{0}")]
+    #[diagnostic(forward(0))]
     ExecLuaRocksError(#[from] ExecLuaRocksError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error("{0}")] // We don't know the concrete error type
     Rockspec(String),
     #[error("error installing luarocks compatibility layer:\n{0}")]
+    #[diagnostic(forward(0))]
     LuaVersion(#[from] LuaVersionError),
 }
 

@@ -25,14 +25,14 @@ edit = { version = "0.1", features = ["quoted-env"] }
 emmylua_check = { version = "0.23", features = [] }
 emmylua_formatter = { version = "0.24", features = [] }
 emmylua_codestyle = "0.6.0"
-eyre = "0.6"
-color-eyre = "0.6"
 inquire = "0.9"
+miette = { workspace = true, features = ["fancy"] }
 nucleo = "0.5"
 octocrab = "0.54"
 open = "5.3"
 spdx = "0.13"
 spinners = { version = "4.2", features = ["osc-progress"] }
+shlex = "2.0"
 termcolor = "1.4"
 termtree = "1.0"
 text_trees = "0.1"
@@ -79,6 +79,6 @@ panic = "warn"
 unwrap_used = "warn"
 expect_used = "warn"
 
-# Improve color-eyre performance in debug mode
+# Improve miette backtrace performance in debug mode
 [profile.dev.package.backtrace]
 opt-level = 3

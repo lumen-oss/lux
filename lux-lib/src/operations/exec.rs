@@ -14,6 +14,7 @@ use crate::{
 };
 use bon::Builder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use thiserror::Error;
 use which::which;
 
@@ -61,7 +62,7 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ExecError {
     #[error("failed to run {cmd}: {source}")]
     RunCommandFailed {
@@ -72,24 +73,31 @@ pub enum ExecError {
     #[error("{cmd} exited with non-zero exit code: {}", exit_code.map(|code| code.to_string()).unwrap_or("unknown".into()))]
     RunCommandNonZeroExitCode { cmd: String, exit_code: Option<i32> },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BuildProject(#[from] BuildWorkspaceError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     InstallCommand(#[from] InstallCommandError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("failed to execute '{0}':\n{1}")]
     Io(String, io::Error),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum InstallCommandError {
     InstallError(#[from] InstallError),

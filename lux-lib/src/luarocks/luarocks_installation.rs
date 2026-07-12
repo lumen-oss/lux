@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use path_slash::{PathBufExt, PathExt};
 use ssri::Integrity;
 use std::{
@@ -50,43 +51,51 @@ build = {
 }
 ";
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaRocksError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     // #[error(transparent)]
     // Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaRocksInstallError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BuildError(#[from] BuildError),
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     UnpackError(#[from] UnpackError),
     #[error("luarocks integrity mismatch.\nExpected: {expected}\nBut got: {got}")]
     IntegrityMismatch { expected: Integrity, got: Integrity },
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ExecLuaRocksError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error("could not write luarocks config: {0}")]
     WriteLuarocksConfigError(io::Error),
     #[error("could not write luarocks config: {0}")]
+    #[diagnostic(forward(0))]
     VariableSubstitutionInConfig(#[from] VariableSubstitutionError),
     #[error("failed to run luarocks: {0}")]
     Io(#[from] io::Error),
     #[error("error setting up luarocks paths: {0}")]
+    #[diagnostic(forward(0))]
     Paths(#[from] PathsError),
     #[error("luarocks binary not found at {0}")]
     LuarocksBinNotFound(PathBuf),

@@ -1,16 +1,16 @@
 use std::fmt::Display;
 
-use thiserror::Error;
-
 use crate::remote_package_db::RemotePackageDB;
+use miette::Diagnostic;
+use thiserror::Error;
 
 use super::{version::PackageVersion, PackageName, PackageReq, PackageSpec, PackageVersionReq};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("rock {0} not found")]
 pub struct RockNotFound(PackageName);
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("rock {} has no version that satisfies constraint {}", .name, .constraint.to_string())]
 pub struct RockConstraintUnsatisfied {
     name: PackageName,

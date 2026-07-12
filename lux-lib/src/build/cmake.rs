@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use miette::Diagnostic;
 use std::{
     env, io,
     process::{ExitStatus, Stdio},
@@ -20,11 +21,13 @@ use crate::{
 
 const CMAKE_BUILD_FILE: &str = "build.lux";
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum CMakeError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("{name} step failed.\n\n{status}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")]
     CommandFailure {
@@ -40,6 +43,7 @@ pub enum CMakeError {
     #[error("failed to run `cmake` step: '{0}' command not found!")]
     CommandNotFound(String),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     VariableSubstitutionError(#[from] VariableSubstitutionError),
 }
 

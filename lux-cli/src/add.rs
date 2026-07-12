@@ -1,4 +1,3 @@
-use eyre::Result;
 use itertools::{Either, Itertools};
 use lux_lib::{
     config::Config,
@@ -8,6 +7,7 @@ use lux_lib::{
     rockspec::lua_dependency::{self},
     workspace::Workspace,
 };
+use miette::Result;
 
 use crate::workspace::{
     sync_build_dependencies_if_locked, sync_dependencies_if_locked,

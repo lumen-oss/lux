@@ -16,6 +16,7 @@ use crate::tree::Tree;
 use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
+use miette::Diagnostic;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::File;
@@ -54,7 +55,7 @@ where
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("failed to pack rock: {0}")]
 pub enum PackError {
     Zip(#[from] zip::result::ZipError),

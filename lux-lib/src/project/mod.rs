@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use path_slash::PathBufExt;
 use project_toml::{
     LocalProjectTomlValidationError, PartialProjectToml, RemoteProjectTomlValidationError,
@@ -44,42 +45,87 @@ pub use project_toml::PROJECT_TOML;
 
 pub const EXTRA_ROCKSPEC: &str = "extra.rockspec";
 
-#[derive(Error, Debug)]
+/// A wrapper around [`toml::de::Error`] plus the original source code and the byte range where the
+/// error occurred so that `miette` can render the failure with line numbers and context.
+#[derive(Debug, Error, Diagnostic)]
+#[error("{message}", message = _inner.message())]
+#[diagnostic(
+    code(lux_lib::toml::deserialize),
+    help("check that the file is valid TOML and matches the expected schema")
+)]
+pub struct TomlDeError {
+    #[source]
+    _inner: Box<toml::de::Error>,
+    #[source_code]
+    src: NamedSource<String>,
+    #[label("here")]
+    span: SourceSpan,
+}
+
+impl TomlDeError {
+    pub fn new(name: &str, src: &str, inner: toml::de::Error) -> Self {
+        let src = NamedSource::new(name, src.to_string());
+        let span = inner.span().unwrap_or(0..0).into();
+        Self {
+            _inner: Box::new(inner),
+            src,
+            span,
+        }
+    }
+
+    pub fn inner(&self) -> &toml::de::Error {
+        &self._inner
+    }
+}
+
+pub(crate) fn parse_toml<T>(name: &str, src: &str) -> Result<T, TomlDeError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    toml::from_str(src).map_err(|e| TomlDeError::new(name, src, e))
+}
+
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum ProjectError {
     #[error("error reading project TOML at {0}:\n{1}")]
     ReadProjectTOML(String, io::Error),
     #[error("error creating project root at {0}:\n{1}")]
     CreateProjectRoot(String, io::Error),
+    #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
-    Toml(#[from] toml::de::Error),
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlDeError),
     #[error("error when parsing `extra.rockspec`: {0}")]
+    #[diagnostic(forward(0))]
     Rockspec(#[from] PartialRockspecError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum IntoLocalRockspecError {
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
     RockspecError(#[from] LuaRockspecError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum IntoRemoteRockspecError {
     RocksTomlValidationError(#[from] RemoteProjectTomlValidationError),
     RockspecError(#[from] LuaRockspecError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ProjectEditError {
     #[error(transparent)]
     Io(#[from] tokio::io::Error),
     #[error(transparent)]
     Toml(#[from] toml_edit::TomlError),
     #[error("error parsing {PROJECT_TOML} after edit. This is probably a bug.")]
-    TomlDe(#[from] toml::de::Error),
+    #[diagnostic(forward(0))]
+    TomlDe(#[from] TomlDeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Git(#[from] GitError),
     #[error("unable to query latest version for {0}")]
     LatestVersionNotFound(PackageName),
@@ -88,10 +134,11 @@ pub enum ProjectEditError {
     #[error("expected string, but got {0}")]
     ExpectedString(Box<toml_edit::Value>),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     GitUrlShorthandParse(#[from] git::shorthand::ParseError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum PinError {
     #[error("package {0} not found in dependencies")]
     PackageNotFound(PackageName),
@@ -103,7 +150,8 @@ pub enum PinError {
     #[error(transparent)]
     Toml(#[from] toml_edit::TomlError),
     #[error("error parsing lux.toml after edit. This is probably a bug.")]
-    TomlDe(#[from] toml::de::Error),
+    #[diagnostic(forward(0))]
+    TomlDe(#[from] TomlDeError),
     #[error(transparent)]
     Io(#[from] tokio::io::Error),
 }
@@ -159,7 +207,11 @@ impl Project {
 
             let mut project = Project {
                 root: ProjectRoot(root.to_path_buf()),
-                toml: PartialProjectToml::new(&toml_content, ProjectRoot(root.to_path_buf()))?,
+                toml: PartialProjectToml::new(
+                    &project_toml_path.to_string_lossy(),
+                    &toml_content,
+                    ProjectRoot(root.to_path_buf()),
+                )?,
             };
 
             if let Some(extra_rockspec) = project.extra_rockspec()? {
@@ -262,7 +314,11 @@ impl Project {
 
         let toml_content = project_toml.to_string();
         tokio::fs::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(&toml_content, self.root.clone())?;
+        self.toml = PartialProjectToml::new(
+            self.toml_path().to_str().unwrap_or("<lux.toml>"),
+            &toml_content,
+            self.root.clone(),
+        )?;
 
         Ok(())
     }
@@ -309,7 +365,11 @@ impl Project {
 
         let toml_content = project_toml.to_string();
         tokio::fs::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(&toml_content, self.root.clone())?;
+        self.toml = PartialProjectToml::new(
+            self.toml_path().to_str().unwrap_or("<lux.toml>"),
+            &toml_content,
+            self.root.clone(),
+        )?;
 
         Ok(())
     }
@@ -351,7 +411,11 @@ impl Project {
 
         let toml_content = project_toml.to_string();
         tokio::fs::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(&toml_content, self.root.clone())?;
+        self.toml = PartialProjectToml::new(
+            self.toml_path().to_str().unwrap_or("<lux.toml>"),
+            &toml_content,
+            self.root.clone(),
+        )?;
 
         Ok(())
     }
@@ -437,7 +501,11 @@ impl Project {
 
         let toml_content = project_toml.to_string();
         tokio::fs::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(&toml_content, self.root.clone())?;
+        self.toml = PartialProjectToml::new(
+            self.toml_path().to_str().unwrap_or("<lux.toml>"),
+            &toml_content,
+            self.root.clone(),
+        )?;
 
         Ok(())
     }
@@ -566,7 +634,11 @@ impl Project {
 
         let toml_content = project_toml.to_string();
         tokio::fs::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(&toml_content, self.root.clone())?;
+        self.toml = PartialProjectToml::new(
+            self.toml_path().to_str().unwrap_or("<lux.toml>"),
+            &toml_content,
+            self.root.clone(),
+        )?;
 
         Ok(())
     }

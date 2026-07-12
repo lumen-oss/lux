@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use clap::Args;
 use emmylua_check::OutputDestination;
-use eyre::{eyre, Result};
 use itertools::Itertools;
 use lux_lib::{config::Config, progress::MultiProgress, workspace::Workspace};
+use miette::{miette, Result};
 
 use crate::{
     args::OutputFormat,
@@ -119,7 +119,7 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
 
     emmylua_check::run_check(emmylua_check_args)
         .await
-        .map_err(|err| eyre!(err.to_string()))?;
+        .map_err(|err| miette!("{err}"))?;
     Ok(())
 }
 

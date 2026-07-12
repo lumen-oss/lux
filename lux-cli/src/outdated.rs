@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use clap::Args;
-use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{
     config::Config, lockfile::LocalPackage, lua_version::LuaVersion, package::PackageVersion,
     progress::MultiProgress, remote_package_db::RemotePackageDB, workspace::Workspace,
 };
+use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 use crate::{args::OutputFormat, workspace::sync_dependencies_if_locked};
@@ -76,7 +76,10 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
                 })
                 .collect::<HashMap<_, _>>();
 
-            println!("{}", serde_json::to_string(&jsonified_rock_list)?);
+            println!(
+                "{}",
+                serde_json::to_string(&jsonified_rock_list).into_diagnostic()?
+            );
         }
         OutputFormat::Text => {
             let formatting = TreeFormatting::dir_tree(FormatCharacters::box_chars());
@@ -88,7 +91,10 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
                     tree.push(format!("{} => {}", rock.version(), latest_version));
                 }
 
-                println!("{}", tree.to_string_with_format(&formatting)?);
+                println!(
+                    "{}",
+                    tree.to_string_with_format(&formatting).into_diagnostic()?
+                );
             }
         }
     }

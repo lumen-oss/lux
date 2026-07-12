@@ -1,8 +1,7 @@
-use eyre::eyre;
+use miette::miette;
 use std::{path::PathBuf, sync::Arc};
 
 use clap::Args;
-use eyre::Result;
 use lux_lib::{
     build::{self, BuildBehaviour},
     config::Config,
@@ -15,6 +14,7 @@ use lux_lib::{
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{self, InstallTree},
 };
+use miette::{IntoDiagnostic, Result};
 
 #[derive(Args, Default)]
 pub struct InstallRockspec {
@@ -36,13 +36,13 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
         .map(|ext| ext != "rockspec")
         .unwrap_or(true)
     {
-        return Err(eyre!("Provided path is not a valid rockspec!"));
+        return Err(miette!("Provided path is not a valid rockspec!"));
     }
 
     let progress_arc = MultiProgress::new_arc(&config);
     let progress = Arc::clone(&progress_arc);
 
-    let content = std::fs::read_to_string(path)?;
+    let content = std::fs::read_to_string(path).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&content)?;
     let lua_version = rockspec.lua_version_matches(&config)?;
     let lua = LuaInstallation::new(

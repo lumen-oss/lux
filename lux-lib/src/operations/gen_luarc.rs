@@ -7,6 +7,7 @@ use crate::workspace::WorkspaceTreeError;
 use crate::workspace::LUX_DIR_NAME;
 use bon::Builder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathBufExt;
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
@@ -16,11 +17,13 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tokio::fs;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum GenLuaRcError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("failed to serialize luarc content:\n{0}")]
     Serialize(String),

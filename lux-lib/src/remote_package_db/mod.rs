@@ -10,8 +10,8 @@ use crate::{
 };
 use itertools::Itertools;
 
+use miette::Diagnostic;
 use thiserror::Error;
-
 /// Package database, used to look up remote rocks
 #[derive(Clone, Debug)]
 pub struct RemotePackageDB(Impl);
@@ -22,27 +22,31 @@ enum Impl {
     Lock(LocalPackageLock),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RemotePackageDBError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ManifestError(#[from] ManifestError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ConfigError(#[from] ConfigError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum SearchError {
     #[error("no rock that matches '{0}' found")]
     RockNotFound(PackageReq),
     #[error("no rock that matches '{0}' found in the lockfile.")]
     RockNotFoundInLockfile(PackageReq),
     #[error("error when pulling manifest:\n{0}")]
+    #[diagnostic(forward(0))]
     Manifest(#[from] ManifestError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RemotePackageDbIntegrityError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lockfile(#[from] LockfileIntegrityError),
 }
 

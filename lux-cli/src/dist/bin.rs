@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use eyre::Result;
 use lux_lib::{
     config::{Config, ConfigBuilder},
     operations::DistProjectBin,
@@ -9,6 +8,7 @@ use lux_lib::{
     tree::FlatDistTree,
     workspace::Workspace,
 };
+use miette::{IntoDiagnostic, Result};
 use tempfile::tempdir;
 
 use crate::args::OutputFormat;
@@ -32,7 +32,7 @@ pub struct Bin {
 }
 
 pub async fn bin(data: Bin, config: Config) -> Result<()> {
-    let staging_dir = tempdir()?;
+    let staging_dir = tempdir().into_diagnostic()?;
     let config = ConfigBuilder::from(config)
         .wrap_bin_scripts(Some(false))
         .user_tree(Some(staging_dir.path().to_path_buf()))
@@ -53,10 +53,11 @@ pub async fn bin(data: Bin, config: Config) -> Result<()> {
         .tree(&tree)
         .maybe_output(data.output)
         .compile()
-        .await?;
+        .await
+        .into_diagnostic()?;
 
     match data.output_format {
-        OutputFormat::Json => println!("{}", serde_json::to_string(&out)?),
+        OutputFormat::Json => println!("{}", serde_json::to_string(&out).into_diagnostic()?),
         OutputFormat::Text => println!("Binary written to {}", out.display()),
     }
 

@@ -1,14 +1,14 @@
-use itertools::Itertools;
-use path_slash::PathBufExt;
-use serde::Serialize;
-use std::{env, fmt::Display, path::PathBuf, str::FromStr};
-use thiserror::Error;
-
 use crate::{
     build::utils::c_dylib_extension,
     lua_version::LuaVersion,
     tree::{InstallTree, TreeError},
 };
+use itertools::Itertools;
+use miette::Diagnostic;
+use path_slash::PathBufExt;
+use serde::Serialize;
+use std::{env, fmt::Display, path::PathBuf, str::FromStr};
+use thiserror::Error;
 
 const LUA_PATH_SEPARATOR: &str = ";";
 const LUA_INIT: &str = "require('lux').loader()";
@@ -25,9 +25,10 @@ pub struct Paths {
     version: LuaVersion,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum PathsError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
 }
 

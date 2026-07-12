@@ -1,6 +1,7 @@
 use async_recursion::async_recursion;
 use flate2::read::GzDecoder;
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathExt;
 use std::fs::File;
 use std::io;
@@ -15,7 +16,7 @@ use tokio::fs;
 use crate::progress::Progress;
 use crate::progress::ProgressBar;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum UnpackError {
     #[error("failed to unpack source: {0}")]
     Io(#[from] io::Error),

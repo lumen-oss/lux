@@ -15,6 +15,7 @@ use crate::{
 };
 use bon::Builder;
 use git2::{build::RepoBuilder, FetchOptions};
+use miette::Diagnostic;
 use path_slash::PathExt;
 use ssri::Integrity;
 use target_lexicon::Triple;
@@ -46,13 +47,14 @@ pub struct BuildLua<'a> {
     progress: &'a Progress<ProgressBar>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum BuildLuaError {
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Unpack(#[from] UnpackError),
     #[error(transparent)]
     Git(#[from] git2::Error),

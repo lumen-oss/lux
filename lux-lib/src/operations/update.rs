@@ -1,9 +1,5 @@
 use std::{io, sync::Arc};
 
-use bon::Builder;
-use itertools::Itertools;
-use thiserror::Error;
-
 use crate::{
     config::Config,
     lockfile::{
@@ -18,30 +14,43 @@ use crate::{
     tree::{self, InstallTree, Tree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
+use bon::Builder;
+use itertools::Itertools;
+use miette::Diagnostic;
+use thiserror::Error;
 
 use super::{Install, InstallError, PackageInstallSpec, RemoveError, SyncError, Uninstall};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum UpdateError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
     #[error("failed to update rock: {0}")]
+    #[diagnostic(forward(0))]
     Install(#[from] InstallError),
     #[error("failed to remove old rock: {0}")]
+    #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
     #[error("error initialising remote package DB:\n{0}")]
+    #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("error loading the workspace:\n{0}")]
+    #[diagnostic(forward(0))]
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error("error initialising the workspace install tree:\n{0}")]
+    #[diagnostic(forward(0))]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("error syncing the workspace install tree:\n{0}")]
+    #[diagnostic(forward(0))]
     Sync(#[from] SyncError),
 }
 

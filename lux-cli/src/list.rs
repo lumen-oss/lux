@@ -1,7 +1,7 @@
 use clap::Args;
-use eyre::Result;
 use itertools::Itertools as _;
 use lux_lib::{config::Config, lockfile::PinnedState, lua_version::LuaVersion, tree::InstallTree};
+use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 use crate::args::OutputFormat;
@@ -19,7 +19,10 @@ pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
 
     match list_data.output_format {
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string(&available_rocks)?);
+            println!(
+                "{}",
+                serde_json::to_string(&available_rocks).into_diagnostic()?
+            );
         }
         OutputFormat::Text => {
             let formatting = TreeFormatting::dir_tree(FormatCharacters::box_chars());
@@ -38,7 +41,10 @@ pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
                     ));
                 }
 
-                println!("{}", tree.to_string_with_format(&formatting)?);
+                println!(
+                    "{}",
+                    tree.to_string_with_format(&formatting).into_diagnostic()?
+                );
             }
         }
     }

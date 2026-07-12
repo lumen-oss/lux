@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use reqwest::header::ToStrError;
 use reqwest::Client;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ use crate::config::Config;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::progress::{Progress, ProgressBar};
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum ManifestFromServerError {
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -33,6 +34,7 @@ pub enum ManifestFromServerError {
     #[error("failed to unzip manifest file {0}:\n{1}")]
     ZipExtract(Url, zip::result::ZipError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionUnset),
 }
 

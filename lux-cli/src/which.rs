@@ -1,6 +1,6 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::{config::Config, lua_rockspec::LuaModule, package::PackageReq, which};
+use miette::Result;
 
 #[derive(Args)]
 pub struct Which {

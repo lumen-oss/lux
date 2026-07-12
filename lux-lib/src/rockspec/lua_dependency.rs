@@ -1,8 +1,5 @@
 use std::{collections::HashMap, convert::Infallible, fmt::Display, str::FromStr};
 
-use serde::{Deserialize, Deserializer};
-use thiserror::Error;
-
 use crate::{
     lockfile::{OptState, PinnedState},
     lua_rockspec::{
@@ -10,10 +7,14 @@ use crate::{
     },
     package::{PackageName, PackageReq, PackageReqParseError, PackageSpec, PackageVersionReq},
 };
+use miette::Diagnostic;
+use serde::{Deserialize, Deserializer};
+use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaDependencySpecParseError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageReq(#[from] PackageReqParseError),
 }
 

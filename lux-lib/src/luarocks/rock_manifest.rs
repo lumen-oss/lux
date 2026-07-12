@@ -1,4 +1,9 @@
+use crate::{
+    lua_rockspec::{DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue},
+    ROCKSPEC_FUEL_LIMIT,
+};
 use itertools::Itertools;
+use miette::Diagnostic;
 use ottavino::{Closure, Executor, Fuel};
 use ottavino_util::serde::from_value;
 use path_slash::PathBufExt;
@@ -6,11 +11,6 @@ use serde::{Deserialize, Deserializer};
 /// Compatibility layer/adapter for the luarocks client
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
-
-use crate::{
-    lua_rockspec::{DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue},
-    ROCKSPEC_FUEL_LIMIT,
-};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct RockManifest {
@@ -22,7 +22,7 @@ pub(crate) struct RockManifest {
     pub root: RockManifestRoot,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RockManifestError {
     #[error("could not parse rock_manifest: {0}")]
     Piccolo(#[from] ottavino::ExternError),

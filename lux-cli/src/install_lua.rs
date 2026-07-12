@@ -1,10 +1,10 @@
-use eyre::{OptionExt, Result};
 use lux_lib::{
     config::Config,
     lua_installation::LuaInstallation,
     lua_version::LuaVersion,
     progress::{MultiProgress, ProgressBar},
 };
+use miette::{miette, Result};
 
 pub async fn install_lua(config: Config) -> Result<()> {
     let version_stringified = &LuaVersion::from(&config)?;
@@ -24,7 +24,7 @@ pub async fn install_lua(config: Config) -> Result<()> {
         .includes()
         .first()
         .and_then(|dir| dir.parent())
-        .ok_or_eyre("error getting lua include parent directory")?;
+        .ok_or_else(|| miette!("error getting lua include parent directory"))?;
 
     bar.map(|bar| {
         bar.finish_with_message(format!(

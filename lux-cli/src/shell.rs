@@ -1,9 +1,9 @@
 use clap::Args;
-use eyre::{eyre, Result, WrapErr};
 use lux_lib::{
     config::Config, lua_installation::LuaInstallation, path::Paths, progress::MultiProgress,
     tree::InstallTree,
 };
+use miette::{miette, IntoDiagnostic, Result};
 use which::which;
 
 use std::{env, path::PathBuf};
@@ -31,7 +31,7 @@ pub struct Shell {
 
 pub async fn shell(data: Shell, config: Config) -> Result<()> {
     if env::var("LUX_SHELL").is_ok_and(|lx_shell_var| lx_shell_var == "1") {
-        return Err(eyre!("Already in a Lux shell."));
+        return Err(miette!("Already in a Lux shell."));
     }
 
     let tree = current_workspace_or_user_tree(&config)?;
@@ -53,13 +53,19 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
         Ok(val) => PathBuf::from(val),
         Err(_) => {
             #[cfg(any(target_os = "linux", target_os = "android"))]
-            let fallback = which("bash").wrap_err("Cannot find `bash` on your system!")?;
+            let fallback = which("bash")
+                .into_diagnostic()
+                .map_err(|_| miette!("Cannot find `bash` on your system!"))?;
 
             #[cfg(target_os = "windows")]
-            let fallback = which("cmd.exe").wrap_err("Cannot find `cmd.exe` on your system!")?;
+            let fallback = which("cmd.exe")
+                .into_diagnostic()
+                .map_err(|_| miette!("Cannot find `cmd.exe` on your system!"))?;
 
             #[cfg(target_os = "macos")]
-            let fallback = which("zsh").wrap_err("Cannot find `zsh` on your system!")?;
+            let fallback = which("zsh")
+                .into_diagnostic()
+                .map_err(|_| miette!("Cannot find `zsh` on your system!"))?;
 
             fallback
         }
@@ -100,9 +106,11 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
         .env("LUA_CPATH", lua_cpath.joined())
         .env("LUA_INIT", lua_init.unwrap_or_default())
         .env("LUX_SHELL", "1")
-        .spawn()?
+        .spawn()
+        .into_diagnostic()?
         .wait()
-        .await?;
+        .await
+        .into_diagnostic()?;
 
     Ok(())
 }

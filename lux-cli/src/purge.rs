@@ -1,4 +1,3 @@
-use eyre::Result;
 use inquire::Confirm;
 use lux_lib::{
     config::Config,
@@ -6,6 +5,7 @@ use lux_lib::{
     progress::{MultiProgress, ProgressBar},
     tree::InstallTree,
 };
+use miette::{IntoDiagnostic, Result};
 
 /// Purge the user tree
 pub async fn purge(config: Config) -> Result<()> {
@@ -16,7 +16,8 @@ pub async fn purge(config: Config) -> Result<()> {
     if !config.no_prompt()
         && Confirm::new(&format!("Are you sure you want to purge all {len} rocks?"))
             .with_default(false)
-            .prompt()?
+            .prompt()
+            .into_diagnostic()?
     {
         let root_dir = tree.root();
 
@@ -27,7 +28,9 @@ pub async fn purge(config: Config) -> Result<()> {
                 root_dir.display()
             )))
         });
-        tokio::fs::remove_dir_all(tree.root()).await?;
+        tokio::fs::remove_dir_all(tree.root())
+            .await
+            .into_diagnostic()?;
     }
 
     Ok(())

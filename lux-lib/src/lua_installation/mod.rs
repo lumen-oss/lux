@@ -1,5 +1,6 @@
 use is_executable::IsExecutable;
 use itertools::Itertools;
+use miette::Diagnostic;
 use path_slash::PathBufExt;
 use std::fmt;
 use std::fmt::Display;
@@ -40,11 +41,12 @@ pub struct LuaInstallation {
     pub(crate) bin: Option<PathBuf>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum LuaBinaryError {
     #[error("neither `lua` nor `luajit` found on the PATH")]
     LuaBinaryNotFound,
     #[error(transparent)]
+    #[diagnostic(transparent)]
     DetectLuaVersion(#[from] DetectLuaVersionError),
     #[error(
         r#"
@@ -72,23 +74,27 @@ in your config, or use `-v LUA=/path/to/lua_binary`.
     CustomBinaryNotFound(String),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum DetectLuaVersionError {
     #[error("failed to run {0}: {1}")]
     RunLuaCommand(String, io::Error),
     #[error("failed to parse Lua version from output: {0}")]
     ParseLuaVersion(String),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageVersionParse(#[from] crate::package::PackageVersionParseError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersion(#[from] crate::lua_version::LuaVersionError),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum LuaInstallationError {
     #[error("could not find a Lua installation and failed to build Lua from source:\n{0}")]
+    #[diagnostic(forward(0))]
     Build(#[from] BuildLuaError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
 

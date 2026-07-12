@@ -1,6 +1,6 @@
-use eyre::{eyre, Context, OptionExt, Result};
 use inquire::Confirm;
 use lux_lib::config::{Config, ConfigBuilder};
+use miette::{miette, Context, IntoDiagnostic, Result};
 
 #[derive(clap::Subcommand)]
 pub enum ConfigCmd {
@@ -34,30 +34,32 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
                 || Confirm::new("Config already exists. Overwrite?")
                     .with_default(false)
                     .prompt()
+                    .into_diagnostic()
                     .wrap_err("error prompting to overwrite config")?
             {
                 std::fs::create_dir_all(
                     config_file
                         .parent()
-                        .ok_or_eyre("error getting lux config parent directory")?,
-                )?;
+                        .ok_or_else(|| miette!("error getting lux config parent directory"))?,
+                )
+                .into_diagnostic()?;
                 let content = if init.default {
                     let cfg: ConfigBuilder = ConfigBuilder::default().build()?.into();
-                    toml::to_string(&cfg)?
+                    toml::to_string(&cfg).into_diagnostic()?
                 } else if init.current {
                     let cfg: ConfigBuilder = config.into();
-                    toml::to_string(&cfg)?
+                    toml::to_string(&cfg).into_diagnostic()?
                 } else {
                     String::default()
                 };
-                std::fs::write(&config_file, content)?;
+                std::fs::write(&config_file, content).into_diagnostic()?;
                 print!("Config initialised at {}", config_file.display());
             }
         }
         ConfigCmd::Edit => {
             let config_file = ConfigBuilder::config_file()?;
             if !config_file.is_file() {
-                return Err(eyre!(
+                return Err(miette!(
                     "
 No config file found.
 Use 'lux config init', 'lux config init --default', or 'lux config init --current'
@@ -65,11 +67,11 @@ to initialise a config file.
 "
                 ));
             }
-            edit::edit_file(config_file)?;
+            edit::edit_file(config_file).into_diagnostic()?;
         }
         ConfigCmd::Show => {
             let cfg: ConfigBuilder = config.into();
-            print!("{}", toml::to_string(&cfg)?);
+            print!("{}", toml::to_string(&cfg).into_diagnostic()?);
         }
     }
     Ok(())

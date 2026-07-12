@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use eyre::Result;
 use lux_lib::{config::Config, operations::Download, progress::MultiProgress, rockspec::Rockspec};
+use miette::Result;
 
 use crate::unpack::UnpackRemote;
 

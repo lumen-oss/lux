@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use clap::Args;
-use eyre::Result;
 use itertools::Itertools;
+use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 use lux_lib::{
@@ -41,7 +41,10 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
         OutputFormat::Json => {
             let rock_to_version_map: HashMap<&PackageName, Vec<&PackageVersion>> =
                 HashMap::from_iter(result);
-            println!("{}", serde_json::to_string(&rock_to_version_map)?);
+            println!(
+                "{}",
+                serde_json::to_string(&rock_to_version_map).into_diagnostic()?
+            );
         }
         OutputFormat::Text => {
             for (key, versions) in result.into_iter().sorted() {
@@ -51,7 +54,10 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
                     tree.push(version.to_string());
                 }
 
-                println!("{}", tree.to_string_with_format(&formatting)?);
+                println!(
+                    "{}",
+                    tree.to_string_with_format(&formatting).into_diagnostic()?
+                );
             }
         }
     }

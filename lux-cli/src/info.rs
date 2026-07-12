@@ -1,9 +1,9 @@
 use clap::Args;
-use eyre::Result;
 use lux_lib::{
     config::Config, operations::Download, package::PackageReq, progress::MultiProgress,
     rockspec::Rockspec, tree::InstallTree,
 };
+use miette::Result;
 
 use crate::workspace::current_workspace_or_user_tree;
 

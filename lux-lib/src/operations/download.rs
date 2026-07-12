@@ -6,6 +6,7 @@ use std::{
 
 use bon::Builder;
 use bytes::Bytes;
+use miette::Diagnostic;
 use thiserror::Error;
 use url::{ParseError, Url};
 
@@ -212,15 +213,17 @@ impl RemoteRockDownload {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum DownloadRockspecError {
     #[error("failed to download rockspec: {0}")]
     Request(#[from] reqwest::Error),
     #[error("failed to convert rockspec response: {0}")]
     ResponseConversion(#[from] FromUtf8Error),
     #[error("error initialising remote package DB:\n{0}")]
+    #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     DownloadSrcRock(#[from] DownloadSrcRockError),
 }
 
@@ -334,21 +337,26 @@ async fn download_remote_rock(
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum SearchAndDownloadError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Search(#[from] SearchError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Download(#[from] DownloadSrcRockError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     DownloadRockspec(#[from] DownloadRockspecError),
     #[error("io operation failed: {0}")]
     Io(#[from] io::Error),
     #[error("UTF-8 conversion failed: {0}")]
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Rockspec(#[from] LuaRockspecError),
     #[error("error initialising remote package DB:\n{0}")]
+    #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to read packed rock {0}:\n{1}")]
     ZipRead(String, zip::result::ZipError),
@@ -357,6 +365,7 @@ pub enum SearchAndDownloadError {
     #[error("{0} not found in the packed rock.")]
     RockspecNotFoundInPackedRock(String),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageSpecFromPackageReq(#[from] PackageSpecFromPackageReqError),
     #[error("git source {0} without a revision or tag.")]
     MissingCheckoutRef(String),
@@ -387,7 +396,7 @@ async fn search_and_download_src_rock(
     Ok(download_src_rock(&remote_package.package, &source_url, progress, config).await?)
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum DownloadSrcRockError {
     #[error("failed to download source rock: {0}")]
     Request(#[from] reqwest::Error),

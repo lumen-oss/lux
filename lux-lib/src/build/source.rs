@@ -1,46 +1,55 @@
 use std::{io, string::FromUtf8Error};
 
-use thiserror::Error;
-
 use crate::{
     build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
     lua_rockspec::{BuildBackendSpec, BuildSpec, LocalLuaRockspec, LuaRockspecError},
     project::{
         project_toml::{LocalProjectTomlValidationError, PartialProjectToml},
-        ProjectRoot, PROJECT_TOML,
+        ProjectRoot, TomlDeError, PROJECT_TOML,
     },
     rockspec::Rockspec,
     tree::InstallTree,
 };
+use miette::Diagnostic;
+use thiserror::Error;
 
 use super::{
     builtin::BuiltinBuildError, cmake::CMakeError, command::CommandError, make::MakeError,
     rust_mlua::RustError, treesitter_parser::TreesitterBuildError, utils::recursive_copy_dir,
 };
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum SourceBuildError {
     #[error("IO operation failed: {0}")]
     Io(#[from] io::Error),
     #[error(transparent)]
     FromUtf8(#[from] FromUtf8Error),
     #[error(transparent)]
-    Toml(#[from] toml::de::Error),
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlDeError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaRockspec(#[from] LuaRockspecError),
     #[error("builtin build failed: {0}")]
+    #[diagnostic(forward(0))]
     Builtin(#[from] BuiltinBuildError),
     #[error("cmake build failed: {0}")]
+    #[diagnostic(forward(0))]
     CMake(#[from] CMakeError),
     #[error("make build failed: {0}")]
+    #[diagnostic(forward(0))]
     Make(#[from] MakeError),
     #[error("command build failed: {0}")]
+    #[diagnostic(forward(0))]
     Command(#[from] CommandError),
     #[error("rust-mlua build failed: {0}")]
+    #[diagnostic(forward(0))]
     Rust(#[from] RustError),
     #[error("treesitter-parser build failed: {0}")]
+    #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
     #[error("cannot build from a project source that requires a luarocks build backend: {0}")]
     UnsupporedLuarocksBuildBackend(String),
@@ -62,7 +71,8 @@ where
         if path.file_name().is_some_and(|name| name == PROJECT_TOML) {
             let toml_content = String::from_utf8(tokio::fs::read(path).await?)?;
             let project_toml =
-                PartialProjectToml::new(&toml_content, ProjectRoot::new())?.into_local()?;
+                PartialProjectToml::new(PROJECT_TOML, &toml_content, ProjectRoot::new())?
+                    .into_local()?;
             build_spec = project_toml.build().current_platform().clone();
             copy_directories = Some(build_spec.copy_directories);
             break;

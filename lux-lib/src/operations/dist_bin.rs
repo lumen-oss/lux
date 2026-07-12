@@ -47,13 +47,17 @@ where
     progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
-#[derive(Error, Debug)]
+use miette::Diagnostic;
+#[derive(Error, Debug, Diagnostic)]
 pub enum DistProjectBinError {
     #[error("error installing project:\n{0}")]
+    #[diagnostic(forward(0))]
     InstallProject(#[from] InstallProjectError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[cfg(not(target_os = "linux"))]
     #[error(
@@ -63,6 +67,7 @@ Cannot link the following binaries:
     )]
     CannotLinkBinaryLibs(String),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
     #[error(transparent)]
     CC(#[from] cc::Error),

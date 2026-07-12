@@ -15,13 +15,13 @@ use builtin::{ModulePathsMissingSources, ModuleSpecAmbiguousPlatformOverride, Mo
 
 use itertools::Itertools;
 
+use miette::Diagnostic;
+use serde::{de, de::IntoDeserializer, Deserialize, Deserializer};
 use std::{
     collections::HashMap, convert::Infallible, env::consts::DLL_EXTENSION, env::consts::DLL_PREFIX,
     fmt::Display, path::PathBuf, str::FromStr,
 };
 use thiserror::Error;
-
-use serde::{de, de::IntoDeserializer, Deserialize, Deserializer};
 
 use crate::{
     lua_rockspec::per_platform_from_intermediate,
@@ -62,7 +62,7 @@ impl Default for BuildSpec {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum BuildSpecInternalError {
     #[error("'builtin' modules should not have list elements")]
     ModulesHaveListElements,
@@ -73,8 +73,10 @@ pub enum BuildSpecInternalError {
     #[error("invalid 'rust-mlua' modules format")]
     InvalidRustMLuaFormat,
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ModulePathsMissingSources(#[from] ModulePathsMissingSources),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     ParseLuaModuleError(#[from] ParseLuaModuleError),
 }
 

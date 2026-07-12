@@ -1,7 +1,7 @@
 use chumsky::{prelude::*, Parser};
+use miette::Diagnostic;
 use thiserror::Error;
-
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum VariableSubstitutionError {
     #[error("unable to substitute variables {0:#?}")]
     SubstitutionError(Vec<String>),
@@ -9,7 +9,7 @@ pub enum VariableSubstitutionError {
     RecursionLimit,
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 #[error("{0}")]
 pub(crate) struct GetVariableError(String);
 

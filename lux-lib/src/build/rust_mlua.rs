@@ -5,6 +5,7 @@ use crate::progress::{Progress, ProgressBar};
 use crate::tree::InstallTree;
 use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
 use itertools::Itertools;
+use miette::Diagnostic;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
@@ -12,7 +13,7 @@ use std::{fs, io};
 use thiserror::Error;
 use tokio::process::Command;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RustError {
     #[error("`cargo build` failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
     CargoBuild {
@@ -25,21 +26,24 @@ pub enum RustError {
     #[error("unable to create directory {0}:\n{1}")]
     CreateDir(String, io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     InstallRustLib(#[from] InstallRustLibError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     InstallLuaLib(#[from] InstallLuaLibError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("error installing rust library {lib}:\n{cause}")]
 pub struct InstallRustLibError {
     lib: String,
     cause: io::Error,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error("error installing Lua library {lib}:\n{cause}")]
 pub struct InstallLuaLibError {
     lib: String,

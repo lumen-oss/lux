@@ -9,9 +9,9 @@ use crate::{
 use std::{collections::HashMap, io, path::PathBuf};
 
 use itertools::Itertools;
+use miette::Diagnostic;
 use nonempty::NonEmpty;
 use thiserror::Error;
-
 mod dist;
 mod list;
 
@@ -76,13 +76,14 @@ pub struct Tree {
     build_tree_dir: PathBuf,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum TreeError {
     #[error("unable to create directory {0}:\n{1}")]
     CreateDir(String, io::Error),
     #[error("unable to write to {0}:\n{1}")]
     WriteFile(String, io::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
 }
 

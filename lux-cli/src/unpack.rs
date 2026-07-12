@@ -1,8 +1,8 @@
 use std::{fs::File, io::Cursor, path::PathBuf};
 
 use clap::Args;
-use eyre::Result;
 use lux_lib::{config::Config, operations, package::PackageReq, progress::MultiProgress};
+use miette::{IntoDiagnostic, Result};
 
 #[derive(Args)]
 pub struct Unpack {
@@ -23,7 +23,7 @@ pub async fn unpack(data: Unpack, config: Config) -> Result<()> {
     let destination = data.destination.unwrap_or_else(|| {
         PathBuf::from(data.path.to_string_lossy().trim_end_matches(".src.rock"))
     });
-    let src_file = File::open(data.path)?;
+    let src_file = File::open(data.path).into_diagnostic()?;
     let progress = MultiProgress::new(&config);
     let bar = progress.map(MultiProgress::new_bar);
 

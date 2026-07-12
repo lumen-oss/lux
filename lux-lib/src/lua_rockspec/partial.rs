@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use ottavino::{Closure, Executor, Fuel};
-use ottavino_util::serde::from_value;
-use thiserror::Error;
-
 use crate::{
     lua_rockspec::RockspecFormat, package::PackageName,
     rockspec::lua_dependency::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT,
 };
+use miette::Diagnostic;
+use ottavino::{Closure, Executor, Fuel};
+use ottavino_util::serde::from_value;
+use thiserror::Error;
 
 use super::{
     parse_lua_tbl_or_default, BuildSpecInternal, DeploySpec, ExternalDependencySpec,
@@ -30,7 +30,7 @@ pub struct PartialLuaRockspec {
     pub(crate) test: Option<TestSpecInternal>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum PartialRockspecError {
     #[error("rockspec execution exceeded fuel limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     FuelLimitExceeded,

@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use eyre::Result;
 use itertools::Itertools;
 use lux_lib::{config::Config, operations::Exec, workspace::Workspace};
-use path_slash::PathExt;
+use path_slash::PathBufExt;
 
 use crate::utils::path::{classify_path, PathTarget};
 use crate::workspace::top_level_ignored_files;
+use miette::{IntoDiagnostic, Result};
 
 #[derive(Args)]
 pub struct Lint {
@@ -29,7 +29,7 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
         Some(path) => classify_path(path)?,
         None => match Workspace::current()? {
             Some(workspace) => PathTarget::Workspace(Box::new(workspace)),
-            None => PathTarget::Directory(std::env::current_dir()?),
+            None => PathTarget::Directory(std::env::current_dir().into_diagnostic()?),
         },
     };
 

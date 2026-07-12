@@ -1,11 +1,11 @@
 use clap::Args;
-use eyre::{eyre, Context, OptionExt, Result};
 use lux_lib::{
     config::Config,
     lua_rockspec::RemoteLuaRockspec,
     operations::{self, VendorTarget},
     workspace::Workspace,
 };
+use miette::{miette, IntoDiagnostic, Result};
 use std::path::PathBuf;
 
 #[derive(Args)]
@@ -30,37 +30,45 @@ pub struct Vendor {
 }
 
 pub async fn vendor(data: Vendor, config: Config) -> Result<()> {
-    let target =
-        match data.rockspec {
-            Some(rockspec_path) => {
-                let content = tokio::fs::read_to_string(&rockspec_path).await?;
-                let rockspec = match rockspec_path
-                    .extension()
-                    .map(|ext| ext.to_string_lossy().to_string())
-                    .unwrap_or("".into())
-                    .as_str()
-                {
-                    "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
-                    _ => Err(eyre!(
-                        "expected a path to a .rockspec file, but got:\n{}",
-                        rockspec_path.display()
-                    )),
-                }?;
-                VendorTarget::Rockspec(rockspec)
+    let target = match data.rockspec {
+        Some(rockspec_path) => {
+            let content = tokio::fs::read_to_string(&rockspec_path)
+                .await
+                .into_diagnostic()?;
+            let rockspec = match rockspec_path
+                .extension()
+                .map(|ext| ext.to_string_lossy().to_string())
+                .unwrap_or("".into())
+                .as_str()
+            {
+                "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
+                _ => Err(miette!(
+                    "expected a path to a .rockspec file, but got:\n{}",
+                    rockspec_path.display()
+                )),
+            }?;
+            VendorTarget::Rockspec(rockspec)
+        }
+        None => match Workspace::current_or_err() {
+            Ok(ws) => VendorTarget::Workspace(ws),
+            Err(_) => {
+                return Err(miette!(
+                    "`lx vendor` must be run in a workspace root or with a rockspec argument."
+                ));
             }
-            None => VendorTarget::Workspace(Workspace::current_or_err().context(
-                "`lx vendor` must be run in a workspace root or with a rockspec argument.",
-            )?),
-        };
+        },
+    };
 
     let vendor_dir = data
         .vendor_dir
         .or_else(|| config.vendor_dir().cloned())
-        .ok_or_eyre(
-            r#"<vendor-dir> not set.
+        .ok_or_else(|| {
+            miette!(
+                r#"<vendor-dir> not set.
         It must either be specified via `--vendor-dir` or passed to this command.
-        "#,
-        )?;
+        "#
+            )
+        })?;
 
     operations::Vendor::new()
         .vendor_dir(vendor_dir)

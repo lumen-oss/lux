@@ -45,6 +45,7 @@ lazy_static = { version = "1", default-features = false, features = ["spin_no_st
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
+miette = { version = "7", features = ["fancy"] }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
@@ -60,6 +61,7 @@ simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
+textwrap = { version = "0.16", default-features = false, features = ["unicode-linebreak", "unicode-width"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
@@ -69,7 +71,6 @@ toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
-tracing-core = { version = "0.1" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
@@ -106,6 +107,7 @@ lazy_static = { version = "1", default-features = false, features = ["spin_no_st
 lock_api = { version = "0.4", features = ["arc_lock"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
+miette = { version = "7", features = ["fancy"] }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
@@ -122,6 +124,7 @@ slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 subtle = { version = "2", default-features = false, features = ["i128"] }
 syn = { version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+textwrap = { version = "0.16", default-features = false, features = ["unicode-linebreak", "unicode-width"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec", "io"] }
@@ -131,7 +134,6 @@ toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
-tracing-core = { version = "0.1" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }

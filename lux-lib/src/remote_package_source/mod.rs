@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use url::Url;
@@ -65,7 +66,7 @@ impl Serialize for RemotePackageSource {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum RemotePackageSourceError {
     #[error("error parsing remote source URL {0}. Missing URL.")]
     MissingUrl(String),

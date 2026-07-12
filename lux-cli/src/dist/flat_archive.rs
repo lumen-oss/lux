@@ -4,7 +4,6 @@ use std::{
 };
 
 use clap::Args;
-use eyre::{eyre, Context as _, OptionExt, Result};
 use lux_lib::{
     build::{Build, BuildBehaviour},
     config::{Config, ConfigBuilder},
@@ -18,6 +17,7 @@ use lux_lib::{
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
 };
+use miette::{miette, IntoDiagnostic, Result, WrapErr};
 use path_slash::PathExt;
 use tempfile::{tempdir, TempDir};
 use tokio::fs::{self, File};
@@ -78,7 +78,7 @@ enum CompressionMethod {
 }
 
 pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
-    let staging_dir = tempdir()?;
+    let staging_dir = tempdir().into_diagnostic()?;
     let config = ConfigBuilder::from(config)
         // Wrapping bin scripts does not make sense for distributed packages.
         .wrap_bin_scripts(Some(false))
@@ -119,7 +119,9 @@ pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
     zip_dir(&install_root, &destination, &args.compression_method).await?;
 
     match args.output_format {
-        OutputFormat::Json => println!("{}", serde_json::to_string(&destination)?),
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string(&destination).into_diagnostic()?)
+        }
         OutputFormat::Text => println!("Wrote archive to {}", destination.display()),
     }
 
@@ -168,7 +170,7 @@ async fn install_package(
     let package = packages
         .into_iter()
         .find(|pkg| pkg.name() == package.name())
-        .ok_or_eyre("package was not installed")?;
+        .ok_or_else(|| miette!("package was not installed"))?;
     Ok((package, tree.root()))
 }
 
@@ -177,7 +179,9 @@ async fn install_rockspec(
     staging_dir: &TempDir,
     config: &Config,
 ) -> Result<(LocalPackage, PathBuf)> {
-    let content = tokio::fs::read_to_string(&rockspec_path).await?;
+    let content = tokio::fs::read_to_string(&rockspec_path)
+        .await
+        .into_diagnostic()?;
     let lua_version = LuaVersion::from(config)?.clone();
     let rockspec = match rockspec_path
         .extension()
@@ -186,7 +190,7 @@ async fn install_rockspec(
         .as_str()
     {
         "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
-        _ => Err(eyre!(
+        _ => Err(miette!(
             "expected a path to a .rockspec or a package requirement."
         )),
     }?;
@@ -213,10 +217,14 @@ async fn install_rockspec(
 
 async fn zip_dir(src_dir: &Path, dest_file: &Path, method: &CompressionMethod) -> Result<()> {
     if dest_file.exists() {
-        return Err(eyre!("File {} already exists!", dest_file.display()));
+        return Err(miette!("File {} already exists!", dest_file.display()));
     }
     let temp_archive = PathBuf::from(format!("{}.part", dest_file.display()));
-    let archive = File::create(&temp_archive).await?.into_std().await;
+    let archive = File::create(&temp_archive)
+        .await
+        .into_diagnostic()?
+        .into_std()
+        .await;
     let walkdir = WalkDir::new(src_dir);
     let mut zip = ZipWriter::new(archive);
 
@@ -239,28 +247,31 @@ async fn zip_dir(src_dir: &Path, dest_file: &Path, method: &CompressionMethod) -
 
     for entry_result in walkdir.into_iter() {
         let entry = entry_result.map_err(|err| {
-            eyre!(
+            miette!(
                 "Error while traversing directory {}: {}.",
                 src_dir.display(),
                 err,
             )
         })?;
         let path = entry.path();
-        let relative_path = path.strip_prefix(src_dir)?;
+        let relative_path = path.strip_prefix(src_dir).into_diagnostic()?;
         let relative_path_str = relative_path.to_slash_lossy().to_string();
         if path.is_file() {
-            zip.start_file(relative_path_str, options)?;
-            let mut f = File::open(path).await?.into_std().await;
-            io::copy(&mut f, &mut zip)?;
+            zip.start_file(relative_path_str, options)
+                .into_diagnostic()?;
+            let mut f = File::open(path).await.into_diagnostic()?.into_std().await;
+            io::copy(&mut f, &mut zip).into_diagnostic()?;
         } else if !relative_path.as_os_str().is_empty() {
-            zip.add_directory(relative_path_str, options)?;
+            zip.add_directory(relative_path_str, options)
+                .into_diagnostic()?;
         }
     }
-    zip.finish()?;
+    zip.finish().into_diagnostic()?;
     fs::rename(&temp_archive, &dest_file)
         .await
-        .context(format!(
-            "Error renaming {} to {}.",
+        .into_diagnostic()
+        .wrap_err(format!(
+            "Error renaming {} to {}",
             temp_archive.display(),
             dest_file.display()
         ))?;

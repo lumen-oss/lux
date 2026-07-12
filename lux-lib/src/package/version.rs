@@ -7,12 +7,12 @@ use std::{
 use html_escape::decode_html_entities;
 use itertools::Itertools;
 
+use miette::Diagnostic;
 use nonempty::NonEmpty;
 use semver::{Comparator, Error, Op, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
-
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum VersionReqToVersionError {
     #[error("cannot parse version from non-exact version requirement '{0}'")]
     NonExactVersionReq(VersionReq),
@@ -136,9 +136,10 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum PackageVersionParseError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Specrev(#[from] SpecrevParseError),
     #[error("failed to parse version: {0}")]
     Version(#[from] Error),
@@ -465,7 +466,7 @@ pub(crate) trait HasModRev {
     fn to_modrev_string(&self) -> String;
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub struct PackageVersionReqError(#[from] Error);
 
@@ -585,7 +586,7 @@ fn trim_specrev(version_str: &str) -> &str {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum SpecrevParseError {
     #[error("specrev {specrev} in version {full_version} contains non-numeric characters")]
     InvalidSpecrev {

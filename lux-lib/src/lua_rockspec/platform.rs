@@ -1,15 +1,15 @@
 use itertools::Itertools;
 
-use std::{cmp::Ordering, collections::HashMap};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
-use thiserror::Error;
-
+use miette::Diagnostic;
 use serde::{
     de::{self, DeserializeOwned, IntoDeserializer, Visitor},
     Deserialize, Deserializer,
 };
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
+use std::{cmp::Ordering, collections::HashMap};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+use thiserror::Error;
 
 use super::{normalize_lua_value, DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, LuaValueSeed};
 
@@ -155,7 +155,7 @@ impl DisplayAsLuaKV for PlatformSupport {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum PlatformValidationError {
     #[error("error when parsing platform identifier: {0}")]
     ParseError(String),
