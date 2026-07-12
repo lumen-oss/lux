@@ -1776,4 +1776,40 @@ mod tests {
         let restored: RockDescription = eval_lua_global(&lua, "description");
         assert_eq!(desc, restored);
     }
+
+    #[test]
+    pub fn regression_luasec() {
+        let rockspec_content = r#"
+package = "LuaSec"
+version = "1.3.2-1"
+source = {
+  url = "git+https://github.com/brunoos/luasec",
+  tag = "v1.3.2",
+}
+external_dependencies = {
+   platforms = {
+      unix = {
+         OPENSSL = {
+            header = "openssl/ssl.h",
+            library = "ssl"
+         }
+      },
+      windows = {
+         OPENSSL = {
+            header = "openssl/ssl.h",
+         }
+      },
+   }
+}
+"#;
+        let rockspec = RemoteLuaRockspec::new(rockspec_content).unwrap();
+        let linux_external_deps = rockspec
+            .external_dependencies()
+            .get(&PlatformIdentifier::Linux);
+        assert!(linux_external_deps.get("OPENSSL").is_some());
+        let windows_external_deps = rockspec
+            .external_dependencies()
+            .get(&PlatformIdentifier::Windows);
+        assert!(windows_external_deps.get("OPENSSL").is_some());
+    }
 }
