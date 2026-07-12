@@ -15,6 +15,7 @@ use crate::utils::path::{classify_path, PathTarget};
 #[derive(Args)]
 pub struct Fmt {
     /// Path to a workspace, directory, or Lua file to format. Defaults to the current workspace.
+    #[arg(long)]
     path: Option<PathBuf>,
 
     #[clap(default_value = "stylua")]
