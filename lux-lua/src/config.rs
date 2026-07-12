@@ -141,4 +141,25 @@ mod tests {
         .exec()
         .unwrap();
     }
+
+    #[tokio::test]
+    async fn lua_api_test_tree_lockfile_api() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lua = Lua::new();
+        lua.globals().set("user_tree", temp.path()).unwrap();
+        lua.globals().set("lux", crate::lux(&lua).unwrap()).unwrap();
+        lua.load(
+            r#"
+        local config = lux.config
+        local full_config = config.builder()
+            :user_tree(user_tree)
+            :build()
+        local tree = full_config:user_tree("5.5")
+        local lockfile = tree:lockfile()
+        print(lockfile:version())
+    "#,
+        )
+        .exec()
+        .unwrap();
+    }
 }
