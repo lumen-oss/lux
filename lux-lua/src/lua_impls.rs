@@ -765,8 +765,8 @@ impl FromLua for PackageInstallSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PackageSpecLua(#[field(skip)] pub PackageSpec);
+#[derive(Debug, Clone)]
+pub struct PackageSpecLua(pub PackageSpec);
 
 impl Typed for PackageSpecLua {
     fn ty() -> Type {
@@ -805,8 +805,20 @@ impl TypedUserData for PackageSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PackageReqLua(#[field(skip)] pub PackageReq);
+impl mlua::UserData for PackageSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PackageReqLua(pub PackageReq);
 
 impl Typed for PackageReqLua {
     fn ty() -> Type {
@@ -838,8 +850,20 @@ impl TypedUserData for PackageReqLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LocalPackageHashesLua(#[field(skip)] pub LocalPackageHashes);
+impl mlua::UserData for PackageReqLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalPackageHashesLua(pub LocalPackageHashes);
 
 impl Typed for LocalPackageHashesLua {
     fn ty() -> Type {
@@ -861,8 +885,20 @@ impl TypedUserData for LocalPackageHashesLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LocalPackageLua(#[field(skip)] pub LocalPackage);
+impl mlua::UserData for LocalPackageHashesLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalPackageLua(pub LocalPackage);
 
 impl Typed for LocalPackageLua {
     fn ty() -> Type {
@@ -919,8 +955,19 @@ impl TypedUserData for LocalPackageLua {
     }
 }
 
-#[derive(mlua_extras::UserData)]
-pub struct RockLayoutLua(#[field(skip)] pub RockLayout);
+impl mlua::UserData for LocalPackageLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+pub struct RockLayoutLua(pub RockLayout);
 
 impl Typed for RockLayoutLua {
     fn ty() -> Type {
@@ -954,6 +1001,18 @@ impl TypedUserData for RockLayoutLua {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Change-agnostic way of referencing various paths for a rock");
+    }
+}
+
+impl mlua::UserData for RockLayoutLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -1034,8 +1093,8 @@ struct RockLayoutConfigInput {
     layout: RockLayoutVariant,
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RockLayoutConfigLua(#[field(skip)] pub RockLayoutConfig);
+#[derive(Debug, Clone)]
+pub struct RockLayoutConfigLua(pub RockLayoutConfig);
 
 impl Typed for RockLayoutConfigLua {
     fn ty() -> Type {
@@ -1066,6 +1125,18 @@ impl TypedUserData for RockLayoutConfigLua {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Template configuration for a rock's tree layout");
+    }
+}
+
+impl mlua::UserData for RockLayoutConfigLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -1377,8 +1448,8 @@ impl mlua::UserData for ConfigBuilderLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LuaDependencySpecLua(#[field(skip)] pub LuaDependencySpec);
+#[derive(Debug, Clone)]
+pub struct LuaDependencySpecLua(pub LuaDependencySpec);
 
 impl Typed for LuaDependencySpecLua {
     fn ty() -> Type {
@@ -1429,8 +1500,20 @@ impl TypedUserData for LuaDependencySpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PlatformSupportLua(#[field(skip)] pub PlatformSupport);
+impl mlua::UserData for LuaDependencySpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlatformSupportLua(pub PlatformSupport);
 
 impl Typed for PlatformSupportLua {
     fn ty() -> Type {
@@ -1452,8 +1535,20 @@ impl TypedUserData for PlatformSupportLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RockDescriptionLua(#[field(skip)] pub RockDescription);
+impl mlua::UserData for PlatformSupportLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RockDescriptionLua(pub RockDescription);
 
 impl Typed for RockDescriptionLua {
     fn ty() -> Type {
@@ -1495,8 +1590,20 @@ impl TypedUserData for RockDescriptionLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct GitSourceLua(#[field(skip)] pub GitSource);
+impl mlua::UserData for RockDescriptionLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GitSourceLua(pub GitSource);
 
 impl Typed for GitSourceLua {
     fn ty() -> Type {
@@ -1516,8 +1623,20 @@ impl TypedUserData for GitSourceLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RemoteRockSourceLua(#[field(skip)] pub RemoteRockSource);
+impl mlua::UserData for GitSourceLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteRockSourceLua(pub RemoteRockSource);
 
 impl Typed for RemoteRockSourceLua {
     fn ty() -> Type {
@@ -1550,8 +1669,20 @@ impl TypedUserData for RemoteRockSourceLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct BustedTestSpecLua(#[field(skip)] pub BustedTestSpec);
+impl mlua::UserData for RemoteRockSourceLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BustedTestSpecLua(pub BustedTestSpec);
 
 impl Typed for BustedTestSpecLua {
     fn ty() -> Type {
@@ -1569,8 +1700,20 @@ impl TypedUserData for BustedTestSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct CommandTestSpecLua(#[field(skip)] pub CommandTestSpec);
+impl mlua::UserData for BustedTestSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandTestSpecLua(pub CommandTestSpec);
 
 impl Typed for CommandTestSpecLua {
     fn ty() -> Type {
@@ -1591,8 +1734,20 @@ impl TypedUserData for CommandTestSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LuaScriptTestSpecLua(#[field(skip)] pub LuaScriptTestSpec);
+impl mlua::UserData for CommandTestSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LuaScriptTestSpecLua(pub LuaScriptTestSpec);
 
 impl Typed for LuaScriptTestSpecLua {
     fn ty() -> Type {
@@ -1615,8 +1770,20 @@ impl TypedUserData for LuaScriptTestSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct ModulePathsLua(#[field(skip)] pub ModulePaths);
+impl mlua::UserData for LuaScriptTestSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ModulePathsLua(pub ModulePaths);
 
 impl Typed for ModulePathsLua {
     fn ty() -> Type {
@@ -1682,8 +1849,20 @@ impl TypedUserData for ModulePathsLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct CMakeBuildSpecLua(#[field(skip)] pub CMakeBuildSpec);
+impl mlua::UserData for ModulePathsLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CMakeBuildSpecLua(pub CMakeBuildSpec);
 
 impl Typed for CMakeBuildSpecLua {
     fn ty() -> Type {
@@ -1710,8 +1889,20 @@ impl TypedUserData for CMakeBuildSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct MakeBuildSpecLua(#[field(skip)] pub MakeBuildSpec);
+impl mlua::UserData for CMakeBuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MakeBuildSpecLua(pub MakeBuildSpec);
 
 impl Typed for MakeBuildSpecLua {
     fn ty() -> Type {
@@ -1760,8 +1951,20 @@ impl TypedUserData for MakeBuildSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct TreesitterParserBuildSpecLua(#[field(skip)] pub TreesitterParserBuildSpec);
+impl mlua::UserData for MakeBuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreesitterParserBuildSpecLua(pub TreesitterParserBuildSpec);
 
 impl Typed for TreesitterParserBuildSpecLua {
     fn ty() -> Type {
@@ -1804,8 +2007,20 @@ impl TypedUserData for TreesitterParserBuildSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RustMluaBuildSpecLua(#[field(skip)] pub RustMluaBuildSpec);
+impl mlua::UserData for TreesitterParserBuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RustMluaBuildSpecLua(pub RustMluaBuildSpec);
 
 impl Typed for RustMluaBuildSpecLua {
     fn ty() -> Type {
@@ -1871,8 +2086,20 @@ Keys are the sources, values the destinations (relative to the `lua` directory).
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct CommandBuildSpecLua(#[field(skip)] pub CommandBuildSpec);
+impl mlua::UserData for RustMluaBuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandBuildSpecLua(pub CommandBuildSpec);
 
 impl Typed for CommandBuildSpecLua {
     fn ty() -> Type {
@@ -1894,8 +2121,20 @@ impl TypedUserData for CommandBuildSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct InstallSpecLua(#[field(skip)] pub InstallSpec);
+impl mlua::UserData for CommandBuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InstallSpecLua(pub InstallSpec);
 
 impl Typed for InstallSpecLua {
     fn ty() -> Type {
@@ -1960,8 +2199,20 @@ to the foo directory under the rock's Lua files directory.
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct BuildSpecLua(#[field(skip)] pub BuildSpec);
+impl mlua::UserData for InstallSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildSpecLua(pub BuildSpec);
 
 impl Typed for BuildSpecLua {
     fn ty() -> Type {
@@ -2007,8 +2258,20 @@ impl TypedUserData for BuildSpecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct LocalLuaRockspecLua(#[field(skip)] pub LocalLuaRockspec);
+impl mlua::UserData for BuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalLuaRockspecLua(pub LocalLuaRockspec);
 
 impl Typed for LocalLuaRockspecLua {
     fn ty() -> Type {
@@ -2092,6 +2355,18 @@ impl TypedUserData for LocalLuaRockspecLua {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("RockSpec for a local rock installation, deserialized from a `.rockspec` file");
+    }
+}
+
+impl mlua::UserData for LocalLuaRockspecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -2204,8 +2479,7 @@ impl mlua::UserData for RemoteLuaRockspecLua {
     }
 }
 
-#[derive(mlua_extras::UserData)]
-pub struct PartialLuaRockspecLua(#[field(skip)] pub PartialLuaRockspec);
+pub struct PartialLuaRockspecLua(pub PartialLuaRockspec);
 
 impl Typed for PartialLuaRockspecLua {
     fn ty() -> Type {
@@ -2228,8 +2502,20 @@ impl TypedUserData for PartialLuaRockspecLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct PartialProjectTomlLua(#[field(skip)] pub PartialProjectToml);
+impl mlua::UserData for PartialLuaRockspecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PartialProjectTomlLua(pub PartialProjectToml);
 
 impl Typed for PartialProjectTomlLua {
     fn ty() -> Type {
@@ -2264,8 +2550,19 @@ The rest of the fields are optional, but are required to build a rockspec.
     }
 }
 
-#[derive(mlua_extras::UserData)]
-pub struct LocalProjectTomlLua(#[field(skip)] pub LocalProjectToml);
+impl mlua::UserData for PartialProjectTomlLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+pub struct LocalProjectTomlLua(pub LocalProjectToml);
 
 impl Typed for LocalProjectTomlLua {
     fn ty() -> Type {
@@ -2340,8 +2637,19 @@ To build a rockspec, use `RemoteProjectToml`.
     }
 }
 
-#[derive(mlua_extras::UserData)]
-pub struct RemoteProjectTomlLua(#[field(skip)] pub RemoteProjectToml);
+impl mlua::UserData for LocalProjectTomlLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+pub struct RemoteProjectTomlLua(pub RemoteProjectToml);
 
 impl Typed for RemoteProjectTomlLua {
     fn ty() -> Type {
@@ -2395,8 +2703,20 @@ impl TypedUserData for RemoteProjectTomlLua {
     }
 }
 
-#[derive(Debug, Clone, mlua_extras::UserData)]
-pub struct RemotePackageDBLua(#[field(skip)] pub RemotePackageDB);
+impl mlua::UserData for RemoteProjectTomlLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RemotePackageDBLua(pub RemotePackageDB);
 
 impl Typed for RemotePackageDBLua {
     fn ty() -> Type {
@@ -2414,6 +2734,18 @@ impl FromLua for RemotePackageDBLua {
                 message: None,
             }),
         }
+    }
+}
+
+impl mlua::UserData for RemotePackageDBLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
@@ -2456,8 +2788,8 @@ impl TypedUserData for RemotePackageDBLua {
     }
 }
 
-#[derive(Clone, mlua_extras::UserData)]
-pub struct LockfileReadOnlyLua(#[field(skip)] pub Lockfile<ReadOnly>);
+#[derive(Clone)]
+pub struct LockfileReadOnlyLua(pub Lockfile<ReadOnly>);
 
 impl Typed for LockfileReadOnlyLua {
     fn ty() -> Type {
@@ -2502,8 +2834,19 @@ impl TypedUserData for LockfileReadOnlyLua {
     }
 }
 
-#[derive(mlua_extras::UserData)]
-pub struct LockfileGuardLua(#[field(skip)] pub LockfileGuard);
+impl mlua::UserData for LockfileReadOnlyLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+pub struct LockfileGuardLua(pub LockfileGuard);
 
 impl Typed for LockfileGuardLua {
     fn ty() -> Type {
@@ -2538,8 +2881,20 @@ impl TypedUserData for LockfileGuardLua {
     }
 }
 
-#[derive(Clone, mlua_extras::UserData)]
-pub struct LockfileReadWriteLua(#[field(skip)] pub Lockfile<ReadWrite>);
+impl mlua::UserData for LockfileGuardLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Clone)]
+pub struct LockfileReadWriteLua(pub Lockfile<ReadWrite>);
 
 impl Typed for LockfileReadWriteLua {
     fn ty() -> Type {
@@ -2588,6 +2943,18 @@ impl TypedUserData for LockfileReadWriteLua {
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Writable lockfile for an install tree");
+    }
+}
+
+impl mlua::UserData for LockfileReadWriteLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
     }
 }
 
