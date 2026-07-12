@@ -1,7 +1,10 @@
 [alias]
-tt = "--locked nextest run --tests --no-fail-fast"                     # All
-tl = "--locked nextest run --lib --no-fail-fast"                       # Lib only
-ttl = "--locked nextest run -p lux-lua --lib --no-fail-fast --features test"  # lux-lua
+# lux-lib + lux-cli + integration
+tt = "--locked nextest run --tests --no-fail-fast"
+# lib only
+tl = "--locked nextest run --lib --no-fail-fast"
+# Lua API
+ttl = "--locked nextest run -p lux-lua --lib --no-fail-fast --features test"
 lx = "--locked run --bin lx --"
 xtask = "--locked run --package xtask --"
 xtask-lua51 = "--locked run --package xtask-lua --features lua51 --"
