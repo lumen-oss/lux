@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0](https://github.com/lumen-oss/lux/compare/v0.35.3...v0.36.0) `lux-cli` - 2026-07-12
+
+### Added
+- [**breaking**] replace `--porcelain` with `--output-format` ([#1674](https://github.com/lumen-oss/lux/pull/1674))
+- *(check)* support specifying directories ([#1663](https://github.com/lumen-oss/lux/pull/1663))
+- *(lint)* remove short option for `--path` flag
+- *(fmt)* [**breaking**] use `--path` flag
+
+### Fixed
+- *(lint)* [**breaking**] resolve CLI argument parsing regression in lx lint ([#1669](https://github.com/lumen-oss/lux/pull/1669))
+
+## [0.46.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.46.0...lux-lib-v0.46.1) `lux-lib` - 2026-07-12
+
+### Fixed
+- *(rockspec)* support per-platform overrides without default ([#1671](https://github.com/lumen-oss/lux/pull/1671))
+
 ## [0.35.3](https://github.com/lumen-oss/lux/compare/v0.35.2...v0.35.3) `lux-cli` - 2026-07-08
 
 ### Added
