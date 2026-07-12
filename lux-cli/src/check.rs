@@ -15,6 +15,7 @@ use crate::{
 #[derive(Args)]
 pub struct Check {
     /// Path to a workspace, directory, or Lua file to check. Defaults to the current workspace.
+    #[arg(short, long)]
     path: Option<PathBuf>,
     /// Comma-separated list of ignore patterns.
     /// Patterns must follow glob syntax.
@@ -86,13 +87,18 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
 
             (dirs, rc)
         }
-        PathTarget::Directory(dir) => (vec![dir], None),
+        PathTarget::Directory(dir) => {
+            let rc = resolve_rc_files(&dir, &config)?;
+            (vec![dir], rc)
+        }
         PathTarget::File(file) => {
             let root = file
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
                 .to_path_buf();
-            (vec![root], None)
+
+            let rc = resolve_rc_files(&root, &config)?;
+            (vec![root], rc)
         }
     };
 
@@ -115,4 +121,17 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
         .await
         .map_err(|err| eyre!(err.to_string()))?;
     Ok(())
+}
+
+fn resolve_rc_files(root: &Path, config: &Config) -> Result<Option<Vec<PathBuf>>> {
+    let rc_path = match Workspace::from(root)? {
+        Some(workspace) => workspace.luarc_path(config),
+        None => root.join(".luarc.json"),
+    };
+
+    if rc_path.is_file() {
+        Ok(Some(vec![rc_path]))
+    } else {
+        Ok(None)
+    }
 }
