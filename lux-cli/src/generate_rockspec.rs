@@ -3,15 +3,16 @@ use eyre::Result;
 use lux_lib::{package::PackageName, project::Project, rockspec::Rockspec, workspace::Workspace};
 use std::path::PathBuf;
 
+use crate::args::OutputFormat;
+
 #[derive(Args)]
 pub struct GenerateRockspec {
     /// Package to generate the rockspec for.
     #[arg(short, long, visible_short_alias = 'p')]
     package: Option<PackageName>,
 
-    /// Output a JSON list of paths to the generated rockspecs.
-    #[arg(long)]
-    porcelain: bool,
+    #[arg(long, default_value = "text", value_enum, ignore_case = true)]
+    output_format: OutputFormat,
 }
 
 pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
@@ -27,14 +28,14 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     for project in targets {
         let path = generate_project_rockspec(project).await?;
 
-        if !data.porcelain {
+        if data.output_format == OutputFormat::Text {
             println!("Wrote rockspec to {}", path.display());
         }
 
         generated_paths.push(path.to_string_lossy().into_owned());
     }
 
-    if data.porcelain {
+    if data.output_format == OutputFormat::Json {
         println!("{}", serde_json::to_string(&generated_paths)?);
     }
 

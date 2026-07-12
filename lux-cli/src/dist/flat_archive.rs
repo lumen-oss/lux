@@ -24,7 +24,10 @@ use tokio::fs::{self, File};
 use walkdir::WalkDir;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
-use crate::{args::PackageOrRockspec, workspace::exists_matching_workspace_member};
+use crate::{
+    args::{OutputFormat, PackageOrRockspec},
+    workspace::exists_matching_workspace_member,
+};
 
 #[derive(Args)]
 pub struct FlatArchive {
@@ -53,9 +56,8 @@ pub struct FlatArchive {
     #[arg(short, long, value_enum, visible_short_alias = 'c')]
     compression_method: CompressionMethod,
 
-    /// Output a JSON path.
-    #[arg(long)]
-    porcelain: bool,
+    #[arg(long, default_value = "text", value_enum, ignore_case = true)]
+    output_format: OutputFormat,
 }
 
 #[derive(Clone, clap::ValueEnum, Default)]
@@ -116,10 +118,9 @@ pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
 
     zip_dir(&install_root, &destination, &args.compression_method).await?;
 
-    if args.porcelain {
-        println!("{}", serde_json::to_string(&destination)?);
-    } else {
-        println!("Wrote archive to {}", destination.display());
+    match args.output_format {
+        OutputFormat::Json => println!("{}", serde_json::to_string(&destination)?),
+        OutputFormat::Text => println!("Wrote archive to {}", destination.display()),
     }
 
     Ok(())
