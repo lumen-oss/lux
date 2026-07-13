@@ -62,7 +62,13 @@ mod definitions_registry {
 }
 
 #[cfg(not(feature = "definitions"))]
-#[cfg_attr(not(any(feature = "test", feature = "definitions")), mlua::lua_module)]
+#[cfg_attr(
+    all(
+        feature = "module",
+        not(any(feature = "test", feature = "definitions"))
+    ),
+    mlua::lua_module
+)]
 fn lux(lua: &Lua) -> LuaResult<LuaAnyUserData> {
     #[cfg(not(any(
         feature = "lua51",
