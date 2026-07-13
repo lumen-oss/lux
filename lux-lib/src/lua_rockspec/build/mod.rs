@@ -734,7 +734,7 @@ impl BuildType {
                 )
             },
             &BuildType::TreesitterParser => {
-                Some(PackageName::new("luarocks-build-treesitter-parser".into()).into())
+                Some(PackageName::new("luarocks-build-treesitter-parser >= 6.1.0".into()).into())
             } // IMPORTANT: If adding another luarocks build backend,
               // make sure to also add it to the filters in `operations::resolve::do_get_all_dependencies`.
         }

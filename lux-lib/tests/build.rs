@@ -202,7 +202,7 @@ async fn treesitter_parser_build() {
         .user_tree(LuaVersion::from(&config).unwrap().clone())
         .unwrap();
 
-    Build::new()
+    let package = Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
         .tree(&tree)
@@ -213,6 +213,93 @@ async fn treesitter_parser_build() {
         .build()
         .await
         .unwrap();
+
+    let rock_layout = tree.installed_rock_layout(&package).unwrap();
+
+    let folds_query = rock_layout
+        .etc
+        .join("queries")
+        .join("rust")
+        .join("folds.scm");
+    assert!(folds_query.is_file());
+}
+
+#[tokio::test]
+async fn treesitter_parser_build_source_queries() {
+    if cfg!(target_env = "msvc") {
+        println!("Skipping test that is flaky on Windows/MSVC");
+        return;
+    }
+
+    let dir = TempDir::new().unwrap();
+
+    let rockspec = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/tree-sitter-tmux-scm-1.rockspec");
+    let content = String::from_utf8(std::fs::read(rockspec).unwrap()).unwrap();
+    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+
+    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+
+    let config = ConfigBuilder::new()
+        .unwrap()
+        .user_tree(Some(dir.to_path_buf()))
+        .lua_version(lua_version)
+        .build()
+        .unwrap();
+
+    let bar = Progress::no_progress();
+
+    let lua = LuaInstallation::new_from_config(&config, &bar)
+        .await
+        .unwrap();
+
+    let tree = config
+        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .unwrap();
+
+    let package = Build::new()
+        .rockspec(&rockspec)
+        .lua(&lua)
+        .tree(&tree)
+        .entry_type(tree::EntryType::Entrypoint)
+        .config(&config)
+        .progress(&bar)
+        .behaviour(Force)
+        .build()
+        .await
+        .unwrap();
+
+    let rock_layout = tree.installed_rock_layout(&package).unwrap();
+
+    let highlights_query = rock_layout
+        .etc
+        .join("queries")
+        .join("tmux")
+        .join("highlights.scm");
+    assert!(highlights_query.is_file());
+
+    let injections_query = rock_layout
+        .etc
+        .join("queries")
+        .join("tmux")
+        .join("injections.scm");
+    assert!(injections_query.is_file());
+
+    let top_level_queries_dir = rock_layout.etc.join("queries");
+    assert!(top_level_queries_dir.is_dir());
+    let mut top_level_scm_files = Vec::new();
+    let mut entries = tokio::fs::read_dir(&top_level_queries_dir).await.unwrap();
+    while let Some(entry) = entries.next_entry().await.unwrap() {
+        let path = entry.path();
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "scm") {
+            top_level_scm_files.push(path);
+        }
+    }
+    assert!(
+        top_level_scm_files.is_empty(),
+        "query files should not be installed at the top level: {:?}",
+        top_level_scm_files,
+    );
 }
 
 #[tokio::test]
