@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.1](https://github.com/lumen-oss/lux/compare/v0.36.0...v0.36.1) `lux-cli` - 2026-07-13
+
+### Dependencies
+- *(deps)* bump emmylua_formatter from 0.23.2 to 0.24.0 ([#1677](https://github.com/lumen-oss/lux/pull/1677))
+
+## [0.46.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.46.1...lux-lib-v0.46.2) `lux-lib` - 2026-07-13
+
+### Added
+- *(build/tree-sitter)* install source queries if none are specified in the rockspec ([#1681](https://github.com/lumen-oss/lux/pull/1681))
+
 ## [0.36.0](https://github.com/lumen-oss/lux/compare/v0.35.3...v0.36.0) `lux-cli` - 2026-07-12
 
 ### Added
