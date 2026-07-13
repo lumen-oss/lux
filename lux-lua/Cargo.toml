@@ -21,7 +21,7 @@ inventory = { version = "0.3", optional = true }
 mlua-extras.workspace = true
 
 [dependencies.lux-lib]
-version = "0.46.1"
+version = "0.46.2"
 path = "../lux-lib"
 
 [dev-dependencies]
