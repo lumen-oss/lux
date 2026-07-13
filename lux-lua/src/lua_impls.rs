@@ -3330,3 +3330,893 @@ enum PackageInstallSpecInput {
         build_behaviour: BuildBehaviourLua,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert_fs::TempDir;
+    use mlua::prelude::*;
+
+    const BASIC_PROJECT: &str = r#"
+package = "test-package"
+version = "0.1.0"
+lua = "5.1"
+
+[dependencies]
+say = ">=1.0"
+
+[source]
+url = "https://example.com/test/test"
+
+[build]
+type = "builtin"
+"#;
+
+    fn setup_lua() -> (TempDir, Lua) {
+        let tree = TempDir::new().unwrap();
+        let lua = Lua::new();
+        lua.globals().set("lux", crate::lux(&lua).unwrap()).unwrap();
+        lua.globals()
+            .set("user_tree", tree.path().to_str().unwrap())
+            .unwrap();
+        (tree, lua)
+    }
+
+    fn create_project(toml: &str) -> (TempDir, Lua) {
+        let project = TempDir::new().unwrap();
+        std::fs::write(project.join("lux.toml"), toml).unwrap();
+        let (_, lua) = setup_lua();
+        lua.globals()
+            .set("project_location", project.path())
+            .unwrap();
+        (project, lua)
+    }
+
+    #[test]
+    fn lua_api_test_lua_version_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            assert(config, "config should not be nil")
+            assert(config:user_tree("5.1"), "user_tree should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_package_version_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local version = rockspec:version()
+            assert(type(version) == "string", "version should be a string")
+            assert(version == "0.1.0-1", "version should be 0.1.0-1")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_package_name_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local name = rockspec:package()
+            assert(type(name) == "string", "name should be a string")
+            assert(name == "test-package", "name should be test-package")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_package_version_req_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local lua_req = rockspec:lua()
+            assert(type(lua_req) == "string", "lua version req should be a string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_platform_identifier_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            assert(tree, "tree should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_rockspec_format_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local format = rockspec:format()
+            assert(format == nil or type(format) == "string", "format should be nil or string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_pinned_state_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local lockfile = tree:lockfile()
+            local rocks = lockfile:rocks()
+            assert(type(rocks) == "table", "rocks should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_opt_state_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local lockfile = tree:lockfile()
+            local version = lockfile:version()
+            assert(type(version) == "string", "lockfile version should be a string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_local_package_id_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local lockfile = tree:lockfile()
+            local rocks = lockfile:rocks()
+            for id, rock in pairs(rocks) do
+                assert(type(id) == "string", "package id should be a string")
+                assert(#id == 64, "package id should be 64 chars")
+                break
+            end
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_lock_constraint_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local lockfile = tree:lockfile()
+            local rocks = lockfile:rocks()
+            for id, rock in pairs(rocks) do
+                local constraint = rock:constraint()
+                assert(type(constraint) == "string", "constraint should be a string")
+                break
+            end
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_external_dependency_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local ext_deps = rockspec:external_dependencies()
+            assert(type(ext_deps) == "table", "external_dependencies should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_rock_layout_config_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :entrypoint_layout({ layout = "default" })
+                :build()
+            assert(config, "config should not be nil")
+
+            local config2 = lux.config.builder()
+                :lua_version("5.1")
+                :entrypoint_layout({ layout = "nvim" })
+                :build()
+            assert(config2, "nvim config should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_config_lua() {
+        let (tree, cache, data) = (
+            TempDir::new().unwrap(),
+            TempDir::new().unwrap(),
+            TempDir::new().unwrap(),
+        );
+        let (_tree, lua) = setup_lua();
+        lua.globals().set("user_tree", tree.path()).unwrap();
+        lua.globals().set("cache", cache.path()).unwrap();
+        lua.globals().set("data", data.path()).unwrap();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :cache_dir(cache)
+                :data_dir(data)
+                :build()
+            assert(config, "config should not be nil")
+            assert(config:server(), "server should not be nil")
+            assert(type(config:extra_servers()) == "table", "extra_servers should be a table")
+            assert(type(config:verbose()) == "boolean", "verbose should be a boolean")
+            assert(type(config:no_progress()) == "boolean", "no_progress should be a boolean")
+            assert(type(config:no_prompt()) == "boolean", "no_prompt should be a boolean")
+            assert(type(config:timeout()) == "number", "timeout should be a number")
+            assert(config:cache_dir(), "cache_dir should not be nil")
+            assert(config:data_dir(), "data_dir should not be nil")
+            assert(config:entrypoint_layout(), "entrypoint_layout should not be nil")
+            assert(type(config:variables()) == "table", "variables should be a table")
+            assert(config:make_cmd(), "make_cmd should not be nil")
+            assert(config:cmake_cmd(), "cmake_cmd should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_config_builder_lua() {
+        let tree = TempDir::new().unwrap();
+        let cache = TempDir::new().unwrap();
+        let data = TempDir::new().unwrap();
+        let (_tree, lua) = setup_lua();
+        lua.globals().set("tree", tree.path()).unwrap();
+        lua.globals().set("cache", cache.path()).unwrap();
+        lua.globals().set("data", data.path()).unwrap();
+
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :dev(true)
+                :server("https://example.com")
+                :extra_servers({"https://example.com", "https://example2.com"})
+                :namespace("example")
+                :lua_dir("lua")
+                :lua_version("5.1")
+                :user_tree(tree)
+                :verbose(true)
+                :no_progress(false)
+                :no_prompt(false)
+                :timeout(10)
+                :cache_dir(cache)
+                :data_dir(data)
+                :entrypoint_layout({ layout = "nvim" })
+                :user_agent("test-agent")
+                :wrap_bin_scripts(true)
+                :build()
+
+            assert(config, "built config should not be nil")
+            assert(config:server() == "https://example.com/", "server mismatch")
+            assert(#config:extra_servers() == 2, "extra_servers count")
+            assert(config:namespace() == "example", "namespace mismatch")
+            assert(config:verbose(), "verbose should be true")
+            assert(config:timeout() == 10, "timeout mismatch")
+            assert(config:user_tree("5.1"), "user_tree should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_tree_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            assert(tree, "tree should not be nil")
+            assert(type(tree:root()) == "string", "root should be a string")
+            assert(type(tree:bin()) == "string", "bin should be a string")
+            assert(tree:lockfile(), "lockfile should not be nil")
+            assert(type(tree:match_rocks("foo")) == "table", "match_rocks should return a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_lockfile_read_only_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local lockfile = tree:lockfile()
+            assert(lockfile, "lockfile should not be nil")
+            assert(type(lockfile:version()) == "string", "version should be a string")
+            assert(type(lockfile:rocks()) == "table", "rocks should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_lockfile_guard_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local lockfile = tree:lockfile()
+            lockfile:map_then_flush(function(guard)
+                assert(guard, "guard should not be nil")
+                assert(type(guard:version()) == "string", "version should be a string")
+                assert(type(guard:rocks()) == "table", "rocks should be a table")
+            end)
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_package_req_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local deps = rockspec:dependencies()
+            assert(#deps > 0, "should have dependencies")
+            local dep = deps[1]
+            local req = dep:package_req()
+            assert(type(req:name()) == "string", "name should be a string")
+            assert(type(req:version_req()) == "string", "version_req should be a string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_lua_dependency_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local deps = rockspec:dependencies()
+            assert(#deps > 0, "should have dependencies")
+            local dep = deps[1]
+            assert(type(dep:name()) == "string", "name should be a string")
+            assert(type(dep:version_req()) == "string", "version_req should be a string")
+            assert(type(dep:package_req()) == "userdata", "package_req should be userdata")
+            local pkg_req = dep:package_req()
+            assert(pkg_req:name(), "package_req name should not be nil")
+            assert(pkg_req:version_req(), "package_req version_req should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_partial_project_toml_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local toml = project:toml()
+            assert(toml, "toml should not be nil")
+            assert(type(toml:package()) == "string", "package should be a string")
+            assert(toml:package() == "test-package", "package should be test-package")
+            assert(toml:to_local(), "to_local should not be nil")
+            assert(toml:to_remote(), "to_remote should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_local_project_toml_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local toml = project:toml()
+            local local_toml = toml:to_local()
+            assert(local_toml, "local_toml should not be nil")
+            assert(type(local_toml:package()) == "string", "package should be a string")
+            assert(local_toml:package() == "test-package")
+            assert(type(local_toml:version()) == "string", "version should be a string")
+            assert(local_toml:version() == "0.1.0-1")
+            assert(local_toml:description(), "description should not be nil")
+            assert(type(local_toml:dependencies()) == "table", "dependencies should be a table")
+            assert(type(local_toml:build_dependencies()) == "table")
+            assert(type(local_toml:test_dependencies()) == "table")
+            assert(local_toml:build(), "build should not be nil")
+            assert(local_toml:test(), "test should not be nil")
+            assert(local_toml:to_lua_rockspec(), "to_lua_rockspec should not be nil")
+            assert(type(local_toml:to_lua_rockspec_string()) == "string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_remote_project_toml_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local toml = project:toml()
+            local remote_toml = toml:to_remote()
+            assert(remote_toml, "remote_toml should not be nil")
+            assert(type(remote_toml:package()) == "string")
+            assert(remote_toml:package() == "test-package")
+            assert(type(remote_toml:version()) == "string")
+            assert(remote_toml:version() == "0.1.0-1")
+            assert(remote_toml:description(), "description should not be nil")
+            assert(type(remote_toml:dependencies()) == "table")
+            assert(remote_toml:build(), "build should not be nil")
+            assert(remote_toml:source(), "source should not be nil")
+            assert(remote_toml:to_lua_rockspec(), "to_lua_rockspec should not be nil")
+            assert(type(remote_toml:to_lua_rockspec_string()) == "string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_local_lua_rockspec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            assert(rockspec, "rockspec should not be nil")
+            assert(type(rockspec:package()) == "string")
+            assert(rockspec:package() == "test-package")
+            assert(type(rockspec:version()) == "string")
+            assert(rockspec:version() == "0.1.0-1")
+            assert(rockspec:description(), "description should not be nil")
+            assert(rockspec:supported_platforms(), "supported_platforms should not be nil")
+            assert(type(rockspec:lua()) == "string", "lua should be a string")
+            assert(type(rockspec:dependencies()) == "table")
+            assert(type(rockspec:build_dependencies()) == "table")
+            assert(type(rockspec:test_dependencies()) == "table")
+            assert(type(rockspec:external_dependencies()) == "table")
+            assert(rockspec:build(), "build should not be nil")
+            assert(rockspec:source(), "source should not be nil")
+            assert(rockspec:test(), "test should not be nil")
+            assert(type(rockspec:to_lua_rockspec_string()) == "string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_remote_lua_rockspec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:remote_rockspec()
+            assert(rockspec, "rockspec should not be nil")
+            assert(type(rockspec:package()) == "string")
+            assert(rockspec:package() == "test-package")
+            assert(type(rockspec:version()) == "string")
+            assert(rockspec:version() == "0.1.0-1")
+            assert(rockspec:description(), "description should not be nil")
+            assert(rockspec:supported_platforms(), "supported_platforms should not be nil")
+            assert(type(rockspec:lua()) == "string")
+            assert(type(rockspec:dependencies()) == "table")
+            assert(type(rockspec:build_dependencies()) == "table")
+            assert(type(rockspec:test_dependencies()) == "table")
+            assert(type(rockspec:external_dependencies()) == "table")
+            assert(rockspec:build(), "build should not be nil")
+            assert(rockspec:source(), "source should not be nil")
+            assert(rockspec:test(), "test should not be nil")
+            assert(type(rockspec:to_lua_rockspec_string()) == "string")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_rock_description_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local desc = rockspec:description()
+            assert(desc, "description should not be nil")
+            assert(type(desc:labels()) == "table", "labels should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_platform_support_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local platforms = rockspec:supported_platforms()
+            assert(platforms, "supported_platforms should not be nil")
+            assert(type(platforms:is_supported("linux")) == "boolean", "is_supported should return a boolean")
+            assert(type(platforms:is_supported("windows")) == "boolean")
+            assert(type(platforms:is_supported("unix")) == "boolean")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_remote_rock_source_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local source = rockspec:source()
+            assert(source, "source should not be nil")
+            assert(source:source_spec(), "source_spec should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_build_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local build = rockspec:build()
+            assert(build, "build should not be nil")
+            assert(type(build:install()) == "userdata", "install should be userdata")
+            assert(type(build:copy_directories()) == "table", "copy_directories should be a table")
+            assert(type(build:patches()) == "table", "patches should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_install_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local build = rockspec:build()
+            local install = build:install()
+            assert(install, "install should not be nil")
+            assert(type(install:lua()) == "table", "lua should be a table")
+            assert(type(install:lib()) == "table", "lib should be a table")
+            assert(type(install:conf()) == "table", "conf should be a table")
+            assert(type(install:bin()) == "table", "bin should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_project_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            assert(project, "project should not be nil")
+            assert(type(project:toml_path()) == "string", "toml_path should be a string")
+            assert(type(project:extra_rockspec_path()) == "string")
+            assert(type(project:root()) == "string", "root should be a string")
+            assert(project:toml(), "toml should not be nil")
+            assert(project:local_rockspec(), "local_rockspec should not be nil")
+            assert(project:remote_rockspec(), "remote_rockspec should not be nil")
+            assert(not project:extra_rockspec(), "extra_rockspec should be nil")
+            assert(type(project:project_files()) == "table", "project_files should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_workspace_lua() {
+        let workspace = TempDir::new().unwrap();
+        std::fs::write(workspace.join("lux.toml"), BASIC_PROJECT).unwrap();
+        let (_tree, lua) = setup_lua();
+        lua.globals()
+            .set("workspace_location", workspace.path())
+            .unwrap();
+
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local workspace = lux.workspace.new(workspace_location)
+            assert(workspace, "workspace should not be nil")
+            assert(type(workspace:root()) == "string", "root should be a string")
+            assert(type(workspace:lockfile_path()) == "string")
+            assert(workspace:tree(config), "tree should not be nil")
+            assert(workspace:test_tree(config), "test_tree should not be nil")
+            assert(type(workspace:members()) == "table", "members should be a table")
+            assert(workspace:single_member_or_select("test-package"),
+                "single_member_or_select should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_extra_rockspec_lua_build_fn() {
+        let (project_dir, lua) = create_project(BASIC_PROJECT);
+        lua.globals()
+            .set("project_dir", project_dir.path())
+            .unwrap();
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local extra_path = project:extra_rockspec_path()
+            local f = io.open(extra_path, "w")
+            if f then
+                f:write([[
+package = "test-package"
+lua = "5.1"
+
+build = (function()
+    return { type = "builtin", modules = { foo = "foo.lua" } }
+end)()
+]])
+                f:close()
+            end
+            local project2 = lux.project.new(project_location)
+            local extra = project2:extra_rockspec()
+            assert(extra ~= nil, "extra_rockspec should not be nil after writing file")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_dependency_type_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local deps = rockspec:dependencies()
+            assert(type(deps) == "table", "dependencies should be a table")
+            assert(#deps > 0, "should have at least one dependency")
+
+            local build_deps = rockspec:build_dependencies()
+            assert(type(build_deps) == "table", "build_dependencies should be a table")
+
+            local test_deps = rockspec:test_dependencies()
+            assert(type(test_deps) == "table", "test_dependencies should be a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_rock_matches_lua() {
+        let (_tree, lua) = setup_lua();
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local matches = tree:match_rocks("nonexistent-package-xyz")
+            assert(matches, "match_rocks should return a table")
+            assert(type(matches.is_found) == "function", "is_found should be a function")
+            assert(type(matches:is_found()) == "boolean", "is_found() should return a boolean")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_rock_source_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local source = rockspec:source()
+            local spec = source:source_spec()
+            assert(type(spec) == "table", "source_spec should be a table")
+            assert(spec.url, "url source should have url key")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_test_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local test = rockspec:test()
+            assert(type(test) == "table", "test should be a table")
+            assert(test.auto_detect, "default test should be auto_detect")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_module_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local build = rockspec:build()
+            assert(build, "build should not be nil")
+            assert(build:build_backend(), "build_backend should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_make_build_spec_lua() {
+        let (_project, lua) = create_project(BASIC_PROJECT);
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local build = rockspec:build()
+            local backend = build:build_backend()
+            assert(backend, "build_backend should not be nil")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_command_build_spec_lua() {
+        let project = TempDir::new().unwrap();
+        std::fs::write(
+            project.join("lux.toml"),
+            r#"
+package = "test-cmd"
+version = "0.1.0"
+lua = "5.1"
+
+[source]
+url = "https://example.com/test/test"
+
+[build]
+type = "command"
+build_command = "make all"
+install_command = "make install"
+"#,
+        )
+        .unwrap();
+        let (_tree, lua) = setup_lua();
+        lua.globals()
+            .set("project_location", project.path())
+            .unwrap();
+
+        lua.load(
+            r#"
+            local project = lux.project.new(project_location)
+            local rockspec = project:local_rockspec()
+            local build = rockspec:build()
+            local backend = build:build_backend()
+            assert(backend, "command build_backend should not be nil")
+            assert(backend:build_command() == "make all", "build_command mismatch")
+            assert(backend:install_command() == "make install", "install_command mismatch")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+}
