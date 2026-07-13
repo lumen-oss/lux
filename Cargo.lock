@@ -1658,7 +1658,7 @@ dependencies = [
  "clap 4.6.1",
  "emmy_lsp_types",
  "emmylua_code_analysis",
- "emmylua_parser",
+ "emmylua_parser 0.26.0",
  "fern",
  "log",
  "mimalloc",
@@ -1679,7 +1679,7 @@ dependencies = [
  "dirs",
  "emmy_lsp_types",
  "emmylua_diagnostic_macro",
- "emmylua_parser",
+ "emmylua_parser 0.26.0",
  "encoding_rs",
  "flagset",
  "hashbrown 0.17.1",
@@ -1729,12 +1729,12 @@ dependencies = [
 
 [[package]]
 name = "emmylua_formatter"
-version = "0.23.2"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0f4681f3180b03c12f6ce3a4c4af161cda733cb0b5c2cd4790adb718dbff2aa"
+checksum = "2307b772894a7d0d9e2e134dcee3b6cc59da25cfaaaf95bca4ce75345bd0c6d7"
 dependencies = [
  "clap 4.6.1",
- "emmylua_parser",
+ "emmylua_parser 0.28.0",
  "glob",
  "hashbrown 0.17.1",
  "mimalloc",
@@ -1753,6 +1753,17 @@ name = "emmylua_parser"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4238868e8f8772e1b255cc446ba80a12df68095d4a9e40e70c777c1b8f28b37"
+dependencies = [
+ "rowan",
+ "rust-i18n",
+ "serde",
+]
+
+[[package]]
+name = "emmylua_parser"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0103cc231288ddc9391785db73be15d5928951e54cfe17c73af8c4d371678db"
 dependencies = [
  "rowan",
  "rust-i18n",
