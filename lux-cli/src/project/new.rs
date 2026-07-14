@@ -152,15 +152,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
         .with_prompt_prefix(Styled::new(">").with_fg(inquire::ui::Color::LightGreen));
 
     // If the project already exists then ask for override confirmation
-    if project.is_some()
-        && (config.no_prompt()
-            || !Confirm::new("Target directory already has a project, write anyway?")
-                .with_default(false)
-                .with_help_message(&format!("This may overwrite your existing {PROJECT_TOML}",))
-                .with_render_config(render_config)
-                .prompt()
-                .into_diagnostic()?)
-    {
+    if project.is_some() && (config.no_prompt() || !overwrite_prompt_confirmed(render_config)?) {
         return Err(miette!("cancelled creation of project (already exists)"));
     };
 
@@ -392,6 +384,15 @@ type = "builtin"
     println!("All done!");
 
     Ok(())
+}
+
+fn overwrite_prompt_confirmed<'a>(render_config: RenderConfig<'a>) -> Result<bool> {
+    Confirm::new("Target directory already has a project, write anyway?")
+        .with_default(false)
+        .with_help_message(&format!("This may overwrite your existing {PROJECT_TOML}",))
+        .with_render_config(render_config)
+        .prompt()
+        .into_diagnostic()
 }
 
 #[cfg(test)]
