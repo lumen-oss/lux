@@ -28,16 +28,20 @@ pub enum BuiltinBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CompileCModules(#[from] CompileCModulesError),
-    #[error("failed to install binary {0}: {1}")]
-    InstallBinary(String, InstallBinaryError),
+    #[error("failed to install binary '{file_name}'")]
+    InstallBinary {
+        file_name: String,
+        #[diagnostic_source]
+        source: InstallBinaryError,
+    },
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
-    #[error(transparent)]
+    #[error("module auto-detection failed")]
     #[diagnostic(transparent)]
-    ParseLuaModule(#[from] ParseLuaModuleError),
+    AutoDetectModules(#[from] AutoDetectModulesError),
 }
 
 impl BuildBackend for BuiltinBuildSpec {
@@ -137,7 +141,10 @@ impl BuildBackend for BuiltinBuildSpec {
                 let installed_bin_script =
                     utils::install_binary(&bin_script, &file_name, tree, lua, args.deploy, config)
                         .await
-                        .map_err(|err| BuiltinBuildError::InstallBinary(file_name.clone(), err))?;
+                        .map_err(|err| BuiltinBuildError::InstallBinary {
+                            file_name: file_name.clone(),
+                            source: err,
+                        })?;
                 if let Some(bin_script_file_name) = installed_bin_script.file_name() {
                     binaries.push(bin_script_file_name.into());
                 }
@@ -160,10 +167,17 @@ fn source_paths(build_dir: &Path, modules: &HashMap<LuaModule, ModuleSpec>) -> H
         .collect()
 }
 
+#[derive(Error, Debug, Diagnostic)]
+pub enum AutoDetectModulesError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ParseLuaModule(#[from] ParseLuaModuleError),
+}
+
 fn autodetect_modules(
     build_dir: &Path,
     exclude: HashSet<PathBuf>,
-) -> Result<HashMap<LuaModule, ModuleSpec>, ParseLuaModuleError> {
+) -> Result<HashMap<LuaModule, ModuleSpec>, AutoDetectModulesError> {
     WalkDir::new(build_dir.join("src"))
         .into_iter()
         .chain(WalkDir::new(build_dir.join("lua")))
@@ -199,7 +213,7 @@ fn autodetect_modules(
                 .is_none_or(|parent| parent.as_os_str().is_empty())
             {
                 pathbuf.set_extension("");
-                LuaModule::from_pathbuf(pathbuf)
+                Ok(LuaModule::from_pathbuf(pathbuf)?)
             } else {
                 let mut lua_module = LuaModule::from_pathbuf(pathbuf)?;
                 // NOTE(mrcjkb): `LuaModule` does not parse as "<module>.init" from files named "init.lua"

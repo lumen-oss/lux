@@ -75,10 +75,10 @@ impl LuaModule {
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum ParseLuaModuleError {
-    #[error("could not parse Lua module from '{0}'.")]
-    FromString(String),
     #[error("path '{0}' resulted in an empty Lua module.")]
     EmptyModule(String),
+    #[error("cannot parse a Lua module from an empty string")]
+    EmptyString,
 }
 
 impl FromStr for LuaModule {
@@ -87,7 +87,7 @@ impl FromStr for LuaModule {
     // NOTE: We may want to add some additional validations
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
-            Err(ParseLuaModuleError::EmptyModule(s.into()))
+            Err(ParseLuaModuleError::EmptyString)
         } else {
             Ok(LuaModule(s.into()))
         }

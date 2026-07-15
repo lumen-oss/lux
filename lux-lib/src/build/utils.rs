@@ -562,7 +562,7 @@ pub enum InstallBinaryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Paths(#[from] PathsError),
-    #[error("error wrapping binary: {0}")]
+    #[error("error wrapping binary")]
     #[diagnostic(forward(0))]
     Wrap(#[from] WrapBinaryError),
 }
@@ -573,8 +573,11 @@ pub enum WrapBinaryError {
     Io(#[from] io::Error),
     #[error(transparent)]
     Utf8(#[from] FromUtf8Error),
-    #[error("no `lua` executable found")]
-    NoLuaBinary,
+    #[error("no Lua executable found")]
+    NoLuaBinary {
+        #[help]
+        help: String,
+    },
 }
 
 /// Returns the file path of the installed binary
@@ -635,9 +638,23 @@ async fn install_wrapped_binary(
     #[cfg(target_family = "windows")]
     let target = tree.bin().join(format!("{}.bat", target));
 
-    let lua_bin = lua
-        .lua_binary_or_config_override(config)
-        .ok_or(WrapBinaryError::NoLuaBinary)?;
+    let lua_bin = lua.lua_binary_or_config_override(config).ok_or({
+        let bin_name = config
+            .variables()
+            .get("LUA")
+            .cloned()
+            .or(lua
+                .bin()
+                .as_ref()
+                .map(|bin| bin.to_slash_lossy().to_string()))
+            .unwrap_or("lua".to_string());
+        WrapBinaryError::NoLuaBinary {
+            help: format!(
+                "make sure {bin_name} (version {}) is on the PATH or has been installed by Lux",
+                lua.version
+            ),
+        }
+    })?;
 
     #[cfg(target_family = "unix")]
     let content = format!(
