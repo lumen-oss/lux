@@ -37,13 +37,20 @@ async fn main() -> Result<()> {
     }))?;
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
-        Err(err) => match clap_to_miette(err) {
-            Ok(report) => return Err(report),
-            Err(text) => {
-                print!("{text}");
-                return Err(miette::miette!("not enough arguments supplied"));
+        Err(err) => {
+            if !err.use_stderr() {
+                let _ = err.print();
+                return Ok(());
             }
-        },
+
+            match clap_to_miette(err) {
+                Ok(report) => return Err(report),
+                Err(text) => {
+                    print!("{text}");
+                    return Err(miette::miette!("not enough arguments supplied"));
+                }
+            }
+        }
     };
 
     let lua_version = cli.lua_version.or({
