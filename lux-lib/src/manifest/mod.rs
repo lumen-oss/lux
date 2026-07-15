@@ -23,9 +23,12 @@ pub enum ManifestError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Lua(#[from] ManifestLuaError),
-    #[error("failed to fetch manifest from server:\n{0}")]
-    #[diagnostic(forward(0))]
-    Server(#[from] ManifestFromServerError),
+    #[error("failed to fetch manifest from {url}:\n{source}")]
+    #[diagnostic(forward(source))]
+    Server {
+        url: String,
+        source: Box<ManifestFromServerError>,
+    },
     #[error("error parsing URL from `vendor-dir`: {0}:")]
     Vendor(String),
 }
@@ -54,11 +57,21 @@ impl Manifest {
                 .map_err(|_err| ManifestError::Vendor(vendor_dir.to_slash_lossy().to_string()))?;
             return Ok(Self::new(server_url, manifest_from_vendor_dir(vendor_dir)));
         }
-        let content = manifest_from_cache_or_server(&server_url, config, progress).await?;
+        let content = manifest_from_cache_or_server(&server_url, config, progress)
+            .await
+            .map_err(|source| ManifestError::Server {
+                url: server_url.to_string(),
+                source: Box::new(source),
+            })?;
         match ManifestMetadata::new(&content) {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
             Err(_) => {
-                let manifest = manifest_from_server_only(&server_url, config, progress).await?;
+                let manifest = manifest_from_server_only(&server_url, config, progress)
+                    .await
+                    .map_err(|source| ManifestError::Server {
+                        url: server_url.to_string(),
+                        source: Box::new(source),
+                    })?;
                 Ok(Self::new(server_url, ManifestMetadata::new(&manifest)?))
             }
         }

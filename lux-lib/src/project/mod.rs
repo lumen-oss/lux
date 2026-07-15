@@ -89,8 +89,10 @@ where
 #[error(transparent)]
 pub enum ProjectError {
     #[error("error reading project TOML at {0}:\n{1}")]
+    #[diagnostic(help("ensure the file exists and is readable."))]
     ReadProjectTOML(String, io::Error),
     #[error("error creating project root at {0}:\n{1}")]
+    #[diagnostic(help("check that the parent directory exists and you have write permissions."))]
     CreateProjectRoot(String, io::Error),
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),

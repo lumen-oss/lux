@@ -149,14 +149,20 @@ pub enum ProjectTomlError {
     #[error(
         r#"generated invalid Lua from TOML:
 {0}
-Please report this issue."#
+"#
     )]
+    #[diagnostic(help("this is a bug in Lux. please report it."))]
     GeneratedInvalidLua(String),
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum LocalProjectTomlValidationError {
     #[error("no lua version provided")]
+    #[diagnostic(help(
+        r#"add a `lua` field to your lux.toml, for example:
+
+  lua = ">=5.1""#
+    ))]
     NoLuaVersion,
     #[error("could not decode the test spec:\n:{0}")]
     #[diagnostic(forward(0))]
@@ -173,10 +179,13 @@ pub enum LocalProjectTomlValidationError {
     #[diagnostic(forward(0))]
     RockSource(#[from] RockSourceError),
     #[error("duplicate dependencies: {0}")]
+    #[diagnostic(help("remove the duplicate entries from the [dependencies] table."))]
     DuplicateDependencies(PackageNameList),
     #[error("duplicate test dependencies: {0}")]
+    #[diagnostic(help("remove the duplicate entries from the [test_dependencies] table."))]
     DuplicateTestDependencies(PackageNameList),
     #[error("duplicate build dependencies: {0}")]
+    #[diagnostic(help("remove the duplicate entries from the [build_dependencies] table."))]
     DuplicateBuildDependencies(PackageNameList),
     #[error(
         r#"dependencies field cannot contain 'lua'.

@@ -31,12 +31,16 @@ pub enum CommandError {
     #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("'build_command' and 'install_command' cannot be empty.")]
-    #[diagnostic(help(
-        "set a command in the `build.build_command` or `build.install_command` field."
-    ))]
+    #[diagnostic(
+        help("set a command in the `build.build_command` or `build.install_command` field"),
+        url("https://lux.lumen-labs.org/reference/lux-toml#command")
+    )]
     EmptyCommand,
     #[error("error parsing command:\n{command}\n\nerror: {err}")]
-    #[diagnostic(help("quote arguments containing spaces in the build/install command."))]
+    #[diagnostic(
+        help("put build/install command arguments in quotes if they contain spaces"),
+        url("https://lux.lumen-labs.org/reference/lux-toml/#command")
+    )]
     ParseError {
         err: shell_words::ParseError,
         command: String,
