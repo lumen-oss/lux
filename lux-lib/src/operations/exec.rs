@@ -126,11 +126,9 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
     let lua_init = if run.disable_loader.unwrap_or(false) {
         None
     } else if user_tree.version().lux_lib_dir().is_none() {
-        eprintln!(
-            "⚠️ WARNING: lux-lua library not found.
-    Cannot use the `lux.loader`.
-    To suppress this warning, set the `--no-loader` option.
-                    "
+        crate::logging::warn(
+            "⚠️ WARNING: lux-lua library not found.\n    Cannot use the `lux.loader`.\n    To suppress this warning, set the `--no-loader` option.".to_string(),
+            Some("exec".to_string()),
         );
         None
     } else {

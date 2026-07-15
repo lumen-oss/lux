@@ -94,11 +94,9 @@ where
         let loader_init = if args.disable_loader.unwrap_or(false) {
             "".to_string()
         } else if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
-            eprintln!(
-                "⚠️ WARNING: lux-lua library not found.
-Cannot use the `lux.loader`.
-To suppress this warning, set the `--no-loader` option.
-                "
+            crate::logging::warn(
+                "⚠️ WARNING: lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.".to_string(),
+                Some("run_lua".to_string()),
             );
             "".to_string()
         } else {

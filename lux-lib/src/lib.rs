@@ -3,6 +3,7 @@ pub mod config;
 pub mod git;
 pub mod hash;
 pub mod lockfile;
+pub mod logging;
 pub mod lua;
 pub mod lua_installation;
 pub mod lua_rockspec;

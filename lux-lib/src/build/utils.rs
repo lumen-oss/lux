@@ -509,10 +509,16 @@ async fn link_c_artifacts(
     };
     if config.verbose() {
         if !&output.stdout.is_empty() {
-            println!("{}", String::from_utf8_lossy(&output.stdout));
+            crate::logging::info(
+                String::from_utf8_lossy(&output.stdout).to_string(),
+                Some("build".to_string()),
+            );
         }
         if !&output.stderr.is_empty() {
-            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            crate::logging::warn(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+                Some("build".to_string()),
+            );
         }
     }
 
@@ -603,10 +609,16 @@ pub(crate) async fn install_binary(
 pub(crate) fn log_command_output(output: &Output, config: &Config) {
     if config.verbose() {
         if !output.stderr.is_empty() {
-            println!("{}", String::from_utf8_lossy(&output.stderr));
+            crate::logging::info(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+                Some("build".to_string()),
+            );
         }
         if !output.stdout.is_empty() {
-            println!("{}", String::from_utf8_lossy(&output.stdout));
+            crate::logging::info(
+                String::from_utf8_lossy(&output.stdout).to_string(),
+                Some("build".to_string()),
+            );
         }
     }
 }

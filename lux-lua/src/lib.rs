@@ -8,6 +8,7 @@ mod config;
 #[cfg(feature = "definitions")]
 pub mod definitions;
 mod loader;
+mod logging;
 pub mod lua_impls;
 mod operations;
 mod project;
@@ -32,6 +33,7 @@ impl TypedUserData for LuxModule {
         fields.add_field("workspace", workspace::WorkspaceModule);
         fields.add_field("project", project::ProjectModule);
         fields.add_field("operations", operations::OperationsModule);
+        fields.add_field("logging", logging::LoggingModule);
     }
 }
 
