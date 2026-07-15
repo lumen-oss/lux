@@ -87,13 +87,18 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallTestDependencies(#[from] InstallTestDependenciesError),
-    #[error("error building project:\n{0}")]
+    #[error("build failed")]
     #[diagnostic(forward(0))]
-    BuildProject(#[from] BuildWorkspaceError),
+    BuildWorkspace(#[from] BuildWorkspaceError),
     #[error("tests failed!")]
     TestFailure,
-    #[error("failed to execute '{0}': {1}")]
-    RunCommandFailure(String, io::Error),
+    #[error("failed to execute '{cmd}'")]
+    RunCommandFailure {
+        cmd: String,
+        source: io::Error,
+        #[help]
+        help: Option<String>,
+    },
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -111,7 +116,7 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ProjectTomlValidation(#[from] LocalProjectTomlValidationError),
-    #[error("failed to sync dependencies: {0}")]
+    #[error("failed to sync dependencies")]
     #[diagnostic(forward(0))]
     Sync(#[from] SyncError),
     #[error(transparent)]
@@ -229,7 +234,21 @@ async fn run_project_tests(
     }
     let status = match command.status() {
         Ok(status) => Ok(status),
-        Err(err) => Err(RunTestsError::RunCommandFailure(test_executable, err)),
+        Err(err) => {
+            let help = if err.to_string().starts_with("No such file") {
+                Some(format!(
+                    "make sure '{}' is available on your PATH",
+                    test_executable
+                ))
+            } else {
+                None
+            };
+            Err(RunTestsError::RunCommandFailure {
+                cmd: test_executable,
+                source: err,
+                help,
+            })
+        }
     }?;
     if !status.success() {
         Err(RunTestsError::TestFailure)
