@@ -37,4 +37,5 @@ third-party = [
   { name = "openssl" },   # vendored/non-vendored
   { name = "reqwest" },   # vendored/non-vendored TLS
   { name = "hyper-tls" }, # vendored/non-vendored TLS
+  { name = "miette" },    # fancy feature should only be enabled for CLI
 ]
