@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.37.1](https://github.com/lumen-oss/lux/compare/v0.37.0...v0.37.1) `lux-cli` - 2026-07-15
+
+### Fixed
+- *(cli)* prevent miette from intercepting clap help output ([#1690](https://github.com/lumen-oss/lux/pull/1690))
+
 ## [0.37.0](https://github.com/lumen-oss/lux/compare/v0.36.1...v0.37.0) `lux-cli` - 2026-07-14
 
 ### Added
