@@ -1,6 +1,6 @@
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
-use crate::config::Config;
+use crate::{config::Config, logging::LoggingState};
 
 mod private {
     pub trait HasProgress {}
@@ -84,7 +84,11 @@ impl ProgressBar {
     pub fn new() -> Self {
         let bar =
             indicatif::ProgressBar::new_spinner().with_finish(indicatif::ProgressFinish::AndClear);
-        bar.enable_steady_tick(Duration::from_millis(100));
+
+        if let LoggingState::Disabled = crate::logging::state() {
+            // NOTE: this spawns a background thread which causes rendering (we don't want that)
+            bar.enable_steady_tick(Duration::from_millis(100));
+        }
 
         Self(bar)
     }
@@ -97,7 +101,19 @@ impl ProgressBar {
     where
         M: Into<Cow<'static, str>>,
     {
-        self.0.set_message(message)
+        let msg: Cow<'static, str> = message.into();
+        match crate::logging::state() {
+            crate::logging::LoggingState::Enabled => {
+                crate::logging::push(
+                    crate::logging::LogLevel::Info,
+                    msg.clone().into_owned(),
+                    Some("progress".to_string()),
+                );
+            }
+            crate::logging::LoggingState::Disabled => {
+                self.0.set_message(msg);
+            }
+        }
     }
 
     pub fn set_position(&self, position: u64) {
@@ -112,14 +128,37 @@ impl ProgressBar {
     where
         M: AsRef<str>,
     {
-        self.0.println(message)
+        match crate::logging::state() {
+            crate::logging::LoggingState::Enabled => {
+                crate::logging::push(
+                    crate::logging::LogLevel::Info,
+                    message.as_ref().to_string(),
+                    Some("progress".to_string()),
+                );
+            }
+            crate::logging::LoggingState::Disabled => {
+                self.0.println(message.as_ref());
+            }
+        }
     }
 
     pub fn finish_with_message<M>(&self, message: M)
     where
         M: Into<Cow<'static, str>>,
     {
-        self.0.finish_with_message(message)
+        let msg: Cow<'static, str> = message.into();
+        match crate::logging::state() {
+            crate::logging::LoggingState::Enabled => {
+                crate::logging::push(
+                    crate::logging::LogLevel::Info,
+                    msg.clone().into_owned(),
+                    Some("progress".to_string()),
+                );
+            }
+            crate::logging::LoggingState::Disabled => {
+                self.0.finish_with_message(msg);
+            }
+        }
     }
 
     pub fn finish_and_clear(&self) {

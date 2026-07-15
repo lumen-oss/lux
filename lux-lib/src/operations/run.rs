@@ -168,11 +168,9 @@ async fn run_with_command(
     let lua_init = if disable_loader {
         None
     } else if tree.version().lux_lib_dir().is_none() {
-        eprintln!(
-            "⚠️ WARNING: lux-lua library not found.
-    Cannot use the `lux.loader`.
-    To suppress this warning, set the `--no-loader` option.
-                    "
+        crate::logging::warn(
+            "⚠️ WARNING: lux-lua library not found.\n    Cannot use the `lux.loader`.\n    To suppress this warning, set the `--no-loader` option.".to_string(),
+            Some("run".to_string()),
         );
         None
     } else {
