@@ -16,21 +16,28 @@ pub enum TreesitterBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
-    #[error("failed to initialise the tree-sitter loader: {0}")]
-    Loader(String),
     #[error("invalid TREE_SITTER_LANGUAGE_VERSION: {0}")]
+    #[diagnostic(help(
+        "check the value of the TREE_SITTER_LANGUAGE_VERSION environment variable."
+    ))]
     ParseAbiVersion(#[from] ParseIntError),
     #[error("error generating tree-sitter grammar: {0}")]
+    #[diagnostic(help("check the grammar source files for errors."))]
     Generate(#[from] GenerateError),
     #[error("error compiling the tree-sitter grammar: {0}")]
+    #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     TreesitterCompileError(String),
     #[error("error creating directory {dir}: {err}")]
+    #[diagnostic(help("check that the parent directory exists and is writable."))]
     CreateDir { dir: PathBuf, err: io::Error },
     #[error("error writing query file: {0}")]
+    #[diagnostic(help("check that the output directory exists and is writable."))]
     WriteQuery(io::Error),
     #[error("error reading directory {dir}: {err}")]
+    #[diagnostic(help("ensure the directory exists and is accessible."))]
     ReadDir { dir: PathBuf, err: io::Error },
     #[error("error copying query file from {from} to {to}: {err}")]
+    #[diagnostic(help("ensure the source file exists and the destination is writable."))]
     CopyQuery {
         from: PathBuf,
         to: PathBuf,

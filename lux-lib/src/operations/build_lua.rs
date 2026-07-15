@@ -64,8 +64,18 @@ pub enum BuildLuaError {
     ClNotFound,
     #[error("failed to find LINK.exe")]
     LinkNotFound,
-    #[error("source integrity mismatch.\nExpected: {expected},\nbut got: {actual}")]
+    #[error(
+        r#"source integrity mismatch.
+- source: {src}
+- expected: {expected}
+- got: {actual}"#
+    )]
+    #[diagnostic(help(
+        r#"the source may have been modified or a tag may have been moved.
+check the source, then use `--no-lock` to update the hash."#
+    ))]
     SourceIntegrityMismatch {
+        src: String,
         expected: Integrity,
         actual: Integrity,
     },
@@ -397,7 +407,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     progress.map(|p| p.set_message(format!("📥 Downloading {}", source_url)));
 
     let response = crate::reqwest::new_https_client(args.config)?
-        .get(source_url)
+        .get(source_url.clone())
         .send()
         .await?
         .error_for_status()?
@@ -408,6 +418,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 
     if hash.matches(&source_integrity).is_none() {
         return Err(BuildLuaError::SourceIntegrityMismatch {
+            src: source_url.to_string(),
             expected: source_integrity,
             actual: hash,
         });

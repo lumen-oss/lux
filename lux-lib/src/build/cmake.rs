@@ -41,10 +41,11 @@ pub enum CMakeError {
     #[error("failed to write CMakeLists.txt: {0}")]
     WriteCmakeListsError(io::Error),
     #[error("failed to run `cmake` step: '{0}' command not found!")]
+    #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     CommandNotFound(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitutionError(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] VariableSubstitutionError),
 }
 
 struct CMakeVariables;

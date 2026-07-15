@@ -52,7 +52,11 @@ pub enum SourceBuildError {
     #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
     #[error("cannot build from a project source that requires a luarocks build backend: {0}")]
-    UnsupporedLuarocksBuildBackend(String),
+    #[diagnostic(help(
+        r#"lux does not support building from source with a luarocks build backend.
+Use a pre-built rock or a different build backend."#
+    ))]
+    UnsupportedLuarocksBuildBackend(String),
 }
 
 pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, SourceBuildError>
@@ -115,7 +119,7 @@ where
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::LuaRock(build_backend)) => return Err(SourceBuildError::UnsupporedLuarocksBuildBackend(build_backend)),
+        Some(BuildBackendSpec::LuaRock(build_backend)) => return Err(SourceBuildError::UnsupportedLuarocksBuildBackend(build_backend)),
         Some(BuildBackendSpec::Source) | // This should not be possible. Let's ignore it.
         None => BuildInfo::default(),
     };

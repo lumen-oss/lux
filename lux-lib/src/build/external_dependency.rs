@@ -17,15 +17,28 @@ use super::utils::{c_lib_extension, format_path};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum ExternalDependencyError {
-    #[error("{}", not_found_error_msg(.0))]
+    #[error("external dependency '{0}' not found")]
+    #[diagnostic(help("{}", not_found_help(.0)))]
     NotFound(String),
     #[error("IO error while trying to detect external dependencies: {0}")]
     Io(#[from] std::io::Error),
     #[error("{0} was probed successfully, but the header {1} could not be found")]
+    #[diagnostic(help(
+        r#"ensure the header is installed.
+As a fallback, set {0}_INCDIR to the include directory."#
+    ))]
     SuccessfulProbeHeaderNotFound(String, String),
     #[error("error probing external dependency {0}: the header {1} could not be found")]
+    #[diagnostic(help(
+        r#"ensure the package is installed with pkg-config support,
+or set {0}_INCDIR to the directory containing the header."#
+    ))]
     HeaderNotFound(String, String),
     #[error("error probing external dependency {0}: the library {1} could not be found")]
+    #[diagnostic(help(
+        r#"ensure the package is installed with pkg-config support,
+or set {0}_LIBDIR to the directory containing the library."#
+    ))]
     LibraryNotFound(String, String),
 }
 
@@ -312,19 +325,19 @@ fn get_libdir(name: &str, config: &ExternalDependencySearchConfig) -> Option<Pat
     .filter(|dir| dir.is_dir())
 }
 
-fn not_found_error_msg(name: &String) -> String {
+fn not_found_help(name: &String) -> String {
     let env_dir = format!("{}_DIR", &name.to_uppercase());
     let env_inc = format!("{}_INCDIR", &name.to_uppercase());
     let env_lib = format!("{}_LIBDIR", &name.to_uppercase());
 
     format!(
-        r#"External dependency not found: {name}.
-Consider one of the following:
-1. Set environment variables:
-   - {env_dir} for the installation prefix, or
-   - {env_inc} and {env_lib} for specific directories
-2. Add the installation prefix to the configuration:
-   {env_dir} = "/path/to/installation""#
+        r#"run `lx debug toolchains` to check pkg-config availability, or set:
+- {env_dir} for the installation prefix, or
+- {env_inc} and {env_lib} for specific directories
+
+alternatively, add to the [external_dependencies] section in lux.toml:
+[external_dependencies.{name}]
+prefix = "/path/to/installation""#
     )
 }
 
