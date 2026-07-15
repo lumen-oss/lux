@@ -72,7 +72,7 @@ pub enum BuildLuaError {
     )]
     #[diagnostic(help(
         r#"the source may have been modified or a tag may have been moved.
-check the source, then use `--no-lock` to update the hash."#
+check the source, then rerun the command with `lx --no-lock` to update the hash."#
     ))]
     SourceIntegrityMismatch {
         src: String,

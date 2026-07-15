@@ -39,7 +39,7 @@ pub enum CMakeError {
     #[error("failed to run `cmake` step: {0}")]
     Io(io::Error),
     #[error("failed to write CMakeLists.txt: {0}")]
-    WriteCmakeListsError(io::Error),
+    WriteCmakeLists(io::Error),
     #[error("failed to run `cmake` step: '{0}' command not found!")]
     #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     CommandNotFound(String),
@@ -84,7 +84,7 @@ impl BuildBackend for CMakeBuildSpec {
         let mut args = Vec::new();
         if let Some(content) = self.cmake_lists_content {
             let cmakelists = build_dir.join("CMakeLists.txt");
-            std::fs::write(&cmakelists, content).map_err(CMakeError::WriteCmakeListsError)?;
+            std::fs::write(&cmakelists, content).map_err(CMakeError::WriteCmakeLists)?;
             args.push(format!("-G\"{}\"", cmakelists.display()));
         } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
             // With msvc and x64, CMake does not select it by default so we need to be explicit.

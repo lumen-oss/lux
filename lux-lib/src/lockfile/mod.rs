@@ -801,8 +801,8 @@ pub enum LockfileIntegrityError {
 "#
     )]
     #[diagnostic(help(
-        r#"The maintainer may have force-uploaded a different rockspec.
-check the rockspec source, then use `--no-lock` to update the hash.
+        r#"the maintainer may have force-uploaded a different rockspec.
+check the rockspec source, then rerun the command with `lx --no-lock` to update the hash.
 "#
     ))]
     RockspecIntegrityMismatch {
@@ -817,8 +817,8 @@ check the rockspec source, then use `--no-lock` to update the hash.
 - got: {got}"#
     )]
     #[diagnostic(help(
-        r#"The maintainer may have force-uploaded a different source or moved a tag.
-check the source URL, then use `--no-lock` to update the hash.
+        r#"the maintainer may have force-uploaded a different source or moved a tag.
+check the source URL, then rerun the command with `lx --no-lock` to update the hash.
 "#
     ))]
     SourceIntegrityMismatch {

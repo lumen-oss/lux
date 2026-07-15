@@ -20,8 +20,18 @@ pub enum ManifestFromServerError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error("failed to pull manifest:\n{0}")]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Request(#[from] reqwest::Error),
     #[error("failed to parse manifest:\n{0}")]
+    #[diagnostic(help(
+        r#"the server returned a manifest that is not valid UTF-8.
+check your network connection and server configuration.
+if you are using a custom server, make sure it returns correctly formatted manifests.
+"#
+    ))]
     FromUtf8(#[from] FromUtf8Error),
     #[error("invalidate date received from server:\n{0}")]
     InvalidDate(#[from] httpdate::Error),
@@ -46,9 +56,9 @@ pub(super) async fn get_manifest(
 ) -> Result<String, ManifestFromServerError> {
     let response = client.get(url.clone()).send().await?;
     if response.status().is_client_error() {
-        let url = fallback_unzipped_url(&url)?;
+        let fallback_url = fallback_unzipped_url(&url)?;
         let manifest_bytes = client
-            .get(url)
+            .get(fallback_url)
             .send()
             .await?
             .error_for_status()?
