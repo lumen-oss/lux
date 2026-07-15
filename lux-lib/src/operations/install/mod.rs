@@ -182,8 +182,12 @@ pub enum InstallError {
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to install pre-built rock {0}:\n{1}")]
     InstallBinaryRock(PackageName, InstallBinaryRockError),
-    #[error("integrity error for package {0}:\n{1}")]
-    Integrity(PackageName, RemotePackageDbIntegrityError),
+    #[error("integrity error for package '{package}'")]
+    Integrity {
+        package: PackageName,
+        #[diagnostic_source]
+        err: RemotePackageDbIntegrityError,
+    },
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
 }

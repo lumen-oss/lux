@@ -141,8 +141,12 @@ pub enum SyncError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Remove(#[from] RemoveError),
-    #[error("integrity error for package {0}: {1}\n")]
-    Integrity(PackageName, LockfileIntegrityError),
+    #[error("integrity error for package '{package}'")]
+    Integrity {
+        package: PackageName,
+        #[diagnostic_source]
+        err: LockfileIntegrityError,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
@@ -279,7 +283,10 @@ async fn do_sync(
         for (_, package) in &to_add {
             install_tree_lockfile
                 .validate_integrity(package)
-                .map_err(|err| SyncError::Integrity(package.name().clone(), err))?;
+                .map_err(|err| SyncError::Integrity {
+                    package: package.name().clone(),
+                    err,
+                })?;
         }
     }
 
