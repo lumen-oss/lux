@@ -3,9 +3,17 @@ use miette::Diagnostic;
 use thiserror::Error;
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum VariableSubstitutionError {
-    #[error("unable to substitute variables {0:#?}")]
+    #[error("unable to substitute variables")]
+    #[diagnostic(help(
+        r#"check that all $(VAR) references refer to defined variables
+in the lux.toml or rockspec."#
+    ))]
     SubstitutionError(Vec<String>),
     #[error("variable expansion recursion limit (100) reached")]
+    #[diagnostic(help(
+        r#"a variable likely references itself directly or indirectly.
+check the variable definitions for circular references."#
+    ))]
     RecursionLimit,
 }
 

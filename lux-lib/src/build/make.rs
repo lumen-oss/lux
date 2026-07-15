@@ -38,11 +38,15 @@ pub enum MakeError {
     #[error("failed to run `make` step: {0}")]
     Io(io::Error),
     #[error("failed to run `make` step: '{0}' command not found!")]
+    #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     CommandNotFound(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitutionError(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] VariableSubstitutionError),
     #[error("{0} not found")]
+    #[diagnostic(help(
+        "ensure the Makefile exists in the build directory or check the rockspec source layout."
+    ))]
     MakefileNotFound(PathBuf),
 }
 

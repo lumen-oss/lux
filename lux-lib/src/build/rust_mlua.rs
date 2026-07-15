@@ -37,17 +37,19 @@ pub enum RustError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("error installing rust library {lib}:\n{cause}")]
+#[error("error installing rust library {lib}")]
+#[diagnostic(help("check that the output directory exists and is writable."))]
 pub struct InstallRustLibError {
     lib: String,
-    cause: io::Error,
+    source: io::Error,
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("error installing Lua library {lib}:\n{cause}")]
+#[error("error installing Lua library {lib}")]
+#[diagnostic(help("check that the output directory exists and is writable."))]
 pub struct InstallLuaLibError {
     lib: String,
-    cause: io::Error,
+    source: io::Error,
 }
 
 impl BuildBackend for RustMluaBuildSpec {
@@ -133,7 +135,7 @@ fn install_rust_libs(
         dst.set_extension(c_dylib_extension());
         fs::copy(&src, &dst).map_err(|err| InstallRustLibError {
             lib: src.to_string_lossy().to_string(),
-            cause: err,
+            source: err,
         })?;
     }
     Ok(())
@@ -149,7 +151,7 @@ fn install_lua_libs(
         let dst = output_paths.src.join(to);
         fs::copy(&src, &dst).map_err(|err| InstallLuaLibError {
             lib: src.to_string_lossy().to_string(),
-            cause: err,
+            source: err,
         })?;
     }
     Ok(())

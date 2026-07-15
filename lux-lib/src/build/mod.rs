@@ -159,8 +159,18 @@ pub enum BuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
-    #[error("source integrity mismatch.\nExpected: {expected},\nbut got: {actual}")]
+    #[error(
+        r#"source integrity mismatch.
+- source: {src}
+- expected: {expected}
+- got: {actual}"#
+    )]
+    #[diagnostic(help(
+        r#"the source may have been modified or a tag may have been moved.
+check the source, then use `--no-lock` to update the hash."#
+    ))]
     SourceIntegrityMismatch {
+        src: String,
         expected: Integrity,
         actual: Integrity,
     },
@@ -170,8 +180,12 @@ pub enum BuildError {
     #[error("failed to fetch rock source:\n{0}")]
     #[diagnostic(forward(0))]
     FetchSrcError(#[from] FetchSrcError),
-    #[error("failed to install binary {0}:\n{1}")]
-    InstallBinary(String, InstallBinaryError),
+    #[error("failed to install binary '{file_name}'")]
+    InstallBinary {
+        file_name: String,
+        #[diagnostic_source]
+        source: InstallBinaryError,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
@@ -269,7 +283,10 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                 config,
             )
             .await
-            .map_err(|err| BuildError::InstallBinary(target.clone(), err))?;
+            .map_err(|err| BuildError::InstallBinary {
+                file_name: target.clone(),
+                source: err,
+            })?;
             progress.map(|p| p.set_position(p.position() + 1));
         }
     }

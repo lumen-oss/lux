@@ -31,8 +31,12 @@ pub enum CommandError {
     #[diagnostic(transparent)]
     Paths(#[from] PathsError),
     #[error("'build_command' and 'install_command' cannot be empty.")]
+    #[diagnostic(help(
+        "set a command in the `build.build_command` or `build.install_command` field."
+    ))]
     EmptyCommand,
     #[error("error parsing command:\n{command}\n\nerror: {err}")]
+    #[diagnostic(help("quote arguments containing spaces in the build/install command."))]
     ParseError {
         err: shell_words::ParseError,
         command: String,
@@ -50,7 +54,7 @@ pub enum CommandError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitutionError(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] VariableSubstitutionError),
 }
 
 impl BuildBackend for CommandBuildSpec {

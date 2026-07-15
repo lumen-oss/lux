@@ -85,6 +85,10 @@ pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(),
 #[derive(Error, Debug, Diagnostic)]
 pub enum OutputValidationError {
     #[error("compilation failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
+    #[diagnostic(help(
+        r#"check the compiler output above for details.
+rerun with `--verbose` for more information."#
+    ))]
     CommandFailure {
         status: ExitStatus,
         stdout: String,
@@ -108,8 +112,16 @@ pub enum CompileCFilesError {
     #[error("IO operation while compiling C files:\n{0}")]
     Io(#[from] io::Error),
     #[error("failed to compile intermediates from C files:\n{0}")]
+    #[diagnostic(help(
+        r#"check the compiler output above for missing headers or syntax errors.
+ensure the C compiler has access to the required include paths."#
+    ))]
     CompileIntermediates(cc::Error),
     #[error("error compiling C files (compilation failed):\n{0}")]
+    #[diagnostic(help(
+        r#"check the compiler output above for details.
+if no C compiler was found, run `lx debug toolchains` to verify your build tools."#
+    ))]
     Compilation(#[from] cc::Error),
     #[error("error compiling C files (linking failed):\n{0}")]
     #[diagnostic(forward(0))]
@@ -269,8 +281,16 @@ pub enum CompileCModulesError {
     #[error("IO operation failed while compiling C modules:\n{0}")]
     Io(#[from] io::Error),
     #[error("failed to compile intermediates from C modules: {0}")]
+    #[diagnostic(help(
+        r#"check the compiler output above for missing headers or syntax errors.
+ensure the C compiler has access to the required include paths."#
+    ))]
     CompileIntermediates(cc::Error),
     #[error("error compiling C modules (compilation failed):\n{0}")]
+    #[diagnostic(help(
+        r#"check the compiler output above for details.
+if no C compiler was found, run `lx debug toolchains` to verify your build tools."#
+    ))]
     Compilation(#[from] cc::Error),
     #[error("error compiling C modules (linking failed):\n{0}")]
     #[diagnostic(forward(0))]
@@ -290,6 +310,9 @@ pub enum LinkCModulesError {
     #[diagnostic(forward(0))]
     OutputValidation(#[from] OutputValidationError),
     #[error("compiling C modules succeeded, but the expected library {0} was not created")]
+    #[diagnostic(help(
+        "check the rockspec or lux.toml `modules` and `lib_modules` tables for correct paths."
+    ))]
     LibOutputNotCreated(String),
 }
 
