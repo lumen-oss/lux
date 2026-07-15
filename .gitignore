@@ -1,4 +1,4 @@
-.direnv
+.*
 
 # Added by cargo
 
@@ -8,11 +8,6 @@
 
 /result*
 
-# For compat
-/.rocks/*
-/rocks.lock
-/rocks.toml
-
 # Temp test files
 /lux-lib/resources/test/luatest-0.2-1/
 /lux-lib/proptest-regressions/
@@ -21,15 +16,10 @@
 /*.rock
 
 # Lux project files
-/.lux/*
 /lux.lock
 /spec/
-/.busted
 /*.rock
-/.luarc.json
 /src
-
-.pre-commit-config.yaml
 
 # Generated definitions by lux-definitions
 /definitions
