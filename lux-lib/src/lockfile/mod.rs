@@ -304,6 +304,18 @@ pub(crate) enum RemotePackageSourceUrl {
     },
 }
 
+impl Display for RemotePackageSourceUrl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RemotePackageSourceUrl::Git { url, checkout_ref } => {
+                format!("{url}@{checkout_ref}").fmt(f)
+            }
+            RemotePackageSourceUrl::Url { url } => url.fmt(f),
+            RemotePackageSourceUrl::File { path } => format!("{}", path.display()).fmt(f),
+        }
+    }
+}
+
 // TODO(vhyrro): Move to `package/local.rs`
 
 /// A locally installed rock
@@ -781,10 +793,39 @@ pub enum LockfileError {
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum LockfileIntegrityError {
-    #[error("rockspec integirty mismatch.\nExpected: {expected}\nBut got: {got}")]
-    RockspecIntegrityMismatch { expected: Integrity, got: Integrity },
-    #[error("source integrity mismatch.\nExpected: {expected}\nBut got: {got}")]
-    SourceIntegrityMismatch { expected: Integrity, got: Integrity },
+    #[error(
+        r#"rockspec integrity mismatch.
+- source: {src}
+- expected: {expected}
+- got: {got}
+"#
+    )]
+    #[diagnostic(help(
+        r#"The maintainer may have force-uploaded a different rockspec.
+Check the rockspec source, then use `--no-lock` to update the hash.
+"#
+    ))]
+    RockspecIntegrityMismatch {
+        src: String,
+        expected: Integrity,
+        got: Integrity,
+    },
+    #[error(
+        r#"source integrity mismatch.
+- source: {src}
+- expected: {expected}
+- got: {got}"#
+    )]
+    #[diagnostic(help(
+        r#"The maintainer may have force-uploaded a different source or moved a tag.
+Check the source URL, then use `--no-lock` to update the hash.
+"#
+    ))]
+    SourceIntegrityMismatch {
+        src: String,
+        expected: Integrity,
+        got: Integrity,
+    },
     #[error("package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile.")]
     PackageNotFound(PackageName, PackageVersion, PinnedState, String),
 }
@@ -897,6 +938,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
                         .is_none()
                     {
                         return Err(LockfileIntegrityError::RockspecIntegrityMismatch {
+                            src: expected_package.source.to_string(),
                             expected: expected_package.hashes.rockspec.clone(),
                             got: installed_package.hashes.rockspec.clone(),
                         });
@@ -908,6 +950,11 @@ impl<P: LockfilePermissions> Lockfile<P> {
                         .is_none()
                     {
                         return Err(LockfileIntegrityError::SourceIntegrityMismatch {
+                            src: expected_package
+                                .source_url
+                                .as_ref()
+                                .map(|url| url.to_string())
+                                .unwrap_or(expected_package.source.to_string()),
                             expected: expected_package.hashes.source.clone(),
                             got: installed_package.hashes.source.clone(),
                         });
