@@ -29,6 +29,10 @@ pub enum RockManifestError {
     #[error("could not deserialize rock_manifest: {0}")]
     Serde(#[from] ottavino_util::serde::de::Error),
     #[error("rock_manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    #[diagnostic(help(
+        r#"the rockspec may be too complex or contain too many dependencies.
+        Try reducing the number of dependencies or simplifying build instructions."#
+    ))]
     FuelLimitExceeded,
 }
 

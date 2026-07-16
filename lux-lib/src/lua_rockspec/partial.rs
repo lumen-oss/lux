@@ -33,6 +33,10 @@ pub struct PartialLuaRockspec {
 #[derive(Debug, Error, Diagnostic)]
 pub enum PartialRockspecError {
     #[error("rockspec execution exceeded fuel limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    #[diagnostic(help(
+        r#"the rockspec may be too complex or contain too many dependencies.
+        Try reducing the number of dependencies or simplifying build instructions."#
+    ))]
     FuelLimitExceeded,
     #[error("field '{0}' should not be declared in extra.rockspec")]
     ExtraneousField(String),

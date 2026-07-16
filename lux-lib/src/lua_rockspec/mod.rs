@@ -18,7 +18,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use build::*;
 pub use dependency::*;
 pub use deploy::*;
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 pub use partial::*;
 pub use platform::*;
 pub use rock_source::*;
@@ -48,51 +48,75 @@ use crate::{
 #[derive(Error, Debug, Diagnostic)]
 pub enum LuaRockspecError {
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    #[diagnostic(
+        code(lux_lib::lua_rockspec::fuel_limit_exceeded),
+        help(
+            r#"the rockspec may be too complex or contain too many dependencies.
+try reducing the number of dependencies or simplifying build instructions.
+"#
+        )
+    )]
     FuelLimitExceeded,
-    #[error(
-        r#"could not parse rockspec ({cause}):
-
-    {content}"#
+    #[error("could not parse rockspec")]
+    #[diagnostic(code(lux_lib::lua_rockspec::execution),
+        help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
     )]
     ExecutionError {
         #[source]
         cause: ottavino::ExternError,
-        content: String,
+        #[source_code]
+        content: NamedSource<String>,
+        #[label("this package")]
+        span: SourceSpan,
     },
-    #[error(
-        r#"could not find rockspec field '{field}':
-
-    {content}"#
-    )]
-    LuaKeyNotFound { field: String, content: String },
-    #[error(
-        r#"could not deserialize rockspec field '{field}':
-
-    {content}"#
+    #[error("invalid field '{field}'")]
+    #[diagnostic(code(lux_lib::lua_rockspec::key_deserialization),
+        help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
     )]
     LuaKeyDeserializationFailure {
         field: String,
-        content: String,
         #[source]
-        cause: ottavino_util::serde::de::Error,
+        cause: Box<ottavino_util::serde::de::Error>,
+        #[source_code]
+        src: NamedSource<String>,
+        #[label("here")]
+        span: SourceSpan,
     },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error(
-        r#"could not parse rockspec ({cause})
-
-    {content}"#
+    #[error("error parsing table (field: '{field}')")]
+    #[diagnostic(code(lux_lib::lua_rockspec::lua_table),
+        help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
     )]
     LuaTable {
-        content: String,
+        field: String,
+        #[source_code]
+        content: NamedSource<String>,
+        #[label("here")]
+        span: SourceSpan,
         #[source]
-        cause: LuaTableError,
+        cause: Box<LuaTableError>,
     },
     #[error("cannot create Lua rockspec with off-spec dependency: {0}")]
+    #[diagnostic(
+        code(lux_lib::lua_rockspec::off_spec_dependency),
+        url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
+    )]
     OffSpecDependency(PackageName),
     #[error("cannot create Lua rockspec with off-spec build dependency: {0}")]
+    #[diagnostic(
+        code(lux_lib::lua_rockspec::off_spec_build_dependency),
+        url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
+    )]
     OffSpecBuildDependency(PackageName),
     #[error("cannot create Lua rockspec with off-spec test dependency: {0}")]
+    #[diagnostic(
+        code(lux_lib::lua_rockspec::off_spec_test_dependency),
+        url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
+    )]
     OffSpecTestDependency(PackageName),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -143,9 +167,10 @@ impl<'gc> HasRockspecKey<'gc> for ottavino::Table<'gc> {
     ) -> Result<V, LuaRockspecError> {
         from_value(self.get_value(ctx, key.clone())).map_err(|cause| {
             LuaRockspecError::LuaKeyDeserializationFailure {
-                field: key,
-                content: rockspec_content.to_string(),
-                cause,
+                field: key.clone(),
+                cause: Box::new(cause),
+                src: NamedSource::new("rockspec", rockspec_content.to_string()),
+                span: find_value_span(rockspec_content, &key),
             }
         })
     }
@@ -207,8 +232,9 @@ impl LocalLuaRockspec {
                     value => from_value(value).map_err(|cause| {
                         LuaRockspecError::LuaKeyDeserializationFailure {
                             field: "source".into(),
-                            content: rockspec_content.to_string(),
-                            cause,
+                            cause: Box::new(cause),
+                            src: NamedSource::new("rockspec", rockspec_content.to_string()),
+                            span: find_value_span(rockspec_content, "source"),
                         }
                     })?,
                 };
@@ -223,14 +249,18 @@ impl LocalLuaRockspec {
                     version: globals.get_rockspec_key(ctx, "version".into(), rockspec_content)?,
                     description: parse_lua_tbl_or_default(ctx, "description").map_err(|cause| {
                         LuaRockspecError::LuaTable {
-                            content: rockspec_content.to_string(),
-                            cause,
+                            field: "description".into(),
+                            content: NamedSource::new("rockspec", rockspec_content.to_string()),
+                            span: find_value_span(rockspec_content, "description"),
+                            cause: Box::new(cause),
                         }
                     })?,
                     supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")
                         .map_err(|cause| LuaRockspecError::LuaTable {
-                            content: rockspec_content.to_string(),
-                            cause,
+                            field: "supported_platforms".into(),
+                            content: NamedSource::new("rockspec", rockspec_content.to_string()),
+                            span: find_value_span(rockspec_content, "supported_platforms"),
+                            cause: Box::new(cause),
                         })?,
                     lua: lua_version_req,
                     dependencies: strip_lua(dependencies),
@@ -251,9 +281,14 @@ impl LocalLuaRockspec {
 
                 Ok(Ok(rockspec))
             })
-            .map_err(|cause| LuaRockspecError::ExecutionError {
-                content: rockspec_content.to_string(),
-                cause,
+            .map_err(|cause| {
+                let src = NamedSource::new("rockspec", rockspec_content.to_string());
+                let span = find_value_span(rockspec_content, "package");
+                LuaRockspecError::ExecutionError {
+                    content: src,
+                    span,
+                    cause,
+                }
             })??;
 
         let rockspec_file_name = format!("{}-{}.rockspec", rockspec.package(), rockspec.version());
@@ -399,9 +434,14 @@ impl RemoteLuaRockspec {
                 source,
             }))
         })
-        .map_err(|cause| LuaRockspecError::ExecutionError {
-            content: rockspec_content.to_string(),
-            cause,
+        .map_err(|cause| {
+            let src = NamedSource::new("rockspec", rockspec_content.to_string());
+            let span = find_value_span(rockspec_content, "package");
+            LuaRockspecError::ExecutionError {
+                content: src,
+                span,
+                cause,
+            }
         })?
     }
 
@@ -595,6 +635,41 @@ pub struct RockDescription {
     /// A list of short strings that specify labels for categorization of this rock.
     #[serde(default)]
     pub labels: Vec<String>,
+}
+
+fn find_key_span(rockspec_content: &str, key: &str) -> SourceSpan {
+    rockspec_content
+        .match_indices(key)
+        .find(|&(start, _)| {
+            let end = start + key.len();
+            let prefix_ok =
+                start == 0 || !rockspec_content.as_bytes()[start - 1].is_ascii_alphanumeric();
+            let suffix_ok = rockspec_content
+                .get(end..)
+                .is_some_and(|s| s.starts_with('=') || s.trim_start().starts_with('='));
+            prefix_ok && suffix_ok
+        })
+        .map(|(start, _)| (start..start + key.len()).into())
+        .unwrap_or((0..0).into())
+}
+
+fn find_value_span(rockspec_content: &str, key: &str) -> SourceSpan {
+    let key = find_key_span(rockspec_content, key);
+    if key.is_empty() {
+        return key;
+    }
+    let key_offset = key.offset();
+    let key_end = key_offset + key.len();
+    let eq_start = key_end + rockspec_content[key_end..].find('=').unwrap_or(0);
+    let value_offset = eq_start + 1;
+    let line_end = rockspec_content[value_offset..]
+        .find('\n')
+        .map(|i| value_offset + i)
+        .unwrap_or(rockspec_content.len());
+    let trimmed = &rockspec_content[value_offset..line_end];
+    let start = value_offset + (trimmed.len() - trimmed.trim_start().len());
+    let end = line_end - (trimmed.len() - trimmed.trim_end().len());
+    (start..end).into()
 }
 
 fn deserialize_url<'de, D>(deserializer: D) -> Result<Option<Url>, D::Error>
@@ -1814,5 +1889,50 @@ external_dependencies = {
             .external_dependencies()
             .get(&PlatformIdentifier::Windows);
         assert!(windows_external_deps.get("OPENSSL").is_some());
+    }
+
+    #[test]
+    pub fn find_value_span_spaces() {
+        let source = "package = 'foo'\nversion = '1.0'";
+        let span = find_value_span(source, "package");
+        assert_eq!(&source[span.offset()..span.offset() + span.len()], "'foo'");
+    }
+
+    #[test]
+    pub fn find_value_span_no_spaces() {
+        let source = "package='foo'";
+        let span = find_value_span(source, "package");
+        assert_eq!(&source[span.offset()..span.offset() + span.len()], "'foo'");
+    }
+
+    #[test]
+    pub fn find_value_span_returns_empty_when_not_found() {
+        let source = "version = '1.0'";
+        let span = find_value_span(source, "package");
+        assert_eq!(span.len(), 0);
+    }
+
+    #[test]
+    pub fn find_value_span_skips_url_containing_field() {
+        let source = "homepage = 'https://luapackager.com'\npackage = 'foo'";
+        let span = find_value_span(source, "package");
+        assert_eq!(&source[span.offset()..span.offset() + span.len()], "'foo'");
+    }
+
+    #[test]
+    pub fn find_value_span_double_quoted() {
+        let source = r#"package = "foo""#;
+        let span = find_value_span(source, "package");
+        assert_eq!(
+            &source[span.offset()..span.offset() + span.len()],
+            r#""foo""#
+        );
+    }
+
+    #[test]
+    pub fn find_value_span_table() {
+        let source = "description = {\n    summary = 'bar'\n}";
+        let span = find_value_span(source, "description");
+        assert_eq!(&source[span.offset()..span.offset() + span.len()], "{");
     }
 }

@@ -30,6 +30,10 @@ pub enum ManifestLuaError {
     #[error("failed to deserialize Lua manifest:\n{0}")]
     DeserializationError(#[from] ottavino_util::serde::de::Error),
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    #[diagnostic(help(
+        r#"the rockspec may be too complex or contain too many dependencies.
+        Try reducing the number of dependencies or simplifying build instructions."#
+    ))]
     FuelLimitExceeded,
 }
 
