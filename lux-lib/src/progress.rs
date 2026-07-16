@@ -65,7 +65,11 @@ impl MultiProgress {
     }
 
     pub fn add(&self, bar: ProgressBar) -> ProgressBar {
-        ProgressBar(self.0.insert_from_back(0, bar.0))
+        if let LoggingState::Disabled = crate::logging::state() {
+            ProgressBar(self.0.insert_from_back(0, bar.0))
+        } else {
+            bar
+        }
     }
 
     pub fn new_bar(&self) -> ProgressBar {
@@ -162,7 +166,9 @@ impl ProgressBar {
     }
 
     pub fn finish_and_clear(&self) {
-        self.0.finish_and_clear()
+        if let LoggingState::Disabled = crate::logging::state() {
+            self.0.finish_and_clear()
+        }
     }
 }
 
@@ -174,7 +180,9 @@ impl Default for ProgressBar {
 
 impl From<String> for ProgressBar {
     fn from(message: String) -> Self {
-        Self(Self::new().0.with_message(message))
+        let bar = Self::new();
+        bar.set_message(message);
+        bar
     }
 }
 
