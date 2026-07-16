@@ -67,10 +67,15 @@ pub enum ExecError {
     #[error("failed to run {cmd}: {source}")]
     RunCommandFailed {
         cmd: String,
-        #[source]
         source: io::Error,
+        #[help]
+        help: Option<String>,
     },
-    #[error("{cmd} exited with non-zero exit code: {}", exit_code.map(|code| code.to_string()).unwrap_or("unknown".into()))]
+    #[error(
+        "{cmd} exited with non-zero exit code: {}",
+        exit_code.map(|code| code.to_string()).unwrap_or("unknown".into())
+    )]
+    #[diagnostic(help("check the command's output for errors."))]
     RunCommandNonZeroExitCode { cmd: String, exit_code: Option<i32> },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -150,10 +155,21 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         .await
     {
         Ok(status) => Ok(status),
-        Err(err) => Err(ExecError::RunCommandFailed {
-            cmd: run.command.to_string(),
-            source: err,
-        }),
+        Err(err) => {
+            let help = if err.to_string().starts_with("No such file") {
+                Some(format!(
+                    "make sure '{}' is available on your PATH",
+                    run.command
+                ))
+            } else {
+                None
+            };
+            Err(ExecError::RunCommandFailed {
+                cmd: run.command.to_string(),
+                source: err,
+                help,
+            })
+        }
     }?;
     if status.success() {
         Ok(())
