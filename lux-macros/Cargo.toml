@@ -1,6 +1,6 @@
 [package]
 name = "lux-macros"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "Proc-macro crate for lux"
 repository = "https://github.com/lumen-oss/lux"

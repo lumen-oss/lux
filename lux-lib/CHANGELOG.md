@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.48.0...lux-lib-v0.49.0) `lux-lib` - 2026-07-16
+
+### Added
+- *(error-reporting)* [**breaking**] manifest and project config diagnostics
+- *(error-reporting)* [**breaking**] more build module diagnostics
+
 ## [0.48.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.47.0...lux-lib-v0.48.0) `lux-lib` - 2026-07-16
 
 ### Added
