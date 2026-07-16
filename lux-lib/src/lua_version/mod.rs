@@ -8,8 +8,10 @@ use crate::{
     config::Config,
     package::{PackageVersion, PackageVersionReq},
 };
+use itertools::Itertools;
 use miette::Diagnostic;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use thiserror::Error;
 
@@ -115,17 +117,23 @@ impl LuaVersion {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error(
-    r#"lua version not set.
-Please provide a version through `lx --lua-version <ver> <cmd>`
-Valid versions are: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit' and 'jit52'.
-"#
-)]
-pub struct LuaVersionUnset;
+#[error("lua version not set")]
+pub struct LuaVersionUnset {
+    #[help]
+    help: String,
+}
 
 impl LuaVersion {
     pub fn from(config: &Config) -> Result<&Self, LuaVersionUnset> {
-        config.lua_version().ok_or(LuaVersionUnset)
+        config.lua_version().ok_or(LuaVersionUnset {
+            help: format!(
+                r#"provide a version through `lx --lua-version <ver> <cmd>`
+or make sure Lux can discover your Lua installation on your PATH.
+valid versions are: {}
+"#,
+                LuaVersion::iter().join(",")
+            ),
+        })
     }
 }
 
@@ -141,10 +149,12 @@ impl FromStr for LuaVersion {
             "5.5" | "55" => Ok(LuaVersion::Lua55),
             "jit" | "luajit" => Ok(LuaVersion::LuaJIT),
             "jit52" | "luajit52" => Ok(LuaVersion::LuaJIT52),
-            _ => Err(r#"unrecognized Lua version.
-                 Supported versions: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit', 'jit52'.
-                 "#
-            .into()),
+            _ => Err(format!(
+                r#"unrecognized Lua version.
+supported versions: {}
+            "#,
+                LuaVersion::iter().join(",")
+            )),
         }
     }
 }
