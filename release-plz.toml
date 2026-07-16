@@ -1,16 +1,15 @@
 [workspace]
-# set the path of all the crates to the changelog
-# to the root of the repository
-changelog_path = "./CHANGELOG.md"
 
 [[package]]
 name = "lux-cli"
+changelog_path = "lux-cli/CHANGELOG.md"
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
 semver_check = false
 
 [[package]]
 name = "lux-lib"
+changelog_path = "lux-lib/CHANGELOG.md"
 semver_check = true
 
 [[package]]
