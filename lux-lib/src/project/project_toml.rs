@@ -145,6 +145,10 @@ pub enum ProjectTomlError {
     #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
     #[error("generated rockspec exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
+    #[diagnostic(help(
+        r#"the rockspec may be too complex or contain too many dependencies.
+        Try reducing the number of dependencies or simplifying build instructions."#
+    ))]
     FuelLimitExceeded,
     #[error(
         r#"generated invalid Lua from TOML:
