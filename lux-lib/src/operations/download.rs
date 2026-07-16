@@ -216,8 +216,16 @@ impl RemoteRockDownload {
 #[derive(Error, Debug, Diagnostic)]
 pub enum DownloadRockspecError {
     #[error("failed to download rockspec: {0}")]
+    #[diagnostic(help(
+        "check your network connection and verify the package exists on the server."
+    ))]
     Request(#[from] reqwest::Error),
     #[error("failed to convert rockspec response: {0}")]
+    #[diagnostic(help(
+        r#"the server returned a response that is not valid UTF-8.
+check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     ResponseConversion(#[from] FromUtf8Error),
     #[error("error initialising remote package DB:\n{0}")]
     #[diagnostic(forward(0))]
@@ -349,8 +357,14 @@ pub enum SearchAndDownloadError {
     #[diagnostic(transparent)]
     DownloadRockspec(#[from] DownloadRockspecError),
     #[error("io operation failed: {0}")]
+    #[diagnostic(help("check that the destination directory exists and is writable."))]
     Io(#[from] io::Error),
     #[error("UTF-8 conversion failed: {0}")]
+    #[diagnostic(help(
+        r#"the server returned a response that is not valid UTF-8.
+check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -359,21 +373,55 @@ pub enum SearchAndDownloadError {
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to read packed rock {0}:\n{1}")]
+    #[diagnostic(help(
+        r#"the downloaded rock may be corrupted.
+check your network connection and rerun the command to re-download it."#
+    ))]
     ZipRead(String, zip::result::ZipError),
     #[error("failed to extract packed rock {0}:\n{1}")]
+    #[diagnostic(help(
+        r#"the downloaded rock may be corrupted.
+check your network connection and rerun the command to re-download it."#
+    ))]
     ZipExtract(String, zip::result::ZipError),
     #[error("{0} not found in the packed rock.")]
+    #[diagnostic(help(
+        r#"the packed rock does not contain the expected rockspec.
+check your network connection and rerun the command to re-download it."#
+    ))]
     RockspecNotFoundInPackedRock(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageSpecFromPackageReq(#[from] PackageSpecFromPackageReqError),
     #[error("git source {0} without a revision or tag.")]
+    #[diagnostic(help(
+        r#"lux requires a pinned revision or tag to ensure reproducible builds.
+without one, the same version could resolve to different code at different times.
+try a different version, or report it to the package maintainer."#
+    ))]
     MissingCheckoutRef(String),
     #[error("cannot download from a local rock source.")]
+    #[diagnostic(
+        help(
+            r#"lux cannot download rocks from a local path.
+for local dependencies, use `path` in your lux.toml."#
+        ),
+        url("https://lux.lumen-labs.org/reference/lux-toml#local-dependencies")
+    )]
     LocalSource,
     #[error("cannot download from a local rock or embedded rockspec source.")]
+    #[diagnostic(
+        help(
+            r#"lux cannot download rocks from a local path.
+for local dependencies, use `path` in your lux.toml."#
+        ),
+        url("https://lux.lumen-labs.org/reference/lux-toml#local-dependencies")
+    )]
     NonURLSource,
     #[error("client error:\n{0}")]
+    #[diagnostic(help(
+        "check your network connection and verify the package exists on the server."
+    ))]
     Request(#[from] reqwest::Error),
 }
 
@@ -399,6 +447,9 @@ async fn search_and_download_src_rock(
 #[derive(Error, Debug, Diagnostic)]
 pub enum DownloadSrcRockError {
     #[error("failed to download source rock: {0}")]
+    #[diagnostic(help(
+        "check your network connection and verify the package exists on the server."
+    ))]
     Request(#[from] reqwest::Error),
     #[error("failed to parse source rock URL: {0}")]
     Parse(#[from] ParseError),
