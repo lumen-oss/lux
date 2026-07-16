@@ -111,9 +111,22 @@ impl Config {
     pub fn enabled_dev_servers(&self) -> Result<Vec<Url>, ConfigError> {
         let mut enabled_dev_servers = Vec::new();
         if self.enable_development_packages {
-            enabled_dev_servers.push(self.server().join(DEV_PATH)?);
+            let config_file = ConfigBuilder::config_file()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            enabled_dev_servers.push(self.server().join(DEV_PATH).map_err(|source| {
+                ConfigError::UrlParseError {
+                    source,
+                    help: Some(format!("check the `server` URL in {config_file}")),
+                }
+            })?);
             for server in self.extra_servers() {
-                enabled_dev_servers.push(server.join(DEV_PATH)?);
+                enabled_dev_servers.push(server.join(DEV_PATH).map_err(|source| {
+                    ConfigError::UrlParseError {
+                        source,
+                        help: Some(format!("check the `extra_servers` URLs in {config_file}")),
+                    }
+                })?);
             }
         }
         Ok(enabled_dev_servers)
@@ -248,16 +261,28 @@ impl HasVariables for Config {
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum ConfigError {
-    #[error(transparent)]
-    Io(#[from] io::Error),
+    #[error("failed to read config file {config_file}")]
+    ConfigRead {
+        config_file: String,
+        source: io::Error,
+        #[help]
+        help: Option<String>,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     NoValidHomeDirectory(#[from] NoValidHomeDirectory),
-    #[error("error deserializing Lux config")]
-    #[diagnostic(forward(0))]
-    Deserialize(#[from] TomlDeError),
-    #[error("error parsing URL: {0}")]
-    UrlParseError(#[from] url::ParseError),
+    #[error("error parsing {config_file}")]
+    Deserialize {
+        config_file: String,
+        #[diagnostic_source]
+        source: TomlDeError,
+    },
+    #[error("error parsing URL: {source}")]
+    UrlParseError {
+        source: url::ParseError,
+        #[help]
+        help: Option<String>,
+    },
 }
 
 /// Incrementally builds a [`Config`] by layering configuration sources.
@@ -311,11 +336,23 @@ impl ConfigBuilder {
     pub fn new() -> Result<Self, ConfigError> {
         let config_file = Self::config_file()?;
         if config_file.is_file() {
-            let content = std::fs::read_to_string(&config_file)?;
-            Ok(crate::project::parse_toml(
-                config_file.to_string_lossy().as_ref(),
-                &content,
-            )?)
+            let config_file_name = config_file.to_string_lossy().to_string();
+            let content = std::fs::read_to_string(&config_file).map_err(|source| {
+                ConfigError::ConfigRead {
+                    config_file: config_file_name.clone(),
+                    source,
+                    help: Some(format!(
+                        "check that {} exists and is readable",
+                        config_file.display()
+                    )),
+                }
+            })?;
+            crate::project::parse_toml(&config_file_name, &content).map_err(|source| {
+                ConfigError::Deserialize {
+                    config_file: config_file_name,
+                    source,
+                }
+            })
         } else {
             Ok(Self::default())
         }
