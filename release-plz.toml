@@ -13,6 +13,11 @@ changelog_path = "lux-lib/CHANGELOG.md"
 semver_check = true
 
 [[package]]
+name = "lux-macros"
+changelog_path = "lux-macros/CHANGELOG.md"
+semver_check = false
+
+[[package]]
 name = "lux-workspace-hack"
 changelog_update = false
 release = false
