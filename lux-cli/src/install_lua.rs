@@ -27,11 +27,14 @@ pub async fn install_lua(config: Config) -> Result<()> {
         .ok_or_else(|| miette!("error getting lua include parent directory"))?;
 
     bar.map(|bar| {
-        bar.finish_with_message(format!(
-            "🌔 Installed Lua ({}) to {}",
-            version_stringified,
-            lua_root.display()
-        ))
+        bar.finish_with_message(
+            format!(
+                "🌔 Installed Lua ({}) to {}",
+                version_stringified,
+                lua_root.display()
+            ),
+            lux_lib::logging::LogLevel::Info,
+        )
     });
 
     Ok(())

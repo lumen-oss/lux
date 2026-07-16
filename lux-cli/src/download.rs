@@ -16,10 +16,10 @@ pub async fn download(dl_data: Download, config: Config) -> Result<()> {
         .await?;
 
     bar.map(|b| {
-        b.finish_with_message(format!(
-            "Succesfully downloaded {}@{}",
-            rock.name, rock.version
-        ))
+        b.finish_with_message(
+            format!("Succesfully downloaded {}@{}", rock.name, rock.version),
+            lux_lib::logging::LogLevel::Info,
+        )
     });
 
     Ok(())
