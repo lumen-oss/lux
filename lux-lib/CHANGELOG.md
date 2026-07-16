@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.0...lux-lib-v0.49.1) `lux-lib` - 2026-07-16
+
+### Fixed
+- *(logging)* also route MultiProgress output through the sink
+
 ## [0.49.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.48.0...lux-lib-v0.49.0) `lux-lib` - 2026-07-16
 
 ### Added
