@@ -92,11 +92,13 @@ where
 #[derive(Error, Debug, Diagnostic)]
 pub enum FetchSrcError {
     #[error("failed to clone rock source:\n{0}")]
+    #[diagnostic(help("check your network connection and verify the git URL is correct."))]
     GitClone(#[from] git2::Error),
     #[error("failed to parse git URL:\n{0}")]
     #[diagnostic(forward(0))]
     GitUrlParse(#[from] RemoteGitUrlParseError),
     #[error(transparent)]
+    #[diagnostic(help("check your network connection."))]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -105,18 +107,24 @@ pub enum FetchSrcError {
     #[diagnostic(transparent)]
     FetchSrcRock(#[from] FetchSrcRockError),
     #[error("unable to remove the '.git' directory:\n{0}")]
+    #[diagnostic(help(
+        "check that no process is using the directory and you have write permissions."
+    ))]
     CleanGitDir(io::Error),
     #[error("unable to compute hash:\n{0}")]
     Hash(io::Error),
     #[error("unable to copy {src} to {dest}:\n{err}")]
+    #[diagnostic(help("check that the source exists and the destination is writable."))]
     CopyDir {
         src: PathBuf,
         dest: PathBuf,
         err: io::Error,
     },
     #[error("unable to open {file}:\n{err}")]
+    #[diagnostic(help("check that the file exists and is readable."))]
     FileOpen { file: PathBuf, err: io::Error },
     #[error("unable to read {file}:\n{err}")]
+    #[diagnostic(help("check that the file exists and is readable."))]
     FileRead { file: PathBuf, err: io::Error },
 }
 
