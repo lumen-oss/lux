@@ -32,7 +32,7 @@ glob = "0.3"
 hex = { version = "0.4" }
 html-escape = "0.2"
 httpdate = "1.0"
-infer = "0.19"
+infer = "0.22"
 is_executable = "1.0"
 lazy_static = "1.5"
 lets_find_up = "0.0"
