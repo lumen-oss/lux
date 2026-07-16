@@ -1,0 +1,22 @@
+name: Merge changelogs
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: python3 .github/merge_changelogs.py
+      - uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore: merge per-package changelogs into root"
+          file_pattern: CHANGELOG.md
