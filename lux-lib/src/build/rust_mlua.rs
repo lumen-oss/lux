@@ -165,8 +165,12 @@ async fn cleanup(output_paths: &RockLayout, progress: &Progress<ProgressBar>) ->
     match tokio::fs::remove_dir_all(root_dir).await {
         Ok(_) => (),
         Err(err) => {
-            progress
-                .map(|p| p.println(format!("Error cleaning up {}: {}", root_dir.display(), err)));
+            progress.map(|p| {
+                p.println(
+                    format!("Error cleaning up {}: {}", root_dir.display(), err),
+                    crate::logging::LogLevel::Error,
+                )
+            });
         }
     };
 }

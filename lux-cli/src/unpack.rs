@@ -30,13 +30,16 @@ pub async fn unpack(data: Unpack, config: Config) -> Result<()> {
     let unpack_path = lux_lib::operations::unpack_src_rock(src_file, destination, &bar).await?;
 
     bar.map(|b| {
-        b.finish_with_message(format!(
-            "
+        b.finish_with_message(
+            format!(
+                "
 You may now enter the following directory:
 {}
 and type `lux make` to build.",
-            unpack_path.display()
-        ))
+                unpack_path.display()
+            ),
+            lux_lib::logging::LogLevel::Info,
+        )
     });
 
     Ok(())
@@ -57,13 +60,16 @@ pub async fn unpack_remote(data: UnpackRemote, config: Config) -> Result<()> {
     let unpack_path = lux_lib::operations::unpack_src_rock(cursor, destination, &bar).await?;
 
     bar.map(|p| {
-        p.finish_with_message(format!(
-            "
+        p.finish_with_message(
+            format!(
+                "
 You may now enter the following directory:
 {}
 and type `lux make` to build.",
-            unpack_path.display()
-        ))
+                unpack_path.display()
+            ),
+            lux_lib::logging::LogLevel::Info,
+        )
     });
 
     Ok(())

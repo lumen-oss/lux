@@ -1,6 +1,9 @@
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
-use crate::{config::Config, logging::LoggingState};
+use crate::{
+    config::Config,
+    logging::{LogLevel, LoggingState},
+};
 
 mod private {
     pub trait HasProgress {}
@@ -84,6 +87,14 @@ impl MultiProgress {
     }
 }
 
+fn get_msg_prefix(level: LogLevel) -> String {
+    match level {
+        LogLevel::Warn => "⚠️ WARNING: ".to_string(),
+        LogLevel::Error => "❌ ERROR: ".to_string(),
+        LogLevel::Info => "".to_string(),
+    }
+}
+
 impl ProgressBar {
     pub fn new() -> Self {
         let bar =
@@ -109,7 +120,7 @@ impl ProgressBar {
         match crate::logging::state() {
             crate::logging::LoggingState::Enabled => {
                 crate::logging::push(
-                    crate::logging::LogLevel::Info,
+                    LogLevel::Info,
                     msg.clone().into_owned(),
                     Some("progress".to_string()),
                 );
@@ -128,25 +139,26 @@ impl ProgressBar {
         self.0.position()
     }
 
-    pub fn println<M>(&self, message: M)
+    pub fn println<M>(&self, message: M, level: LogLevel)
     where
         M: AsRef<str>,
     {
         match crate::logging::state() {
             crate::logging::LoggingState::Enabled => {
                 crate::logging::push(
-                    crate::logging::LogLevel::Info,
+                    level,
                     message.as_ref().to_string(),
                     Some("progress".to_string()),
                 );
             }
             crate::logging::LoggingState::Disabled => {
-                self.0.println(message.as_ref());
+                self.0
+                    .println(format!("{}{}", get_msg_prefix(level), message.as_ref()));
             }
         }
     }
 
-    pub fn finish_with_message<M>(&self, message: M)
+    pub fn finish_with_message<M>(&self, message: M, level: LogLevel)
     where
         M: Into<Cow<'static, str>>,
     {
@@ -154,13 +166,14 @@ impl ProgressBar {
         match crate::logging::state() {
             crate::logging::LoggingState::Enabled => {
                 crate::logging::push(
-                    crate::logging::LogLevel::Info,
+                    level,
                     msg.clone().into_owned(),
                     Some("progress".to_string()),
                 );
             }
             crate::logging::LoggingState::Disabled => {
-                self.0.finish_with_message(msg);
+                self.0
+                    .finish_with_message(format!("{}{}", get_msg_prefix(level), msg));
             }
         }
     }

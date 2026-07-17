@@ -81,16 +81,19 @@ where
                         fetch.rockspec.version().clone(),
                     );
                     fetch.progress.map(|p| {
-                        p.println(format!(
-                            "⚠️ WARNING: Failed to fetch source for {}: {}",
-                            &package, err
-                        ))
+                        p.println(
+                            format!("Failed to fetch source for {}: {}", &package, err),
+                            crate::logging::LogLevel::Warn,
+                        )
                     });
                     fetch.progress.map(|p| {
-                        p.println(format!(
-                            "⚠️ Falling back to searching for a .src.rock archive on {}",
-                            fetch.config.server()
-                        ))
+                        p.println(
+                            format!(
+                                "Falling back to searching for a .src.rock archive on {}",
+                                fetch.config.server()
+                            ),
+                            crate::logging::LogLevel::Warn,
+                        )
                     });
                     let metadata =
                         FetchSrcRock::new(&package, fetch.dest_dir, fetch.config, fetch.progress)

@@ -489,14 +489,14 @@ async fn do_build_lua_unix(
         Ok(output) if !output.status.success() && build_target != "generic" => {
             progress.map(|p| {
                 p.println(format!(
-                    r#"⚠️ WARNING: Could not build Lua target '{build_target}'. Attempting a 'generic' Lua target build.
+                    r#"Could not build Lua target '{build_target}'. Attempting a 'generic' Lua target build.
 Some functionality may be limited, including dynamic module loading and REPL history.
 
 stderr:
 {}
 "#,
                     String::from_utf8_lossy(&output.stderr)
-                ))
+                ),crate::logging::LogLevel::Warn)
             });
             let fallback_output = Command::new(config.make_cmd())
                 .current_dir(build_dir)

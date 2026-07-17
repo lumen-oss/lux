@@ -30,14 +30,17 @@ pub async fn fetch_remote(data: UnpackRemote, config: Config) -> Result<()> {
         .unwrap_or_else(|| destination);
 
     bar.map(|b| {
-        b.finish_with_message(format!(
-            "
+        b.finish_with_message(
+            format!(
+                "
 You may now enter the following directory:
 {}
 and type `lux build` to build.
     ",
-            build_dir.as_path().display()
-        ))
+                build_dir.as_path().display()
+            ),
+            lux_lib::logging::LogLevel::Info,
+        )
     });
 
     Ok(())
