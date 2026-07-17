@@ -76,10 +76,9 @@ where
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
                     );
-                    let metadata =
-                        FetchSrcRock::new(&package, fetch.dest_dir, fetch.config)
-                            .fetch()
-                            .await?;
+                    let metadata = FetchSrcRock::new(&package, fetch.dest_dir, fetch.config)
+                        .fetch()
+                        .await?;
                     Ok(metadata)
                 }
                 RockSourceSpec::File(_) => Err(err),
@@ -168,8 +167,10 @@ impl Prompter for NullPrompter {
     }
 }
 
+#[tracing::instrument(name = "📥 Fetching source", skip_all)]
 async fn do_fetch_src<R: Rockspec>(
-    fetch: &FetchSrc<'_, R>) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
+    fetch: &FetchSrc<'_, R>,
+) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
     let rockspec = fetch.rockspec;
     let rock_source = rockspec.source().current_platform();
     let dest_dir = fetch.dest_dir;
@@ -201,6 +202,7 @@ async fn do_fetch_src<R: Rockspec>(
     let metadata = match &source_spec {
         RockSourceSpec::Git(git) => {
             let url = git.url.to_string();
+            tracing::info!(message = format!("🦠 Cloning {url}").as_str());
 
             let auth = if config.no_prompt() {
                 GitAuthenticator::default()
@@ -244,6 +246,7 @@ async fn do_fetch_src<R: Rockspec>(
             }
         }
         RockSourceSpec::Url(url) => {
+            tracing::info!(message = format!("📥 Downloading {url}").as_str());
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
@@ -273,7 +276,8 @@ async fn do_fetch_src<R: Rockspec>(
                 cursor,
                 rock_source.unpack_dir.is_none(),
                 file_name,
-                dest_dir)
+                dest_dir,
+            )
             .await?;
             RemotePackageSourceMetadata {
                 hash,
@@ -281,6 +285,8 @@ async fn do_fetch_src<R: Rockspec>(
             }
         }
         RockSourceSpec::File(path) => {
+            tracing::info!(message = format!("📋 Copying {}", path.display()).as_str());
+
             let hash = if path.is_dir() {
                 recursive_copy_dir(&path.to_path_buf(), dest_dir)
                     .await
@@ -312,7 +318,8 @@ async fn do_fetch_src<R: Rockspec>(
                     file,
                     rock_source.unpack_dir.is_none(),
                     file_name,
-                    dest_dir)
+                    dest_dir,
+                )
                 .await?;
                 path.hash().map_err(FetchSrcError::Hash)?
             };
@@ -325,23 +332,18 @@ async fn do_fetch_src<R: Rockspec>(
     Ok(metadata)
 }
 
+#[tracing::instrument(name = "📥 Downloading src.rock", skip_all)]
 async fn do_fetch_src_rock(
-    fetch: FetchSrcRock<'_>) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
+    fetch: FetchSrcRock<'_>,
+) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
     let package = fetch.package;
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
-    let src_rock =
-        operations::download_src_rock(package, config.server(), fetch.config).await?;
+    let src_rock = operations::download_src_rock(package, config.server(), fetch.config).await?;
     let hash = src_rock.bytes.hash()?;
     let cursor = Cursor::new(src_rock.bytes);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
-    operations::unpack::unpack(
-        mime_type,
-        cursor,
-        true,
-        src_rock.file_name,
-        dest_dir)
-    .await?;
+    operations::unpack::unpack(mime_type, cursor, true, src_rock.file_name, dest_dir).await?;
     Ok(RemotePackageSourceMetadata {
         hash,
         source_url: RemotePackageSourceUrl::Url { url: src_rock.url },

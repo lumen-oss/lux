@@ -194,11 +194,7 @@ async fn install_rockspec(
             "expected a path to a .rockspec or a package requirement."
         )),
     }?;
-    let lua = LuaInstallation::new(
-        &lua_version,
-        config,
-    )
-    .await?;
+    let lua = LuaInstallation::new(&lua_version, config).await?;
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
     let package = Build::new()
         .rockspec(&rockspec)

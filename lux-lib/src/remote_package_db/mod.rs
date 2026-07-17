@@ -50,8 +50,7 @@ pub enum RemotePackageDbIntegrityError {
 }
 
 impl RemotePackageDB {
-    pub async fn from_config(
-        config: &Config) -> Result<Self, RemotePackageDBError> {
+    pub async fn from_config(config: &Config) -> Result<Self, RemotePackageDBError> {
         let mut manifests = Vec::new();
         for server in config.enabled_dev_servers()? {
             let manifest = Manifest::from_config(server, config).await?;
@@ -66,23 +65,29 @@ impl RemotePackageDB {
     }
 
     /// Find a remote package that matches the requirement, returning the latest match.
+    #[tracing::instrument(name = "🔎 Searching", skip_all)]
     pub(crate) fn find(
         &self,
         package_req: &PackageReq,
-        filter: Option<RemotePackageTypeFilterSpec>) -> Result<RemotePackage, SearchError> {
+        filter: Option<RemotePackageTypeFilterSpec>,
+    ) -> Result<RemotePackage, SearchError> {
         match &self.0 {
-            Impl::LuarocksManifests(manifests) => match manifests.iter().find_map(|manifest| {
-                manifest.find(package_req, filter.clone())
-            }) {
-                Some(package) => Ok(package),
-                None => Err(SearchError::RockNotFound(package_req.clone())),
-            },
+            Impl::LuarocksManifests(manifests) => {
+                match manifests
+                    .iter()
+                    .find_map(|manifest| manifest.find(package_req, filter.clone()))
+                {
+                    Some(package) => Ok(package),
+                    None => Err(SearchError::RockNotFound(package_req.clone())),
+                }
+            }
             Impl::Lock(lockfile) => {
                 match lockfile.has_rock(package_req, filter).map(|local_package| {
                     RemotePackage::new(
                         PackageSpec::new(local_package.spec.name, local_package.spec.version),
                         local_package.source,
-                        local_package.source_url)
+                        local_package.source_url,
+                    )
                 }) {
                     Some(package) => Ok(package),
                     None => Err(SearchError::RockNotFoundInLockfile(package_req.clone())),
@@ -111,7 +116,8 @@ impl RemotePackageDB {
                                             package_req.version_req().matches(version)
                                         })
                                         .sorted_by(|a, b| Ord::cmp(b, a))
-                                        .collect_vec()))
+                                        .collect_vec(),
+                                ))
                             } else {
                                 None
                             }

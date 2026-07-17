@@ -19,7 +19,6 @@ use miette::{miette, IntoDiagnostic, Result};
 use path_slash::PathBufExt;
 use tempfile::tempdir;
 
-
 #[derive(Args)]
 pub struct Pack {
     /// Path to a RockSpec or a package query for a package to pack.{n}
@@ -167,11 +166,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             }?;
             let temp_dir = tempdir().into_diagnostic()?;
             let config = config.with_tree(temp_dir.path().to_path_buf());
-            let lua = LuaInstallation::new(
-                &lua_version,
-                &config,
-            )
-            .await?;
+            let lua = LuaInstallation::new(&lua_version, &config).await?;
             let tree = config.user_tree(lua_version)?;
             let package = Build::new()
                 .rockspec(&rockspec)

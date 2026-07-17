@@ -15,7 +15,6 @@ use bon::Builder;
 use miette::Diagnostic;
 use path_slash::PathExt;
 use thiserror::Error;
-
 /// Fetch a vendored rock from `<vendor_dir>`
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
@@ -59,13 +58,16 @@ where
     State: fetch_vendored_builder::State + fetch_vendored_builder::IsComplete,
 {
     pub(crate) async fn fetch_vendored_rock(
-        self) -> Result<RemoteRockDownload, FetchVendoredError> {
+        self,
+    ) -> Result<RemoteRockDownload, FetchVendoredError> {
         do_fetch_vendored_rock(self._build()).await
     }
 }
 
+#[tracing::instrument(name = "📥 Fetching vendored rock", skip_all)]
 async fn do_fetch_vendored_rock(
-    args: FetchVendored<'_>) -> Result<RemoteRockDownload, FetchVendoredError> {
+    args: FetchVendored<'_>,
+) -> Result<RemoteRockDownload, FetchVendoredError> {
     let vendor_dir = args.vendor_dir;
     let package = args.package;
     let package_db = args.package_db;
@@ -98,16 +100,18 @@ async fn do_fetch_vendored_rock(
     }
 }
 
-/// Load the vendored RockSpec for a package, expecting one to be present.
+#[tracing::instrument(name = "📑 Loading vendored rockspec", skip_all)]
 async fn load_vendored_rockspec(
     vendor_dir: &Path,
-    package: &PackageSpec) -> Result<RemoteLuaRockspec, FetchVendoredError> {
+    package: &PackageSpec,
+) -> Result<RemoteLuaRockspec, FetchVendoredError> {
     let rockspec_path =
         vendor_dir.join(format!("{}-{}.rockspec", package.name(), package.version()));
     if !rockspec_path.is_file() {
         return Err(FetchVendoredError::RockspecNotFound(
             package.clone(),
-            vendor_dir.to_slash_lossy().to_string()));
+            vendor_dir.to_slash_lossy().to_string(),
+        ));
     }
     let rockspec_content = tokio::fs::read_to_string(&rockspec_path)
         .await
@@ -128,7 +132,8 @@ async fn load_vendored_rockspec(
 #[allow(clippy::result_large_err)] // This is ok because it's just a Deserialize helper
 fn load_vendored_package(
     vendor_dir: &Path,
-    package: &PackageSpec) -> Result<VendoredPackage, FetchVendoredError> {
+    package: &PackageSpec,
+) -> Result<VendoredPackage, FetchVendoredError> {
     let source_dir = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
     if source_dir.is_dir() {
         Ok(VendoredPackage::Source(source_dir.clone()))
@@ -139,7 +144,8 @@ fn load_vendored_package(
         } else {
             Err(FetchVendoredError::PackageNotFound(
                 package.clone(),
-                vendor_dir.to_slash_lossy().to_string()))
+                vendor_dir.to_slash_lossy().to_string(),
+            ))
         }
     }
 }
@@ -166,7 +172,8 @@ mod tests {
         source = {
             url = 'https://github.com/lumen-oss/foo/archive/1.0.0/foo.zip',
         }
-        "#)
+        "#,
+            )
             .unwrap();
         let package_spec = PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap());
         let rockspec = load_vendored_rockspec(vendor_dir.path(), &package_spec).await;

@@ -840,9 +840,7 @@ mod tests {
             .build()
             .unwrap();
         let lua_version = config.lua_version().unwrap();
-        let lua = LuaInstallation::new(lua_version, &config)
-            .await
-            .unwrap();
+        let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_valid");
         let temp_dir = assert_fs::TempDir::new().unwrap().to_path_buf();
@@ -865,9 +863,7 @@ mod tests {
             .build()
             .unwrap();
         let lua_version = config.lua_version().unwrap();
-        let lua = LuaInstallation::new(lua_version, &config)
-            .await
-            .unwrap();
+        let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
         let tree = config.user_tree(lua_version.clone()).unwrap();
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_valid");

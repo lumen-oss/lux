@@ -1,7 +1,7 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, operations::Download, package::PackageReq,
-    rockspec::Rockspec, tree::InstallTree,
+    config::Config, operations::Download, package::PackageReq, rockspec::Rockspec,
+    tree::InstallTree,
 };
 
 use miette::Result;

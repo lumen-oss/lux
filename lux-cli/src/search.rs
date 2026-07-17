@@ -11,7 +11,6 @@ use lux_lib::{
     remote_package_db::RemotePackageDB,
 };
 
-
 use crate::args::OutputFormat;
 
 #[derive(Args)]

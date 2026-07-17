@@ -46,9 +46,7 @@ impl Manifest {
         }
     }
 
-    pub async fn from_config(
-        server_url: Url,
-        config: &Config) -> Result<Self, ManifestError> {
+    pub async fn from_config(server_url: Url, config: &Config) -> Result<Self, ManifestError> {
         if let Some(vendor_dir) = config.vendor_dir() {
             let server_url: Url = Url::from_file_path(vendor_dir)
                 .map_err(|_err| ManifestError::Vendor(vendor_dir.to_slash_lossy().to_string()))?;
@@ -86,7 +84,8 @@ impl Manifest {
     pub fn find(
         &self,
         package_req: &PackageReq,
-        filter: Option<RemotePackageTypeFilterSpec>) -> Option<RemotePackage> {
+        filter: Option<RemotePackageTypeFilterSpec>,
+    ) -> Option<RemotePackage> {
         match self.metadata().latest_match(package_req, filter) {
             None => None,
             Some((package, package_type)) => {

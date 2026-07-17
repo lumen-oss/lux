@@ -62,7 +62,8 @@ where
         let args = self._build();
         let tree = args.tree.unwrap_or(
             args.config
-                .user_tree(LuaVersion::from(args.config)?.clone())?);
+                .user_tree(LuaVersion::from(args.config)?.clone())?,
+        );
         remove(args.packages, tree, args.config).await
     }
 }
@@ -71,7 +72,8 @@ where
 async fn remove(
     package_ids: Vec<LocalPackageId>,
     tree: Tree,
-    config: &Config) -> Result<(), RemoveError> {
+    config: &Config,
+) -> Result<(), RemoveError> {
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids
@@ -81,7 +83,6 @@ async fn remove(
         .collect_vec();
 
     futures::stream::iter(packages.into_iter().map(|package| {
-
         let tree = tree.clone();
         tokio::spawn(remove_package(package, tree))
     }))
@@ -100,14 +101,12 @@ async fn remove(
     Ok(())
 }
 
-async fn remove_package(
-    package: LocalPackage,
-    tree: Tree) -> Result<(), RemoveError> {
+#[tracing::instrument(name = "🗑️ Removing package", skip_all)]
+async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveError> {
     let rock_layout = tree.installed_rock_layout(&package)?;
     tokio::fs::remove_dir_all(&rock_layout.etc).await?;
     tokio::fs::remove_dir_all(&rock_layout.rock_path).await?;
 
-    // Delete the corresponding binaries attached to the current package (located under `{LUX_TREE}/bin/`)
     for relative_binary_path in package.spec.binaries() {
         if let Some(binary_file_name) = relative_binary_path.file_name() {
             let binary_path = tree.bin().join(binary_file_name);
@@ -121,6 +120,5 @@ async fn remove_package(
             }
         }
     }
-
     Ok(())
 }

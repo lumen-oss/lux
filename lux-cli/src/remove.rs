@@ -1,8 +1,7 @@
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    config::Config, package::PackageName, rockspec::lua_dependency,
-    workspace::Workspace,
+    config::Config, package::PackageName, rockspec::lua_dependency, workspace::Workspace,
 };
 
 use miette::{miette, Result};

@@ -1,4 +1,3 @@
-
 use bon::Builder;
 use itertools::Itertools;
 
@@ -65,7 +64,8 @@ pub(crate) fn prepare_dependencies_for_build(
     project_toml: &LocalProjectToml,
     workspace_tree: &impl InstallTree,
     dependencies_to_install: &mut Vec<PackageInstallSpec>,
-    build_dependencies_to_install: &mut Vec<PackageInstallSpec>) {
+    build_dependencies_to_install: &mut Vec<PackageInstallSpec>,
+) {
     let dependencies = project_toml
         .dependencies()
         .current_platform()

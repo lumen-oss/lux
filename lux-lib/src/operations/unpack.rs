@@ -27,31 +27,35 @@ pub enum UnpackError {
     UnknownMimeType,
 }
 
+#[tracing::instrument(name = "📦 Unpacking src.rock", skip_all)]
 pub async fn unpack_src_rock<R: Read + Seek + Send>(
     rock_src: R,
-    destination: PathBuf) -> Result<PathBuf, UnpackError> {
+    destination: PathBuf,
+) -> Result<PathBuf, UnpackError> {
     unpack_src_rock_impl(rock_src, destination).await
 }
 
 async fn unpack_src_rock_impl<R: Read + Seek + Send>(
     rock_src: R,
-    destination: PathBuf) -> Result<PathBuf, UnpackError> {
+    destination: PathBuf,
+) -> Result<PathBuf, UnpackError> {
     let mut zip = zip::ZipArchive::new(rock_src)?;
     zip.extract(&destination)?;
     Ok(destination)
 }
 
+#[tracing::instrument(name = "📦 Unpacking file", skip_all)]
 #[async_recursion]
 pub(crate) async fn unpack<R>(
     mime_type: Option<&str>,
     reader: R,
     extract_nested_archive: bool,
     _file_name: String,
-    dest_dir: &Path) -> Result<(), UnpackError>
+    dest_dir: &Path,
+) -> Result<(), UnpackError>
 where
     R: Read + Seek + Send,
 {
-
     match mime_type {
         Some("application/zip") => {
             let mut archive = zip::ZipArchive::new(reader)?;
@@ -122,7 +126,8 @@ where
                     file,
                     extract_nested_archive, // It might be a nested archive inside a .src.rock
                     file_name,
-                    dest_dir)
+                    dest_dir,
+                )
                 .await?;
                 fs::remove_file(nested_archive_path).await?;
             }
@@ -212,8 +217,6 @@ mod tests {
         let file = File::open(&test_rock_path).unwrap();
         let dest = TempDir::new().unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        unpack_src_rock(file, dest.to_path_buf())
-            .await
-            .unwrap();
+        unpack_src_rock(file, dest.to_path_buf()).await.unwrap();
     }
 }
