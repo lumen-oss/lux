@@ -106,15 +106,15 @@ pub enum ProjectError {
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum IntoLocalRockspecError {
-    LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
-    RockspecError(#[from] LuaRockspecError),
+    LocalProjectTomlValidationError(Box<LocalProjectTomlValidationError>),
+    RockspecError(Box<LuaRockspecError>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum IntoRemoteRockspecError {
-    RocksTomlValidationError(#[from] RemoteProjectTomlValidationError),
-    RockspecError(#[from] LuaRockspecError),
+    RocksTomlValidationError(Box<RemoteProjectTomlValidationError>),
+    RockspecError(Box<LuaRockspecError>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -245,14 +245,22 @@ impl Project {
     }
 
     pub fn local_rockspec(&self) -> Result<LocalLuaRockspec, IntoLocalRockspecError> {
-        Ok(self.toml().into_local()?.to_lua_rockspec()?)
+        self.toml()
+            .into_local()
+            .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
+            .to_lua_rockspec()
+            .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
     }
 
     pub fn remote_rockspec(
         &self,
         specrev: Option<SpecRev>,
     ) -> Result<RemoteLuaRockspec, IntoRemoteRockspecError> {
-        Ok(self.toml().into_remote(specrev)?.to_lua_rockspec()?)
+        self.toml()
+            .into_remote(specrev)
+            .map_err(|err| IntoRemoteRockspecError::RocksTomlValidationError(Box::new(err)))?
+            .to_lua_rockspec()
+            .map_err(|err| IntoRemoteRockspecError::RockspecError(Box::new(err)))
     }
 
     pub fn extra_rockspec(&self) -> Result<Option<PartialLuaRockspec>, PartialRockspecError> {

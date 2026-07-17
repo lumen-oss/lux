@@ -64,7 +64,7 @@ try reducing the number of dependencies or simplifying build instructions.
     )]
     ExecutionError {
         #[source]
-        cause: ottavino::ExternError,
+        cause: Box<ottavino::ExternError>,
         #[source_code]
         content: NamedSource<String>,
         #[label("this package")]
@@ -287,7 +287,7 @@ impl LocalLuaRockspec {
                 LuaRockspecError::ExecutionError {
                     content: src,
                     span,
-                    cause,
+                    cause: Box::new(cause),
                 }
             })??;
 
@@ -414,35 +414,40 @@ impl RemoteLuaRockspec {
     pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
         let mut lua = ottavino::Lua::core();
 
-        lua.try_enter(|ctx| {
-            let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
+        let source = lua
+            .try_enter(|ctx| {
+                let closure = Closure::load(ctx, None, rockspec_content.as_bytes())?;
 
-            let executor = Executor::start(ctx, closure.into(), ());
+                let executor = Executor::start(ctx, closure.into(), ());
 
-            let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
+                let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
-            if !output {
-                return Ok(Err(LuaRockspecError::FuelLimitExceeded));
-            }
+                if !output {
+                    return Ok(Err(LuaRockspecError::FuelLimitExceeded));
+                }
 
-            let globals = ctx.globals();
+                let globals = ctx.globals();
 
-            let source = globals.get_rockspec_key(ctx, "source".into(), rockspec_content)?;
+                let source: PerPlatform<RemoteRockSource> =
+                    globals.get_rockspec_key(ctx, "source".into(), rockspec_content)?;
 
-            Ok(Ok(RemoteLuaRockspec {
-                local: LocalLuaRockspec::new(rockspec_content, ProjectRoot::new())?,
-                source,
-            }))
+                Ok(Ok(source))
+            })
+            .map_err(|cause| {
+                let src = NamedSource::new("rockspec", rockspec_content.to_string());
+                let span = find_value_span(rockspec_content, "package");
+                LuaRockspecError::ExecutionError {
+                    content: src,
+                    span,
+                    cause: Box::new(cause),
+                }
+            })??;
+
+        Ok(RemoteLuaRockspec {
+            // NOTE: Calling this outside of `lua.try_enter` reduces error message repetition
+            local: LocalLuaRockspec::new(rockspec_content, ProjectRoot::new())?,
+            source,
         })
-        .map_err(|cause| {
-            let src = NamedSource::new("rockspec", rockspec_content.to_string());
-            let span = find_value_span(rockspec_content, "package");
-            LuaRockspecError::ExecutionError {
-                content: src,
-                span,
-                cause,
-            }
-        })?
     }
 
     pub fn from_package_and_source_spec(
