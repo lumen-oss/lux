@@ -25,10 +25,7 @@ async fn luarocks_make() {
         .unwrap();
     let tree = config.user_tree(lua_version.unwrap()).unwrap();
     let luarocks = LuaRocksInstallation::new(&config, tree).unwrap();
-    let lua =
-        LuaInstallation::new_from_config(&config)
-            .await
-            .unwrap();
+    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
     luarocks.ensure_installed(&lua).await.unwrap();
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/no-build-spec/");
@@ -37,9 +34,7 @@ async fn luarocks_make() {
     build_dir.copy_from(&project_root, &["**"]).unwrap();
     let dest_dir = TempDir::new().unwrap();
     let lua_version = LuaVersion::from(&config).unwrap_or(&LuaVersion::Lua51);
-    let lua = LuaInstallation::new(lua_version, &config)
-        .await
-        .unwrap();
+    let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
     luarocks
         .make(&rockspec_path, build_dir.path(), dest_dir.path(), &lua)
         .await

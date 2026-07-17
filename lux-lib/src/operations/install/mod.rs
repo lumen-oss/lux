@@ -32,6 +32,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
+use tracing::Instrument;
 pub mod spec;
 
 /// A rocks package installer, providing fine-grained control
@@ -58,7 +59,8 @@ where
 {
     pub fn workspace(
         self,
-        workspace: &'a Workspace) -> Result<InstallBuilder<'a, Tree, install_builder::SetTree<State>>, WorkspaceTreeError>
+        workspace: &'a Workspace,
+    ) -> Result<InstallBuilder<'a, Tree, install_builder::SetTree<State>>, WorkspaceTreeError>
     where
         State::Tree: install_builder::IsUnset,
     {
@@ -108,9 +110,7 @@ where
         }
         let package_db = match install_built.package_db {
             Some(db) => db,
-            None => {
-                RemotePackageDB::from_config(install_built.config).await?
-            }
+            None => RemotePackageDB::from_config(install_built.config).await?,
         };
 
         let duplicate_entrypoints = install_built
@@ -124,14 +124,16 @@ where
 
         if !duplicate_entrypoints.is_empty() {
             return Err(InstallError::DuplicateEntrypoints(PackageNameList::new(
-                duplicate_entrypoints)));
+                duplicate_entrypoints,
+            )));
         }
 
         install_impl(
             install_built.packages,
             Arc::new(package_db),
             install_built.config,
-            &install_built.tree)
+            &install_built.tree,
+        )
         .await
     }
 }
@@ -209,30 +211,36 @@ where
         .get_all_dependencies()
         .await?;
 
-    let lua = Arc::new(
-        LuaInstallation::new_from_config(config).await?);
+    let lua = Arc::new(LuaInstallation::new_from_config(config).await?);
 
     // We have to install transitive build dependencies sequentially
     while let Some(build_dep_spec) = build_dep_rx.recv().await {
         let rockspec = build_dep_spec.downloaded_rock.rockspec();
         let package = rockspec.package().clone();
-        let build_tree = tree.build_tree(config)?;
-        // We have to write to the build tree's lockfile after each build,
-        // so that each transitive build dependency is available for the
-        // next build dependencies that may depend on it.
-        let mut build_lockfile = build_tree.lockfile()?.write_guard();
-        let pkg = Build::new()
-            .rockspec(rockspec)
-            .lua(&lua)
-            .tree(&build_tree)
-            .entry_type(tree::EntryType::Entrypoint)
-            .config(config)
-            .constraint(build_dep_spec.spec.constraint())
-            .behaviour(build_dep_spec.build_behaviour)
-            .build()
-            .await
-            .map_err(|err| InstallError::BuildDependency(package, err))?;
-        build_lockfile.add_entrypoint(&pkg);
+        let span = tracing::info_span!("install");
+        async {
+            tracing::info!(message = format!("💻 Installing build dependency: {package}").as_str());
+            let build_tree = tree.build_tree(config)?;
+            // We have to write to the build tree's lockfile after each build,
+            // so that each transitive build dependency is available for the
+            // next build dependencies that may depend on it.
+            let mut build_lockfile = build_tree.lockfile()?.write_guard();
+            let pkg = Build::new()
+                .rockspec(rockspec)
+                .lua(&lua)
+                .tree(&build_tree)
+                .entry_type(tree::EntryType::Entrypoint)
+                .config(config)
+                .constraint(build_dep_spec.spec.constraint())
+                .behaviour(build_dep_spec.build_behaviour)
+                .build()
+                .await
+                .map_err(|err| InstallError::BuildDependency(package, err))?;
+            build_lockfile.add_entrypoint(&pkg);
+            Ok::<_, InstallError>(())
+        }
+        .instrument(span)
+        .await?;
     }
 
     let mut all_packages = HashMap::with_capacity(dep_rx.len());
@@ -242,7 +250,6 @@ where
 
     let installed_packages =
         futures::stream::iter(all_packages.clone().into_values().map(|install_spec| {
-
             let downloaded_rock = install_spec.downloaded_rock;
             let config = config.clone();
             let tree = tree.clone();
@@ -263,7 +270,7 @@ where
                                 &lua,
                                 &tree,
                                 &config,
-)
+                            )
                             .await?
                         }
                         RemoteRockDownload::BinaryRock {
@@ -279,7 +286,8 @@ where
                                 install_spec.opt,
                                 install_spec.entry_type,
                                 &config,
-                                &tree)
+                                &tree,
+                            )
                             .await?
                         }
                         RemoteRockDownload::SrcRock {
@@ -301,7 +309,8 @@ where
                                 install_spec.entry_type,
                                 &lua,
                                 &tree,
-                                &config)
+                                &config,
+                            )
                             .await?
                         }
                     };
@@ -344,7 +353,9 @@ A required dependency was not installed correctly.
 This is likely because an install thread panicked and was interrupted unexpectedly.
 
 [THIS IS A BUG!]
-"#))?);
+"#,
+                    ))?,
+            );
         }
         Ok(())
     };
@@ -363,6 +374,7 @@ This is likely because an install thread panicked and was interrupted unexpected
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(name = "💻 Installing package", skip_all)]
 async fn install_rockspec<T>(
     rockspec_download: DownloadedRockspec,
     src_rock_source: Option<SrcRockSource>,
@@ -378,9 +390,9 @@ async fn install_rockspec<T>(
 where
     T: InstallTree + Sync,
 {
+    let package = rockspec_download.rockspec.package().clone();
     let rockspec = rockspec_download.rockspec;
     let source = rockspec_download.source;
-    let package = rockspec.package().clone();
 
     if let Some(BuildBackendSpec::LuaRock(_)) = &rockspec.build().current_platform().build_backend {
         let luarocks_tree = tree.build_tree(config)?;
@@ -412,6 +424,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(name = "💻 Installing package (pre-built)", skip_all)]
 async fn install_binary_rock(
     rockspec_download: DownloadedRockspec,
     packed_rock: Bytes,
@@ -431,7 +444,8 @@ async fn install_binary_rock(
         packed_rock,
         entry_type,
         config,
-        tree,)
+        tree,
+    )
     .pin(pin)
     .opt(opt)
     .constraint(constraint)

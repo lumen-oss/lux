@@ -164,7 +164,8 @@ index 959c7ed..9c6a9a1 100644
  local _ENV,       loaded, packages, release, require_
      = _ENV or _G, {},     {},       true,    require
 "#
-            .to_string())]
+            .to_string(),
+        )]
         .into_iter()
         .collect();
 
@@ -173,9 +174,7 @@ index 959c7ed..9c6a9a1 100644
             .no_progress(Some(true))
             .build()
             .unwrap();
-        Patch::new(&temp_dir.join(""), &patches)
-            .apply()
-            .unwrap();
+        Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
 
         let patched_content = std::fs::read_to_string(&patch_file).unwrap();
         assert!(patched_content.contains(added_line));
@@ -195,7 +194,8 @@ index 0000000..1cbadfb
 @@ -0,0 +1 @@
 +# title
 "#
-            .to_string())]
+            .to_string(),
+        )]
         .into_iter()
         .collect();
         let config = ConfigBuilder::new()
@@ -203,9 +203,7 @@ index 0000000..1cbadfb
             .no_progress(Some(true))
             .build()
             .unwrap();
-        Patch::new(&temp_dir.join(""), &patches)
-            .apply()
-            .unwrap();
+        Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
         let patch_file = temp_dir.join("foo/README.md");
         let patched_content = std::fs::read_to_string(&patch_file).unwrap();
         assert!(patched_content.contains("# title"));
@@ -227,7 +225,8 @@ index 1cbadfb..0000000
 @@ -1 +0,0 @@
 -# title
 "#
-            .to_string())]
+            .to_string(),
+        )]
         .into_iter()
         .collect();
 
@@ -237,9 +236,7 @@ index 1cbadfb..0000000
             .build()
             .unwrap();
 
-        Patch::new(&temp_dir.join(""), &patches)
-            .apply()
-            .unwrap();
+        Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
         assert!(!test_file.exists());
     }
 }

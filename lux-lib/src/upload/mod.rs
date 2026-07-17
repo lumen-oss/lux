@@ -143,7 +143,8 @@ impl ApiKey {
     /// variable and seals it in this struct.
     pub fn new() -> Result<Self, ApiKeyUnspecified> {
         Ok(Self(
-            env::var("LUX_API_KEY").map_err(|_| ApiKeyUnspecified)?))
+            env::var("LUX_API_KEY").map_err(|_| ApiKeyUnspecified)?,
+        ))
     }
 
     /// Creates an API key from a [`String`].
@@ -261,6 +262,7 @@ impl From<SignatureProtocol> for gpgme::Protocol {
     }
 }
 
+#[tracing::instrument(name = "📤 Uploading package", skip_all)]
 async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError> {
     let project = args.project;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
@@ -275,8 +277,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     helpers::ensure_user_exists(&client, &api_key, config.server()).await?;
 
     let (rockspec, rockspec_content) =
-        helpers::generate_rockspec(project, &client, &api_key, config, package_db)
-            .await?;
+        helpers::generate_rockspec(project, &client, &api_key, config, package_db).await?;
 
     #[cfg(not(feature = "gpgme"))]
     let signed: Option<String> = None;
@@ -362,7 +363,8 @@ mod helpers {
     pub(crate) unsafe fn url_for_method(
         server_url: &Url,
         api_key: &ApiKey,
-        endpoint: &str) -> Result<Url, url::ParseError> {
+        endpoint: &str,
+    ) -> Result<Url, url::ParseError> {
         server_url
             .join("api/1/")?
             .join(&format!("{}/", api_key.get()))?
@@ -371,7 +373,8 @@ mod helpers {
 
     pub(crate) async fn ensure_tool_version(
         client: &Client,
-        server_url: &Url) -> Result<(), ToolCheckError> {
+        server_url: &Url,
+    ) -> Result<(), ToolCheckError> {
         let url = server_url.join("api/tool_version")?;
         let response: VersionCheckResponse = client
             .post(url)
@@ -386,7 +389,8 @@ mod helpers {
         } else {
             Err(ToolCheckError::ToolOutdated(
                 server_url.to_string(),
-                response))
+                response,
+            ))
         }
     }
 
@@ -394,7 +398,8 @@ mod helpers {
         client: &Client,
         server_url: &Url,
         api_key: &ApiKey,
-        tfa_code: &str) -> Result<TfaToken, UploadError> {
+        tfa_code: &str,
+    ) -> Result<TfaToken, UploadError> {
         let response = client
             .get(unsafe { url_for_method(server_url, api_key, "verify_tfa")? })
             .query(&(("code", tfa_code.to_string())))
@@ -411,7 +416,8 @@ mod helpers {
                 LuarocksTfaVerificationResponse::Failure(LuarocksErrorResponse { errors }) => {
                     Err(UploadError::TfaCodeRejected(
                         tfa_code.to_string(),
-                        errors.into_iter().join("\n")))
+                        errors.into_iter().join("\n"),
+                    ))
                 }
             }
         }
@@ -420,7 +426,8 @@ mod helpers {
     pub(crate) async fn ensure_user_exists(
         client: &Client,
         api_key: &ApiKey,
-        server_url: &Url) -> Result<(), UserCheckError> {
+        server_url: &Url,
+    ) -> Result<(), UserCheckError> {
         let response = client
             .get(unsafe { url_for_method(server_url, api_key, "status")? })
             .send()
@@ -440,7 +447,8 @@ mod helpers {
         client: &Client,
         api_key: &ApiKey,
         config: &Config,
-        package_db: &RemotePackageDB) -> Result<(RemoteProjectToml, String), UploadError> {
+        package_db: &RemotePackageDB,
+    ) -> Result<(RemoteProjectToml, String), UploadError> {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;
 
@@ -456,7 +464,8 @@ mod helpers {
                 api_key,
                 rockspec.package(),
                 rockspec.version(),
-                config.server())
+                config.server(),
+            )
             .await?
             {
                 let package =
@@ -486,12 +495,14 @@ mod helpers {
         api_key: &ApiKey,
         name: &PackageName,
         version: &PackageVersion,
-        server: &Url) -> Result<bool, RockCheckError> {
+        server: &Url,
+    ) -> Result<bool, RockCheckError> {
         let server_response_raw_json = client
             .get(unsafe { url_for_method(server, api_key, "check_rockspec")? })
             .query(&(
                 ("package", name.to_string()),
-                ("version", version.to_string())))
+                ("version", version.to_string()),
+            ))
             .send()
             .await?
             .error_for_status()?

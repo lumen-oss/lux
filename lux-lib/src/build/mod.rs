@@ -198,8 +198,8 @@ pub enum BuildBehaviour {
 
 async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
-    args: RunBuildArgs<'_, T>) -> Result<BuildInfo, BuildError> {
-
+    args: RunBuildArgs<'_, T>,
+) -> Result<BuildInfo, BuildError> {
     Ok(
         match rockspec.build().current_platform().build_backend.to_owned() {
             Some(BuildBackendSpec::Builtin(build_spec)) => build_spec.run(args).await?,
@@ -213,7 +213,8 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
             Some(BuildBackendSpec::LuaRock(_)) => luarocks::build(rockspec, args).await?,
             Some(BuildBackendSpec::Source) => source::build(args).await?,
             None => BuildInfo::default(),
-        })
+        },
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -224,30 +225,22 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     lua: &LuaInstallation,
     build_dir: &Path,
     entry_type: &EntryType,
-    config: &Config) -> Result<(), BuildError> {
+    config: &Config,
+) -> Result<(), BuildError> {
     let install_spec = &rockspec.build().current_platform().install;
-    let lua_len = install_spec.lua.len();
-    let lib_len = install_spec.lib.len();
-    let bin_len = install_spec.bin.len();
-    let conf_len = install_spec.conf.len();
-    let _total_len = lua_len + lib_len + bin_len + conf_len;
-
-    if lua_len > 0 {
-    }
+    tracing::info!(message = "📋 Copying Lua modules...");
     for (target, source) in &install_spec.lua {
         let absolute_source = build_dir.join(source);
         utils::copy_lua_to_module_path(&absolute_source, target, &output_paths.src)?;
     }
-    if lib_len > 0 {
-    }
+    tracing::info!(message = "📋 Compiling C libraries...");
     for (target, source) in &install_spec.lib {
         let absolute_source = build_dir.join(source);
         let resolved_target = output_paths.lib.join(target);
         tokio::fs::copy(absolute_source, resolved_target).await?;
     }
     if entry_type.is_entrypoint() {
-        if bin_len > 0 {
-        }
+        tracing::info!(message = "💻 Installing binaries...");
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
             utils::install_binary(
@@ -256,7 +249,8 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                 tree,
                 lua,
                 deploy_spec,
-                config)
+                config,
+            )
             .await
             .map_err(|err| BuildError::InstallBinary {
                 file_name: target.clone(),
@@ -264,7 +258,8 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
             })?;
         }
     }
-    if conf_len > 0 {
+    if !install_spec.conf.is_empty() {
+        tracing::info!(message = "📋 Copying configuration files...");
         for (target, source) in &install_spec.conf {
             let absolute_source = build_dir.join(source);
             let target = output_paths.conf.join(target);
@@ -277,6 +272,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     Ok(())
 }
 
+#[tracing::instrument(name = "🛠️ Building package", skip_all)]
 async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LocalPackage, BuildError>
 where
     R: Rockspec + HasIntegrity,
@@ -332,7 +328,8 @@ where
             })
             .unwrap_or(RemotePackageSource::Local),
         Some(source_metadata.source_url.clone()),
-        hashes);
+        hashes,
+    );
     package.spec.pinned = build.pin;
     package.spec.opt = build.opt;
 
@@ -381,7 +378,8 @@ where
                         if dir_entries.len() == 1
                             && !is_source_or_etc_dir(
                                 unsafe { dir_entries.first().unwrap_unchecked() },
-                                rockspec)
+                                rockspec,
+                            )
                         {
                             unsafe {
                                 temp_dir
@@ -395,10 +393,7 @@ where
                 }
             };
 
-            Patch::new(
-                &build_dir,
-                &rockspec.build().current_platform().patches)
-            .apply()?;
+            Patch::new(&build_dir, &rockspec.build().current_platform().patches).apply()?;
 
             let external_dependencies = rockspec
                 .external_dependencies()
@@ -421,7 +416,8 @@ where
                     .config(build.config)
                     .tree(tree)
                     .build_dir(&build_dir)
-                    .build())
+                    .build(),
+            )
             .await?;
 
             package.spec.binaries.extend(output.binaries);
@@ -433,7 +429,8 @@ where
                 lua,
                 &build_dir,
                 &build.entry_type,
-                build.config)
+                build.config,
+            )
             .await?;
 
             for directory in rockspec
@@ -448,7 +445,8 @@ where
             {
                 recursive_copy_dir(
                     &build_dir.join(directory),
-                    &output_paths.etc.join(directory))
+                    &output_paths.etc.join(directory),
+                )
                 .await?;
             }
 
@@ -477,7 +475,8 @@ where
 
 async fn recursive_copy_doc_dir(
     output_paths: &RockLayout,
-    build_dir: &Path) -> Result<(), BuildError> {
+    build_dir: &Path,
+) -> Result<(), BuildError> {
     let mut doc_dir = build_dir.join("doc");
     if !doc_dir.exists() {
         doc_dir = build_dir.join("docs");
@@ -533,9 +532,7 @@ mod tests {
             doc: dest_dir.join("doc"),
         };
         let lua_version = config.lua_version().unwrap_or(&LuaVersion::Lua51);
-        let lua = LuaInstallation::new(lua_version, &config)
-            .await
-            .unwrap();
+        let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
         let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
         run_build(
@@ -549,8 +546,8 @@ mod tests {
                 .config(&config)
                 .tree(&tree)
                 .build_dir(&build_dir)
-
-                .build())
+                .build(),
+        )
         .await
         .unwrap();
         let foo_dir = dest_dir.child("src").child("foo");

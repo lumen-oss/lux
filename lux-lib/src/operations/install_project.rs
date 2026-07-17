@@ -74,8 +74,7 @@ impl<
         let project = args.project;
         let tree = args.tree;
         let build_tree = tree.build_tree(config)?;
-        let lua = LuaInstallation::new_from_config(config)
-        .await?;
+        let lua = LuaInstallation::new_from_config(config).await?;
         let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
         let mut dependencies_to_install = Vec::new();
         let mut build_dependencies_to_install = Vec::new();
@@ -84,7 +83,8 @@ impl<
             &project_toml,
             tree,
             &mut dependencies_to_install,
-            &mut build_dependencies_to_install);
+            &mut build_dependencies_to_install,
+        );
 
         InstallDependencies::new()
             .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
@@ -92,7 +92,8 @@ impl<
                 build_dependencies_to_install
                     .into_iter()
                     .unique()
-                    .collect_vec())
+                    .collect_vec(),
+            )
             .tree(tree)
             .lua(&lua)
             .luarocks(&luarocks)
@@ -107,7 +108,6 @@ impl<
             .tree(tree)
             .entry_type(tree::EntryType::Entrypoint)
             .config(config)
-
             .behaviour(BuildBehaviour::Force)
             .build()
             .await?;

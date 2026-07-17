@@ -162,9 +162,12 @@ pub enum SyncError {
     GenLuaRc(#[from] GenLuaRcError),
 }
 
+#[tracing::instrument(name = "🔄 Syncing dependencies", skip_all)]
+
 async fn do_sync(
     args: Sync<'_>,
-    lock_type: &LocalPackageLockType) -> Result<SyncReport, SyncError> {
+    lock_type: &LocalPackageLockType,
+) -> Result<SyncReport, SyncError> {
     let tree = match lock_type {
         LocalPackageLockType::Regular => args.workspace.tree(args.config)?,
         LocalPackageLockType::Test => args.workspace.test_tree(args.config)?,
@@ -186,21 +189,24 @@ async fn do_sync(
                     .into_local()?
                     .dependencies()
                     .current_platform()
-                    .clone()),
+                    .clone(),
+            ),
             LocalPackageLockType::Build => packages.extend(
                 project
                     .toml()
                     .into_local()?
                     .build_dependencies()
                     .current_platform()
-                    .clone()),
+                    .clone(),
+            ),
             LocalPackageLockType::Test => packages.extend(
                 project
                     .toml()
                     .into_local()?
                     .test_dependencies()
                     .current_platform()
-                    .clone()),
+                    .clone(),
+            ),
         }
     }
     let packages = packages
@@ -354,7 +360,8 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"])
+                &["**"],
+            )
             .unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
@@ -382,7 +389,8 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"])
+                &["**"],
+            )
             .unwrap();
         let temp_dir = temp_dir.into_persistent();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
@@ -419,7 +427,8 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"])
+                &["**"],
+            )
             .unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
@@ -453,7 +462,8 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"])
+                &["**"],
+            )
             .unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();

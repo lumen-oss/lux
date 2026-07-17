@@ -33,7 +33,6 @@ impl TypedUserData for LuxModule {
         fields.add_field("workspace", workspace::WorkspaceModule);
         fields.add_field("project", project::ProjectModule);
         fields.add_field("operations", operations::OperationsModule);
-
     }
 }
 

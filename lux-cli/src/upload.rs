@@ -1,7 +1,7 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, package::PackageName,
-    remote_package_db::RemotePackageDB, upload::ProjectUpload, workspace::Workspace,
+    config::Config, package::PackageName, remote_package_db::RemotePackageDB,
+    upload::ProjectUpload, workspace::Workspace,
 };
 
 use miette::{IntoDiagnostic, Result};

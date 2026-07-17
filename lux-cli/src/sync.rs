@@ -1,8 +1,5 @@
 use clap::Args;
-use lux_lib::{
-    config::Config, lockfile::LocalPackage, operations::Sync,
-    workspace::Workspace,
-};
+use lux_lib::{config::Config, lockfile::LocalPackage, operations::Sync, workspace::Workspace};
 
 use miette::Result;
 

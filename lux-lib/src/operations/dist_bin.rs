@@ -96,11 +96,12 @@ struct InstalledFiles {
     lib: Vec<PathBuf>,
 }
 
+#[tracing::instrument(name = "📦 Distributing binary", skip_all)]
+
 async fn do_dist_project_bin<T>(args: DistProjectBin<'_, T>) -> Result<PathBuf, DistProjectBinError>
 where
     T: InstallTree + Sync + Send + Clone + 'static,
 {
-
     let package = InstallProject::new()
         .project(args.project)
         .config(args.config)
@@ -190,7 +191,8 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
                 .iter()
                 .unique()
                 .map(|p| p.to_string_lossy())
-                .join("\n")));
+                .join("\n"),
+        ));
     }
 
     // NOTE: A `FlatDistTree` can produce duplicates, as all modules share the same `src`.
@@ -224,7 +226,8 @@ fn module_names(lib_root: &Path, path: &Path) -> (String, String) {
 async fn generate_c_source(
     entrypoint_module: &str,
     files: &InstalledFiles,
-    lib_root: &Path) -> Result<String, io::Error> {
+    lib_root: &Path,
+) -> Result<String, io::Error> {
     let mut out = String::from(C_PREAMBLE);
 
     out.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
@@ -306,7 +309,8 @@ async fn compile_binary(
     lua: &LuaInstallation,
     native_modules: &[PathBuf],
     work_dir: &tempfile::TempDir,
-    config: &Config) -> Result<(), DistProjectBinError> {
+    config: &Config,
+) -> Result<(), DistProjectBinError> {
     let mut build = cc::Build::new();
     let host = target_lexicon::Triple::host().to_string();
 
@@ -518,7 +522,8 @@ mod tests {
             RockBinaries::default(),
             RemotePackageSource::Test,
             None,
-            hashes)
+            hashes,
+        )
     }
 
     #[cfg(target_os = "linux")]
@@ -557,7 +562,8 @@ mod tests {
             .unwrap();
         tokio::fs::write(
             layout_b.lib.join(format!("bar.{}", c_dylib_extension())),
-            "")
+            "",
+        )
         .await
         .unwrap();
 
@@ -601,7 +607,8 @@ mod tests {
         let tree = FlatDistTree::new(
             staging.to_path_buf(),
             config.lua_version().cloned().unwrap(),
-            &config)
+            &config,
+        )
         .unwrap();
 
         InstallProject::new()
@@ -654,7 +661,8 @@ mod tests {
         let tree = FlatDistTree::new(
             staging.to_path_buf(),
             config.lua_version().cloned().unwrap(),
-            &config)
+            &config,
+        )
         .unwrap();
 
         let out_dir = TempDir::new().unwrap();

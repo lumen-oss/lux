@@ -1,8 +1,5 @@
 use clap::Args;
-use lux_lib::{
-    config::Config, lua_installation::LuaInstallation, path::Paths,
-    tree::InstallTree,
-};
+use lux_lib::{config::Config, lua_installation::LuaInstallation, path::Paths, tree::InstallTree};
 
 use miette::{miette, IntoDiagnostic, Result};
 use which::which;

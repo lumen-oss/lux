@@ -1,6 +1,5 @@
 use lux_lib::{
-    config::Config, lockfile::PinnedState, lua_version::LuaVersion, operations,
-    package::PackageReq,
+    config::Config, lockfile::PinnedState, lua_version::LuaVersion, operations, package::PackageReq,
 };
 
 use miette::Result;

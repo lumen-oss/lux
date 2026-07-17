@@ -20,3 +20,6 @@ features = ["vendored-module"]
 
 [build.modules]
 lux = "lux_lua"
+
+[dependencies]
+"fidget.nvim" = "1.6.0-1"

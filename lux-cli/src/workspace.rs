@@ -2,13 +2,8 @@ use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 use itertools::Itertools;
 use lux_lib::{
-    config::Config,
-    git::shorthand::RemoteGitUrlShorthand,
-    lua_version::LuaVersion,
-    operations::Sync,
-    package::PackageReq,
-    tree::Tree,
-    workspace::Workspace,
+    config::Config, git::shorthand::RemoteGitUrlShorthand, lua_version::LuaVersion,
+    operations::Sync, package::PackageReq, tree::Tree, workspace::Workspace,
 };
 use miette::{Context, Result};
 use walkdir::WalkDir;
@@ -81,10 +76,7 @@ pub fn current_workspace_or_user_tree(config: &Config) -> Result<Tree> {
     })
 }
 
-pub async fn sync_dependencies_if_locked(
-    workspace: &Workspace,
-    config: &Config,
-) -> Result<()> {
+pub async fn sync_dependencies_if_locked(workspace: &Workspace, config: &Config) -> Result<()> {
     // NOTE: We only update the lockfile if one exists.
     // Otherwise, the next `lx build` will remove the packages.
     Sync::new(workspace, config)

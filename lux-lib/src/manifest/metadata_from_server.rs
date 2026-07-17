@@ -51,7 +51,8 @@ pub(super) async fn get_manifest(
     url: Url,
     manifest_version: String,
     target: &Path,
-    client: &Client) -> Result<String, ManifestFromServerError> {
+    client: &Client,
+) -> Result<String, ManifestFromServerError> {
     let response = client.get(url.clone()).send().await?;
     if response.status().is_client_error() {
         let fallback_url = fallback_unzipped_url(&url)?;
@@ -97,16 +98,16 @@ pub(super) async fn get_manifest(
     }
 }
 
-/// Look up the manifest from a cache, or get the manifest from the server
-/// if the cache doesn't exist or is outdated.
+#[tracing::instrument(name = "📥 Downloading manifest", skip_all)]
 pub(crate) async fn manifest_from_cache_or_server(
     server_url: &Url,
-    config: &Config) -> Result<String, ManifestFromServerError> {
+    config: &Config,
+) -> Result<String, ManifestFromServerError> {
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
 
-    // Stores a path to the manifest cache (this allows us to operate on a manifest without
-    // needing to pull it from the luarocks servers each time).
+    tracing::info!(message = format!("📥 Downloading manifest from {url}").as_str());
+
     let cache = mk_manifest_cache(&url, config).await?;
 
     #[cfg(not(test))]
@@ -115,11 +116,9 @@ pub(crate) async fn manifest_from_cache_or_server(
     #[cfg(test)]
     let client = crate::reqwest::new_http_client(config)?;
 
-    // Read the metadata of the local cache and attempt to get the last modified date.
     if let Ok(metadata) = fs::metadata(&cache).await {
         let last_modified_local: SystemTime = metadata.modified()?;
 
-        // Ask the server for the last modified date of its manifest.
         let response = match client.head(url.clone()).send().await? {
             response if response.status().is_client_error() => {
                 let url = fallback_unzipped_url(&url)?;
@@ -131,32 +130,27 @@ pub(crate) async fn manifest_from_cache_or_server(
         if let Some(last_modified_header) = response.headers().get("Last-Modified") {
             let server_last_modified = httpdate::parse_http_date(last_modified_header.to_str()?)?;
 
-            // If the server's version of the manifest is newer than ours then update out manifest.
             if server_last_modified > last_modified_local {
-                // Since we only pulled in the headers previously we must now request the entire
-                // manifest from scratch.
-
                 return get_manifest(url, manifest_version.clone(), &cache, &client).await;
             }
 
-            // Else return the cached manifest.
             return Ok(fs::read_to_string(&cache).await?);
         }
     }
 
-    // If our cache file does not exist then pull the whole manifest.
-    // TODO(#337): switch to something that can report progress
-
     get_manifest(url, manifest_version.clone(), &cache, &client).await
 }
 
-/// Get the manifest from the server, ignoring the cache.
-/// This still populates the cache.
+#[tracing::instrument(name = "📥 Downloading manifest", skip_all)]
 pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
-    config: &Config) -> Result<String, ManifestFromServerError> {
+    config: &Config,
+) -> Result<String, ManifestFromServerError> {
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
+
+    tracing::info!(message = format!("📥 Downloading manifest from {url}").as_str());
+
     let cache = mk_manifest_cache(&url, config).await?;
     let client = crate::reqwest::new_https_client(config)?;
     get_manifest(url, manifest_version.clone(), &cache, &client).await
@@ -165,7 +159,8 @@ pub(crate) async fn manifest_from_server_only(
 fn mk_manifest_url(
     server_url: &Url,
     manifest_version: &str,
-    config: &Config) -> Result<Url, ManifestFromServerError> {
+    config: &Config,
+) -> Result<Url, ManifestFromServerError> {
     let manifest_filename = format!("manifest-{manifest_version}.zip");
     let url = match config.namespace() {
         Some(namespace) => server_url
@@ -181,7 +176,8 @@ async fn mk_manifest_cache(url: &Url, config: &Config) -> io::Result<PathBuf> {
         // Convert the url to a directory name so we don't create too many subdirectories
         url.to_string()
             .replace(&[':', '*', '?', '"', '<', '>', '|', '/', '\\'][..], "_")
-            .trim_end_matches(".zip"));
+            .trim_end_matches(".zip"),
+    );
     // Ensure all intermediate directories for the cache file are created (e.g. `~/.cache/lux/manifest`)
     if let Some(cache_parent_dir) = cache.parent() {
         fs::create_dir_all(cache_parent_dir).await?;
@@ -218,8 +214,12 @@ mod tests {
                                     "{}/resources/test/manifest-5.1.zip",
                                     env!("CARGO_MANIFEST_DIR")
                                 )
-                                .as_str())
-                            .unwrap())));
+                                .as_str(),
+                            )
+                            .unwrap(),
+                        ),
+                ),
+        );
         server
     }
 
@@ -270,7 +270,8 @@ mod tests {
         let mut url_str = server.url_str("/");
         url_str.pop(); // Remove trailing "/"
         let manifest_content = std::fs::read_to_string(
-            format!("{}/resources/test/manifest-5.1", env!("CARGO_MANIFEST_DIR")).as_str())
+            format!("{}/resources/test/manifest-5.1", env!("CARGO_MANIFEST_DIR")).as_str(),
+        )
         .unwrap();
         let cache_dir = assert_fs::TempDir::new().unwrap();
         let cache = cache_dir.join("manifest-5.1");
