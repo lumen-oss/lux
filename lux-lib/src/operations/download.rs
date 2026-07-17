@@ -282,7 +282,8 @@ async fn download_remote_rock(
                 .map_err(DownloadRockspecError::Request)?;
             let content = String::from_utf8(bytes.into())?;
             let rockspec = DownloadedRockspec {
-                rockspec: RemoteLuaRockspec::new(&content)?,
+                rockspec: RemoteLuaRockspec::new(&content)
+                    .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?,
                 source: remote_package.source,
                 source_url: remote_package.source_url,
             };
@@ -292,7 +293,8 @@ async fn download_remote_rock(
         }
         RemotePackageSource::RockspecContent(content) => {
             let rockspec = DownloadedRockspec {
-                rockspec: RemoteLuaRockspec::new(content)?,
+                rockspec: RemoteLuaRockspec::new(content)
+                    .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?,
                 source: remote_package.source,
                 source_url: remote_package.source_url,
             };
@@ -368,7 +370,7 @@ if the issue persists, the server may be temporarily unavailable."#
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Rockspec(#[from] LuaRockspecError),
+    Rockspec(Box<LuaRockspecError>),
     #[error("error initialising remote package DB:\n{0}")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
@@ -609,6 +611,7 @@ pub(crate) async fn unpack_rockspec(
         .map_err(|err| SearchAndDownloadError::ZipExtract(rock.file_name.clone(), err))?;
     let mut content = String::new();
     rockspec_file.read_to_string(&mut content)?;
-    let rockspec = RemoteLuaRockspec::new(&content)?;
+    let rockspec = RemoteLuaRockspec::new(&content)
+        .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?;
     Ok(rockspec)
 }
