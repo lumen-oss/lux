@@ -13,7 +13,6 @@ use zip::ZipArchive;
 
 use crate::config::Config;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
-use crate::progress::{Progress, ProgressBar};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum ManifestFromServerError {
@@ -52,8 +51,7 @@ pub(super) async fn get_manifest(
     url: Url,
     manifest_version: String,
     target: &Path,
-    client: &Client,
-) -> Result<String, ManifestFromServerError> {
+    client: &Client) -> Result<String, ManifestFromServerError> {
     let response = client.get(url.clone()).send().await?;
     if response.status().is_client_error() {
         let fallback_url = fallback_unzipped_url(&url)?;
@@ -103,9 +101,7 @@ pub(super) async fn get_manifest(
 /// if the cache doesn't exist or is outdated.
 pub(crate) async fn manifest_from_cache_or_server(
     server_url: &Url,
-    config: &Config,
-    bar: &Progress<ProgressBar>,
-) -> Result<String, ManifestFromServerError> {
+    config: &Config) -> Result<String, ManifestFromServerError> {
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
 
@@ -139,9 +135,6 @@ pub(crate) async fn manifest_from_cache_or_server(
             if server_last_modified > last_modified_local {
                 // Since we only pulled in the headers previously we must now request the entire
                 // manifest from scratch.
-                bar.map(|bar| {
-                    bar.set_message(format!("📥 Downloading updated manifest from {}", &url))
-                });
 
                 return get_manifest(url, manifest_version.clone(), &cache, &client).await;
             }
@@ -153,7 +146,6 @@ pub(crate) async fn manifest_from_cache_or_server(
 
     // If our cache file does not exist then pull the whole manifest.
     // TODO(#337): switch to something that can report progress
-    bar.map(|bar| bar.set_message(format!("📥 Downloading manifest from {}", &url)));
 
     get_manifest(url, manifest_version.clone(), &cache, &client).await
 }
@@ -162,22 +154,18 @@ pub(crate) async fn manifest_from_cache_or_server(
 /// This still populates the cache.
 pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
-    config: &Config,
-    bar: &Progress<ProgressBar>,
-) -> Result<String, ManifestFromServerError> {
+    config: &Config) -> Result<String, ManifestFromServerError> {
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     let cache = mk_manifest_cache(&url, config).await?;
     let client = crate::reqwest::new_https_client(config)?;
-    bar.map(|bar| bar.set_message(format!("📥 Downloading manifest from {}", &url)));
     get_manifest(url, manifest_version.clone(), &cache, &client).await
 }
 
 fn mk_manifest_url(
     server_url: &Url,
     manifest_version: &str,
-    config: &Config,
-) -> Result<Url, ManifestFromServerError> {
+    config: &Config) -> Result<Url, ManifestFromServerError> {
     let manifest_filename = format!("manifest-{manifest_version}.zip");
     let url = match config.namespace() {
         Some(namespace) => server_url
@@ -193,8 +181,7 @@ async fn mk_manifest_cache(url: &Url, config: &Config) -> io::Result<PathBuf> {
         // Convert the url to a directory name so we don't create too many subdirectories
         url.to_string()
             .replace(&[':', '*', '?', '"', '<', '>', '|', '/', '\\'][..], "_")
-            .trim_end_matches(".zip"),
-    );
+            .trim_end_matches(".zip"));
     // Ensure all intermediate directories for the cache file are created (e.g. `~/.cache/lux/manifest`)
     if let Some(cache_parent_dir) = cache.parent() {
         fs::create_dir_all(cache_parent_dir).await?;
@@ -212,7 +199,7 @@ mod tests {
     use httptest::{matchers::request, responders::status_code, Expectation, Server};
     use serial_test::serial;
 
-    use crate::{config::ConfigBuilder, progress::MultiProgress};
+    use crate::config::ConfigBuilder;
 
     use super::*;
 
@@ -231,12 +218,8 @@ mod tests {
                                     "{}/resources/test/manifest-5.1.zip",
                                     env!("CARGO_MANIFEST_DIR")
                                 )
-                                .as_str(),
-                            )
-                            .unwrap(),
-                        ),
-                ),
-        );
+                                .as_str())
+                            .unwrap())));
         server
     }
 
@@ -254,9 +237,7 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config, &bar)
+        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config)
             .await
             .unwrap();
     }
@@ -276,10 +257,8 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
 
-        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config, &bar)
+        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config)
             .await
             .unwrap();
     }
@@ -291,8 +270,7 @@ mod tests {
         let mut url_str = server.url_str("/");
         url_str.pop(); // Remove trailing "/"
         let manifest_content = std::fs::read_to_string(
-            format!("{}/resources/test/manifest-5.1", env!("CARGO_MANIFEST_DIR")).as_str(),
-        )
+            format!("{}/resources/test/manifest-5.1", env!("CARGO_MANIFEST_DIR")).as_str())
         .unwrap();
         let cache_dir = assert_fs::TempDir::new().unwrap();
         let cache = cache_dir.join("manifest-5.1");
@@ -305,9 +283,7 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        let result = manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config, &bar)
+        let result = manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config)
             .await
             .unwrap();
         assert_eq!(result, manifest_content);

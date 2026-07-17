@@ -1,5 +1,5 @@
 use miette::miette;
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use clap::Args;
 use lux_lib::{
@@ -10,10 +10,10 @@ use lux_lib::{
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     luarocks::luarocks_installation::LuaRocksInstallation,
     operations::{Install, PackageInstallSpec},
-    progress::MultiProgress,
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{self, InstallTree},
 };
+
 use miette::{IntoDiagnostic, Result};
 
 #[derive(Args, Default)]
@@ -39,16 +39,12 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
         return Err(miette!("Provided path is not a valid rockspec!"));
     }
 
-    let progress_arc = MultiProgress::new_arc(&config);
-    let progress = Arc::clone(&progress_arc);
-
     let content = std::fs::read_to_string(path).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&content)?;
     let lua_version = rockspec.lua_version_matches(&config)?;
     let lua = LuaInstallation::new(
         &lua_version,
         &config,
-        &progress.map(|progress| progress.new_bar()),
     )
     .await?;
     let tree = config.user_tree(lua_version)?;
@@ -83,7 +79,6 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
     Install::new(&config)
         .packages(build_dependencies_to_install)
         .tree(tree.build_tree(&config)?)
-        .progress(progress_arc.clone())
         .install()
         .await?;
 
@@ -107,15 +102,13 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
     Install::new(&config)
         .packages(dependencies_to_install)
         .tree(tree.clone())
-        .progress(progress_arc.clone())
         .install()
         .await?;
 
     if let Some(BuildBackendSpec::LuaRock(_)) = &rockspec.build().current_platform().build_backend {
         let build_tree = tree.build_tree(&config)?;
         let luarocks = LuaRocksInstallation::new(&config, build_tree)?;
-        let bar = progress.map(|p| p.new_bar());
-        luarocks.ensure_installed(&lua, &bar).await?;
+        luarocks.ensure_installed(&lua).await?;
     }
 
     build::Build::new()
@@ -124,7 +117,6 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
         .lua(&lua)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&progress.map(|p| p.new_bar()))
         .pin(pin)
         .behaviour(BuildBehaviour::Force)
         .build()

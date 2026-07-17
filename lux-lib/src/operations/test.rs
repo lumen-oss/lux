@@ -1,4 +1,4 @@
-use std::{io, ops::Deref, path::PathBuf, process::Command, sync::Arc};
+use std::{io, ops::Deref, path::PathBuf, process::Command};
 
 use super::{
     BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
@@ -12,7 +12,6 @@ use crate::{
     lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
     package::{PackageName, PackageVersionReqError},
     path::{Paths, PathsError},
-    progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
     rockspec::Rockspec,
     tree::{self, TreeError},
@@ -47,7 +46,6 @@ pub struct Test<'a> {
 
     #[builder(default)]
     env: TestEnv,
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 impl<State: test_builder::State> TestBuilder<'_, State> {
@@ -133,24 +131,17 @@ pub enum RunTestsError {
 async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
     let workspace = test.workspace;
     let config = test.config;
-    let progress = test
-        .progress
-        .unwrap_or_else(|| MultiProgress::new_arc(config));
     let no_lock = test.no_lock.unwrap_or(false);
 
     if let Some(package) = test.package {
         let project = workspace.select_member(&package)?;
-        let progress = Arc::clone(&progress);
         run_project_tests(
-            &workspace, project, no_lock, &test.args, &test.env, progress, config,
-        )
+            &workspace, project, no_lock, &test.args, &test.env, config)
         .await
     } else {
         for project in workspace.members() {
-            let progress = Arc::clone(&progress);
             run_project_tests(
-                &workspace, project, no_lock, &test.args, &test.env, progress, config,
-            )
+                &workspace, project, no_lock, &test.args, &test.env, config)
             .await?;
         }
         Ok(())
@@ -163,20 +154,17 @@ async fn run_project_tests(
     no_lock: bool,
     test_args: &[String],
     test_env: &TestEnv,
-    progress: Arc<Progress<MultiProgress>>,
-    config: &Config,
-) -> Result<(), RunTestsError> {
+    config: &Config) -> Result<(), RunTestsError> {
     let rocks = project.toml().into_local()?;
     let test_spec = rocks.test().current_platform().to_validated(project)?;
     let test_config = test_spec.test_config(config)?;
 
     if no_lock {
         let rockspec = project.toml().into_local()?;
-        ensure_test_dependencies(workspace, project, rockspec, &test_config, progress.clone())
+        ensure_test_dependencies(workspace, project, rockspec, &test_config)
             .await?;
     } else {
         Sync::new(workspace, &test_config)
-            .progress(progress.clone())
             .sync_test_dependencies()
             .await?;
     }
@@ -273,9 +261,7 @@ async fn ensure_test_dependencies(
     workspace: &Workspace,
     project: &Project,
     rockspec: impl Rockspec,
-    config: &Config,
-    progress: Arc<Progress<MultiProgress>>,
-) -> Result<(), InstallTestDependenciesError> {
+    config: &Config) -> Result<(), InstallTestDependenciesError> {
     let test_tree = workspace.test_tree(config)?;
     let rockspec_dependencies = rockspec.test_dependencies().current_platform();
     let test_dependencies = rockspec
@@ -319,22 +305,19 @@ async fn ensure_test_dependencies(
                     build_behaviour.map(|build_behaviour| {
                         PackageInstallSpec::new(
                             dep.package_req().clone(),
-                            tree::EntryType::Entrypoint,
-                        )
+                            tree::EntryType::Entrypoint)
                         .build_behaviour(build_behaviour)
                         .pin(*dep.pin())
                         .opt(*dep.opt())
                         .maybe_source(dep.source.clone())
                         .build()
                     })
-                }),
-        )
+                }))
         .collect();
 
     Install::new(config)
         .packages(test_dependencies)
         .tree(test_tree)
-        .progress(progress.clone())
         .install()
         .await?;
 

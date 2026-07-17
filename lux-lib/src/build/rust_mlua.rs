@@ -1,7 +1,6 @@
 use super::utils::c_dylib_extension;
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
-use crate::progress::{Progress, ProgressBar};
 use crate::tree::InstallTree;
 use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
 use itertools::Itertools;
@@ -62,7 +61,6 @@ impl BuildBackend for RustMluaBuildSpec {
         let output_paths = args.output_paths;
         let config = args.config;
         let build_dir = args.build_dir;
-        let progress = args.progress;
         let lua_version = LuaVersion::from(config)?;
         let lua_feature = match lua_version {
             LuaVersion::Lua51 => "lua51",
@@ -86,7 +84,6 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push("--features");
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
-        progress.map(|bar| bar.set_message("🛠️ Building (🦀 rust-mlua)..."));
         match Command::new("cargo")
             .current_dir(build_dir)
             .args(build_args)
@@ -109,14 +106,14 @@ impl BuildBackend for RustMluaBuildSpec {
         if let Err(err) =
             install_rust_libs(self.modules, &self.target_path, build_dir, output_paths)
         {
-            cleanup(output_paths, progress).await;
+            cleanup(output_paths).await;
             return Err(err.into());
         }
         fs::create_dir_all(&output_paths.src).map_err(|err| {
             RustError::CreateDir(output_paths.src.to_string_lossy().to_string(), err)
         })?;
         if let Err(err) = install_lua_libs(self.include, build_dir, output_paths) {
-            cleanup(output_paths, progress).await;
+            cleanup(output_paths).await;
             return Err(err.into());
         }
         Ok(BuildInfo::default())
@@ -127,8 +124,7 @@ fn install_rust_libs(
     modules: HashMap<String, PathBuf>,
     target_path: &Path,
     build_dir: &Path,
-    output_paths: &RockLayout,
-) -> Result<(), InstallRustLibError> {
+    output_paths: &RockLayout) -> Result<(), InstallRustLibError> {
     for (module, rust_lib) in modules {
         let src = build_dir.join(target_path).join("release").join(rust_lib);
         let mut dst: PathBuf = output_paths.lib.join(module);
@@ -144,8 +140,7 @@ fn install_rust_libs(
 fn install_lua_libs(
     include: HashMap<PathBuf, PathBuf>,
     build_dir: &Path,
-    output_paths: &RockLayout,
-) -> Result<(), InstallLuaLibError> {
+    output_paths: &RockLayout) -> Result<(), InstallLuaLibError> {
     for (from, to) in include {
         let src = build_dir.join(from);
         let dst = output_paths.src.join(to);
@@ -157,20 +152,11 @@ fn install_lua_libs(
     Ok(())
 }
 
-async fn cleanup(output_paths: &RockLayout, progress: &Progress<ProgressBar>) -> () {
+async fn cleanup(output_paths: &RockLayout) -> () {
     let root_dir = &output_paths.rock_path;
-
-    progress.map(|p| p.set_message(format!("🗑️ Cleaning up {}", root_dir.display())));
 
     match tokio::fs::remove_dir_all(root_dir).await {
         Ok(_) => (),
-        Err(err) => {
-            progress.map(|p| {
-                p.println(
-                    format!("Error cleaning up {}: {}", root_dir.display(), err),
-                    crate::logging::LogLevel::Error,
-                )
-            });
-        }
+        Err(_) => {}
     };
 }

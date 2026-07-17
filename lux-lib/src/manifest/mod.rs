@@ -7,7 +7,6 @@ pub use crate::manifest::metadata::*;
 use crate::manifest::metadata_from_server::*;
 use crate::manifest::metadata_from_vendor_dir::manifest_from_vendor_dir;
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
-use crate::progress::{Progress, ProgressBar};
 use crate::{
     config::Config,
     package::{PackageReq, RemotePackage},
@@ -49,15 +48,13 @@ impl Manifest {
 
     pub async fn from_config(
         server_url: Url,
-        config: &Config,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<Self, ManifestError> {
+        config: &Config) -> Result<Self, ManifestError> {
         if let Some(vendor_dir) = config.vendor_dir() {
             let server_url: Url = Url::from_file_path(vendor_dir)
                 .map_err(|_err| ManifestError::Vendor(vendor_dir.to_slash_lossy().to_string()))?;
             return Ok(Self::new(server_url, manifest_from_vendor_dir(vendor_dir)));
         }
-        let content = manifest_from_cache_or_server(&server_url, config, progress)
+        let content = manifest_from_cache_or_server(&server_url, config)
             .await
             .map_err(|source| ManifestError::Server {
                 url: server_url.to_string(),
@@ -66,7 +63,7 @@ impl Manifest {
         match ManifestMetadata::new(&content) {
             Ok(metadata) => Ok(Self::new(server_url, metadata)),
             Err(_) => {
-                let manifest = manifest_from_server_only(&server_url, config, progress)
+                let manifest = manifest_from_server_only(&server_url, config)
                     .await
                     .map_err(|source| ManifestError::Server {
                         url: server_url.to_string(),
@@ -89,8 +86,7 @@ impl Manifest {
     pub fn find(
         &self,
         package_req: &PackageReq,
-        filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<RemotePackage> {
+        filter: Option<RemotePackageTypeFilterSpec>) -> Option<RemotePackage> {
         match self.metadata().latest_match(package_req, filter) {
             None => None,
             Some((package, package_type)) => {

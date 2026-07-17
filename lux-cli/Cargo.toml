@@ -43,6 +43,8 @@ whoami = "2.1"
 git2 = { workspace = true }
 ignore = { workspace = true }
 indicatif = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "fmt"] }
 itertools = { workspace = true }
 lux-workspace-hack = { workspace = true }
 path-absolutize = { workspace = true }

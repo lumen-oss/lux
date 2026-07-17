@@ -1,8 +1,9 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, lockfile::LocalPackage, operations::Sync, progress::MultiProgress,
+    config::Config, lockfile::LocalPackage, operations::Sync,
     workspace::Workspace,
 };
+
 use miette::Result;
 
 #[derive(Args)]
@@ -15,22 +16,18 @@ pub struct SyncProject {
 /// Sync the current project's installed packages with its lux.toml.
 pub async fn sync(args: SyncProject, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
-    let progress = MultiProgress::new_arc(&config);
 
     let dep_report = Sync::new(&workspace, &config)
-        .progress(progress.clone())
         .validate_integrity(!args.no_integrity_check)
         .sync_dependencies()
         .await?;
 
     let build_report = Sync::new(&workspace, &config)
-        .progress(progress.clone())
         .validate_integrity(false)
         .sync_build_dependencies()
         .await?;
 
     let test_report = Sync::new(&workspace, &config)
-        .progress(progress.clone())
         .validate_integrity(false)
         .sync_test_dependencies()
         .await?;

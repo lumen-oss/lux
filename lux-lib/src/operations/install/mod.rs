@@ -16,7 +16,6 @@ use crate::{
     },
     operations::resolve::{Resolve, ResolveDependenciesError},
     package::{PackageName, PackageNameList},
-    progress::{MultiProgress, Progress, ProgressBar},
     remote_package_db::{RemotePackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
     rockspec::Rockspec,
     tree::{self, InstallTree, Tree, TreeError},
@@ -51,7 +50,6 @@ where
     #[builder(setters(name = "_tree", vis = ""))]
     tree: T,
     package_db: Option<RemotePackageDB>,
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 impl<'a, State> InstallBuilder<'a, Tree, State>
@@ -60,8 +58,7 @@ where
 {
     pub fn workspace(
         self,
-        workspace: &'a Workspace,
-    ) -> Result<InstallBuilder<'a, Tree, install_builder::SetTree<State>>, WorkspaceTreeError>
+        workspace: &'a Workspace) -> Result<InstallBuilder<'a, Tree, install_builder::SetTree<State>>, WorkspaceTreeError>
     where
         State::Tree: install_builder::IsUnset,
     {
@@ -109,15 +106,10 @@ where
         if install_built.packages.is_empty() {
             return Ok(Vec::default());
         }
-        let progress = match install_built.progress {
-            Some(p) => p,
-            None => MultiProgress::new_arc(install_built.config),
-        };
         let package_db = match install_built.package_db {
             Some(db) => db,
             None => {
-                let bar = progress.map(|p| p.new_bar());
-                RemotePackageDB::from_config(install_built.config, &bar).await?
+                RemotePackageDB::from_config(install_built.config).await?
             }
         };
 
@@ -132,17 +124,14 @@ where
 
         if !duplicate_entrypoints.is_empty() {
             return Err(InstallError::DuplicateEntrypoints(PackageNameList::new(
-                duplicate_entrypoints,
-            )));
+                duplicate_entrypoints)));
         }
 
         install_impl(
             install_built.packages,
             Arc::new(package_db),
             install_built.config,
-            &install_built.tree,
-            progress,
-        )
+            &install_built.tree)
         .await
     }
 }
@@ -199,7 +188,6 @@ async fn install_impl<T>(
     package_db: Arc<RemotePackageDB>,
     config: &Config,
     tree: &T,
-    progress_arc: Arc<Progress<MultiProgress>>,
 ) -> Result<Vec<LocalPackage>, InstallError>
 where
     T: InstallTree + Clone + Send + Sync + 'static,
@@ -218,24 +206,15 @@ where
         .lockfile(Arc::new(lockfile.clone()))
         .build_lockfile(Arc::new(build_lockfile.clone()))
         .config(config)
-        .progress(progress_arc.clone())
         .get_all_dependencies()
         .await?;
 
     let lua = Arc::new(
-        LuaInstallation::new_from_config(config, &progress_arc.map(|progress| progress.new_bar()))
-            .await?,
-    );
+        LuaInstallation::new_from_config(config).await?);
 
     // We have to install transitive build dependencies sequentially
     while let Some(build_dep_spec) = build_dep_rx.recv().await {
         let rockspec = build_dep_spec.downloaded_rock.rockspec();
-        let bar = progress_arc.map(|p| {
-            p.add(ProgressBar::from(format!(
-                "💻 Installing build dependency: {}",
-                build_dep_spec.downloaded_rock.rockspec().package(),
-            )))
-        });
         let package = rockspec.package().clone();
         let build_tree = tree.build_tree(config)?;
         // We have to write to the build tree's lockfile after each build,
@@ -248,7 +227,6 @@ where
             .tree(&build_tree)
             .entry_type(tree::EntryType::Entrypoint)
             .config(config)
-            .progress(&bar)
             .constraint(build_dep_spec.spec.constraint())
             .behaviour(build_dep_spec.build_behaviour)
             .build()
@@ -264,7 +242,7 @@ where
 
     let installed_packages =
         futures::stream::iter(all_packages.clone().into_values().map(|install_spec| {
-            let progress_arc = progress_arc.clone();
+
             let downloaded_rock = install_spec.downloaded_rock;
             let config = config.clone();
             let tree = tree.clone();
@@ -285,8 +263,7 @@ where
                                 &lua,
                                 &tree,
                                 &config,
-                                progress_arc,
-                            )
+)
                             .await?
                         }
                         RemoteRockDownload::BinaryRock {
@@ -302,9 +279,7 @@ where
                                 install_spec.opt,
                                 install_spec.entry_type,
                                 &config,
-                                &tree,
-                                progress_arc,
-                            )
+                                &tree)
                             .await?
                         }
                         RemoteRockDownload::SrcRock {
@@ -326,9 +301,7 @@ where
                                 install_spec.entry_type,
                                 &lua,
                                 &tree,
-                                &config,
-                                progress_arc,
-                            )
+                                &config)
                             .await?
                         }
                     };
@@ -371,9 +344,7 @@ A required dependency was not installed correctly.
 This is likely because an install thread panicked and was interrupted unexpectedly.
 
 [THIS IS A BUG!]
-"#,
-                    ))?,
-            );
+"#))?);
         }
         Ok(())
     };
@@ -403,21 +374,18 @@ async fn install_rockspec<T>(
     lua: &LuaInstallation,
     tree: &T,
     config: &Config,
-    progress_arc: Arc<Progress<MultiProgress>>,
 ) -> Result<LocalPackage, InstallError>
 where
     T: InstallTree + Sync,
 {
-    let progress = Arc::clone(&progress_arc);
     let rockspec = rockspec_download.rockspec;
     let source = rockspec_download.source;
     let package = rockspec.package().clone();
-    let bar = progress.map(|p| p.add(ProgressBar::from(format!("💻 Installing {}", &package,))));
 
     if let Some(BuildBackendSpec::LuaRock(_)) = &rockspec.build().current_platform().build_backend {
         let luarocks_tree = tree.build_tree(config)?;
         let luarocks = LuaRocksInstallation::new(config, luarocks_tree)?;
-        luarocks.ensure_installed(lua, &bar).await?;
+        luarocks.ensure_installed(lua).await?;
     }
 
     let source_spec = match src_rock_source {
@@ -431,7 +399,6 @@ where
         .tree(tree)
         .entry_type(entry_type)
         .config(config)
-        .progress(&bar)
         .pin(pin)
         .opt(opt)
         .constraint(constraint)
@@ -441,9 +408,6 @@ where
         .build()
         .await
         .map_err(|err| InstallError::Build(package, err))?;
-
-    bar.map(|b| b.finish_and_clear());
-
     Ok(pkg)
 }
 
@@ -458,26 +422,16 @@ async fn install_binary_rock(
     entry_type: tree::EntryType,
     config: &Config,
     tree: &impl InstallTree,
-    progress_arc: Arc<Progress<MultiProgress>>,
 ) -> Result<LocalPackage, InstallError> {
-    let progress = Arc::clone(&progress_arc);
     let rockspec = rockspec_download.rockspec;
     let package = rockspec.package().clone();
-    let bar = progress.map(|p| {
-        p.add(ProgressBar::from(format!(
-            "💻 Installing {} (pre-built)",
-            &package,
-        )))
-    });
     let pkg = BinaryRockInstall::new(
         &rockspec,
         rockspec_download.source,
         packed_rock,
         entry_type,
         config,
-        tree,
-        &bar,
-    )
+        tree,)
     .pin(pin)
     .opt(opt)
     .constraint(constraint)
@@ -485,8 +439,5 @@ async fn install_binary_rock(
     .install()
     .await
     .map_err(|err| InstallError::InstallBinaryRock(package, err))?;
-
-    bar.map(|b| b.finish_and_clear());
-
     Ok(pkg)
 }

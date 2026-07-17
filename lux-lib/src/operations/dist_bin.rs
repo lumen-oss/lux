@@ -2,7 +2,6 @@ use std::{
     io,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::Arc,
 };
 
 use bon::Builder;
@@ -16,7 +15,6 @@ use crate::{
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
-    progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
     tree::{InstallTree, TreeError},
@@ -43,8 +41,6 @@ where
     /// Destination path for the compiled binary.
     /// Defaults to `<cwd>/<package>[.exe]`.
     output: Option<PathBuf>,
-
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 use miette::Diagnostic;
@@ -104,16 +100,11 @@ async fn do_dist_project_bin<T>(args: DistProjectBin<'_, T>) -> Result<PathBuf, 
 where
     T: InstallTree + Sync + Send + Clone + 'static,
 {
-    let progress = args
-        .progress
-        .clone()
-        .unwrap_or_else(|| MultiProgress::new_arc(args.config));
 
     let package = InstallProject::new()
         .project(args.project)
         .config(args.config)
         .tree(args.tree)
-        .maybe_progress(args.progress)
         .build()
         .await?;
 
@@ -131,7 +122,7 @@ where
 
     let layout = args.tree.installed_rock_layout(&package)?;
 
-    let lua = LuaInstallation::new_from_config(args.config, &progress.map(|p| p.new_bar())).await?;
+    let lua = LuaInstallation::new_from_config(args.config).await?;
 
     let output = args.output.unwrap_or_else(|| {
         let mut p = PathBuf::from(&pkg_name);
@@ -199,8 +190,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
                 .iter()
                 .unique()
                 .map(|p| p.to_string_lossy())
-                .join("\n"),
-        ));
+                .join("\n")));
     }
 
     // NOTE: A `FlatDistTree` can produce duplicates, as all modules share the same `src`.
@@ -234,8 +224,7 @@ fn module_names(lib_root: &Path, path: &Path) -> (String, String) {
 async fn generate_c_source(
     entrypoint_module: &str,
     files: &InstalledFiles,
-    lib_root: &Path,
-) -> Result<String, io::Error> {
+    lib_root: &Path) -> Result<String, io::Error> {
     let mut out = String::from(C_PREAMBLE);
 
     out.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
@@ -317,8 +306,7 @@ async fn compile_binary(
     lua: &LuaInstallation,
     native_modules: &[PathBuf],
     work_dir: &tempfile::TempDir,
-    config: &Config,
-) -> Result<(), DistProjectBinError> {
+    config: &Config) -> Result<(), DistProjectBinError> {
     let mut build = cc::Build::new();
     let host = target_lexicon::Triple::host().to_string();
 
@@ -530,8 +518,7 @@ mod tests {
             RockBinaries::default(),
             RemotePackageSource::Test,
             None,
-            hashes,
-        )
+            hashes)
     }
 
     #[cfg(target_os = "linux")]
@@ -570,8 +557,7 @@ mod tests {
             .unwrap();
         tokio::fs::write(
             layout_b.lib.join(format!("bar.{}", c_dylib_extension())),
-            "",
-        )
+            "")
         .await
         .unwrap();
 
@@ -615,8 +601,7 @@ mod tests {
         let tree = FlatDistTree::new(
             staging.to_path_buf(),
             config.lua_version().cloned().unwrap(),
-            &config,
-        )
+            &config)
         .unwrap();
 
         InstallProject::new()
@@ -669,8 +654,7 @@ mod tests {
         let tree = FlatDistTree::new(
             staging.to_path_buf(),
             config.lua_version().cloned().unwrap(),
-            &config,
-        )
+            &config)
         .unwrap();
 
         let out_dir = TempDir::new().unwrap();

@@ -19,8 +19,6 @@ use crate::lua_version::LuaVersion;
 use crate::lua_version::LuaVersionUnset;
 use crate::operations;
 use crate::operations::BuildLuaError;
-use crate::progress::Progress;
-use crate::progress::ProgressBar;
 use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
 use crate::{config::Config, package::PackageVersion, variables::HasVariables};
@@ -100,17 +98,13 @@ pub enum LuaInstallationError {
 
 impl LuaInstallation {
     pub async fn new_from_config(
-        config: &Config,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<Self, LuaInstallationError> {
-        Self::new(LuaVersion::from(config)?, config, progress).await
+        config: &Config) -> Result<Self, LuaInstallationError> {
+        Self::new(LuaVersion::from(config)?, config).await
     }
 
     pub async fn new(
         version: &LuaVersion,
-        config: &Config,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<Self, LuaInstallationError> {
+        config: &Config) -> Result<Self, LuaInstallationError> {
         let _lock = NEW_MUTEX.lock().await;
         if let Some(lua_intallation) = Self::probe(version, config.external_deps()) {
             return Ok(lua_intallation);
@@ -139,14 +133,13 @@ impl LuaInstallation {
                 bin,
             })
         } else {
-            Self::install(version, config, progress).await
+            Self::install(version, config).await
         }
     }
 
     pub(crate) fn probe(
         version: &LuaVersion,
-        search_config: &ExternalDependencySearchConfig,
-    ) -> Option<Self> {
+        search_config: &ExternalDependencySearchConfig) -> Option<Self> {
         let pkg_name_probes = match version {
             LuaVersion::Lua51 => vec!["lua5.1", "lua-5.1"],
             LuaVersion::Lua52 => vec!["lua5.2", "lua-5.2"],
@@ -162,8 +155,7 @@ impl LuaInstallation {
                 ExternalDependencyInfo::probe(
                     pkg_name,
                     &ExternalDependencySpec::default(),
-                    search_config,
-                )
+                    search_config)
             })
             .find_map(Result::ok);
 
@@ -192,9 +184,7 @@ impl LuaInstallation {
 
     pub async fn install(
         version: &LuaVersion,
-        config: &Config,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<Self, LuaInstallationError> {
+        config: &Config) -> Result<Self, LuaInstallationError> {
         let _lock = INSTALL_MUTEX.lock().await;
 
         let target = Self::root_dir(version, config);
@@ -203,7 +193,6 @@ impl LuaInstallation {
             .lua_version(version)
             .install_dir(&target)
             .config(config)
-            .progress(progress)
             .build()
             .await?;
 
@@ -490,14 +479,12 @@ fn get_lua_lib_name(lib_dir: &Path, lua_version: &LuaVersion) -> Option<String> 
 }
 
 fn detect_installed_lua_version_from_path(
-    lua_cmd: &Path,
-) -> Result<PackageVersion, DetectLuaVersionError> {
+    lua_cmd: &Path) -> Result<PackageVersion, DetectLuaVersionError> {
     let output = match std::process::Command::new(lua_cmd).arg("-v").output() {
         Ok(output) => Ok(output),
         Err(err) => Err(DetectLuaVersionError::RunLuaCommand(
             lua_cmd.to_string_lossy().to_string(),
-            err,
-        )),
+            err)),
     }?;
     let output_vec = if output.stderr.is_empty() {
         output.stdout
@@ -510,8 +497,7 @@ fn detect_installed_lua_version_from_path(
 }
 
 fn parse_lua_version_from_output(
-    lua_output: &str,
-) -> Result<PackageVersion, DetectLuaVersionError> {
+    lua_output: &str) -> Result<PackageVersion, DetectLuaVersionError> {
     let lua_version_str = lua_output
         .trim_start_matches("Lua")
         .trim_start_matches("JIT")
@@ -519,14 +505,13 @@ fn parse_lua_version_from_output(
         .next()
         .map(|s| s.to_string())
         .ok_or(DetectLuaVersionError::ParseLuaVersion(
-            lua_output.to_string(),
-        ))?;
+            lua_output.to_string()))?;
     Ok(PackageVersion::parse(&lua_version_str)?)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{config::ConfigBuilder, progress::MultiProgress};
+    use crate::config::ConfigBuilder;
 
     use super::*;
 
@@ -551,9 +536,7 @@ mod tests {
         }
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let lua_version = config.lua_version().unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        let lua_installation = LuaInstallation::new(lua_version, &config, &bar)
+        let lua_installation = LuaInstallation::new(lua_version, &config)
             .await
             .unwrap();
         // FIXME: This fails when run in the nix checkPhase

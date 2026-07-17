@@ -47,14 +47,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     let config = args.config;
     let build_dir = args.build_dir;
     let tree = args.tree;
-    let progress = args.progress;
-    progress.map(|p| {
-        p.set_message(format!(
-            "Building {} {} with luarocks...",
-            rockspec.package(),
-            rockspec.version()
-        ))
-    });
+
     let rockspec_temp_dir = tempdir()?;
     let rockspec_file = rockspec_temp_dir.path().join(format!(
         "{}-{}.rockspec",

@@ -1,8 +1,9 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, operations::Download, package::PackageReq, progress::MultiProgress,
+    config::Config, operations::Download, package::PackageReq,
     rockspec::Rockspec, tree::InstallTree,
 };
+
 use miette::Result;
 
 use crate::workspace::current_workspace_or_user_tree;
@@ -15,15 +16,10 @@ pub struct Info {
 pub async fn info(data: Info, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
 
-    let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
-
-    let rockspec = Download::new(&data.package, &config, &bar)
+    let rockspec = Download::new(&data.package, &config)
         .download_rockspec()
         .await?
         .rockspec;
-
-    bar.map(|b| b.finish_and_clear());
 
     if tree.match_rocks(&data.package)?.is_found() {
         println!("Currently installed in {}", tree.root().display());

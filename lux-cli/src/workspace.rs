@@ -1,6 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
-
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 use itertools::Itertools;
 use lux_lib::{
@@ -9,7 +7,6 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::Sync,
     package::PackageReq,
-    progress::{MultiProgress, Progress},
     tree::Tree,
     workspace::Workspace,
 };
@@ -86,13 +83,11 @@ pub fn current_workspace_or_user_tree(config: &Config) -> Result<Tree> {
 
 pub async fn sync_dependencies_if_locked(
     workspace: &Workspace,
-    progress: Arc<Progress<MultiProgress>>,
     config: &Config,
 ) -> Result<()> {
     // NOTE: We only update the lockfile if one exists.
     // Otherwise, the next `lx build` will remove the packages.
     Sync::new(workspace, config)
-        .progress(progress)
         .sync_dependencies()
         .await
         .wrap_err("syncing dependencies with the project lockfile failed.")?;
@@ -101,11 +96,9 @@ pub async fn sync_dependencies_if_locked(
 
 pub async fn sync_build_dependencies_if_locked(
     workspace: &Workspace,
-    progress: Arc<Progress<MultiProgress>>,
     config: &Config,
 ) -> Result<()> {
     Sync::new(workspace, config)
-        .progress(progress.clone())
         .sync_build_dependencies()
         .await
         .wrap_err("syncing build dependencies with the project lockfile failed.")?;
@@ -114,11 +107,9 @@ pub async fn sync_build_dependencies_if_locked(
 
 pub async fn sync_test_dependencies_if_locked(
     workspace: &Workspace,
-    progress: Arc<Progress<MultiProgress>>,
     config: &Config,
 ) -> Result<()> {
     Sync::new(workspace, config)
-        .progress(progress.clone())
         .sync_test_dependencies()
         .await
         .wrap_err("syncing test dependencies with the project lockfile failed.")?;

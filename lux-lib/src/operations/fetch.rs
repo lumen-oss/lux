@@ -7,8 +7,6 @@ use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::RockSourceSpec;
 use crate::operations;
 use crate::package::PackageSpec;
-use crate::progress::Progress;
-use crate::progress::ProgressBar;
 use crate::rockspec::Rockspec;
 use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
@@ -39,8 +37,6 @@ pub struct FetchSrc<'a, R: Rockspec> {
     rockspec: &'a R,
     #[builder(start_fn)]
     config: &'a Config,
-    #[builder(start_fn)]
-    progress: &'a Progress<ProgressBar>,
     #[builder(setters(vis = "pub(crate)"))]
     source_url: Option<RemotePackageSourceUrl>,
 }
@@ -80,23 +76,8 @@ where
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
                     );
-                    fetch.progress.map(|p| {
-                        p.println(
-                            format!("Failed to fetch source for {}: {}", &package, err),
-                            crate::logging::LogLevel::Warn,
-                        )
-                    });
-                    fetch.progress.map(|p| {
-                        p.println(
-                            format!(
-                                "Falling back to searching for a .src.rock archive on {}",
-                                fetch.config.server()
-                            ),
-                            crate::logging::LogLevel::Warn,
-                        )
-                    });
                     let metadata =
-                        FetchSrcRock::new(&package, fetch.dest_dir, fetch.config, fetch.progress)
+                        FetchSrcRock::new(&package, fetch.dest_dir, fetch.config)
                             .fetch()
                             .await?;
                     Ok(metadata)
@@ -150,8 +131,6 @@ struct FetchSrcRock<'a> {
     dest_dir: &'a Path,
     #[builder(start_fn)]
     config: &'a Config,
-    #[builder(start_fn)]
-    progress: &'a Progress<ProgressBar>,
 }
 
 impl<State> FetchSrcRockBuilder<'_, State>
@@ -190,11 +169,9 @@ impl Prompter for NullPrompter {
 }
 
 async fn do_fetch_src<R: Rockspec>(
-    fetch: &FetchSrc<'_, R>,
-) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
+    fetch: &FetchSrc<'_, R>) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
     let rockspec = fetch.rockspec;
     let rock_source = rockspec.source().current_platform();
-    let progress = fetch.progress;
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
     // prioritise lockfile source, if present
@@ -224,7 +201,6 @@ async fn do_fetch_src<R: Rockspec>(
     let metadata = match &source_spec {
         RockSourceSpec::Git(git) => {
             let url = git.url.to_string();
-            progress.map(|p| p.set_message(format!("🦠 Cloning {url}")));
 
             let auth = if config.no_prompt() {
                 GitAuthenticator::default()
@@ -268,7 +244,6 @@ async fn do_fetch_src<R: Rockspec>(
             }
         }
         RockSourceSpec::Url(url) => {
-            progress.map(|p| p.set_message(format!("📥 Downloading {}", url.to_owned())));
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
@@ -298,9 +273,7 @@ async fn do_fetch_src<R: Rockspec>(
                 cursor,
                 rock_source.unpack_dir.is_none(),
                 file_name,
-                dest_dir,
-                progress,
-            )
+                dest_dir)
             .await?;
             RemotePackageSourceMetadata {
                 hash,
@@ -309,7 +282,6 @@ async fn do_fetch_src<R: Rockspec>(
         }
         RockSourceSpec::File(path) => {
             let hash = if path.is_dir() {
-                progress.map(|p| p.set_message(format!("📋 Copying {}", path.display())));
                 recursive_copy_dir(&path.to_path_buf(), dest_dir)
                     .await
                     .map_err(|err| FetchSrcError::CopyDir {
@@ -317,7 +289,6 @@ async fn do_fetch_src<R: Rockspec>(
                         dest: dest_dir.to_path_buf(),
                         err,
                     })?;
-                progress.map(|p| p.finish_and_clear());
                 dest_dir.hash().map_err(FetchSrcError::Hash)?
             } else {
                 let mut file = File::open(path).map_err(|err| FetchSrcError::FileOpen {
@@ -341,9 +312,7 @@ async fn do_fetch_src<R: Rockspec>(
                     file,
                     rock_source.unpack_dir.is_none(),
                     file_name,
-                    dest_dir,
-                    progress,
-                )
+                    dest_dir)
                 .await?;
                 path.hash().map_err(FetchSrcError::Hash)?
             };
@@ -357,14 +326,12 @@ async fn do_fetch_src<R: Rockspec>(
 }
 
 async fn do_fetch_src_rock(
-    fetch: FetchSrcRock<'_>,
-) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
+    fetch: FetchSrcRock<'_>) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
     let package = fetch.package;
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
-    let progress = fetch.progress;
     let src_rock =
-        operations::download_src_rock(package, config.server(), progress, fetch.config).await?;
+        operations::download_src_rock(package, config.server(), fetch.config).await?;
     let hash = src_rock.bytes.hash()?;
     let cursor = Cursor::new(src_rock.bytes);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
@@ -373,9 +340,7 @@ async fn do_fetch_src_rock(
         cursor,
         true,
         src_rock.file_name,
-        dest_dir,
-        progress,
-    )
+        dest_dir)
     .await?;
     Ok(RemotePackageSourceMetadata {
         hash,

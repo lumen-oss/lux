@@ -1,7 +1,8 @@
 use lux_lib::{
     config::Config, lockfile::PinnedState, lua_version::LuaVersion, operations,
-    package::PackageReq, progress::MultiProgress,
+    package::PackageReq,
 };
+
 use miette::Result;
 
 use crate::utils::install::apply_build_behaviour;
@@ -33,7 +34,6 @@ pub async fn install(data: Install, config: Config) -> Result<()> {
     operations::Install::new(&config)
         .packages(packages)
         .tree(tree)
-        .progress(MultiProgress::new_arc(&config))
         .install()
         .await?;
 
