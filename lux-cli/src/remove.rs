@@ -1,9 +1,10 @@
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    config::Config, package::PackageName, progress::MultiProgress, rockspec::lua_dependency,
+    config::Config, package::PackageName, rockspec::lua_dependency,
     workspace::Workspace,
 };
+
 use miette::{miette, Result};
 
 use crate::workspace::{
@@ -32,7 +33,6 @@ pub struct Remove {
 
 pub async fn remove(data: Remove, config: Config) -> Result<()> {
     let mut workspace = Workspace::current()?.ok_or_else(|| miette!("No project found"))?;
-    let progress = MultiProgress::new_arc(&config);
 
     let project = workspace.single_member_or_select_mut(&data.package)?;
 
@@ -63,13 +63,13 @@ pub async fn remove(data: Remove, config: Config) -> Result<()> {
     }
 
     if !data.depencencies.is_empty() {
-        sync_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+        sync_dependencies_if_locked(&workspace, &config).await?;
     }
     if !build_packages.is_empty() {
-        sync_build_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+        sync_build_dependencies_if_locked(&workspace, &config).await?;
     }
     if !test_packages.is_empty() {
-        sync_test_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+        sync_test_dependencies_if_locked(&workspace, &config).await?;
     }
     Ok(())
 }

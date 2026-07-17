@@ -11,7 +11,6 @@ use crate::{
     hash::HasIntegrity,
     lua_version::LuaVersion,
     operations::{self, UnpackError},
-    progress::{Progress, ProgressBar},
 };
 use bon::Builder;
 use git2::{build::RepoBuilder, FetchOptions};
@@ -44,7 +43,6 @@ pub struct BuildLua<'a> {
     lua_version: &'a LuaVersion,
     install_dir: &'a Path,
     config: &'a Config,
-    progress: &'a Progress<ProgressBar>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -104,8 +102,6 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
 }
 
 async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
-    let progress = args.progress;
-
     let build_dir = tempdir().map_err(|err| {
         io::Error::other(format!(
             "failed to create lua_installation temp directory:\n{}",
@@ -115,7 +111,6 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     // XXX luajit.org responds with an invalid content-type, so we'll use the github mirror for now.
     // let luajit_url = "https://luajit.org/git/luajit.git";
     let luajit_url = "https://github.com/LuaJIT/LuaJIT.git";
-    progress.map(|p| p.set_message(format!("🦠 Cloning {luajit_url}")));
     {
         // We create a new scope because we have to drop fetch_options before the await
         let mut fetch_options = FetchOptions::new();
@@ -137,8 +132,6 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     let lua_version = args.lua_version;
     let config = args.config;
     let install_dir = args.install_dir;
-    let progress = args.progress;
-    progress.map(|p| p.set_message(format!("🛠️ Building Luajit {LUAJIT_MM_VERSION}")));
 
     let host = Triple::host();
 
@@ -206,12 +199,9 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
             return Err(BuildLuaError::Io(io::Error::other(format!(
                 "Failed to run `{} build`:\n{}",
                 config.make_cmd(),
-                err,
-            ))));
+                err))));
         }
     };
-
-    progress.map(|p| p.set_message(format!("💻 Installing Luajit {LUAJIT_MM_VERSION}")));
 
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
@@ -235,8 +225,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
             return Err(BuildLuaError::Io(io::Error::other(format!(
                 "Failed to run `{} install`:\n{}",
                 config.make_cmd(),
-                err,
-            ))));
+                err))));
         }
     };
     move_luajit_includes(install_dir).await?;
@@ -310,10 +299,6 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         ))
     })?;
 
-    let progress = args.progress;
-
-    progress.map(|p| p.set_message(format!("🛠️ Building Luajit {LUAJIT_MM_VERSION}")));
-
     let src_dir = build_dir.join("src");
     let mut msvcbuild = Command::new(src_dir.join("msvcbuild.bat"));
     msvcbuild.current_dir(&src_dir);
@@ -347,12 +332,10 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         Err(err) => {
             return Err(BuildLuaError::Io(io::Error::other(format!(
                 "Failed to run msvcbuild.bat:\n{}",
-                err,
-            ))))
+                err))))
         }
     };
 
-    progress.map(|p| p.set_message(format!("💻 Installing Luajit {LUAJIT_MM_VERSION}")));
     copy_includes(&src_dir, &include_dir).await?;
     fs::copy(src_dir.join("lua51.lib"), lib_dir.join("luajit.lib"))
         .await
@@ -376,8 +359,6 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
 
 async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
-    let progress = args.progress;
-
     let build_dir = tempdir().map_err(|err| {
         io::Error::other(format!(
             "failed to create lua_installation temp directory:\n{}",
@@ -404,8 +385,6 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .unwrap_unchecked()
     };
 
-    progress.map(|p| p.set_message(format!("📥 Downloading {}", source_url)));
-
     let response = crate::reqwest::new_https_client(args.config)?
         .get(source_url.clone())
         .send()
@@ -431,9 +410,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
         cursor,
         true,
         file_name,
-        build_dir.path(),
-        progress,
-    )
+        build_dir.path())
     .await?;
 
     if cfg!(target_env = "msvc") {
@@ -447,10 +424,8 @@ async fn do_build_lua_unix(
     args: BuildLua<'_>,
     build_dir: &Path,
     lua_version: &LuaVersion,
-    pkg_version: &str,
-) -> Result<(), BuildLuaError> {
+    _pkg_version: &str) -> Result<(), BuildLuaError> {
     let config = args.config;
-    let progress = args.progress;
     let install_dir = args.install_dir;
 
     let build_target = if cfg!(target_os = "linux") {
@@ -467,14 +442,6 @@ async fn do_build_lua_unix(
     } else {
         "generic"
     };
-
-    progress.map(|p| {
-        p.set_message(format!(
-            "🛠️ Building Lua {} ({})",
-            pkg_version, build_target
-        ))
-    });
-
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
         .stdout(Stdio::piped())
@@ -487,17 +454,6 @@ async fn do_build_lua_unix(
         // Typically, the `readline` headers cannot be found. In these
         // cases, try the build again with the `generic` platform target.
         Ok(output) if !output.status.success() && build_target != "generic" => {
-            progress.map(|p| {
-                p.println(format!(
-                    r#"Could not build Lua target '{build_target}'. Attempting a 'generic' Lua target build.
-Some functionality may be limited, including dynamic module loading and REPL history.
-
-stderr:
-{}
-"#,
-                    String::from_utf8_lossy(&output.stderr)
-                ),crate::logging::LogLevel::Warn)
-            });
             let fallback_output = Command::new(config.make_cmd())
                 .current_dir(build_dir)
                 .stdout(Stdio::piped())
@@ -509,8 +465,6 @@ stderr:
         }
         output => guard_success(output, config, &format!("build ({build_target})"))?,
     };
-
-    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
 
     match Command::new(config.make_cmd())
         .current_dir(build_dir)
@@ -534,8 +488,7 @@ stderr:
             return Err(BuildLuaError::Io(io::Error::other(format!(
                 "Failed to run `{} install`:\n{}",
                 config.make_cmd(),
-                err,
-            ))))
+                err))))
         }
     };
 
@@ -546,13 +499,9 @@ async fn do_build_lua_msvc(
     args: BuildLua<'_>,
     build_dir: &Path,
     lua_version: &LuaVersion,
-    pkg_version: &str,
-) -> Result<(), BuildLuaError> {
+    _pkg_version: &str) -> Result<(), BuildLuaError> {
     let config = args.config;
-    let progress = args.progress;
     let install_dir = args.install_dir;
-
-    progress.map(|p| p.set_message(format!("🛠️ Building Lua {}", pkg_version)));
 
     let lib_dir = install_dir.join("lib");
     fs::create_dir_all(&lib_dir).await.map_err(|err| {
@@ -664,8 +613,6 @@ async fn do_build_lua_msvc(
         })
     });
 
-    progress.map(|p| p.set_message(format!("💻 Installing Lua {}", pkg_version)));
-
     let target = host.to_string();
     let link =
         cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
@@ -686,8 +633,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        &format!("link {dll_name}.dll"),
-    )?;
+        &format!("link {dll_name}.dll"))?;
 
     // lua.exe
     guard_success(
@@ -698,8 +644,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        &format!("link {}", lua_bin_path.display()),
-    )?;
+        &format!("link {}", lua_bin_path.display()))?;
 
     // luac.exe
     guard_success(
@@ -710,8 +655,7 @@ async fn do_build_lua_msvc(
             .output()
             .await,
         config,
-        &format!("link {}", lua_c_bin_path.display()),
-    )?;
+        &format!("link {}", lua_c_bin_path.display()))?;
 
     copy_includes(&src_dir, &include_dir).await?;
 
@@ -721,8 +665,7 @@ async fn do_build_lua_msvc(
 fn guard_success(
     output: io::Result<std::process::Output>,
     config: &Config,
-    cmd_name: &str,
-) -> Result<(), BuildLuaError> {
+    cmd_name: &str) -> Result<(), BuildLuaError> {
     match output {
         Ok(output) if output.status.success() => {
             utils::log_command_output(&output, config);
@@ -737,8 +680,7 @@ fn guard_success(
         Err(err) => Err(BuildLuaError::Io(io::Error::other(format!(
             "Failed to run `{} build`:\n{}",
             config.make_cmd(),
-            err,
-        )))),
+            err)))),
     }
 }
 

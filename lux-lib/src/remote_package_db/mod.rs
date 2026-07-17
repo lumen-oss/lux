@@ -6,7 +6,6 @@ use crate::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
         RemotePackageTypeFilterSpec,
     },
-    progress::{Progress, ProgressBar},
 };
 use itertools::Itertools;
 
@@ -52,19 +51,17 @@ pub enum RemotePackageDbIntegrityError {
 
 impl RemotePackageDB {
     pub async fn from_config(
-        config: &Config,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<Self, RemotePackageDBError> {
+        config: &Config) -> Result<Self, RemotePackageDBError> {
         let mut manifests = Vec::new();
         for server in config.enabled_dev_servers()? {
-            let manifest = Manifest::from_config(server, config, progress).await?;
+            let manifest = Manifest::from_config(server, config).await?;
             manifests.push(manifest);
         }
         for server in config.extra_servers() {
-            let manifest = Manifest::from_config(server.clone(), config, progress).await?;
+            let manifest = Manifest::from_config(server.clone(), config).await?;
             manifests.push(manifest);
         }
-        manifests.push(Manifest::from_config(config.server().clone(), config, progress).await?);
+        manifests.push(Manifest::from_config(config.server().clone(), config).await?);
         Ok(Self(Impl::LuarocksManifests(manifests)))
     }
 
@@ -72,12 +69,9 @@ impl RemotePackageDB {
     pub(crate) fn find(
         &self,
         package_req: &PackageReq,
-        filter: Option<RemotePackageTypeFilterSpec>,
-        progress: &Progress<ProgressBar>,
-    ) -> Result<RemotePackage, SearchError> {
+        filter: Option<RemotePackageTypeFilterSpec>) -> Result<RemotePackage, SearchError> {
         match &self.0 {
             Impl::LuarocksManifests(manifests) => match manifests.iter().find_map(|manifest| {
-                progress.map(|p| p.set_message(format!("🔎 Searching {}", &manifest.server_url())));
                 manifest.find(package_req, filter.clone())
             }) {
                 Some(package) => Ok(package),
@@ -88,8 +82,7 @@ impl RemotePackageDB {
                     RemotePackage::new(
                         PackageSpec::new(local_package.spec.name, local_package.spec.version),
                         local_package.source,
-                        local_package.source_url,
-                    )
+                        local_package.source_url)
                 }) {
                     Some(package) => Ok(package),
                     None => Err(SearchError::RockNotFoundInLockfile(package_req.clone())),
@@ -118,8 +111,7 @@ impl RemotePackageDB {
                                             package_req.version_req().matches(version)
                                         })
                                         .sorted_by(|a, b| Ord::cmp(b, a))
-                                        .collect_vec(),
-                                ))
+                                        .collect_vec()))
                             } else {
                                 None
                             }
@@ -155,7 +147,7 @@ impl RemotePackageDB {
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<PackageSpec> {
-        match self.find(package_req, filter, &Progress::no_progress()) {
+        match self.find(package_req, filter) {
             Ok(result) => Some(result.package),
             Err(_) => None,
         }

@@ -1,9 +1,7 @@
 use std::io;
-use std::sync::Arc;
 
 use crate::lockfile::{FlushLockfileError, LocalPackage, LocalPackageId};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
-use crate::progress::{MultiProgress, Progress, ProgressBar};
 use crate::tree::{InstallTree, TreeError};
 use crate::{config::Config, tree::Tree};
 use bon::Builder;
@@ -31,7 +29,6 @@ pub struct Uninstall<'a> {
     #[builder(field)]
     packages: Vec<LocalPackageId>,
     config: &'a Config,
-    progress: Option<Arc<Progress<MultiProgress>>>,
     tree: Option<Tree>,
 }
 
@@ -63,15 +60,10 @@ where
     /// Remove the packages.
     pub async fn remove(self) -> Result<(), RemoveError> {
         let args = self._build();
-        let progress = match args.progress {
-            Some(p) => p,
-            None => MultiProgress::new_arc(args.config),
-        };
         let tree = args.tree.unwrap_or(
             args.config
-                .user_tree(LuaVersion::from(args.config)?.clone())?,
-        );
-        remove(args.packages, tree, args.config, &Arc::clone(&progress)).await
+                .user_tree(LuaVersion::from(args.config)?.clone())?);
+        remove(args.packages, tree, args.config).await
     }
 }
 
@@ -79,9 +71,7 @@ where
 async fn remove(
     package_ids: Vec<LocalPackageId>,
     tree: Tree,
-    config: &Config,
-    progress: &Progress<MultiProgress>,
-) -> Result<(), RemoveError> {
+    config: &Config) -> Result<(), RemoveError> {
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids
@@ -91,10 +81,9 @@ async fn remove(
         .collect_vec();
 
     futures::stream::iter(packages.into_iter().map(|package| {
-        let bar = progress.map(|p| p.new_bar());
 
         let tree = tree.clone();
-        tokio::spawn(remove_package(package, tree, bar))
+        tokio::spawn(remove_package(package, tree))
     }))
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()
@@ -113,17 +102,7 @@ async fn remove(
 
 async fn remove_package(
     package: LocalPackage,
-    tree: Tree,
-    bar: Progress<ProgressBar>,
-) -> Result<(), RemoveError> {
-    bar.map(|p| {
-        p.set_message(format!(
-            "🗑️ Removing {}@{}",
-            package.name(),
-            package.version()
-        ))
-    });
-
+    tree: Tree) -> Result<(), RemoveError> {
     let rock_layout = tree.installed_rock_layout(&package)?;
     tokio::fs::remove_dir_all(&rock_layout.etc).await?;
     tokio::fs::remove_dir_all(&rock_layout.rock_path).await?;
@@ -143,6 +122,5 @@ async fn remove_package(
         }
     }
 
-    bar.map(|p| p.finish_and_clear());
     Ok(())
 }

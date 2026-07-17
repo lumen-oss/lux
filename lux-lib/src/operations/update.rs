@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::io;
 
 use crate::{
     config::Config,
@@ -8,7 +8,6 @@ use crate::{
     },
     lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageReq, RockConstraintUnsatisfied},
-    progress::{MultiProgress, Progress},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     remote_package_source::RemotePackageSource,
     tree::{self, InstallTree, Tree, TreeError},
@@ -79,8 +78,6 @@ pub struct Update<'a> {
     validate_integrity: Option<bool>,
 
     package_db: Option<RemotePackageDB>,
-
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
@@ -114,24 +111,17 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
             return Ok(Vec::default());
         }
 
-        let progress = args
-            .progress
-            .clone()
-            .unwrap_or_else(|| MultiProgress::new_arc(args.config));
-
         let package_db = match &args.package_db {
             Some(db) => db.clone(),
             None => {
-                let bar = progress.map(|p| p.new_bar());
-                let db = RemotePackageDB::from_config(args.config, &bar).await?;
-                bar.map(|b| b.finish_and_clear());
+                let db = RemotePackageDB::from_config(args.config).await?;
                 db
             }
         };
 
         match Workspace::current()? {
-            Some(workspace) => update_workspace(workspace, args, package_db, progress).await,
-            None => update_install_tree(args, package_db, progress).await,
+            Some(workspace) => update_workspace(workspace, args, package_db).await,
+            None => update_install_tree(args, package_db).await,
         }
     }
 }
@@ -139,9 +129,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 async fn update_workspace(
     workspace: Workspace,
     args: Update<'_>,
-    package_db: RemotePackageDB,
-    progress: Arc<Progress<MultiProgress>>,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+    package_db: RemotePackageDB) -> Result<Vec<LocalPackage>, UpdateError> {
     let mut project_lockfile = workspace.lockfile()?.write_guard();
     let tree = workspace.tree(args.config)?;
 
@@ -156,9 +144,7 @@ async fn update_workspace(
         LocalPackageLockType::Regular,
         package_db.clone(),
         args.config,
-        progress.clone(),
-        &args.packages,
-    )
+        &args.packages)
     .await?
     .into_iter()
     .chain(dep_report.added)
@@ -175,9 +161,7 @@ async fn update_workspace(
         LocalPackageLockType::Test,
         package_db.clone(),
         args.config,
-        progress.clone(),
-        &args.test_dependencies,
-    )
+        &args.test_dependencies)
     .await?
     .into_iter()
     .chain(dep_report.added)
@@ -195,9 +179,7 @@ async fn update_workspace(
         LocalPackageLockType::Build,
         package_db.clone(),
         args.config,
-        progress.clone(),
-        &args.build_dependencies,
-    )
+        &args.build_dependencies)
     .await?
     .into_iter()
     .chain(dep_report.added)
@@ -216,9 +198,7 @@ async fn update_dependency_tree(
     lock_type: LocalPackageLockType,
     package_db: RemotePackageDB,
     config: &Config,
-    progress: Arc<Progress<MultiProgress>>,
-    packages: &Option<Vec<PackageReq>>,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+    packages: &Option<Vec<PackageReq>>) -> Result<Vec<LocalPackage>, UpdateError> {
     let lockfile = tree.lockfile()?;
     let dependencies = updatable_packages(&lockfile)
         .into_iter()
@@ -226,7 +206,7 @@ async fn update_dependency_tree(
         .collect_vec();
     let updated_lockfile = tree.lockfile()?;
     let updated_dependencies =
-        update(dependencies, package_db, tree, &lockfile, config, progress).await?;
+        update(dependencies, package_db, tree, &lockfile, config).await?;
     if !updated_dependencies.is_empty() {
         project_lockfile.sync(updated_lockfile.local_pkg_lock(), &lock_type);
     }
@@ -235,8 +215,7 @@ async fn update_dependency_tree(
 
 fn is_included(
     (pkg, _): &(LocalPackage, PackageReq),
-    package_reqs: &Option<Vec<PackageReq>>,
-) -> bool {
+    package_reqs: &Option<Vec<PackageReq>>) -> bool {
     package_reqs.is_none()
         || package_reqs.as_ref().is_some_and(|packages| {
             packages
@@ -247,9 +226,7 @@ fn is_included(
 
 async fn update_install_tree(
     args: Update<'_>,
-    package_db: RemotePackageDB,
-    progress: Arc<Progress<MultiProgress>>,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+    package_db: RemotePackageDB) -> Result<Vec<LocalPackage>, UpdateError> {
     let tree = args
         .config
         .user_tree(LuaVersion::from(args.config)?.clone())?;
@@ -258,7 +235,7 @@ async fn update_install_tree(
         .into_iter()
         .filter(|pkg| is_included(pkg, &args.packages))
         .collect_vec();
-    update(packages, package_db, tree, &lockfile, args.config, progress).await
+    update(packages, package_db, tree, &lockfile, args.config).await
 }
 
 async fn update(
@@ -266,9 +243,7 @@ async fn update(
     package_db: RemotePackageDB,
     tree: Tree,
     lockfile: &Lockfile<ReadOnly>,
-    config: &Config,
-    progress: Arc<Progress<MultiProgress>>,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+    config: &Config) -> Result<Vec<LocalPackage>, UpdateError> {
     let updatable = packages
         .clone()
         .into_iter()
@@ -290,7 +265,6 @@ async fn update(
         Uninstall::new()
             .config(config)
             .packages(updatable.iter().map(|(package, _)| package.id()))
-            .progress(progress.clone())
             .remove()
             .await?;
         let updated_packages = Install::new(config)
@@ -298,11 +272,9 @@ async fn update(
                 updatable
                     .iter()
                     .map(|updatable| mk_install_spec(updatable, lockfile))
-                    .collect(),
-            )
+                    .collect())
             .tree(tree)
             .package_db(package_db)
-            .progress(progress)
             .install()
             .await?;
         Ok(updated_packages)
@@ -333,8 +305,7 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LocalPackage, Packa
 
 fn mk_install_spec(
     (package, req): &(LocalPackage, PackageReq),
-    lockfile: &Lockfile<ReadOnly>,
-) -> PackageInstallSpec {
+    lockfile: &Lockfile<ReadOnly>) -> PackageInstallSpec {
     let entry_type = if lockfile.is_entrypoint(&package.id()) {
         tree::EntryType::Entrypoint
     } else {

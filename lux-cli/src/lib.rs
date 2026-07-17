@@ -62,6 +62,7 @@ pub mod path;
 pub mod pin;
 pub mod project;
 pub mod purge;
+pub mod progress;
 pub mod remove;
 pub mod run;
 pub mod run_lua;

@@ -5,14 +5,12 @@ use crate::{
     lua_installation::{LuaInstallation, LuaInstallationError},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
-    progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
     tree::{self, InstallTree, TreeError},
 };
 use bon::Builder;
 use itertools::Itertools;
 use miette::Diagnostic;
-use std::sync::Arc;
 use thiserror::Error;
 
 use super::InstallError;
@@ -62,8 +60,6 @@ where
     config: &'a Config,
 
     tree: &'a T,
-
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 impl<
@@ -78,14 +74,7 @@ impl<
         let project = args.project;
         let tree = args.tree;
         let build_tree = tree.build_tree(config)?;
-        let progress_arc = args
-            .progress
-            .clone()
-            .unwrap_or_else(|| MultiProgress::new_arc(args.config));
-        let lua = LuaInstallation::new_from_config(
-            config,
-            &progress_arc.map(|progress| progress.new_bar()),
-        )
+        let lua = LuaInstallation::new_from_config(config)
         .await?;
         let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
         let mut dependencies_to_install = Vec::new();
@@ -95,8 +84,7 @@ impl<
             &project_toml,
             tree,
             &mut dependencies_to_install,
-            &mut build_dependencies_to_install,
-        );
+            &mut build_dependencies_to_install);
 
         InstallDependencies::new()
             .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
@@ -104,13 +92,11 @@ impl<
                 build_dependencies_to_install
                     .into_iter()
                     .unique()
-                    .collect_vec(),
-            )
+                    .collect_vec())
             .tree(tree)
             .lua(&lua)
             .luarocks(&luarocks)
             .config(config)
-            .progress(progress_arc.clone())
             .build()
             .await
             .map_err(InstallProjectError::InstallBuildDependencies)?;
@@ -121,7 +107,7 @@ impl<
             .tree(tree)
             .entry_type(tree::EntryType::Entrypoint)
             .config(config)
-            .progress(&progress_arc.map(|p| p.new_bar()))
+
             .behaviour(BuildBehaviour::Force)
             .build()
             .await?;

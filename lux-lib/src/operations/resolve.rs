@@ -16,7 +16,6 @@ use crate::{
     },
     operations::{FetchVendored, FetchVendoredError},
     package::{PackageName, PackageReq},
-    progress::{MultiProgress, Progress},
     remote_package_db::RemotePackageDB,
     rockspec::Rockspec,
     tree,
@@ -70,7 +69,6 @@ where
     lockfile: Option<Arc<Lockfile<P>>>,
     build_lockfile: Option<Arc<Lockfile<P>>>,
     config: &'a Config,
-    progress: Arc<Progress<MultiProgress>>,
 }
 
 impl<P, State> ResolveBuilder<'_, P, State>
@@ -79,8 +77,7 @@ where
     State: resolve_builder::State + resolve_builder::IsComplete,
 {
     pub(crate) async fn get_all_dependencies(
-        self,
-    ) -> Result<Vec<LocalPackageId>, ResolveDependenciesError> {
+        self) -> Result<Vec<LocalPackageId>, ResolveDependenciesError> {
         let args = self._build();
         do_get_all_dependencies(args).await
     }
@@ -88,8 +85,7 @@ where
 
 #[async_recursion]
 async fn do_get_all_dependencies<'a, P>(
-    args: Resolve<'a, P>,
-) -> Result<Vec<LocalPackageId>, ResolveDependenciesError>
+    args: Resolve<'a, P>) -> Result<Vec<LocalPackageId>, ResolveDependenciesError>
 where
     'a: 'async_recursion,
     P: LockfilePermissions + Send + Sync + 'static,
@@ -102,7 +98,6 @@ where
     let lockfile = args.lockfile;
     let build_lockfile = args.build_lockfile;
     let config = args.config;
-    let progress = args.progress;
     futures::stream::iter(
         packages
             .into_iter()
@@ -117,8 +112,7 @@ where
                         || lockfile
                             .as_ref()
                             .is_none_or(|lockfile| lockfile.has_rock(package, None).is_none())
-                },
-            )
+                })
             .map(
                 // NOTE: we propagate build_behaviour, pin and opt to all dependencies
                 |PackageInstallSpec {
@@ -135,8 +129,6 @@ where
                     let build_dependencies_tx = build_dependencies_tx.clone();
                     let parent_packages = Arc::clone(&parent_packages);
                     let package_db = Arc::clone(&package_db);
-                    let progress = Arc::clone(&progress);
-                    let build_dep_progress = Arc::clone(&progress);
                     let lockfile = match &lockfile {
                         Some(lockfile) => Some(Arc::clone(lockfile)),
                         None => None,
@@ -147,26 +139,23 @@ where
                     };
 
                     tokio::spawn(async move {
-                        let bar = progress.map(|p| p.new_bar());
 
                         let downloaded_rock = if let Some(source) = source {
                             RemoteRockDownload::from_package_req_and_source_spec(
                                 package.clone(),
-                                source,
-                            )?
+                                source)?
                         } else if let Some(vendor_dir) = config.vendor_dir() {
                             FetchVendored::new()
                                 .vendor_dir(vendor_dir)
                                 .package(&package)
                                 .package_db(&package_db)
-                                .progress(&bar)
                                 .fetch_vendored_rock()
                                 .await
                                 .map_err(|err| {
                                     ResolveDependenciesError::FetchVendored(package.clone(), err)
                                 })?
                         } else {
-                            Download::new(&package, &config, &bar)
+                            Download::new(&package, &config)
                                 .package_db(&package_db)
                                 .download_remote_rock()
                                 .await?
@@ -183,9 +172,7 @@ where
                                         .iter()
                                         .cloned()
                                         .chain(std::iter::once(rockspec.package().clone()))
-                                        .collect_vec(),
-                                ),
-                            ));
+                                        .collect_vec())));
                         }
 
                         // NOTE: We don't need to install build dependencies to install binary rocks.
@@ -226,13 +213,11 @@ where
                                         .iter()
                                         .cloned()
                                         .chain(std::iter::once(rockspec.package().clone()))
-                                        .collect_vec(),
-                                ))
+                                        .collect_vec()))
                                 .package_db(package_db.clone())
                                 .maybe_lockfile(build_lockfile.clone())
                                 .maybe_build_lockfile(build_lockfile.clone())
                                 .config(&config)
-                                .progress(build_dep_progress)
                                 .get_all_dependencies()
                                 .await?;
                         }
@@ -275,13 +260,11 @@ where
                                     .iter()
                                     .cloned()
                                     .chain(std::iter::once(rockspec.package().clone()))
-                                    .collect_vec(),
-                            ))
+                                    .collect_vec()))
                             .package_db(package_db)
                             .maybe_lockfile(lockfile)
                             .maybe_build_lockfile(build_lockfile)
                             .config(&config)
-                            .progress(progress)
                             .get_all_dependencies()
                             .await?;
 
@@ -293,8 +276,7 @@ where
                             dependencies,
                             &pin,
                             &opt,
-                            rockspec.binaries(),
-                        );
+                            rockspec.binaries());
 
                         let install_spec = PackageInstallData {
                             build_behaviour,
@@ -311,9 +293,7 @@ where
 
                         Ok::<_, ResolveDependenciesError>(local_spec.id())
                     })
-                },
-            ),
-    )
+                }))
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()
     .await

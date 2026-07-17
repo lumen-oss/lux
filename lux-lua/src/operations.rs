@@ -10,7 +10,6 @@ use lux_lib::{
         set_pinned_state, BuildWorkspace, DistProjectBin, Download, Install, Sync, Uninstall,
         Update,
     },
-    progress::{Progress, ProgressBar},
     remote_package_db::RemotePackageDB,
 };
 use mlua::prelude::*;
@@ -220,8 +219,7 @@ impl TypedUserData for OperationsModule {
             |_, (package_req, config): (String, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let req = package_req.parse().into_lua_err()?;
-                let progress = Progress::<ProgressBar>::no_progress();
-                Download::new(&req, &config.0, &progress)
+                Download::new(&req, &config.0)
                     .download_rockspec()
                     .await
                     .into_lua_err()
@@ -275,7 +273,7 @@ mod definitions_registry {
 
 async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String, Vec<String>>> {
     let remote_db =
-        RemotePackageDB::from_config(&config.0, &Progress::<ProgressBar>::no_progress())
+        RemotePackageDB::from_config(&config.0)
             .await
             .into_lua_err()?;
 

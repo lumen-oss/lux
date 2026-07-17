@@ -11,7 +11,6 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{self, Install, PackageInstallSpec},
     package::PackageName,
-    progress::MultiProgress,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
     workspace::Workspace,
@@ -19,6 +18,7 @@ use lux_lib::{
 use miette::{miette, IntoDiagnostic, Result};
 use path_slash::PathBufExt;
 use tempfile::tempdir;
+
 
 #[derive(Args)]
 pub struct Pack {
@@ -95,7 +95,6 @@ async fn pack_workspace(
 pub async fn pack(args: Pack, config: Config) -> Result<()> {
     let lua_version = LuaVersion::from(&config)?.clone();
     let dest_dir = std::env::current_dir().into_diagnostic()?;
-    let progress = MultiProgress::new_arc(&config);
     let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
         Some(PackageOrRockspec::Package(package_req))
             if exists_matching_workspace_member(&package_req)? =>
@@ -116,7 +115,6 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                                 .build(),
                         )
                         .tree(tree.clone())
-                        .progress(progress)
                         .install()
                         .await?;
                     let package = packages
@@ -168,12 +166,10 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 )),
             }?;
             let temp_dir = tempdir().into_diagnostic()?;
-            let bar = progress.map(|p| p.new_bar());
             let config = config.with_tree(temp_dir.path().to_path_buf());
             let lua = LuaInstallation::new(
                 &lua_version,
                 &config,
-                &progress.map(|progress| progress.new_bar()),
             )
             .await?;
             let tree = config.user_tree(lua_version)?;
@@ -183,7 +179,6 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .tree(&tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&config)
-                .progress(&bar)
                 .build()
                 .await?;
             let rock_path = operations::Pack::new(dest_dir, tree, package)

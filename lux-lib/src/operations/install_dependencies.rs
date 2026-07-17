@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use bon::Builder;
 use itertools::Itertools;
@@ -8,7 +7,6 @@ use crate::{
     lua_installation::LuaInstallation,
     luarocks::luarocks_installation::LuaRocksInstallation,
     operations::{Install, InstallError},
-    progress::{MultiProgress, Progress},
     project::project_toml::LocalProjectToml,
     rockspec::Rockspec,
     tree::{self, InstallTree},
@@ -29,7 +27,6 @@ where
     lua: &'a LuaInstallation,
     luarocks: &'a LuaRocksInstallation,
     config: &'a Config,
-    progress: Arc<Progress<MultiProgress>>,
 }
 
 impl<
@@ -46,14 +43,11 @@ impl<
         let build_tree = tree.build_tree(config)?;
         let lua = args.lua;
         let luarocks = args.luarocks;
-        let progress_arc = args.progress;
         if !build_dependencies.is_empty() {
-            let bar = progress_arc.map(|p| p.new_bar());
-            luarocks.ensure_installed(lua, &bar).await?;
+            luarocks.ensure_installed(lua).await?;
             Install::new(config)
                 .packages(build_dependencies.into_iter().unique().collect_vec())
                 .tree(build_tree.clone())
-                .progress(progress_arc.clone())
                 .install()
                 .await?;
         }
@@ -61,7 +55,6 @@ impl<
         Install::new(config)
             .packages(dependencies.into_iter().unique().collect_vec())
             .tree(tree.clone())
-            .progress(progress_arc.clone())
             .install()
             .await?;
         Ok(())
@@ -72,8 +65,7 @@ pub(crate) fn prepare_dependencies_for_build(
     project_toml: &LocalProjectToml,
     workspace_tree: &impl InstallTree,
     dependencies_to_install: &mut Vec<PackageInstallSpec>,
-    build_dependencies_to_install: &mut Vec<PackageInstallSpec>,
-) {
+    build_dependencies_to_install: &mut Vec<PackageInstallSpec>) {
     let dependencies = project_toml
         .dependencies()
         .current_platform()

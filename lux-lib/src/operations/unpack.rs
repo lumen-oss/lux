@@ -13,9 +13,6 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tokio::fs;
 
-use crate::progress::Progress;
-use crate::progress::ProgressBar;
-
 #[derive(Error, Debug, Diagnostic)]
 pub enum UnpackError {
     #[error("failed to unpack source: {0}")]
@@ -32,23 +29,13 @@ pub enum UnpackError {
 
 pub async fn unpack_src_rock<R: Read + Seek + Send>(
     rock_src: R,
-    destination: PathBuf,
-    progress: &Progress<ProgressBar>,
-) -> Result<PathBuf, UnpackError> {
-    progress.map(|p| {
-        p.set_message(format!(
-            "📦 Unpacking src.rock into {}",
-            destination.display()
-        ))
-    });
-
+    destination: PathBuf) -> Result<PathBuf, UnpackError> {
     unpack_src_rock_impl(rock_src, destination).await
 }
 
 async fn unpack_src_rock_impl<R: Read + Seek + Send>(
     rock_src: R,
-    destination: PathBuf,
-) -> Result<PathBuf, UnpackError> {
+    destination: PathBuf) -> Result<PathBuf, UnpackError> {
     let mut zip = zip::ZipArchive::new(rock_src)?;
     zip.extract(&destination)?;
     Ok(destination)
@@ -59,14 +46,11 @@ pub(crate) async fn unpack<R>(
     mime_type: Option<&str>,
     reader: R,
     extract_nested_archive: bool,
-    file_name: String,
-    dest_dir: &Path,
-    progress: &Progress<ProgressBar>,
-) -> Result<(), UnpackError>
+    _file_name: String,
+    dest_dir: &Path) -> Result<(), UnpackError>
 where
     R: Read + Seek + Send,
 {
-    progress.map(|p| p.set_message(format!("📦 Unpacking {file_name}")));
 
     match mime_type {
         Some("application/zip") => {
@@ -138,9 +122,7 @@ where
                     file,
                     extract_nested_archive, // It might be a nested archive inside a .src.rock
                     file_name,
-                    dest_dir,
-                    progress,
-                )
+                    dest_dir)
                 .await?;
                 fs::remove_file(nested_archive_path).await?;
             }
@@ -215,7 +197,7 @@ fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)
 
 #[cfg(test)]
 mod tests {
-    use crate::{config::ConfigBuilder, progress::MultiProgress};
+    use crate::config::ConfigBuilder;
     use assert_fs::TempDir;
     use std::fs::File;
 
@@ -230,9 +212,7 @@ mod tests {
         let file = File::open(&test_rock_path).unwrap();
         let dest = TempDir::new().unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        unpack_src_rock(file, dest.to_path_buf(), &bar)
+        unpack_src_rock(file, dest.to_path_buf())
             .await
             .unwrap();
     }

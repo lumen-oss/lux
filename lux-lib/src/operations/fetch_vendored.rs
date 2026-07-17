@@ -8,7 +8,6 @@ use crate::{
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
     package::{PackageReq, PackageSpec},
-    progress::{Progress, ProgressBar},
     remote_package_db::{RemotePackageDB, SearchError},
     remote_package_source::RemotePackageSource,
 };
@@ -24,7 +23,6 @@ pub(crate) struct FetchVendored<'a> {
     vendor_dir: &'a Path,
     package: &'a PackageReq,
     package_db: &'a RemotePackageDB,
-    progress: &'a Progress<ProgressBar>,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -61,20 +59,17 @@ where
     State: fetch_vendored_builder::State + fetch_vendored_builder::IsComplete,
 {
     pub(crate) async fn fetch_vendored_rock(
-        self,
-    ) -> Result<RemoteRockDownload, FetchVendoredError> {
+        self) -> Result<RemoteRockDownload, FetchVendoredError> {
         do_fetch_vendored_rock(self._build()).await
     }
 }
 
 async fn do_fetch_vendored_rock(
-    args: FetchVendored<'_>,
-) -> Result<RemoteRockDownload, FetchVendoredError> {
+    args: FetchVendored<'_>) -> Result<RemoteRockDownload, FetchVendoredError> {
     let vendor_dir = args.vendor_dir;
     let package = args.package;
     let package_db = args.package_db;
-    let progress = args.progress;
-    let package_spec = package_db.find(package, None, progress)?.package;
+    let package_spec = package_db.find(package, None)?.package;
     let rockspec = load_vendored_rockspec(vendor_dir, &package_spec).await?;
     match load_vendored_package(vendor_dir, &package_spec)? {
         VendoredPackage::Source(path) => Ok(RemoteRockDownload::RockspecOnly {
@@ -106,15 +101,13 @@ async fn do_fetch_vendored_rock(
 /// Load the vendored RockSpec for a package, expecting one to be present.
 async fn load_vendored_rockspec(
     vendor_dir: &Path,
-    package: &PackageSpec,
-) -> Result<RemoteLuaRockspec, FetchVendoredError> {
+    package: &PackageSpec) -> Result<RemoteLuaRockspec, FetchVendoredError> {
     let rockspec_path =
         vendor_dir.join(format!("{}-{}.rockspec", package.name(), package.version()));
     if !rockspec_path.is_file() {
         return Err(FetchVendoredError::RockspecNotFound(
             package.clone(),
-            vendor_dir.to_slash_lossy().to_string(),
-        ));
+            vendor_dir.to_slash_lossy().to_string()));
     }
     let rockspec_content = tokio::fs::read_to_string(&rockspec_path)
         .await
@@ -135,8 +128,7 @@ async fn load_vendored_rockspec(
 #[allow(clippy::result_large_err)] // This is ok because it's just a Deserialize helper
 fn load_vendored_package(
     vendor_dir: &Path,
-    package: &PackageSpec,
-) -> Result<VendoredPackage, FetchVendoredError> {
+    package: &PackageSpec) -> Result<VendoredPackage, FetchVendoredError> {
     let source_dir = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
     if source_dir.is_dir() {
         Ok(VendoredPackage::Source(source_dir.clone()))
@@ -147,8 +139,7 @@ fn load_vendored_package(
         } else {
             Err(FetchVendoredError::PackageNotFound(
                 package.clone(),
-                vendor_dir.to_slash_lossy().to_string(),
-            ))
+                vendor_dir.to_slash_lossy().to_string()))
         }
     }
 }
@@ -175,8 +166,7 @@ mod tests {
         source = {
             url = 'https://github.com/lumen-oss/foo/archive/1.0.0/foo.zip',
         }
-        "#,
-            )
+        "#)
             .unwrap();
         let package_spec = PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap());
         let rockspec = load_vendored_rockspec(vendor_dir.path(), &package_spec).await;

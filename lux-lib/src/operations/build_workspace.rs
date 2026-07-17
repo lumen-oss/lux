@@ -6,7 +6,6 @@ use crate::{
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
     package::PackageName,
-    progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, Project},
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
@@ -14,7 +13,6 @@ use crate::{
 use bon::Builder;
 use itertools::Itertools;
 use miette::Diagnostic;
-use std::sync::Arc;
 use thiserror::Error;
 
 use super::{InstallError, Sync, SyncError};
@@ -76,8 +74,6 @@ pub struct BuildWorkspace<'a> {
 
     /// Build only the dependencies
     only_deps: bool,
-
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>
@@ -90,24 +86,15 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
         let workspace = args.workspace;
         let workspace_tree = workspace.tree(config)?;
         let build_tree = workspace.build_tree(config)?;
-        let progress_arc = args
-            .progress
-            .clone()
-            .unwrap_or_else(|| MultiProgress::new_arc(args.config));
-        let lua = LuaInstallation::new_from_config(
-            config,
-            &progress_arc.map(|progress| progress.new_bar()),
-        )
+        let lua = LuaInstallation::new_from_config(config)
         .await?;
         if !args.no_lock {
             Sync::new(workspace, config)
-                .progress(progress_arc.clone())
                 .sync_dependencies()
                 .await
                 .map_err(BuildWorkspaceError::SyncDependencies)?;
 
             Sync::new(workspace, config)
-                .progress(progress_arc.clone())
                 .sync_build_dependencies()
                 .await
                 .map_err(BuildWorkspaceError::SyncBuildDependencies)?;
@@ -122,8 +109,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                     &project_toml,
                     &workspace_tree,
                     &mut dependencies_to_install,
-                    &mut build_dependencies_to_install,
-                );
+                    &mut build_dependencies_to_install);
             } else {
                 for project in workspace.members() {
                     let project_toml = project.toml().into_local()?;
@@ -131,8 +117,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                         &project_toml,
                         &workspace_tree,
                         &mut dependencies_to_install,
-                        &mut build_dependencies_to_install,
-                    );
+                        &mut build_dependencies_to_install);
                 }
             }
 
@@ -144,13 +129,11 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                     build_dependencies_to_install
                         .into_iter()
                         .unique()
-                        .collect_vec(),
-                )
+                        .collect_vec())
                 .tree(&tree)
                 .lua(&lua)
                 .luarocks(&luarocks)
                 .config(config)
-                .progress(progress_arc.clone())
                 .build()
                 .await
                 .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
@@ -161,11 +144,11 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
             if let Some(package) = &args.package {
                 let project = workspace.select_member(package)?;
                 let pkg =
-                    build_project(project, workspace, &lua, config, progress_arc.clone()).await?;
+                    build_project(project, workspace, &lua, config).await?;
                 packages.push(pkg);
             } else {
                 for project in workspace.members() {
-                    let pkg = build_project(project, workspace, &lua, config, progress_arc.clone())
+                    let pkg = build_project(project, workspace, &lua, config)
                         .await?;
                     packages.push(pkg);
                 }
@@ -179,9 +162,7 @@ async fn build_project(
     project: &Project,
     workspace: &Workspace,
     lua: &LuaInstallation,
-    config: &Config,
-    progress: Arc<Progress<MultiProgress>>,
-) -> Result<LocalPackage, BuildWorkspaceError> {
+    config: &Config) -> Result<LocalPackage, BuildWorkspaceError> {
     let workspace_tree = workspace.tree(config)?;
     let project_toml = project.toml().into_local()?;
 
@@ -191,7 +172,7 @@ async fn build_project(
         .tree(&workspace_tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
-        .progress(&progress.map(|p| p.new_bar()))
+
         .behaviour(BuildBehaviour::Force)
         .build()
         .await?;

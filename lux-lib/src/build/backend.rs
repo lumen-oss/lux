@@ -11,7 +11,6 @@ use crate::{
     config::Config,
     lua_installation::LuaInstallation,
     lua_rockspec::DeploySpec,
-    progress::{Progress, ProgressBar},
     tree::{InstallTree, RockLayout},
 };
 
@@ -26,7 +25,6 @@ pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
     pub(crate) config: &'a Config,
     pub(crate) tree: &'a T,
     pub(crate) build_dir: &'a Path,
-    pub(crate) progress: &'a Progress<ProgressBar>,
 }
 
 pub(crate) trait BuildBackend {
@@ -34,8 +32,7 @@ pub(crate) trait BuildBackend {
 
     fn run<T: InstallTree + Sync>(
         self,
-        args: RunBuildArgs<'_, T>,
-    ) -> impl Future<Output = Result<BuildInfo, Self::Err>> + Send;
+        args: RunBuildArgs<'_, T>) -> impl Future<Output = Result<BuildInfo, Self::Err>> + Send;
 }
 
 #[derive(Default)]

@@ -6,10 +6,10 @@ use lux_lib::lua_version::LuaVersion;
 use lux_lib::operations;
 use lux_lib::package::PackageName;
 use lux_lib::package::PackageReq;
-use lux_lib::progress::MultiProgress;
 use lux_lib::rockspec::lua_dependency;
 use lux_lib::tree::RockMatches;
 use lux_lib::workspace::Workspace;
+
 use miette::miette;
 use miette::Context;
 use miette::Result;
@@ -39,7 +39,6 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
     match Workspace::current()? {
         Some(mut workspace) => {
             let project = workspace.single_member_or_select_mut(&data.package)?;
-            let progress = MultiProgress::new_arc(&config);
 
             if data
                 .package_req
@@ -84,21 +83,18 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
             }
             if !packages.is_empty() {
                 operations::Sync::new(&workspace, &config)
-                    .progress(progress.clone())
                     .sync_dependencies()
                     .await
                     .wrap_err("syncing dependencies with the project lockfile failed.")?;
             }
             if !build_packages.is_empty() {
                 operations::Sync::new(&workspace, &config)
-                    .progress(progress.clone())
                     .sync_build_dependencies()
                     .await
                     .wrap_err("syncing build dependencies with the project lockfile failed.")?;
             }
             if !test_packages.is_empty() {
                 operations::Sync::new(&workspace, &config)
-                    .progress(progress.clone())
                     .sync_test_dependencies()
                     .await
                     .wrap_err("syncing test dependencies with the project lockfile failed.")?;
