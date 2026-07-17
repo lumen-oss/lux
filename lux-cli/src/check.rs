@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use clap::Args;
 use emmylua_check::OutputDestination;
 use itertools::Itertools;
-use lux_lib::{config::Config, progress::MultiProgress, workspace::Workspace};
+use lux_lib::{config::Config, workspace::Workspace};
+
 use miette::{miette, Result};
 
 use crate::{
@@ -54,9 +55,8 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
 
     let (workspace_dirs, rc_files) = match target {
         PathTarget::Workspace(workspace) => {
-            let progress = MultiProgress::new_arc(&config);
-            sync_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
-            sync_test_dependencies_if_locked(&workspace, progress, &config).await?;
+            sync_dependencies_if_locked(&workspace, &config).await?;
+            sync_test_dependencies_if_locked(&workspace, &config).await?;
 
             let dirs = workspace
                 .members()

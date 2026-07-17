@@ -57,7 +57,6 @@ impl BuildBackend for BuiltinBuildSpec {
         let config = args.config;
         let tree = args.tree;
         let build_dir = args.build_dir;
-        let progress = args.progress;
 
         // Detect all Lua modules
         let modules = autodetect_modules(build_dir, source_paths(build_dir, &self.modules))?
@@ -65,20 +64,11 @@ impl BuildBackend for BuiltinBuildSpec {
             .chain(self.modules)
             .collect::<HashMap<_, _>>();
 
-        progress.map(|p| p.set_position(modules.len() as u64));
-
         for (destination_path, module_type) in modules.iter() {
             match module_type {
                 ModuleSpec::SourcePath(source) => {
                     if source.extension().map(|ext| ext == "c").unwrap_or(false) {
-                        progress.map(|p| {
-                            p.set_message(format!(
-                                "Compiling {} -> {}...",
-                                &source.to_string_lossy(),
-                                &destination_path
-                            ))
-                        });
-                        let absolute_source_paths = vec![build_dir.join(source)];
+    let absolute_source_paths = vec![build_dir.join(source)];
                         utils::compile_c_files(
                             &absolute_source_paths,
                             destination_path,
@@ -89,14 +79,7 @@ impl BuildBackend for BuiltinBuildSpec {
                         )
                         .await?
                     } else {
-                        progress.map(|p| {
-                            p.set_message(format!(
-                                "Copying {} to {}...",
-                                &source.to_string_lossy(),
-                                &destination_path
-                            ))
-                        });
-                        let absolute_source_path = build_dir.join(source);
+    let absolute_source_path = build_dir.join(source);
                         utils::copy_lua_to_module_path(
                             &absolute_source_path,
                             destination_path,
@@ -105,7 +88,6 @@ impl BuildBackend for BuiltinBuildSpec {
                     }
                 }
                 ModuleSpec::SourcePaths(files) => {
-                    progress.map(|p| p.set_message("Compiling C files..."));
                     let absolute_source_paths =
                         files.iter().map(|file| build_dir.join(file)).collect();
                     utils::compile_c_files(
@@ -119,7 +101,6 @@ impl BuildBackend for BuiltinBuildSpec {
                     .await?
                 }
                 ModuleSpec::ModulePaths(data) => {
-                    progress.map(|p| p.set_message("Compiling C modules..."));
                     utils::compile_c_modules(
                         data,
                         build_dir,

@@ -35,7 +35,6 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
     package::{PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, SpecRev},
-    progress::{HasProgress, Progress, ProgressBar},
     project::{
         project_toml::{LocalProjectToml, PartialProjectToml, RemoteProjectToml},
         Project,
@@ -3106,7 +3105,7 @@ impl TypedUserData for ProjectLua {
                 let _guard = lux_lib::lua::lua_runtime().enter();
                 let deps = map_dependency_type(deps.0);
                 let package_db =
-                    RemotePackageDB::from_config(&config.0, &Progress::<ProgressBar>::no_progress())
+                    RemotePackageDB::from_config(&config.0)
                         .await
                         .into_lua_err()?;
                 this.0.add(deps.as_ref(), &package_db).await.into_lua_err()

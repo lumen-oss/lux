@@ -20,7 +20,6 @@ use crate::{
     lua_rockspec::BuildBackendSpec,
     operations::{self, FetchSrcError},
     package::PackageSpec,
-    progress::{Progress, ProgressBar},
     remote_package_source::RemotePackageSource,
     tree::RockLayout,
 };
@@ -30,7 +29,6 @@ use cmake::CMakeError;
 use command::CommandError;
 use external_dependency::{ExternalDependencyError, ExternalDependencyInfo};
 
-use indicatif::style::TemplateError;
 use itertools::Itertools;
 use luarocks::LuarocksBuildError;
 use make::MakeError;
@@ -68,7 +66,6 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     tree: &'a T,
     entry_type: tree::EntryType,
     config: &'a Config,
-    progress: &'a Progress<ProgressBar>,
     lua: &'a LuaInstallation,
 
     #[builder(default)]
@@ -145,8 +142,7 @@ pub enum BuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
-    #[error("failed to create spinner: {0}")]
-    SpinnerFailure(#[from] TemplateError),
+
     #[error(transparent)]
     #[diagnostic(transparent)]
     ExternalDependencyError(#[from] ExternalDependencyError),
@@ -202,10 +198,7 @@ pub enum BuildBehaviour {
 
 async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
-    args: RunBuildArgs<'_, T>,
-) -> Result<BuildInfo, BuildError> {
-    let progress = args.progress;
-    progress.map(|p| p.set_message("🛠️ Building..."));
+    args: RunBuildArgs<'_, T>) -> Result<BuildInfo, BuildError> {
 
     Ok(
         match rockspec.build().current_platform().build_backend.to_owned() {
@@ -220,8 +213,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
             Some(BuildBackendSpec::LuaRock(_)) => luarocks::build(rockspec, args).await?,
             Some(BuildBackendSpec::Source) => source::build(args).await?,
             None => BuildInfo::default(),
-        },
-    )
+        })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -232,45 +224,29 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     lua: &LuaInstallation,
     build_dir: &Path,
     entry_type: &EntryType,
-    progress: &Progress<ProgressBar>,
-    config: &Config,
-) -> Result<(), BuildError> {
-    progress.map(|p| {
-        p.set_message(format!(
-            "💻 Installing {} {}",
-            rockspec.package(),
-            rockspec.version()
-        ))
-    });
-
+    config: &Config) -> Result<(), BuildError> {
     let install_spec = &rockspec.build().current_platform().install;
     let lua_len = install_spec.lua.len();
     let lib_len = install_spec.lib.len();
     let bin_len = install_spec.bin.len();
     let conf_len = install_spec.conf.len();
-    let total_len = lua_len + lib_len + bin_len + conf_len;
-    progress.map(|p| p.set_position(total_len as u64));
+    let _total_len = lua_len + lib_len + bin_len + conf_len;
 
     if lua_len > 0 {
-        progress.map(|p| p.set_message("📋 Copying Lua modules..."));
     }
     for (target, source) in &install_spec.lua {
         let absolute_source = build_dir.join(source);
         utils::copy_lua_to_module_path(&absolute_source, target, &output_paths.src)?;
-        progress.map(|p| p.set_position(p.position() + 1));
     }
     if lib_len > 0 {
-        progress.map(|p| p.set_message("📋 Compiling C libraries..."));
     }
     for (target, source) in &install_spec.lib {
         let absolute_source = build_dir.join(source);
         let resolved_target = output_paths.lib.join(target);
         tokio::fs::copy(absolute_source, resolved_target).await?;
-        progress.map(|p| p.set_position(p.position() + 1));
     }
     if entry_type.is_entrypoint() {
         if bin_len > 0 {
-            progress.map(|p| p.set_message("💻 Installing binaries..."));
         }
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
@@ -280,18 +256,15 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                 tree,
                 lua,
                 deploy_spec,
-                config,
-            )
+                config)
             .await
             .map_err(|err| BuildError::InstallBinary {
                 file_name: target.clone(),
                 source: err,
             })?;
-            progress.map(|p| p.set_position(p.position() + 1));
         }
     }
     if conf_len > 0 {
-        progress.map(|p| p.set_message("📋 Copying configuration files..."));
         for (target, source) in &install_spec.conf {
             let absolute_source = build_dir.join(source);
             let target = output_paths.conf.join(target);
@@ -299,7 +272,6 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                 tokio::fs::create_dir_all(parent_dir).await?;
             }
             tokio::fs::copy(absolute_source, target).await?;
-            progress.map(|p| p.set_position(p.position() + 1));
         }
     }
     Ok(())
@@ -311,15 +283,6 @@ where
     T: InstallTree + Sync,
 {
     let rockspec = build.rockspec;
-
-    build.progress.map(|p| {
-        p.set_message(format!(
-            "🛠️ Building {}@{}...",
-            rockspec.package(),
-            rockspec.version()
-        ))
-    });
-
     let lua = build.lua;
 
     rockspec.validate_lua_version(&lua.version)?;
@@ -332,19 +295,19 @@ where
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
             let hash = bytes.hash()?;
             let cursor = Cursor::new(&bytes);
-            operations::unpack_src_rock(cursor, temp_dir.path().to_path_buf(), build.progress)
+            operations::unpack_src_rock(cursor, temp_dir.path().to_path_buf())
                 .await
                 .map_err(BuildError::UnpackSrcRock)?;
             RemotePackageSourceMetadata { hash, source_url }
         }
         Some(RemotePackageSourceSpec::RockSpec(source_url)) => {
-            operations::FetchSrc::new(temp_dir.path(), rockspec, build.config, build.progress)
+            operations::FetchSrc::new(temp_dir.path(), rockspec, build.config)
                 .maybe_source_url(source_url)
                 .fetch_internal()
                 .await?
         }
         None => {
-            operations::FetchSrc::new(temp_dir.path(), rockspec, build.config, build.progress)
+            operations::FetchSrc::new(temp_dir.path(), rockspec, build.config)
                 .fetch_internal()
                 .await?
         }
@@ -369,8 +332,7 @@ where
             })
             .unwrap_or(RemotePackageSource::Local),
         Some(source_metadata.source_url.clone()),
-        hashes,
-    );
+        hashes);
     package.spec.pinned = build.pin;
     package.spec.opt = build.opt;
 
@@ -419,8 +381,7 @@ where
                         if dir_entries.len() == 1
                             && !is_source_or_etc_dir(
                                 unsafe { dir_entries.first().unwrap_unchecked() },
-                                rockspec,
-                            )
+                                rockspec)
                         {
                             unsafe {
                                 temp_dir
@@ -436,9 +397,7 @@ where
 
             Patch::new(
                 &build_dir,
-                &rockspec.build().current_platform().patches,
-                build.progress,
-            )
+                &rockspec.build().current_platform().patches)
             .apply()?;
 
             let external_dependencies = rockspec
@@ -462,9 +421,7 @@ where
                     .config(build.config)
                     .tree(tree)
                     .build_dir(&build_dir)
-                    .progress(build.progress)
-                    .build(),
-            )
+                    .build())
             .await?;
 
             package.spec.binaries.extend(output.binaries);
@@ -476,9 +433,7 @@ where
                 lua,
                 &build_dir,
                 &build.entry_type,
-                build.progress,
-                build.config,
-            )
+                build.config)
             .await?;
 
             for directory in rockspec
@@ -493,8 +448,7 @@ where
             {
                 recursive_copy_dir(
                     &build_dir.join(directory),
-                    &output_paths.etc.join(directory),
-                )
+                    &output_paths.etc.join(directory))
                 .await?;
             }
 
@@ -523,8 +477,7 @@ where
 
 async fn recursive_copy_doc_dir(
     output_paths: &RockLayout,
-    build_dir: &Path,
-) -> Result<(), BuildError> {
+    build_dir: &Path) -> Result<(), BuildError> {
     let mut doc_dir = build_dir.join("doc");
     if !doc_dir.exists() {
         doc_dir = build_dir.join("docs");
@@ -548,7 +501,6 @@ mod tests {
         config::ConfigBuilder,
         lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_version::LuaVersion,
-        progress::MultiProgress,
         project::Project,
         tree::RockLayout,
     };
@@ -581,14 +533,11 @@ mod tests {
             doc: dest_dir.join("doc"),
         };
         let lua_version = config.lua_version().unwrap_or(&LuaVersion::Lua51);
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        let lua = LuaInstallation::new(lua_version, &config, &bar)
+        let lua = LuaInstallation::new(lua_version, &config)
             .await
             .unwrap();
         let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
-        let progress = MultiProgress::new(&config);
         run_build(
             &rockspec,
             RunBuildArgs::new()
@@ -600,9 +549,8 @@ mod tests {
                 .config(&config)
                 .tree(&tree)
                 .build_dir(&build_dir)
-                .progress(&progress.map(|p| p.new_bar()))
-                .build(),
-        )
+
+                .build())
         .await
         .unwrap();
         let foo_dir = dest_dir.child("src").child("foo");

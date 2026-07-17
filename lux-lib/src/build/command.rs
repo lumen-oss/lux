@@ -74,14 +74,11 @@ impl BuildBackend for CommandBuildSpec {
         let external_dependencies = args.external_dependencies;
         let config = args.config;
         let build_dir = args.build_dir;
-        let progress = args.progress;
 
         let build_tree = args.tree.build_tree(config)?;
         let build_paths = Paths::new(&build_tree)?;
 
-        progress.map(|bar| bar.set_message("Running build_command..."));
         if let Some(build_command) = &self.build_command {
-            progress.map(|bar| bar.set_message("Running build_command..."));
             run_command(
                 build_command,
                 output_paths,
@@ -95,7 +92,6 @@ impl BuildBackend for CommandBuildSpec {
         }
         if !no_install {
             if let Some(install_command) = &self.install_command {
-                progress.map(|bar| bar.set_message("Running install_command..."));
                 run_command(
                     install_command,
                     output_paths,

@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::io;
 
 use super::{Install, InstallError, PackageInstallSpec, RemoveError, Uninstall};
 use crate::{
@@ -11,7 +11,6 @@ use crate::{
     luarocks::luarocks_installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError},
     package::{PackageName, PackageReq},
-    progress::{MultiProgress, Progress},
     project::{project_toml::LocalProjectTomlValidationError, ProjectError},
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
@@ -34,7 +33,6 @@ pub struct Sync<'a> {
     #[builder(field)]
     extra_packages: Vec<PackageReq>,
 
-    progress: Option<Arc<Progress<MultiProgress>>>,
     /// Whether to validate the integrity of installed packages.
     validate_integrity: Option<bool>,
     /// When `true`, skip filesystem existence checks and rely on the install tree's lockfile
@@ -166,8 +164,7 @@ pub enum SyncError {
 
 async fn do_sync(
     args: Sync<'_>,
-    lock_type: &LocalPackageLockType,
-) -> Result<SyncReport, SyncError> {
+    lock_type: &LocalPackageLockType) -> Result<SyncReport, SyncError> {
     let tree = match lock_type {
         LocalPackageLockType::Regular => args.workspace.tree(args.config)?,
         LocalPackageLockType::Test => args.workspace.test_tree(args.config)?,
@@ -180,8 +177,6 @@ async fn do_sync(
     let mut workspace_lockfile = args.workspace.lockfile()?.write_guard();
     let dest_lockfile = tree.lockfile()?;
 
-    let progress = args.progress.unwrap_or(MultiProgress::new_arc(args.config));
-
     let mut packages = Vec::new();
     for project in args.workspace.members() {
         match lock_type {
@@ -191,24 +186,21 @@ async fn do_sync(
                     .into_local()?
                     .dependencies()
                     .current_platform()
-                    .clone(),
-            ),
+                    .clone()),
             LocalPackageLockType::Build => packages.extend(
                 project
                     .toml()
                     .into_local()?
                     .build_dependencies()
                     .current_platform()
-                    .clone(),
-            ),
+                    .clone()),
             LocalPackageLockType::Test => packages.extend(
                 project
                     .toml()
                     .into_local()?
                     .test_dependencies()
                     .current_platform()
-                    .clone(),
-            ),
+                    .clone()),
         }
     }
     let packages = packages
@@ -272,7 +264,6 @@ async fn do_sync(
         .package_db(package_db)
         .packages(packages_to_install)
         .tree(tree.clone())
-        .progress(progress.clone())
         .install()
         .await?;
 
@@ -295,7 +286,6 @@ async fn do_sync(
     Uninstall::new()
         .config(args.config)
         .packages(packages_to_remove)
-        .progress(progress.clone())
         .tree(tree.clone())
         .remove()
         .await?;
@@ -324,7 +314,6 @@ async fn do_sync(
         let added = Install::new(args.config)
             .packages(missing_packages)
             .tree(tree.clone())
-            .progress(progress.clone())
             .install()
             .await?;
 
@@ -365,8 +354,7 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"],
-            )
+                &["**"])
             .unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
@@ -394,8 +382,7 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"],
-            )
+                &["**"])
             .unwrap();
         let temp_dir = temp_dir.into_persistent();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
@@ -432,8 +419,7 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"],
-            )
+                &["**"])
             .unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
@@ -467,8 +453,7 @@ mod tests {
             .copy_from(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("resources/test/sample-projects/dependencies/"),
-                &["**"],
-            )
+                &["**"])
             .unwrap();
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();

@@ -537,16 +537,10 @@ async fn link_c_artifacts(
     };
     if config.verbose() {
         if !&output.stdout.is_empty() {
-            crate::logging::info(
-                String::from_utf8_lossy(&output.stdout).to_string(),
-                Some("build".to_string()),
-            );
+            tracing::info!("{}", String::from_utf8_lossy(&output.stdout));
         }
         if !&output.stderr.is_empty() {
-            crate::logging::warn(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-                Some("build".to_string()),
-            );
+            tracing::warn!("{}", String::from_utf8_lossy(&output.stderr));
         }
     }
 
@@ -642,16 +636,10 @@ pub(crate) async fn install_binary(
 pub(crate) fn log_command_output(output: &Output, config: &Config) {
     if config.verbose() {
         if !output.stderr.is_empty() {
-            crate::logging::info(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-                Some("build".to_string()),
-            );
+            tracing::info!("{}", String::from_utf8_lossy(&output.stderr));
         }
         if !output.stdout.is_empty() {
-            crate::logging::info(
-                String::from_utf8_lossy(&output.stdout).to_string(),
-                Some("build".to_string()),
-            );
+            tracing::info!("{}", String::from_utf8_lossy(&output.stdout));
         }
     }
 }
@@ -838,7 +826,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion, progress::MultiProgress, tree::Tree,
+        lua_version::LuaVersion, tree::Tree,
     };
 
     use super::*;
@@ -852,9 +840,7 @@ mod tests {
             .build()
             .unwrap();
         let lua_version = config.lua_version().unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        let lua = LuaInstallation::new(lua_version, &config, &bar)
+        let lua = LuaInstallation::new(lua_version, &config)
             .await
             .unwrap();
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -879,9 +865,7 @@ mod tests {
             .build()
             .unwrap();
         let lua_version = config.lua_version().unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        let lua = LuaInstallation::new(lua_version, &config, &bar)
+        let lua = LuaInstallation::new(lua_version, &config)
             .await
             .unwrap();
         let tree = config.user_tree(lua_version.clone()).unwrap();

@@ -2,9 +2,9 @@ use inquire::Confirm;
 use lux_lib::{
     config::Config,
     lua_version::LuaVersion,
-    progress::{MultiProgress, ProgressBar},
     tree::InstallTree,
 };
+
 use miette::{IntoDiagnostic, Result};
 
 /// Purge the user tree
@@ -19,15 +19,8 @@ pub async fn purge(config: Config) -> Result<()> {
             .prompt()
             .into_diagnostic()?
     {
-        let root_dir = tree.root();
+        let _root_dir = tree.root();
 
-        let progress = MultiProgress::new(&config);
-        let _spinner = progress.map(|progress| {
-            progress.add(ProgressBar::from(format!(
-                "🗑️ Purging {}",
-                root_dir.display()
-            )))
-        });
         tokio::fs::remove_dir_all(tree.root())
             .await
             .into_diagnostic()?;

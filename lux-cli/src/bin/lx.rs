@@ -6,7 +6,7 @@ use lux_cli::{
     debug::{self, Debug},
     dist::{self, Dist},
     doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
-    install_rockspec, lint, list, outdated, pack, path, pin, project, purge, remove, run, run_lua,
+    install_rockspec, lint, list, outdated, pack, path, pin, progress, project, purge, remove, run, run_lua,
     search, shell, sync, test, uninstall, unpack, update,
     upload::{self},
     vendor, which, Cli, Commands,
@@ -17,6 +17,8 @@ use lux_lib::{
     lua_version::LuaVersion,
 };
 use miette::{MietteHandlerOpts, Result};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use lux_cli::utils::error::clap_to_miette;
 
@@ -96,6 +98,22 @@ async fn main() -> Result<()> {
 
     if config.verbose() {
         std::env::set_var("CC_ENABLE_DEBUG_OUTPUT", "1");
+    }
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_writer(std::io::stderr);
+
+    if config.no_progress() {
+        tracing_subscriber::registry()
+            .with(fmt_layer)
+            .init();
+    } else {
+        let progress_layer = progress::ProgressLayer::new();
+        tracing_subscriber::registry()
+            .with(fmt_layer)
+            .with(progress_layer)
+            .init();
     }
 
     match cli.command {

@@ -54,13 +54,11 @@ impl BuildBackend for TreesitterParserBuildSpec {
     {
         let output_paths = args.output_paths;
         let build_dir = args.build_dir;
-        let progress = args.progress;
         let build_dir = self
             .location
             .map(|dir| build_dir.join(dir))
             .unwrap_or(build_dir.to_path_buf());
         if self.generate {
-            progress.map(|b| b.set_message("📖 ✍Generating tree-sitter grammar..."));
             let abi_version = match std::env::var("TREE_SITTER_LANGUAGE_VERSION") {
                 Ok(v) => v.parse()?,
                 Err(_) => DEFAULT_GENERATE_ABI_VERSION,
@@ -78,7 +76,6 @@ impl BuildBackend for TreesitterParserBuildSpec {
                 tree_sitter_generate::OptLevel::default(),
             )?;
         }
-        progress.map(|b| b.set_message("🛠️ Building (🌳 tree-sitter parser)..."));
         if self.parser {
             build_parser(&build_dir, &output_paths.etc.join("parser"), &self.lang).await?;
         }

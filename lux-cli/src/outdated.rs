@@ -4,8 +4,9 @@ use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
     config::Config, lockfile::LocalPackage, lua_version::LuaVersion, package::PackageVersion,
-    progress::MultiProgress, remote_package_db::RemotePackageDB, workspace::Workspace,
+    remote_package_db::RemotePackageDB, workspace::Workspace,
 };
+
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
@@ -20,13 +21,11 @@ pub struct Outdated {
 /// List rocks that are outdated
 /// If in a project, this lists rocks in the project tree
 pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
-    let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
     let workspace = Workspace::current()?;
     let tree = match &workspace {
         Some(project) => {
             // Make sure dependencies are synced if in a project
-            sync_dependencies_if_locked(project, MultiProgress::new_arc(&config), &config).await?;
+            sync_dependencies_if_locked(project, &config).await?;
             project.tree(&config)?
         }
         None => {
@@ -35,9 +34,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         }
     };
 
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
-
-    bar.map(|b| b.set_message("🔎 Checking for outdated rocks...".to_string()));
+    let package_db = RemotePackageDB::from_config(&config).await?;
 
     // NOTE: This will display all installed versions and each possible upgrade.
     // However, this should also take into account dependency constraints made by other rocks.
@@ -58,8 +55,6 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         .iter()
         .sorted_by_key(|(rock, _)| rock.name().to_owned())
         .into_group_map_by(|(rock, _)| rock.name().to_owned());
-
-    bar.map(|b| b.finish_and_clear());
 
     match outdated_data.output_format {
         OutputFormat::Json => {

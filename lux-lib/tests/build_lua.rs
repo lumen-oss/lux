@@ -1,6 +1,6 @@
 use assert_fs::{assert::PathAssert, prelude::PathChild};
 use lux_lib::lua_version::LuaVersion;
-use lux_lib::{config::ConfigBuilder, operations::BuildLua, progress::MultiProgress};
+use lux_lib::{config::ConfigBuilder, operations::BuildLua};
 use predicates::prelude::predicate;
 
 #[tokio::test]
@@ -21,11 +21,8 @@ async fn test_build_lua() {
             .lua_version(Some(lua_version.clone()))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
         BuildLua::new()
             .lua_version(&lua_version)
-            .progress(&bar)
             .install_dir(&target_path)
             .config(&config)
             .build()
@@ -74,11 +71,8 @@ async fn test_build_luajit() {
             .lua_version(Some(lua_version.clone()))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
         BuildLua::new()
             .lua_version(&lua_version)
-            .progress(&bar)
             .install_dir(&target_path)
             .config(&config)
             .build()

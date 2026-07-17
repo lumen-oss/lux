@@ -25,7 +25,6 @@ use crate::{
         DownloadedRockspec, FetchSrcError, PackageInstallSpec, UnpackError,
     },
     package::PackageReq,
-    progress::{MultiProgress, Progress, ProgressBar},
     project::project_toml::LocalProjectTomlValidationError,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
@@ -61,8 +60,6 @@ pub struct Vendor<'a> {
     no_delete: Option<bool>,
 
     config: &'a Config,
-
-    progress: Option<Arc<Progress<MultiProgress>>>,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -112,15 +109,11 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     let no_lock = args.no_lock.unwrap_or(false);
     let target = args.target;
     let config = args.config;
-    let progress = match args.progress {
-        Some(p) => p,
-        None => MultiProgress::new_arc(args.config),
-    };
     let mut all_packages = Vec::new();
 
     for lock_type in LocalPackageLockType::iter() {
         let (package_db, install_specs) =
-            mk_resolve_args(lock_type, no_lock, &target, config, progress.clone()).await?;
+            mk_resolve_args(lock_type, no_lock, &target, config).await?;
 
         let (dep_tx, mut dep_rx) = tokio::sync::mpsc::unbounded_channel();
         Resolve::<'_, ReadOnly>::new()
@@ -129,7 +122,6 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
             .packages(install_specs)
             .package_db(Arc::new(package_db))
             .config(config)
-            .progress(progress.clone())
             .get_all_dependencies()
             .await?;
 
@@ -146,7 +138,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
             })?;
     }
 
-    vendor_sources(Arc::new(vendor_dir), progress, config.clone(), all_packages).await
+    vendor_sources(Arc::new(vendor_dir), config.clone(), all_packages).await
 }
 
 async fn mk_resolve_args(
@@ -154,7 +146,6 @@ async fn mk_resolve_args(
     no_lock: bool,
     target: &VendorTarget,
     config: &Config,
-    progress: Arc<Progress<MultiProgress>>,
 ) -> Result<(RemotePackageDB, Vec<PackageInstallSpec>), VendorError> {
     match &target {
         VendorTarget::Workspace(workspace) => {
@@ -162,8 +153,7 @@ async fn mk_resolve_args(
             let package_db = if !no_lock {
                 lockfile.local_pkg_lock(&lock_type).clone().into()
             } else {
-                let bar = progress.map(|p| p.new_bar());
-                RemotePackageDB::from_config(config, &bar).await?
+                RemotePackageDB::from_config(config).await?
             };
             let mut install_specs = Vec::new();
             for project in workspace.members() {
@@ -185,8 +175,7 @@ async fn mk_resolve_args(
             Ok((package_db, install_specs))
         }
         VendorTarget::Rockspec(remote_lua_rockspec) => {
-            let bar = progress.map(|p| p.new_bar());
-            let package_db = RemotePackageDB::from_config(config, &bar).await?;
+            let package_db = RemotePackageDB::from_config(config).await?;
             let mut install_specs = Vec::new();
             push_dependencies(&lock_type, remote_lua_rockspec, &mut install_specs)?;
             Ok((package_db, install_specs))
@@ -232,13 +221,11 @@ fn push_dependencies<R: Rockspec>(
 
 async fn vendor_sources(
     vendor_dir: Arc<PathBuf>,
-    progress: Arc<Progress<MultiProgress>>,
     config: Config,
     packages: Vec<PackageInstallData>,
 ) -> Result<(), VendorError> {
     futures::stream::iter(packages.into_iter().map(|dep| {
         let vendor_dir = Arc::clone(&vendor_dir);
-        let progress = Arc::clone(&progress);
         let config = config.clone();
         tokio::spawn(async move {
             match dep.downloaded_rock {
@@ -248,7 +235,6 @@ async fn vendor_sources(
                         rockspec_download,
                         None,
                         &config,
-                        &progress,
                     )
                     .await?
                 }
@@ -256,7 +242,7 @@ async fn vendor_sources(
                     rockspec_download,
                     packed_rock,
                 } => {
-                    vendor_binary_rock(&vendor_dir, rockspec_download, packed_rock, &progress)
+                    vendor_binary_rock(&vendor_dir, rockspec_download, packed_rock)
                         .await?
                 }
                 crate::operations::RemoteRockDownload::SrcRock {
@@ -273,7 +259,6 @@ async fn vendor_sources(
                         rockspec_download,
                         Some(src_rock_source),
                         &config,
-                        &progress,
                     )
                     .await?
                 }
@@ -294,18 +279,12 @@ async fn vendor_rockspec_sources(
     rockspec_download: DownloadedRockspec,
     src_rock_source: Option<SrcRockSource>,
     config: &Config,
-    progress: &Progress<MultiProgress>,
 ) -> Result<(), VendorError> {
     let rockspec = rockspec_download.rockspec;
     let package = rockspec.package();
     let version = rockspec.version();
     let package_version_str = format!("{}@{}", package, version);
-    let bar = progress.map(|p| {
-        p.add(ProgressBar::from(format!(
-            "💼 Vendoring source of {}",
-            &package_version_str,
-        )))
-    });
+
     let source_spec = match src_rock_source {
         Some(src_rock_source) => RemotePackageSourceSpec::SrcRock(src_rock_source),
         None => RemotePackageSourceSpec::RockSpec(rockspec_download.source_url),
@@ -337,17 +316,15 @@ async fn vendor_rockspec_sources(
             source_url: _,
         }) => {
             let cursor = Cursor::new(&bytes);
-            operations::unpack_src_rock(cursor, package_vendor_dir, &bar).await?;
+            operations::unpack_src_rock(cursor, package_vendor_dir).await?;
         }
         RemotePackageSourceSpec::RockSpec(source_url) => {
-            operations::FetchSrc::new(&package_vendor_dir, &rockspec, config, &bar)
+            operations::FetchSrc::new(&package_vendor_dir, &rockspec, config)
                 .maybe_source_url(source_url)
                 .fetch_internal()
                 .await?;
         }
     }
-
-    bar.map(|bar| bar.finish_and_clear());
 
     Ok(())
 }
@@ -356,20 +333,12 @@ async fn vendor_binary_rock(
     vendor_dir: &Path,
     rockspec_download: DownloadedRockspec,
     packed_rock: Bytes,
-    progress: &Progress<MultiProgress>,
 ) -> Result<(), VendorError> {
     let rockspec = rockspec_download.rockspec;
     let package = rockspec.package();
     let version = rockspec.version();
 
     let file_name = format!("{}@{}.rock", package, version);
-
-    let bar = progress.map(|p| {
-        p.add(ProgressBar::from(format!(
-            "💼 Vendoring pre-built binary .rock: {}",
-            &file_name,
-        )))
-    });
 
     tokio::fs::create_dir_all(&vendor_dir)
         .await
@@ -384,8 +353,6 @@ async fn vendor_binary_rock(
     file.write_all(&packed_rock)
         .await
         .map_err(|err| VendorError::CreateSrcRock(dest_file.to_slash_lossy().to_string(), err))?;
-
-    bar.map(|bar| bar.finish_and_clear());
 
     Ok(())
 }

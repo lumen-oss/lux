@@ -2,11 +2,11 @@ use itertools::{Either, Itertools};
 use lux_lib::{
     config::Config,
     package::PackageName,
-    progress::MultiProgress,
     remote_package_db::RemotePackageDB,
     rockspec::lua_dependency::{self},
     workspace::Workspace,
 };
+
 use miette::Result;
 
 use crate::workspace::{
@@ -48,11 +48,7 @@ pub struct Add {
 pub async fn add(data: Add, config: Config) -> Result<()> {
     let mut workspace = Workspace::current_or_err()?;
     let project = workspace.single_member_or_select_mut(&data.package)?;
-    let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
-    let db = RemotePackageDB::from_config(&config, &bar).await?;
-
-    let progress = MultiProgress::new_arc(&config);
+    let db = RemotePackageDB::from_config(&config).await?;
 
     let (dependencies, git_dependencies): (Vec<_>, Vec<_>) =
         data.package_req.iter().partition_map(|req| match req {
@@ -115,13 +111,13 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
     }
 
     if !data.package_req.is_empty() {
-        sync_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+        sync_dependencies_if_locked(&workspace, &config).await?;
     }
     if !build_packages.is_empty() {
-        sync_build_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+        sync_build_dependencies_if_locked(&workspace, &config).await?;
     }
     if !test_packages.is_empty() {
-        sync_test_dependencies_if_locked(&workspace, progress.clone(), &config).await?;
+        sync_test_dependencies_if_locked(&workspace, &config).await?;
     }
 
     Ok(())

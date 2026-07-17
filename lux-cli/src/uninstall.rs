@@ -8,9 +8,9 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageReq,
-    progress::MultiProgress,
     tree::{self, InstallTree, RockMatches, TreeError},
 };
+
 use miette::{miette, IntoDiagnostic, Result};
 
 #[derive(Args)]
@@ -89,8 +89,6 @@ Cannot uninstall dependencies:
         .cloned()
         .partition(|pkg_id| lockfile.is_dependency(pkg_id));
 
-    let progress = MultiProgress::new_arc(&config);
-
     if dependencies.is_empty() {
         operations::Uninstall::new()
             .config(&config)
@@ -131,7 +129,6 @@ Reinstall?
             operations::Uninstall::new()
                 .config(&config)
                 .packages(entrypoints)
-                .progress(progress.clone())
                 .remove()
                 .await?;
 
@@ -153,13 +150,11 @@ Reinstall?
             operations::Uninstall::new()
                 .config(&config)
                 .packages(dependencies)
-                .progress(progress.clone())
                 .remove()
                 .await?;
             operations::Install::new(&config)
                 .packages(reinstall_specs)
                 .tree(tree)
-                .progress(progress.clone())
                 .install()
                 .await?;
         } else {
@@ -183,7 +178,6 @@ Reinstall?
             operations::Uninstall::new()
                 .config(&config)
                 .packages(dangling_rocks)
-                .progress(progress.clone())
                 .remove()
                 .await?;
         }

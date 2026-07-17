@@ -1,8 +1,9 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, package::PackageName, progress::MultiProgress,
+    config::Config, package::PackageName,
     remote_package_db::RemotePackageDB, upload::ProjectUpload, workspace::Workspace,
 };
+
 use miette::{IntoDiagnostic, Result};
 
 #[cfg(feature = "gpgme")]
@@ -30,9 +31,7 @@ pub struct Upload {
 pub async fn upload(data: Upload, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
 
-    let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = RemotePackageDB::from_config(&config).await?;
     let tfa_code = tfa_code_from_args_or_secret(&data)?;
     if let Some(package) = data.package {
         let project = workspace.select_member(&package)?;
@@ -41,7 +40,6 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
             .config(&config)
             .sign_protocol(data.sign_protocol.clone())
             .maybe_tfa_code(tfa_code)
-            .progress(&bar)
             .package_db(&package_db)
             .upload_to_luarocks()
             .await?;
@@ -52,7 +50,6 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
                 .config(&config)
                 .sign_protocol(data.sign_protocol.clone())
                 .maybe_tfa_code(tfa_code.clone())
-                .progress(&bar)
                 .package_db(&package_db)
                 .upload_to_luarocks()
                 .await?;
@@ -65,9 +62,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
 #[cfg(not(feature = "gpgme"))]
 pub async fn upload(data: Upload, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
-    let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
-    let package_db = RemotePackageDB::from_config(&config, &bar).await?;
+    let package_db = RemotePackageDB::from_config(&config).await?;
     let tfa_code = tfa_code_from_args_or_secret(&data)?;
     if let Some(package) = data.package {
         let project = workspace.select_member(&package)?;
@@ -75,7 +70,6 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
             .project(project)
             .config(&config)
             .maybe_tfa_code(tfa_code)
-            .progress(&bar)
             .package_db(&package_db)
             .upload_to_luarocks()
             .await?;
@@ -85,7 +79,6 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
                 .project(project)
                 .config(&config)
                 .maybe_tfa_code(tfa_code.clone())
-                .progress(&bar)
                 .package_db(&package_db)
                 .upload_to_luarocks()
                 .await?;

@@ -10,9 +10,9 @@ use lux_lib::{
     lua_installation::{LuaBinary, LuaInstallation},
     lua_version::LuaVersion,
     operations,
-    progress::MultiProgress,
     workspace::Workspace,
 };
+
 use miette::{IntoDiagnostic, Result, WrapErr};
 
 use crate::build::{self, Build};
@@ -87,15 +87,12 @@ To exit type 'exit()' or <C-d>.
     let lua_cmd = match run_lua.lua.map(LuaBinary::Custom) {
         Some(lua_cmd) => lua_cmd,
         None => {
-            let progress = MultiProgress::new_arc(&config);
-            let bar = progress.map(|progress| progress.new_bar());
-            let lua_cmd = LuaInstallation::new(&lua_version, &config, &bar)
+            let lua_cmd = LuaInstallation::new(&lua_version, &config)
                 .await?
                 .bin()
                 .as_ref()
                 .map(|lua_bin| LuaBinary::Custom(lua_bin.to_slash_lossy().to_string()))
                 .unwrap_or_else(|| LuaBinary::new(lua_version, &config));
-            bar.map(|bar| bar.finish_and_clear());
             lua_cmd
         }
     };

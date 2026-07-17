@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use lux_lib::lua_version::LuaVersion;
-use lux_lib::progress::MultiProgress;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
@@ -12,7 +11,6 @@ use lux_lib::{
     config::ConfigBuilder,
     lua_installation::{detect_installed_lua_version, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
-    progress::Progress,
     tree,
 };
 use tokio::runtime::Builder;
@@ -27,10 +25,8 @@ async fn builtin_build() {
     let content = String::from_utf8(
         std::fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("resources/test/lua-cjson-2.1.0-1.rockspec"),
-        )
-        .unwrap(),
-    )
+                .join("resources/test/lua-cjson-2.1.0-1.rockspec"))
+        .unwrap())
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
@@ -44,10 +40,7 @@ async fn builtin_build() {
         .build()
         .unwrap();
 
-    let progress = MultiProgress::new(&config);
-    let bar = progress.map(MultiProgress::new_bar);
-
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -59,7 +52,6 @@ async fn builtin_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -73,10 +65,8 @@ async fn make_build() {
     let content = String::from_utf8(
         std::fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("resources/test/make-project/make-project-scm-1.rockspec"),
-        )
-        .unwrap(),
-    )
+                .join("resources/test/make-project/make-project-scm-1.rockspec"))
+        .unwrap())
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
@@ -89,9 +79,7 @@ async fn make_build() {
         .build()
         .unwrap();
 
-    let bar = Progress::no_progress();
-
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -103,7 +91,6 @@ async fn make_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -148,9 +135,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
         .build()
         .unwrap();
 
-    let bar = Progress::no_progress();
-
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -162,7 +147,6 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -192,9 +176,7 @@ async fn treesitter_parser_build() {
         .build()
         .unwrap();
 
-    let bar = Progress::no_progress();
-
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -208,7 +190,6 @@ async fn treesitter_parser_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -247,9 +228,7 @@ async fn treesitter_parser_build_source_queries() {
         .build()
         .unwrap();
 
-    let bar = Progress::no_progress();
-
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -263,7 +242,6 @@ async fn treesitter_parser_build_source_queries() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -298,8 +276,7 @@ async fn treesitter_parser_build_source_queries() {
     assert!(
         top_level_scm_files.is_empty(),
         "query files should not be installed at the top level: {:?}",
-        top_level_scm_files,
-    );
+        top_level_scm_files);
 }
 
 #[tokio::test]
@@ -321,9 +298,8 @@ async fn test_build_local_project_no_source() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
-    let bar = Progress::no_progress();
 
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -333,7 +309,6 @@ async fn test_build_local_project_no_source() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -366,9 +341,8 @@ async fn test_build_local_project_only_src() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
-    let bar = Progress::no_progress();
 
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -378,7 +352,6 @@ async fn test_build_local_project_only_src() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -397,10 +370,8 @@ fn test_build_multiple_treesitter_parsers() {
     let content = String::from_utf8(
         std::fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("resources/test/tree-sitter-rust-0.0.43.rockspec"),
-        )
-        .unwrap(),
-    )
+                .join("resources/test/tree-sitter-rust-0.0.43.rockspec"))
+        .unwrap())
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
@@ -431,8 +402,7 @@ fn test_build_multiple_treesitter_parsers() {
         let rockspec = rockspec.clone();
 
         handles.push(runtime.spawn(async move {
-            let bar = Progress::no_progress();
-            let lua = LuaInstallation::new_from_config(&config, &bar)
+            let lua = LuaInstallation::new_from_config(&config)
                 .await
                 .unwrap();
 
@@ -442,7 +412,6 @@ fn test_build_multiple_treesitter_parsers() {
                 .tree(&tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&config)
-                .progress(&bar)
                 .behaviour(Force)
                 .build()
                 .await
@@ -472,9 +441,8 @@ async fn build_project_with_git_dependency() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
-    let bar = Progress::no_progress();
 
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -484,7 +452,6 @@ async fn build_project_with_git_dependency() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await
@@ -510,9 +477,8 @@ async fn test_multiline_command_build() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
-    let bar = Progress::no_progress();
 
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -522,7 +488,6 @@ async fn test_multiline_command_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(BuildBehaviour::Force)
         .build()
         .await
@@ -539,10 +504,8 @@ async fn builtin_build_install_include() {
 
     let content = String::from_utf8(
         std::fs::read(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luyoga-1.3-3.rockspec"),
-        )
-        .unwrap(),
-    )
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luyoga-1.3-3.rockspec"))
+        .unwrap())
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
@@ -555,9 +518,7 @@ async fn builtin_build_install_include() {
         .build()
         .unwrap();
 
-    let bar = Progress::no_progress();
-
-    let lua = LuaInstallation::new_from_config(&config, &bar)
+    let lua = LuaInstallation::new_from_config(&config)
         .await
         .unwrap();
 
@@ -569,7 +530,6 @@ async fn builtin_build_install_include() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .progress(&bar)
         .behaviour(Force)
         .build()
         .await

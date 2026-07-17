@@ -1,4 +1,3 @@
-use crate::progress::{Progress, ProgressBar};
 use bon::Builder;
 use diffy::{self, ApplyError, ParsePatchError};
 use miette::Diagnostic;
@@ -12,8 +11,6 @@ pub(crate) struct Patch<'a> {
     dir: &'a PathBuf,
     #[builder(start_fn)]
     patches: &'a HashMap<PathBuf, String>,
-    #[builder(start_fn)]
-    progress: &'a Progress<ProgressBar>,
 }
 
 impl<State> PatchBuilder<'_, State>
@@ -61,8 +58,6 @@ pub enum PatchError {
 
 pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
     for (path, patch_str) in args.patches {
-        args.progress
-            .map(|bar| bar.set_message(format!("Applying patch {}", path.display())));
         let patch = diffy::Patch::from_str(patch_str)
             .map_err(|err| PatchError::Parse(path.clone(), err))?;
 
@@ -137,7 +132,7 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{config::ConfigBuilder, progress::MultiProgress};
+    use crate::config::ConfigBuilder;
 
     use super::*;
     use assert_fs::TempDir;
@@ -169,8 +164,7 @@ index 959c7ed..9c6a9a1 100644
  local _ENV,       loaded, packages, release, require_
      = _ENV or _G, {},     {},       true,    require
 "#
-            .to_string(),
-        )]
+            .to_string())]
         .into_iter()
         .collect();
 
@@ -179,9 +173,7 @@ index 959c7ed..9c6a9a1 100644
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        Patch::new(&temp_dir.join(""), &patches, &bar)
+        Patch::new(&temp_dir.join(""), &patches)
             .apply()
             .unwrap();
 
@@ -203,8 +195,7 @@ index 0000000..1cbadfb
 @@ -0,0 +1 @@
 +# title
 "#
-            .to_string(),
-        )]
+            .to_string())]
         .into_iter()
         .collect();
         let config = ConfigBuilder::new()
@@ -212,9 +203,7 @@ index 0000000..1cbadfb
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
-        Patch::new(&temp_dir.join(""), &patches, &bar)
+        Patch::new(&temp_dir.join(""), &patches)
             .apply()
             .unwrap();
         let patch_file = temp_dir.join("foo/README.md");
@@ -238,8 +227,7 @@ index 1cbadfb..0000000
 @@ -1 +0,0 @@
 -# title
 "#
-            .to_string(),
-        )]
+            .to_string())]
         .into_iter()
         .collect();
 
@@ -248,10 +236,8 @@ index 1cbadfb..0000000
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
 
-        Patch::new(&temp_dir.join(""), &patches, &bar)
+        Patch::new(&temp_dir.join(""), &patches)
             .apply()
             .unwrap();
         assert!(!test_file.exists());

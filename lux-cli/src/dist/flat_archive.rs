@@ -13,10 +13,10 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{Install, InstallProject, PackageInstallSpec},
     package::{PackageName, PackageReq},
-    progress::MultiProgress,
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
 };
+
 use miette::{miette, IntoDiagnostic, Result, WrapErr};
 use path_slash::PathExt;
 use tempfile::{tempdir, TempDir};
@@ -194,12 +194,9 @@ async fn install_rockspec(
             "expected a path to a .rockspec or a package requirement."
         )),
     }?;
-    let progress = MultiProgress::new_arc(config);
-    let bar = progress.map(|p| p.new_bar());
     let lua = LuaInstallation::new(
         &lua_version,
         config,
-        &progress.map(|progress| progress.new_bar()),
     )
     .await?;
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
@@ -209,7 +206,6 @@ async fn install_rockspec(
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
-        .progress(&bar)
         .build()
         .await?;
     Ok((package, tree.root()))

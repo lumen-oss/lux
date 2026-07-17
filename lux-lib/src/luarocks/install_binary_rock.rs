@@ -18,7 +18,6 @@ use crate::{
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::rock_manifest::RockManifest,
     package::PackageSpec,
-    progress::{Progress, ProgressBar},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
@@ -74,7 +73,6 @@ where
     behaviour: BuildBehaviour,
     config: &'a Config,
     tree: &'a T,
-    progress: &'a Progress<ProgressBar>,
 }
 
 impl<'a, T> BinaryRockInstall<'a, T>
@@ -87,16 +85,13 @@ where
         rock_bytes: Bytes,
         entry_type: tree::EntryType,
         config: &'a Config,
-        tree: &'a T,
-        progress: &'a Progress<ProgressBar>,
-    ) -> Self {
+        tree: &'a T) -> Self {
         Self {
             rockspec,
             rock_bytes,
             source,
             config,
             tree,
-            progress,
             constraint: LockConstraint::default(),
             behaviour: BuildBehaviour::default(),
             pin: PinnedState::default(),
@@ -123,13 +118,6 @@ where
 
     pub(crate) async fn install(self) -> Result<LocalPackage, InstallBinaryRockError> {
         let rockspec = self.rockspec;
-        self.progress.map(|p| {
-            p.set_message(format!(
-                "Unpacking and installing {}@{}...",
-                rockspec.package(),
-                rockspec.version()
-            ))
-        });
         for (name, dep) in rockspec.external_dependencies().current_platform() {
             let _ = ExternalDependencyInfo::probe(name, dep, self.config.external_deps())?;
         }
@@ -152,8 +140,7 @@ where
             rockspec.binaries(),
             self.source,
             source_url,
-            hashes,
-        );
+            hashes);
         package.spec.pinned = self.pin;
         package.spec.opt = self.opt;
         match self.tree.lockfile()?.get(&package.id()) {
@@ -181,32 +168,27 @@ where
                 install_manifest_entries(
                     &rock_manifest.lib.entries,
                     &unpack_dir.path().join("lib"),
-                    &output_paths.lib,
-                )
+                    &output_paths.lib)
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.lua.entries,
                     &unpack_dir.path().join("lua"),
-                    &output_paths.src,
-                )
+                    &output_paths.src)
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.bin.entries,
                     &unpack_dir.path().join("bin"),
-                    &output_paths.bin,
-                )
+                    &output_paths.bin)
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.doc.entries,
                     &unpack_dir.path().join("doc"),
-                    &output_paths.doc,
-                )
+                    &output_paths.doc)
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.root.entries,
                     unpack_dir.path(),
-                    &output_paths.etc,
-                )
+                    &output_paths.etc)
                 .await?;
                 // rename <name>-<version>.rockspec
                 let rockspec_path = output_paths.etc.join(format!(
@@ -227,8 +209,7 @@ where
 async fn install_manifest_entries<T>(
     entry: &HashMap<PathBuf, T>,
     src: &Path,
-    dest: &Path,
-) -> Result<(), InstallBinaryRockError> {
+    dest: &Path) -> Result<(), InstallBinaryRockError> {
     for relative_src_path in entry.keys() {
         let target = dest.join(relative_src_path);
         let src_path = src.join(relative_src_path);
@@ -243,8 +224,7 @@ async fn install_manifest_entries<T>(
             let metadata = tokio::fs::metadata(&src_path).await?;
             return Err(InstallBinaryRockError::NotAFileOrDirectory(
                 src_path.to_string_lossy().to_string(),
-                metadata,
-            ));
+                metadata));
         }
     }
     Ok(())
@@ -258,7 +238,6 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
-        progress::MultiProgress,
     };
 
     use super::*;
@@ -290,8 +269,6 @@ mod tests {
             .user_tree(Some(install_root.to_path_buf()))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
         let tree = config
             .user_tree(config.lua_version().unwrap().clone())
             .unwrap();
@@ -301,9 +278,7 @@ mod tests {
             rock.bytes,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
-            &bar,
-        )
+            &tree)
         .install()
         .await
         .unwrap();
@@ -357,8 +332,6 @@ mod tests {
             .user_tree(Some(install_root.to_path_buf()))
             .build()
             .unwrap();
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(MultiProgress::new_bar);
         let tree = config
             .user_tree(config.lua_version().unwrap().clone())
             .unwrap();
@@ -368,9 +341,7 @@ mod tests {
             rock.bytes,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
-            &bar,
-        )
+            &tree)
         .install()
         .await
         .unwrap();
@@ -384,8 +355,7 @@ mod tests {
         let packed_rock = Pack::new(
             pack_dest_dir.to_path_buf(),
             tree.clone(),
-            local_package.clone(),
-        )
+            local_package.clone())
         .pack()
         .await
         .unwrap();
@@ -429,9 +399,7 @@ mod tests {
             rock.bytes,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
-            &bar,
-        )
+            &tree)
         .install()
         .await
         .unwrap();

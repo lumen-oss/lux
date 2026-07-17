@@ -74,7 +74,7 @@ vfs = "0.13"
 
 git2 = { workspace = true }
 ignore = { workspace = true }
-indicatif = { workspace = true }
+tracing = "0.1"
 itertools = { workspace = true }
 lux-macros = { workspace = true }
 lux-workspace-hack = { workspace = true }

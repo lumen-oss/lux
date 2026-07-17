@@ -1,7 +1,7 @@
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::package::{PackageName, PackageReq};
-use lux_lib::progress::{MultiProgress, ProgressBar};
+
 use lux_lib::remote_package_db::RemotePackageDB;
 use lux_lib::rockspec::lua_dependency::LuaDependencyType;
 use lux_lib::workspace::Workspace;
@@ -39,15 +39,10 @@ pub struct Update {
 }
 
 pub async fn update(args: Update, config: Config) -> Result<()> {
-    let progress = MultiProgress::new_arc(&config);
-    progress.map(|p| p.add(ProgressBar::from("🔎 Looking for updates...".to_string())));
-
     if args.toml {
         let mut workspace = Workspace::current_or_err()?;
 
-        let progress = MultiProgress::new(&config);
-        let bar = progress.map(|progress| progress.new_bar());
-        let db = RemotePackageDB::from_config(&config, &bar).await?;
+        let db = RemotePackageDB::from_config(&config).await?;
         let package_names = to_package_names(args.packages.as_ref())?;
         let mut upgrade_all = true;
         if let Some(packages) = package_names {
@@ -110,7 +105,6 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
     }
 
     let updated_packages = operations::Update::new(&config)
-        .progress(progress)
         .packages(args.packages)
         .build_dependencies(args.build)
         .test_dependencies(args.test)
