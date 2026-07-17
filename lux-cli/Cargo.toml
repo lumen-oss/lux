@@ -64,7 +64,7 @@ serial_test = { version = "3.5" }
 assert_fs = "1.1"
 
 [dependencies.lux-lib]
-version = "0.49.2"
+version = "0.50.0"
 path = "../lux-lib/"
 features = ["clap"]
 
