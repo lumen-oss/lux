@@ -1,8 +1,4 @@
-use lux_lib::{
-    config::Config,
-    lua_installation::LuaInstallation,
-    lua_version::LuaVersion,
-};
+use lux_lib::{config::Config, lua_installation::LuaInstallation, lua_version::LuaVersion};
 
 use miette::{miette, Result};
 

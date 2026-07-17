@@ -1,9 +1,5 @@
 use inquire::Confirm;
-use lux_lib::{
-    config::Config,
-    lua_version::LuaVersion,
-    tree::InstallTree,
-};
+use lux_lib::{config::Config, lua_version::LuaVersion, tree::InstallTree};
 
 use miette::{IntoDiagnostic, Result};
 

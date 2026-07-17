@@ -32,7 +32,8 @@ pub(crate) trait BuildBackend {
 
     fn run<T: InstallTree + Sync>(
         self,
-        args: RunBuildArgs<'_, T>) -> impl Future<Output = Result<BuildInfo, Self::Err>> + Send;
+        args: RunBuildArgs<'_, T>,
+    ) -> impl Future<Output = Result<BuildInfo, Self::Err>> + Send;
 }
 
 #[derive(Default)]

@@ -68,7 +68,7 @@ impl BuildBackend for BuiltinBuildSpec {
             match module_type {
                 ModuleSpec::SourcePath(source) => {
                     if source.extension().map(|ext| ext == "c").unwrap_or(false) {
-    let absolute_source_paths = vec![build_dir.join(source)];
+                        let absolute_source_paths = vec![build_dir.join(source)];
                         utils::compile_c_files(
                             &absolute_source_paths,
                             destination_path,
@@ -79,7 +79,7 @@ impl BuildBackend for BuiltinBuildSpec {
                         )
                         .await?
                     } else {
-    let absolute_source_path = build_dir.join(source);
+                        let absolute_source_path = build_dir.join(source);
                         utils::copy_lua_to_module_path(
                             &absolute_source_path,
                             destination_path,

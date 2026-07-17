@@ -85,7 +85,8 @@ where
         rock_bytes: Bytes,
         entry_type: tree::EntryType,
         config: &'a Config,
-        tree: &'a T) -> Self {
+        tree: &'a T,
+    ) -> Self {
         Self {
             rockspec,
             rock_bytes,
@@ -116,6 +117,7 @@ where
         Self { behaviour, ..self }
     }
 
+    #[tracing::instrument(name = "📦 Installing package", skip_all)]
     pub(crate) async fn install(self) -> Result<LocalPackage, InstallBinaryRockError> {
         let rockspec = self.rockspec;
         for (name, dep) in rockspec.external_dependencies().current_platform() {
@@ -140,7 +142,8 @@ where
             rockspec.binaries(),
             self.source,
             source_url,
-            hashes);
+            hashes,
+        );
         package.spec.pinned = self.pin;
         package.spec.opt = self.opt;
         match self.tree.lockfile()?.get(&package.id()) {
@@ -168,27 +171,32 @@ where
                 install_manifest_entries(
                     &rock_manifest.lib.entries,
                     &unpack_dir.path().join("lib"),
-                    &output_paths.lib)
+                    &output_paths.lib,
+                )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.lua.entries,
                     &unpack_dir.path().join("lua"),
-                    &output_paths.src)
+                    &output_paths.src,
+                )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.bin.entries,
                     &unpack_dir.path().join("bin"),
-                    &output_paths.bin)
+                    &output_paths.bin,
+                )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.doc.entries,
                     &unpack_dir.path().join("doc"),
-                    &output_paths.doc)
+                    &output_paths.doc,
+                )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.root.entries,
                     unpack_dir.path(),
-                    &output_paths.etc)
+                    &output_paths.etc,
+                )
                 .await?;
                 // rename <name>-<version>.rockspec
                 let rockspec_path = output_paths.etc.join(format!(
@@ -209,7 +217,8 @@ where
 async fn install_manifest_entries<T>(
     entry: &HashMap<PathBuf, T>,
     src: &Path,
-    dest: &Path) -> Result<(), InstallBinaryRockError> {
+    dest: &Path,
+) -> Result<(), InstallBinaryRockError> {
     for relative_src_path in entry.keys() {
         let target = dest.join(relative_src_path);
         let src_path = src.join(relative_src_path);
@@ -224,7 +233,8 @@ async fn install_manifest_entries<T>(
             let metadata = tokio::fs::metadata(&src_path).await?;
             return Err(InstallBinaryRockError::NotAFileOrDirectory(
                 src_path.to_string_lossy().to_string(),
-                metadata));
+                metadata,
+            ));
         }
     }
     Ok(())
@@ -278,7 +288,8 @@ mod tests {
             rock.bytes,
             tree::EntryType::Entrypoint,
             &config,
-            &tree)
+            &tree,
+        )
         .install()
         .await
         .unwrap();
@@ -341,7 +352,8 @@ mod tests {
             rock.bytes,
             tree::EntryType::Entrypoint,
             &config,
-            &tree)
+            &tree,
+        )
         .install()
         .await
         .unwrap();
@@ -355,7 +367,8 @@ mod tests {
         let packed_rock = Pack::new(
             pack_dest_dir.to_path_buf(),
             tree.clone(),
-            local_package.clone())
+            local_package.clone(),
+        )
         .pack()
         .await
         .unwrap();
@@ -399,7 +412,8 @@ mod tests {
             rock.bytes,
             tree::EntryType::Entrypoint,
             &config,
-            &tree)
+            &tree,
+        )
         .install()
         .await
         .unwrap();

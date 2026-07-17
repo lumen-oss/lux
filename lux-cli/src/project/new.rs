@@ -9,7 +9,6 @@ use inquire::{
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, Result};
 use spdx::LicenseId;
-use spinners::{Spinner, Spinners};
 
 use crate::utils::github_metadata::{self, RepoMetadata};
 use lux_lib::{
@@ -188,11 +187,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             name,
             target,
         } => {
-            let mut spinner = Spinner::new(
-                Spinners::Dots,
-                "Fetching remote repository metadata... ".into(),
-            );
-
+            eprintln!("Fetching remote repository metadata...");
             let repo_metadata = match github_metadata::get_metadata_for(Some(&target)).await {
                 Ok(value) => value.map_or_else(|| RepoMetadata::default(&target), Ok),
                 Err(_) => {
@@ -203,7 +198,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             }
             .into_diagnostic()?;
 
-            spinner.stop_and_persist("✔", "Fetched remote repository metadata.".into());
+            eprintln!("✔ Fetched remote repository metadata.");
 
             let package_name = name
                 .map_or_else(

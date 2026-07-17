@@ -42,11 +42,7 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
     let content = std::fs::read_to_string(path).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&content)?;
     let lua_version = rockspec.lua_version_matches(&config)?;
-    let lua = LuaInstallation::new(
-        &lua_version,
-        &config,
-    )
-    .await?;
+    let lua = LuaInstallation::new(&lua_version, &config).await?;
     let tree = config.user_tree(lua_version)?;
 
     // Ensure all dependencies and build dependencies are installed first

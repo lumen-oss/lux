@@ -79,15 +79,14 @@ pub struct BuildWorkspace<'a> {
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>
     BuildWorkspaceBuilder<'_, State>
 {
-    /// Returns `Some` if the `only_deps` option is set to `false`.
+    #[tracing::instrument(name = "🛠️ Building workspace", skip_all)]
     pub async fn build(self) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
         let args = self._build();
         let config = args.config;
         let workspace = args.workspace;
         let workspace_tree = workspace.tree(config)?;
         let build_tree = workspace.build_tree(config)?;
-        let lua = LuaInstallation::new_from_config(config)
-        .await?;
+        let lua = LuaInstallation::new_from_config(config).await?;
         if !args.no_lock {
             Sync::new(workspace, config)
                 .sync_dependencies()
@@ -109,7 +108,8 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                     &project_toml,
                     &workspace_tree,
                     &mut dependencies_to_install,
-                    &mut build_dependencies_to_install);
+                    &mut build_dependencies_to_install,
+                );
             } else {
                 for project in workspace.members() {
                     let project_toml = project.toml().into_local()?;
@@ -117,7 +117,8 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                         &project_toml,
                         &workspace_tree,
                         &mut dependencies_to_install,
-                        &mut build_dependencies_to_install);
+                        &mut build_dependencies_to_install,
+                    );
                 }
             }
 
@@ -129,7 +130,8 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                     build_dependencies_to_install
                         .into_iter()
                         .unique()
-                        .collect_vec())
+                        .collect_vec(),
+                )
                 .tree(&tree)
                 .lua(&lua)
                 .luarocks(&luarocks)
@@ -143,13 +145,11 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
         if !args.only_deps {
             if let Some(package) = &args.package {
                 let project = workspace.select_member(package)?;
-                let pkg =
-                    build_project(project, workspace, &lua, config).await?;
+                let pkg = build_project(project, workspace, &lua, config).await?;
                 packages.push(pkg);
             } else {
                 for project in workspace.members() {
-                    let pkg = build_project(project, workspace, &lua, config)
-                        .await?;
+                    let pkg = build_project(project, workspace, &lua, config).await?;
                     packages.push(pkg);
                 }
             }
@@ -162,7 +162,8 @@ async fn build_project(
     project: &Project,
     workspace: &Workspace,
     lua: &LuaInstallation,
-    config: &Config) -> Result<LocalPackage, BuildWorkspaceError> {
+    config: &Config,
+) -> Result<LocalPackage, BuildWorkspaceError> {
     let workspace_tree = workspace.tree(config)?;
     let project_toml = project.toml().into_local()?;
 
@@ -172,7 +173,6 @@ async fn build_project(
         .tree(&workspace_tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
-
         .behaviour(BuildBehaviour::Force)
         .build()
         .await?;

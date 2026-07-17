@@ -272,10 +272,9 @@ mod definitions_registry {
 }
 
 async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String, Vec<String>>> {
-    let remote_db =
-        RemotePackageDB::from_config(&config.0)
-            .await
-            .into_lua_err()?;
+    let remote_db = RemotePackageDB::from_config(&config.0)
+        .await
+        .into_lua_err()?;
 
     Ok(remote_db
         .search(&query.parse().into_lua_err()?)

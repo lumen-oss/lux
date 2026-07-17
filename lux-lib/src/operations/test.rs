@@ -128,6 +128,8 @@ pub enum RunTestsError {
     LuaBinary(#[from] LuaBinaryError),
 }
 
+#[tracing::instrument(name = "🧪 Running tests", skip_all)]
+
 async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
     let workspace = test.workspace;
     let config = test.config;
@@ -135,14 +137,10 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
 
     if let Some(package) = test.package {
         let project = workspace.select_member(&package)?;
-        run_project_tests(
-            &workspace, project, no_lock, &test.args, &test.env, config)
-        .await
+        run_project_tests(&workspace, project, no_lock, &test.args, &test.env, config).await
     } else {
         for project in workspace.members() {
-            run_project_tests(
-                &workspace, project, no_lock, &test.args, &test.env, config)
-            .await?;
+            run_project_tests(&workspace, project, no_lock, &test.args, &test.env, config).await?;
         }
         Ok(())
     }
@@ -154,15 +152,15 @@ async fn run_project_tests(
     no_lock: bool,
     test_args: &[String],
     test_env: &TestEnv,
-    config: &Config) -> Result<(), RunTestsError> {
+    config: &Config,
+) -> Result<(), RunTestsError> {
     let rocks = project.toml().into_local()?;
     let test_spec = rocks.test().current_platform().to_validated(project)?;
     let test_config = test_spec.test_config(config)?;
 
     if no_lock {
         let rockspec = project.toml().into_local()?;
-        ensure_test_dependencies(workspace, project, rockspec, &test_config)
-            .await?;
+        ensure_test_dependencies(workspace, project, rockspec, &test_config).await?;
     } else {
         Sync::new(workspace, &test_config)
             .sync_test_dependencies()
@@ -261,7 +259,8 @@ async fn ensure_test_dependencies(
     workspace: &Workspace,
     project: &Project,
     rockspec: impl Rockspec,
-    config: &Config) -> Result<(), InstallTestDependenciesError> {
+    config: &Config,
+) -> Result<(), InstallTestDependenciesError> {
     let test_tree = workspace.test_tree(config)?;
     let rockspec_dependencies = rockspec.test_dependencies().current_platform();
     let test_dependencies = rockspec
@@ -305,14 +304,16 @@ async fn ensure_test_dependencies(
                     build_behaviour.map(|build_behaviour| {
                         PackageInstallSpec::new(
                             dep.package_req().clone(),
-                            tree::EntryType::Entrypoint)
+                            tree::EntryType::Entrypoint,
+                        )
                         .build_behaviour(build_behaviour)
                         .pin(*dep.pin())
                         .opt(*dep.opt())
                         .maybe_source(dep.source.clone())
                         .build()
                     })
-                }))
+                }),
+        )
         .collect();
 
     Install::new(config)

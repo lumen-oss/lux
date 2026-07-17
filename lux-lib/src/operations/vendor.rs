@@ -230,21 +230,12 @@ async fn vendor_sources(
         tokio::spawn(async move {
             match dep.downloaded_rock {
                 crate::operations::RemoteRockDownload::RockspecOnly { rockspec_download } => {
-                    vendor_rockspec_sources(
-                        &vendor_dir,
-                        rockspec_download,
-                        None,
-                        &config,
-                    )
-                    .await?
+                    vendor_rockspec_sources(&vendor_dir, rockspec_download, None, &config).await?
                 }
                 crate::operations::RemoteRockDownload::BinaryRock {
                     rockspec_download,
                     packed_rock,
-                } => {
-                    vendor_binary_rock(&vendor_dir, rockspec_download, packed_rock)
-                        .await?
-                }
+                } => vendor_binary_rock(&vendor_dir, rockspec_download, packed_rock).await?,
                 crate::operations::RemoteRockDownload::SrcRock {
                     rockspec_download,
                     src_rock,
@@ -274,6 +265,7 @@ async fn vendor_sources(
     .try_collect()
 }
 
+#[tracing::instrument(name = "💼 Vendoring source", skip_all)]
 async fn vendor_rockspec_sources(
     vendor_dir: &Path,
     rockspec_download: DownloadedRockspec,
@@ -329,6 +321,7 @@ async fn vendor_rockspec_sources(
     Ok(())
 }
 
+#[tracing::instrument(name = "💼 Vendoring pre-built binary", skip_all)]
 async fn vendor_binary_rock(
     vendor_dir: &Path,
     rockspec_download: DownloadedRockspec,

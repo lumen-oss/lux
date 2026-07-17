@@ -124,7 +124,8 @@ fn install_rust_libs(
     modules: HashMap<String, PathBuf>,
     target_path: &Path,
     build_dir: &Path,
-    output_paths: &RockLayout) -> Result<(), InstallRustLibError> {
+    output_paths: &RockLayout,
+) -> Result<(), InstallRustLibError> {
     for (module, rust_lib) in modules {
         let src = build_dir.join(target_path).join("release").join(rust_lib);
         let mut dst: PathBuf = output_paths.lib.join(module);
@@ -140,7 +141,8 @@ fn install_rust_libs(
 fn install_lua_libs(
     include: HashMap<PathBuf, PathBuf>,
     build_dir: &Path,
-    output_paths: &RockLayout) -> Result<(), InstallLuaLibError> {
+    output_paths: &RockLayout,
+) -> Result<(), InstallLuaLibError> {
     for (from, to) in include {
         let src = build_dir.join(from);
         let dst = output_paths.src.join(to);
