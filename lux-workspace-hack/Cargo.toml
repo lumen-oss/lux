@@ -71,6 +71,7 @@ toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
+web-time = { version = "1", default-features = false, features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
 winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
 zeroize = { version = "1", features = ["derive"] }
@@ -132,6 +133,7 @@ toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
+web-time = { version = "1", default-features = false, features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
 winnow-dff4ba8e3ae991db = { package = "winnow", version = "1" }
 zeroize = { version = "1", features = ["derive"] }
