@@ -63,43 +63,16 @@ try reducing the number of dependencies or simplifying build instructions.
         url("https://lux.lumen-labs.org/reference/lux-toml")
     )]
     ExecutionError {
-        #[source]
-        cause: Box<ottavino::ExternError>,
+        cause: Box<String>,
         #[source_code]
         content: NamedSource<String>,
         #[label("this package")]
-        span: SourceSpan,
-    },
-    #[error("invalid field '{field}'")]
-    #[diagnostic(code(lux_lib::lua_rockspec::key_deserialization),
-        help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),
-        url("https://lux.lumen-labs.org/reference/lux-toml")
-    )]
-    LuaKeyDeserializationFailure {
-        field: String,
-        #[source]
-        cause: Box<ottavino_util::serde::de::Error>,
-        #[source_code]
-        src: NamedSource<String>,
-        #[label("here")]
-        span: SourceSpan,
+        pkg_span: SourceSpan,
+        #[label("{cause}")]
+        err_span: Option<SourceSpan>,
     },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error("error parsing table (field: '{field}')")]
-    #[diagnostic(code(lux_lib::lua_rockspec::lua_table),
-        help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),
-        url("https://lux.lumen-labs.org/reference/lux-toml")
-    )]
-    LuaTable {
-        field: String,
-        #[source_code]
-        content: NamedSource<String>,
-        #[label("here")]
-        span: SourceSpan,
-        #[source]
-        cause: Box<LuaTableError>,
-    },
     #[error("cannot create Lua rockspec with off-spec dependency: {0}")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::off_spec_dependency),
@@ -121,6 +94,55 @@ try reducing the number of dependencies or simplifying build instructions.
     #[error(transparent)]
     #[diagnostic(transparent)]
     ProjectToml(#[from] ProjectTomlError),
+}
+
+impl LuaRockspecError {
+    fn from_ottavino(cause: ottavino::ExternError, rockspec_content: &str) -> Self {
+        let msg = match &cause {
+            ottavino::ExternError::Runtime(rt) => rt.to_string(),
+            _ => cause.to_string(),
+        };
+        let field = msg
+            .strip_prefix("invalid rockspec field '")
+            .and_then(|rest| rest.split('\'').next())
+            .map(|f| f.to_owned());
+        let err_span = field.as_deref().and_then(|field| {
+            let span = find_key_span(rockspec_content, field);
+            if span.is_empty() {
+                None
+            } else {
+                Some(span)
+            }
+        });
+        LuaRockspecError::ExecutionError {
+            cause: Box::new(msg),
+            content: NamedSource::new("rockspec", rockspec_content.to_string()),
+            pkg_span: find_value_span(rockspec_content, "package"),
+            err_span,
+        }
+    }
+}
+
+/// This error can be returned within `ottavino::Lua::try_enter`.
+/// ottavino wraps it in an [`ottavino::ExternError`], which Lux wraps inn
+/// a [`LuaRockspecError::ExecutionError`]
+#[derive(Error, Debug, Diagnostic)]
+enum ParseLuaRockspecFieldError {
+    #[error("invalid rockspec field '{field}': {source}")]
+    Deserialize {
+        field: String,
+        source: Box<ottavino_util::serde::de::Error>,
+    },
+    #[error(
+        r#"invalid rockspec field '{field}'.
+Failed to parse a table field: {source}"#
+    )]
+    DeserializeTable {
+        field: String,
+        source: Box<ottavino_util::serde::de::Error>,
+    },
+    #[error("invalid rockspec field '{field}'. expected a table, but got: {invalid_type}")]
+    NotATable { field: String, invalid_type: String },
 }
 
 /// RockSpec for a local rock installation, deserialized from a `.rockspec` file
@@ -153,24 +175,29 @@ trait HasRockspecKey<'gc> {
     fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
         ctx: ottavino::Context<'gc>,
-        key: String,
-        rockspec_content: &str,
-    ) -> Result<V, LuaRockspecError>;
+        key: &str,
+    ) -> Result<V, ParseLuaRockspecFieldError>;
 }
 
 impl<'gc> HasRockspecKey<'gc> for ottavino::Table<'gc> {
     fn get_rockspec_key<V: Deserialize<'gc>>(
         &self,
         ctx: ottavino::Context<'gc>,
-        key: String,
-        rockspec_content: &str,
-    ) -> Result<V, LuaRockspecError> {
-        from_value(self.get_value(ctx, key.clone())).map_err(|cause| {
-            LuaRockspecError::LuaKeyDeserializationFailure {
-                field: key.clone(),
-                cause: Box::new(cause),
-                src: NamedSource::new("rockspec", rockspec_content.to_string()),
-                span: find_value_span(rockspec_content, &key),
+        key: &str,
+    ) -> Result<V, ParseLuaRockspecFieldError> {
+        let value = self.get_value(ctx, key.to_string());
+        let is_table = matches!(&value, ottavino::Value::Table(_));
+        from_value(value).map_err(|source| {
+            if is_table {
+                ParseLuaRockspecFieldError::DeserializeTable {
+                    field: key.into(),
+                    source: Box::new(source),
+                }
+            } else {
+                ParseLuaRockspecFieldError::Deserialize {
+                    field: key.into(),
+                    source: Box::new(source),
+                }
             }
         })
     }
@@ -198,7 +225,7 @@ impl LocalLuaRockspec {
                 let globals = ctx.globals();
 
                 let dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-                    globals.get_rockspec_key(ctx, "dependencies".into(), rockspec_content)?;
+                    globals.get_rockspec_key(ctx, "dependencies")?;
 
                 let lua_version_req = dependencies
                     .current_platform()
@@ -220,60 +247,38 @@ impl LocalLuaRockspec {
                 }
 
                 let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-                    globals.get_rockspec_key(ctx, "build_dependencies".into(), rockspec_content)?;
+                    globals.get_rockspec_key(ctx, "build_dependencies")?;
 
                 let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
-                    globals.get_rockspec_key(ctx, "test_dependencies".into(), rockspec_content)?;
+                    globals.get_rockspec_key(ctx, "test_dependencies")?;
 
                 let source: PerPlatform<RemoteRockSource> = match globals.get_value(ctx, "source") {
                     ottavino::Value::Nil => {
                         PerPlatform::new(RockSourceSpec::File(project_root.to_path_buf()).into())
                     }
-                    value => from_value(value).map_err(|cause| {
-                        LuaRockspecError::LuaKeyDeserializationFailure {
+                    value => from_value(value).map_err(|source| {
+                        ParseLuaRockspecFieldError::Deserialize {
                             field: "source".into(),
-                            cause: Box::new(cause),
-                            src: NamedSource::new("rockspec", rockspec_content.to_string()),
-                            span: find_value_span(rockspec_content, "source"),
+                            source: Box::new(source),
                         }
                     })?,
                 };
 
                 let rockspec = LocalLuaRockspec {
-                    rockspec_format: globals.get_rockspec_key(
-                        ctx,
-                        "rockspec_format".into(),
-                        rockspec_content,
-                    )?,
-                    package: globals.get_rockspec_key(ctx, "package".into(), rockspec_content)?,
-                    version: globals.get_rockspec_key(ctx, "version".into(), rockspec_content)?,
-                    description: parse_lua_tbl_or_default(ctx, "description").map_err(|cause| {
-                        LuaRockspecError::LuaTable {
-                            field: "description".into(),
-                            content: NamedSource::new("rockspec", rockspec_content.to_string()),
-                            span: find_value_span(rockspec_content, "description"),
-                            cause: Box::new(cause),
-                        }
-                    })?,
-                    supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")
-                        .map_err(|cause| LuaRockspecError::LuaTable {
-                            field: "supported_platforms".into(),
-                            content: NamedSource::new("rockspec", rockspec_content.to_string()),
-                            span: find_value_span(rockspec_content, "supported_platforms"),
-                            cause: Box::new(cause),
-                        })?,
+                    rockspec_format: globals.get_rockspec_key(ctx, "rockspec_format")?,
+                    package: globals.get_rockspec_key(ctx, "package")?,
+                    version: globals.get_rockspec_key(ctx, "version")?,
+                    description: parse_lua_tbl_or_default(ctx, "description")?,
+                    supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")?,
                     lua: lua_version_req,
                     dependencies: strip_lua(dependencies),
                     build_dependencies: strip_lua(build_dependencies),
                     test_dependencies: strip_lua(test_dependencies),
-                    external_dependencies: globals.get_rockspec_key(
-                        ctx,
-                        "external_dependencies".into(),
-                        rockspec_content,
-                    )?,
-                    build: globals.get_rockspec_key(ctx, "build".into(), rockspec_content)?,
-                    test: globals.get_rockspec_key(ctx, "test".into(), rockspec_content)?,
-                    deploy: globals.get_rockspec_key(ctx, "deploy".into(), rockspec_content)?,
+                    external_dependencies: globals
+                        .get_rockspec_key(ctx, "external_dependencies")?,
+                    build: globals.get_rockspec_key(ctx, "build")?,
+                    test: globals.get_rockspec_key(ctx, "test")?,
+                    deploy: globals.get_rockspec_key(ctx, "deploy")?,
                     raw_content: rockspec_content.into(),
 
                     source,
@@ -281,15 +286,7 @@ impl LocalLuaRockspec {
 
                 Ok(Ok(rockspec))
             })
-            .map_err(|cause| {
-                let src = NamedSource::new("rockspec", rockspec_content.to_string());
-                let span = find_value_span(rockspec_content, "package");
-                LuaRockspecError::ExecutionError {
-                    content: src,
-                    span,
-                    cause: Box::new(cause),
-                }
-            })??;
+            .map_err(|cause| LuaRockspecError::from_ottavino(cause, rockspec_content))??;
 
         let rockspec_file_name = format!("{}-{}.rockspec", rockspec.package(), rockspec.version());
 
@@ -429,19 +426,11 @@ impl RemoteLuaRockspec {
                 let globals = ctx.globals();
 
                 let source: PerPlatform<RemoteRockSource> =
-                    globals.get_rockspec_key(ctx, "source".into(), rockspec_content)?;
+                    globals.get_rockspec_key(ctx, "source")?;
 
                 Ok(Ok(source))
             })
-            .map_err(|cause| {
-                let src = NamedSource::new("rockspec", rockspec_content.to_string());
-                let span = find_value_span(rockspec_content, "package");
-                LuaRockspecError::ExecutionError {
-                    content: src,
-                    span,
-                    cause: Box::new(cause),
-                }
-            })??;
+            .map_err(|cause| LuaRockspecError::from_ottavino(cause, rockspec_content))??;
 
         Ok(RemoteLuaRockspec {
             // NOTE: Calling this outside of `lua.try_enter` reduces error message repetition
@@ -724,30 +713,24 @@ impl Display for RockspecFormat {
     }
 }
 
-#[derive(Error, Debug, Diagnostic)]
-pub enum LuaTableError {
-    #[error("could not parse '{variable}'. Expected list, but got {invalid_type}")]
-    ParseError {
-        variable: String,
-        invalid_type: String,
-    },
-    #[error(transparent)]
-    DeserializationError(#[from] ottavino_util::serde::de::Error),
-}
-
 fn parse_lua_tbl_or_default<T>(
     ctx: ottavino::Context<'_>,
-    lua_var_name: &str,
-) -> Result<T, LuaTableError>
+    field: &str,
+) -> Result<T, ParseLuaRockspecFieldError>
 where
     T: Default,
     T: DeserializeOwned,
 {
-    let ret = match ctx.globals().get_value(ctx, lua_var_name.to_string()) {
+    let ret = match ctx.globals().get_value(ctx, field.to_string()) {
         ottavino::Value::Nil => T::default(),
-        value @ ottavino::Value::Table(_) => from_value(value)?,
-        value => Err(LuaTableError::ParseError {
-            variable: lua_var_name.to_string(),
+        value @ ottavino::Value::Table(_) => {
+            from_value(value).map_err(|source| ParseLuaRockspecFieldError::DeserializeTable {
+                field: field.to_string(),
+                source: Box::new(source),
+            })?
+        }
+        value => Err(ParseLuaRockspecFieldError::NotATable {
+            field: field.to_string(),
             invalid_type: value.type_name().to_string(),
         })?,
     };
@@ -1939,5 +1922,86 @@ external_dependencies = {
         let source = "description = {\n    summary = 'bar'\n}";
         let span = find_value_span(source, "description");
         assert_eq!(&source[span.offset()..span.offset() + span.len()], "{");
+    }
+
+    #[test]
+    pub fn parse_lua_rockspec_field_error() {
+        let rockspec_content = "package = 'my-lua-lib'\nfoo = 123";
+        let extern_err = ottavino::Lua::core()
+            .try_enter(|_ctx| {
+                Err(ParseLuaRockspecFieldError::Deserialize {
+                    field: "foo".into(),
+                    source: Box::new(ottavino_util::serde::de::Error::Message(
+                        "expected bar".into(),
+                    )),
+                })?;
+                Ok(())
+            })
+            .unwrap_err();
+        let err = LuaRockspecError::from_ottavino(extern_err, rockspec_content);
+        match err {
+            LuaRockspecError::ExecutionError {
+                cause,
+                err_span: Some(span),
+                ..
+            } => {
+                assert!(cause.contains("invalid rockspec field 'foo'"));
+                assert_eq!(
+                    &rockspec_content[span.offset()..span.offset() + span.len()],
+                    "foo"
+                );
+            }
+            other => panic!("expected ExecutionError with err_span, got: {other:?}"),
+        }
+        let extern_err = ottavino::Lua::core()
+            .try_enter(|_ctx| {
+                Err(ParseLuaRockspecFieldError::DeserializeTable {
+                    field: "foo".into(),
+                    source: Box::new(ottavino_util::serde::de::Error::Message(
+                        "expected bar".into(),
+                    )),
+                })?;
+                Ok(())
+            })
+            .unwrap_err();
+        let err = LuaRockspecError::from_ottavino(extern_err, rockspec_content);
+        match err {
+            LuaRockspecError::ExecutionError {
+                cause,
+                err_span: Some(span),
+                ..
+            } => {
+                assert!(cause.contains("invalid rockspec field 'foo'"));
+                assert_eq!(
+                    &rockspec_content[span.offset()..span.offset() + span.len()],
+                    "foo"
+                );
+            }
+            other => panic!("expected ExecutionError with err_span, got: {other:?}"),
+        }
+        let extern_err = ottavino::Lua::core()
+            .try_enter(|_ctx| {
+                Err(ParseLuaRockspecFieldError::NotATable {
+                    field: "foo".into(),
+                    invalid_type: "integer".into(),
+                })?;
+                Ok(())
+            })
+            .unwrap_err();
+        let err = LuaRockspecError::from_ottavino(extern_err, rockspec_content);
+        match err {
+            LuaRockspecError::ExecutionError {
+                cause,
+                err_span: Some(span),
+                ..
+            } => {
+                assert!(cause.contains("invalid rockspec field 'foo'"));
+                assert_eq!(
+                    &rockspec_content[span.offset()..span.offset() + span.len()],
+                    "foo"
+                );
+            }
+            other => panic!("expected ExecutionError with err_span, got: {other:?}"),
+        }
     }
 }
