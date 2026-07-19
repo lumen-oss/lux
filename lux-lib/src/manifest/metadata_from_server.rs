@@ -107,7 +107,7 @@ pub(crate) async fn manifest_from_cache_or_server(
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     let span = span!(
         tracing::Level::INFO,
-        "📥 Downloading manifest",
+        "Downloading manifest",
         url = url.to_string(),
     );
     let _enter = span.enter();
@@ -154,7 +154,7 @@ pub(crate) async fn manifest_from_server_only(
 
     let span = span!(
         tracing::Level::INFO,
-        "📥 Downloading manifest",
+        "Downloading manifest",
         url = url.to_string(),
     );
     let _enter = span.enter();

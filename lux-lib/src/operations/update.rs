@@ -96,7 +96,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 }
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
-    #[tracing::instrument(name = "🔄 Updating packages", skip_all)]
+    #[tracing::instrument(name = "Updating packages", skip_all)]
 
     /// Returns the packages that were installed or removed
     pub async fn update(self) -> Result<Vec<LocalPackage>, UpdateError>

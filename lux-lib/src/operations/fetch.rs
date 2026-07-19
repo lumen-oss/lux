@@ -189,7 +189,7 @@ async fn do_fetch_src<R: Rockspec>(
     };
     let span = span!(
         tracing::Level::INFO,
-        "📥 Fetching source",
+        "Fetching source",
         location = source_spec.to_string(),
     );
     let _enter = span.enter();
@@ -209,7 +209,7 @@ async fn do_fetch_src<R: Rockspec>(
     let metadata = match &source_spec {
         RockSourceSpec::Git(git) => {
             let url = git.url.to_string();
-            tracing::debug!(message = format!("🦠 Cloning {url}").as_str());
+            tracing::debug!(message = format!("Cloning {url}").as_str());
 
             let auth = if config.no_prompt() {
                 GitAuthenticator::default()
@@ -345,7 +345,7 @@ async fn do_fetch_src_rock(
     let package = fetch.package;
     let span = span!(
         tracing::Level::INFO,
-        "📥 Fetching src.rock",
+        "Fetching src.rock",
         package = package.to_string(),
     );
     let _enter = span.enter();

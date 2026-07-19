@@ -49,7 +49,7 @@ pub enum TreesitterBuildError {
 impl BuildBackend for TreesitterParserBuildSpec {
     type Err = TreesitterBuildError;
 
-    #[tracing::instrument(name = "🛠️ treesitter_parser::run", skip_all, level = "debug")]
+    #[tracing::instrument(name = "treesitter_parser::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -61,7 +61,7 @@ impl BuildBackend for TreesitterParserBuildSpec {
             .map(|dir| build_dir.join(dir))
             .unwrap_or(build_dir.to_path_buf());
         if self.generate {
-            let span = info_span!("🌳 Generating tree-sitter parser");
+            let span = info_span!("Generating tree-sitter parser");
             let _enter = span.enter();
             let abi_version = match std::env::var("TREE_SITTER_LANGUAGE_VERSION") {
                 Ok(v) => v.parse()?,
@@ -179,7 +179,7 @@ async fn build_parser(
     parser_dir: &Path,
     lang: &str,
 ) -> Result<(), TreesitterBuildError> {
-    let span = info_span!("🌳 Compiling tree-sitter parser", language = lang);
+    let span = info_span!("Compiling tree-sitter parser", language = lang);
     let _enter = span.enter();
     tokio::fs::create_dir_all(parser_dir)
         .await

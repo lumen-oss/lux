@@ -117,7 +117,7 @@ where
         Self { behaviour, ..self }
     }
 
-    #[tracing::instrument(name = "📦 Installing binary rock", skip_all)]
+    #[tracing::instrument(name = "Installing binary rock", skip_all)]
     pub(crate) async fn install(self) -> Result<LocalPackage, InstallBinaryRockError> {
         let rockspec = self.rockspec;
         for (name, dep) in rockspec.external_dependencies().current_platform() {

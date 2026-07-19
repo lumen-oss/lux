@@ -56,7 +56,7 @@ pub(crate) fn copy_lua_to_module_path(
 ) -> io::Result<()> {
     let span = span!(
         tracing::Level::TRACE,
-        "📋 Copying Lua module",
+        "Copying Lua module",
         source = source.to_slash_lossy().to_string(),
         target = target_module.to_string(),
         target_dir = target_dir.to_slash_lossy().to_string(),
@@ -158,7 +158,7 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 /// Compiles a set of C files into a single dynamic library and places them under `{target_dir}/{target_file}`.
 /// # Panics
 /// Panics if no parent or no filename can be determined for the target path.
-#[tracing::instrument(name = "🛠️ Compiling C files", skip_all)]
+#[tracing::instrument(name = "Compiling C files", skip_all)]
 pub(crate) async fn compile_c_files(
     files: &Vec<PathBuf>,
     target_module: &LuaModule,
@@ -189,6 +189,7 @@ pub(crate) async fn compile_c_files(
     let intermediate_dir = tempfile::tempdir()?;
     let build = build
         .cargo_output(config.verbose())
+        .cargo_debug(config.verbose())
         .cargo_metadata(config.verbose())
         .cargo_warnings(config.verbose())
         .warnings(config.verbose())
@@ -347,7 +348,7 @@ pub enum LinkCModulesError {
 /// Compiles a set of C files (with extra metadata) to a given destination.
 /// # Panics
 /// Panics if no filename for the target path can be determined.
-#[tracing::instrument(name = "🛠️ Compiling C modules", skip_all)]
+#[tracing::instrument(name = "Compiling C modules", skip_all)]
 pub(crate) async fn compile_c_modules(
     data: &ModulePaths,
     source_dir: &Path,
@@ -404,6 +405,7 @@ pub(crate) async fn compile_c_modules(
     let intermediate_dir = tempfile::tempdir()?;
     let build = build
         .cargo_output(config.verbose())
+        .cargo_debug(config.verbose())
         .cargo_metadata(config.verbose())
         .cargo_warnings(config.verbose())
         .warnings(config.verbose())
@@ -635,7 +637,7 @@ pub(crate) async fn install_binary(
 {
     let span = span!(
         tracing::Level::TRACE,
-        "💻 Installing binary...",
+        "Installing binary...",
         source = source.to_slash_lossy().to_string(),
         target,
     );

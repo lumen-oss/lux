@@ -231,7 +231,7 @@ async fn download_remote_rock(
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     let span = span!(
         tracing::Level::INFO,
-        "📥 Downloading rock",
+        "Downloading rock",
         package = package_req.to_string(),
     );
     let _enter = span.enter();
@@ -381,7 +381,7 @@ pub enum DownloadSrcRockError {
     Parse(#[from] ParseError),
 }
 
-#[tracing::instrument(name = "📥 Downloading src.rock", skip_all)]
+#[tracing::instrument(name = "Downloading src.rock", skip_all)]
 pub(crate) async fn download_src_rock(
     package: &PackageSpec,
     server_url: &Url,
@@ -396,7 +396,7 @@ pub(crate) async fn download_src_rock(
         .await
 }
 
-#[tracing::instrument(name = "📥 Downloading binary rock", skip_all)]
+#[tracing::instrument(name = "Downloading binary rock", skip_all)]
 pub(crate) async fn download_binary_rock(
     package: &PackageSpec,
     server_url: &Url,
@@ -413,7 +413,7 @@ pub(crate) async fn download_binary_rock(
         .await
 }
 
-#[tracing::instrument(name = "📥 Downloading package", skip_all)]
+#[tracing::instrument(name = "Downloading package", skip_all)]
 async fn download_src_rock_to_file(
     package_req: &PackageReq,
     destination_dir: Option<PathBuf>,
@@ -461,7 +461,7 @@ where
 
         let span = span!(
             tracing::Level::INFO,
-            "📥 Downloading",
+            "Downloading",
             package = package.name().to_string(),
             version = package.version().to_string(),
             server = args.server_url.to_string(),

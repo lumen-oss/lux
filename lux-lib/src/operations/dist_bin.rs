@@ -96,7 +96,7 @@ struct InstalledFiles {
     lib: Vec<PathBuf>,
 }
 
-#[tracing::instrument(name = "📦 Distributing binary", skip_all)]
+#[tracing::instrument(name = "Distributing binary", skip_all)]
 
 async fn do_dist_project_bin<T>(args: DistProjectBin<'_, T>) -> Result<PathBuf, DistProjectBinError>
 where

@@ -74,7 +74,7 @@ async fn do_fetch_vendored_rock(
 
     let span = span!(
         tracing::Level::INFO,
-        "📥 Fetching vendored rock",
+        "Fetching vendored rock",
         package = package.to_string(),
     );
     let _enter = span.enter();

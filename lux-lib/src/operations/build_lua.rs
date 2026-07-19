@@ -105,7 +105,7 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
 async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let span = span!(
         tracing::Level::INFO,
-        "🛠️ Building LuaJIT",
+        "Building LuaJIT",
         version = LUAJIT_MM_VERSION,
     );
     let _enter = span.enter();
@@ -123,7 +123,7 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     {
         let span = span!(
             tracing::Level::INFO,
-            "🦠 Cloning LuaJIT sources",
+            "Cloning LuaJIT sources",
             url = luajit_url,
         );
         let _enter = span.enter();
@@ -144,7 +144,7 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     }
 }
 
-#[tracing::instrument(name = "🛠️ Compiling LuaJIT", skip_all)]
+#[tracing::instrument(name = "Compiling LuaJIT", skip_all)]
 async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
     let config = args.config;
@@ -289,7 +289,7 @@ async fn move_luajit_includes(install_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-#[tracing::instrument(name = "🛠️ Compiling LuaJIT", skip_all)]
+#[tracing::instrument(name = "Compiling LuaJIT", skip_all)]
 async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
     let install_dir = args.install_dir;
@@ -381,7 +381,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
     let span = span!(
         tracing::Level::INFO,
-        "🛠️ Building Lua",
+        "Building Lua",
         version = lua_version.to_string(),
     );
     let _enter = span.enter();
@@ -415,7 +415,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let response = {
         let span = span!(
             tracing::Level::INFO,
-            "📥 Downloading Lua",
+            "Downloading Lua",
             url = source_url.to_string(),
         );
         let _enter = span.enter();
@@ -450,14 +450,14 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     }
 }
 
-#[tracing::instrument(name = "🛠️ Compiling Lua", skip_all)]
+#[tracing::instrument(name = "Compiling Lua", skip_all)]
 async fn do_build_lua_unix(
     args: BuildLua<'_>,
     build_dir: &Path,
     lua_version: &LuaVersion,
     _pkg_version: &str,
 ) -> Result<(), BuildLuaError> {
-    tracing::debug!(message = "🛠️ Compiling Lua (Unix)...");
+    tracing::debug!(message = "Compiling Lua (Unix)...");
     let config = args.config;
     let install_dir = args.install_dir;
 
@@ -529,14 +529,14 @@ async fn do_build_lua_unix(
     Ok(())
 }
 
-#[tracing::instrument(name = "🛠️ Compiling Lua", skip_all)]
+#[tracing::instrument(name = "Compiling Lua", skip_all)]
 async fn do_build_lua_msvc(
     args: BuildLua<'_>,
     build_dir: &Path,
     lua_version: &LuaVersion,
     _pkg_version: &str,
 ) -> Result<(), BuildLuaError> {
-    tracing::debug!(message = "🛠️ Compiling Lua (MSVC)...");
+    tracing::debug!(message = "Compiling Lua (MSVC)...");
     let config = args.config;
     let install_dir = args.install_dir;
 

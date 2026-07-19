@@ -110,10 +110,10 @@ where
         }
         let count = install_built.packages.len();
         let span = if count > 1 {
-            info_span!("💻 Installing", count,)
+            info_span!("Installing", count,)
         } else {
             let install_spec = &install_built.packages[0];
-            info_span!("💻 Installing", package = install_spec.package.to_string(),)
+            info_span!("Installing", package = install_spec.package.to_string(),)
         };
         let _enter = span.enter();
         let package_db = match install_built.package_db {
@@ -226,7 +226,7 @@ where
         let rockspec = build_dep_spec.downloaded_rock.rockspec();
         let package = rockspec.package().clone();
         let span = info_span!(
-            "💻 Installing build dependency",
+            "Installing build dependency",
             package = package.to_string(),
             version = rockspec.version().to_string()
         );
@@ -405,7 +405,7 @@ where
     let package = rockspec_download.rockspec.package().clone();
     let rockspec = rockspec_download.rockspec;
     let span = info_span!(
-        "💻 Installing",
+        "Installing",
         package = package.to_string(),
         version = rockspec.version().to_string(),
     );
@@ -457,7 +457,7 @@ async fn install_binary_rock(
     let package = rockspec.package().clone();
     let span = span!(
         tracing::Level::INFO,
-        "💻 Installing (pre-built)",
+        "Installing (pre-built)",
         package = package.to_string(),
         version = rockspec.version().to_string(),
     );

@@ -162,7 +162,7 @@ pub enum SyncError {
     GenLuaRc(#[from] GenLuaRcError),
 }
 
-#[tracing::instrument(name = "🔄 Syncing dependencies", skip_all)]
+#[tracing::instrument(name = "Syncing dependencies", skip_all)]
 
 async fn do_sync(
     args: Sync<'_>,

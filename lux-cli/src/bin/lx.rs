@@ -122,7 +122,7 @@ async fn main() -> Result<()> {
                 "{spinner} {span_child_prefix}{span_name} {{{span_fields}}}",
             )
             .into_diagnostic()?
-            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
+            .tick_chars("🌑🌒🌓🌔🌕🌖🌗🌘"),
         );
         let fmt_layer = tracing_subscriber::fmt::layer::<tracing_subscriber::Registry>()
             .with_target(false)

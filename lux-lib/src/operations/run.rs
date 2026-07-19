@@ -168,7 +168,7 @@ async fn run_with_command(
     let lua_init = if disable_loader {
         None
     } else if tree.version().lux_lib_dir().is_none() {
-        tracing::warn!("⚠️ WARNING: lux-lua library not found.\n    Cannot use the `lux.loader`.\n    To suppress this warning, set the `--no-loader` option.");
+        tracing::warn!("lux-lua library not found.\n    Cannot use the `lux.loader`.\n    To suppress this warning, set the `--no-loader` option.");
         None
     } else {
         Some(paths.init())

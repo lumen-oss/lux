@@ -83,8 +83,8 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
     pub async fn build(self) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
         let build = self._build();
         let span = match &build.package {
-            Some(package) => info_span!("🛠️ Building workspace", package = package.to_string()),
-            None => info_span!("🛠️ Building workspace"),
+            Some(package) => info_span!("Building workspace", package = package.to_string()),
+            None => info_span!("Building workspace"),
         };
         do_build(build).instrument(span).await
     }
