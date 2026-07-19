@@ -88,11 +88,10 @@ pub async fn path(path_data: Path, config: Config) -> Result<()> {
             let mut result = String::new();
             let no_loader = args.no_loader || {
                 if tree.version().lux_lib_dir().is_none() {
-                    eprintln!(
-                        "⚠️ WARNING: lux-lua library not found.
+                    tracing::warn!(
+                        r#"lux-lua library not found.
 Cannot use the `lux.loader`.
-To suppress this warning, run `lx path full --no-loader`.
-                "
+To suppress this warning, run `lx path full --no-loader`."#
                     );
                     true
                 } else {

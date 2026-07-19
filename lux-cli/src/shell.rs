@@ -75,11 +75,10 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
     let lua_init = if data.no_loader {
         None
     } else if tree.version().lux_lib_dir().is_none() {
-        eprintln!(
-            "⚠️ WARNING: lux-lua library not found.
-    Cannot use the `lux.loader`.
-    To suppress this warning, set the `--no-loader` option.
-                    "
+        tracing::warn!(
+            r#"lux-lua library not found.
+Cannot use the `lux.loader`.
+To suppress this warning, set the `--no-loader` option."#
         );
         None
     } else {

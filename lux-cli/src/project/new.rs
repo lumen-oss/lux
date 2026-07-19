@@ -191,7 +191,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             let repo_metadata = match github_metadata::get_metadata_for(Some(&target)).await {
                 Ok(value) => value.map_or_else(|| RepoMetadata::default(&target), Ok),
                 Err(_) => {
-                    println!("Could not fetch remote repo metadata, defaulting to empty values.");
+                    tracing::info!("Could not fetch remote repo metadata, defaulting to empty values.");
 
                     RepoMetadata::default(&target)
                 }
@@ -367,7 +367,7 @@ type = "builtin"
 
     let main_dir = validated.target.join(validated.main.to_string());
     if main_dir.exists() {
-        eprintln!(
+        tracing::info!(
             "Directory `{}/` already exists - we won't make any changes to it.",
             main_dir.display()
         );
