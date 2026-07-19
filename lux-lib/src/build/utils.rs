@@ -29,6 +29,24 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::external_dependency::ExternalDependencyInfo;
 
+pub(crate) trait CCExt {
+    fn try_compile_objects(&self, config: &Config) -> Result<Vec<PathBuf>, cc::Error>;
+}
+
+impl CCExt for cc::Build {
+    fn try_compile_objects(&self, config: &Config) -> Result<Vec<PathBuf>, cc::Error> {
+        if config.verbose() {
+            self.try_compile_intermediates()
+        } else {
+            // HACK: try_compile_intermediates prints the exit code to stderr,
+            // which interferes with lux-cli progress spinners, etc
+            let mut _stdout_gag = gag::Gag::stdout();
+            let mut _stderr_gag = gag::Gag::stderr();
+            self.try_compile_intermediates()
+        }
+    }
+}
+
 /// Copies a lua source file to a specific destination. The destination is described by a
 /// `module.path` syntax (equivalent to the syntax provided to Lua's `require()` function).
 pub(crate) fn copy_lua_to_module_path(
@@ -198,7 +216,7 @@ pub(crate) async fn compile_c_files(
     }
 
     let objects = build
-        .try_compile_intermediates()
+        .try_compile_objects(config)
         .map_err(CompileCFilesError::CompileIntermediates)?;
 
     link_c_artifacts(
@@ -427,7 +445,7 @@ pub(crate) async fn compile_c_modules(
         .to_string();
     // See https://github.com/rust-lang/cc-rs/issues/594#issuecomment-2110551057
     let objects = build
-        .try_compile_intermediates()
+        .try_compile_objects(config)
         .map_err(CompileCModulesError::CompileIntermediates)?;
 
     let libdir_args = data

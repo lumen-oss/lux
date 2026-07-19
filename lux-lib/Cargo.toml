@@ -99,6 +99,7 @@ ottavino = "0.4.0"
 ottavino-util = "0.4.0"
 serde-value = "0.7.0"
 auth-git2 = "0.6.0"
+gag = "1.0.0"
 
 [dev-dependencies]
 httptest = { version = "0.16" }
