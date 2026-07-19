@@ -8,6 +8,7 @@ use thiserror::Error;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::{fs, io};
+use tracing::span;
 use url::Url;
 use zip::ZipArchive;
 
@@ -98,13 +99,18 @@ pub(super) async fn get_manifest(
     }
 }
 
-#[tracing::instrument(name = "📥 Downloading manifest", skip_all)]
 pub(crate) async fn manifest_from_cache_or_server(
     server_url: &Url,
     config: &Config,
 ) -> Result<String, ManifestFromServerError> {
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
+    let span = span!(
+        tracing::Level::INFO,
+        "📥 Downloading manifest",
+        url = url.to_string(),
+    );
+    let _enter = span.enter();
 
     tracing::info!(message = format!("📥 Downloading manifest from {url}").as_str());
 
@@ -141,13 +147,19 @@ pub(crate) async fn manifest_from_cache_or_server(
     get_manifest(url, manifest_version.clone(), &cache, &client).await
 }
 
-#[tracing::instrument(name = "📥 Downloading manifest", skip_all)]
 pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
     config: &Config,
 ) -> Result<String, ManifestFromServerError> {
     let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
+
+    let span = span!(
+        tracing::Level::INFO,
+        "📥 Downloading manifest",
+        url = url.to_string(),
+    );
+    let _enter = span.enter();
 
     tracing::info!(message = format!("📥 Downloading manifest from {url}").as_str());
 

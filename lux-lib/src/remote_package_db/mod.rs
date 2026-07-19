@@ -11,6 +11,7 @@ use itertools::Itertools;
 
 use miette::Diagnostic;
 use thiserror::Error;
+use tracing::span;
 /// Package database, used to look up remote rocks
 #[derive(Clone, Debug)]
 pub struct RemotePackageDB(Impl);
@@ -65,12 +66,17 @@ impl RemotePackageDB {
     }
 
     /// Find a remote package that matches the requirement, returning the latest match.
-    #[tracing::instrument(name = "🔎 Searching", skip_all)]
     pub(crate) fn find(
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Result<RemotePackage, SearchError> {
+        let span = span!(
+            tracing::Level::INFO,
+            "🔎 Searching",
+            package = package_req.to_string(),
+        );
+        let _enter = span.enter();
         match &self.0 {
             Impl::LuarocksManifests(manifests) => {
                 match manifests

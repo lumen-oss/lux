@@ -15,6 +15,7 @@ use bon::Builder;
 use miette::Diagnostic;
 use path_slash::PathExt;
 use thiserror::Error;
+use tracing::span;
 /// Fetch a vendored rock from `<vendor_dir>`
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
@@ -64,13 +65,20 @@ where
     }
 }
 
-#[tracing::instrument(name = "📥 Fetching vendored rock", skip_all)]
 async fn do_fetch_vendored_rock(
     args: FetchVendored<'_>,
 ) -> Result<RemoteRockDownload, FetchVendoredError> {
     let vendor_dir = args.vendor_dir;
     let package = args.package;
     let package_db = args.package_db;
+
+    let span = span!(
+        tracing::Level::INFO,
+        "📥 Fetching vendored rock",
+        package = package.to_string(),
+    );
+    let _enter = span.enter();
+
     let package_spec = package_db.find(package, None)?.package;
     let rockspec = load_vendored_rockspec(vendor_dir, &package_spec).await?;
     match load_vendored_package(vendor_dir, &package_spec)? {
@@ -100,11 +108,17 @@ async fn do_fetch_vendored_rock(
     }
 }
 
-#[tracing::instrument(name = "📑 Loading vendored rockspec", skip_all)]
 async fn load_vendored_rockspec(
     vendor_dir: &Path,
     package: &PackageSpec,
 ) -> Result<RemoteLuaRockspec, FetchVendoredError> {
+    let span = span!(
+        tracing::Level::INFO,
+        "📑 Loading vendored rockspec",
+        package = package.to_string(),
+    );
+    let _enter = span.enter();
+
     let rockspec_path =
         vendor_dir.join(format!("{}-{}.rockspec", package.name(), package.version()));
     if !rockspec_path.is_file() {
