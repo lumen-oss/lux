@@ -127,8 +127,10 @@ async fn main() -> Result<()> {
             .with_target(false)
             .with_writer(indicatif_layer.get_stderr_writer())
             .with_filter(fmt_filter);
-        let indicatif_layer =
-            indicatif_layer.with_filter(tracing_subscriber::filter::EnvFilter::new("info"));
+        let span_fmt_filter_level = if config.verbose() { "trace" } else { "info" };
+        let indicatif_layer = indicatif_layer.with_filter(
+            tracing_subscriber::filter::EnvFilter::new(span_fmt_filter_level),
+        );
         tracing_subscriber::registry()
             .with(fmt_layer)
             .with(ProgressStyleTemplateLayer {})

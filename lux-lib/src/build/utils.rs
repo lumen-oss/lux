@@ -546,15 +546,8 @@ async fn link_c_artifacts(
             .output()
             .await?
     };
-    if !&output.stdout.is_empty() {
-        tracing::debug!("{}", String::from_utf8_lossy(&output.stdout));
-    }
-    if !&output.stderr.is_empty() {
-        tracing::warn!("{}", String::from_utf8_lossy(&output.stderr));
-    }
-
-    validate_output(&output)?;
     trace_command_output(&output);
+    validate_output(&output)?;
 
     if output_path.exists() {
         Ok(())
@@ -651,10 +644,14 @@ pub(crate) async fn install_binary(
 /// Logs the output's stdout and stderr in verbose mode
 pub(crate) fn trace_command_output(output: &Output) {
     if !output.stderr.is_empty() {
-        tracing::debug!("{}", String::from_utf8_lossy(&output.stderr));
+        for line in String::from_utf8_lossy(&output.stderr).lines() {
+            tracing::debug!("{}", line);
+        }
     }
     if !output.stdout.is_empty() {
-        tracing::debug!("{}", String::from_utf8_lossy(&output.stdout));
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            tracing::debug!("{}", line);
+        }
     }
 }
 
