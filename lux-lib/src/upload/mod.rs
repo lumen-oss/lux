@@ -408,7 +408,7 @@ mod helpers {
     ) -> Result<TfaToken, UploadError> {
         let response = client
             .get(unsafe { url_for_method(server_url, api_key, "verify_tfa")? })
-            .query(&(("code", tfa_code.to_string())))
+            .query(&("code", tfa_code.to_string()))
             .send()
             .await?;
         let status = response.status();
