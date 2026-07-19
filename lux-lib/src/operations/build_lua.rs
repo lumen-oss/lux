@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    build::utils,
+    build::utils::{self, CCExt},
     config::Config,
     hash::HasIntegrity,
     lua_version::LuaVersion,
@@ -625,14 +625,14 @@ async fn do_build_lua_msvc(
         .include(&src_dir)
         .files(lib_c_files)
         .out_dir(&lib_dir)
-        .try_compile_intermediates()?;
+        .try_compile_objects(config)?;
 
     let bin_objects = cc
         .include(&src_dir)
         .file(src_dir.join(format!("{lua_bin_name}.c")))
         .file(src_dir.join(format!("{lua_c_bin_name}.c")))
         .out_dir(&src_dir)
-        .try_compile_intermediates()?;
+        .try_compile_objects(config)?;
 
     let lua_bin_objects = bin_objects.iter().filter(|file| {
         file.file_stem().is_some_and(|fname| {
