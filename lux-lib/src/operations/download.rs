@@ -471,7 +471,7 @@ where
         let ext = args.ext;
         let server_url = args.server_url;
         let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
-        tracing::info!(message = format!("📥 Downloading {full_rock_name}").as_str());
+        tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
         let url = server_url.join(&full_rock_name)?;
         let response = crate::reqwest::new_https_client(args.config)?
             .get(url.clone())

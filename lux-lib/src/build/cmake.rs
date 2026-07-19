@@ -160,7 +160,7 @@ impl BuildBackend for CMakeBuildSpec {
 async fn spawn_cmake_cmd(cmd: &mut Command, config: &Config) -> Result<(), CMakeError> {
     match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(child) => match child.wait_with_output().await {
-            Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+            Ok(output) if output.status.success() => utils::trace_command_output(&output),
             Ok(output) => {
                 return Err(CMakeError::CommandFailure {
                     name: config.cmake_cmd().clone(),

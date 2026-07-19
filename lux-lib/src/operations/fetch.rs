@@ -209,7 +209,7 @@ async fn do_fetch_src<R: Rockspec>(
     let metadata = match &source_spec {
         RockSourceSpec::Git(git) => {
             let url = git.url.to_string();
-            tracing::info!(message = format!("🦠 Cloning {url}").as_str());
+            tracing::debug!(message = format!("🦠 Cloning {url}").as_str());
 
             let auth = if config.no_prompt() {
                 GitAuthenticator::default()
@@ -253,7 +253,7 @@ async fn do_fetch_src<R: Rockspec>(
             }
         }
         RockSourceSpec::Url(url) => {
-            tracing::info!(message = format!("📥 Downloading {url}").as_str());
+            tracing::debug!(message = format!("📥 Downloading {url}").as_str());
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
@@ -292,7 +292,7 @@ async fn do_fetch_src<R: Rockspec>(
             }
         }
         RockSourceSpec::File(path) => {
-            tracing::info!(message = format!("📋 Copying {}", path.display()).as_str());
+            tracing::debug!(message = format!("📋 Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {
                 recursive_copy_dir(&path.to_path_buf(), dest_dir)

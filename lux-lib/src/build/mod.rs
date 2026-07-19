@@ -6,6 +6,7 @@ use crate::operations::{RemotePackageSourceMetadata, UnpackError};
 use crate::rockspec::{LuaVersionCompatibility, Rockspec};
 use crate::tree::{self, EntryType, InstallTree, TreeError};
 use bytes::Bytes;
+use path_slash::PathBufExt;
 use std::collections::HashMap;
 use std::fs::DirEntry;
 use std::io::Cursor;
@@ -229,19 +230,27 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     config: &Config,
 ) -> Result<(), BuildError> {
     let install_spec = &rockspec.build().current_platform().install;
-    tracing::info!(message = "📋 Copying Lua modules...");
-    for (target, source) in &install_spec.lua {
-        let absolute_source = build_dir.join(source);
-        utils::copy_lua_to_module_path(&absolute_source, target, &output_paths.src)?;
+    {
+        let span = span!(tracing::Level::INFO, "📋 Copying Lua modules");
+        let _enter = span.enter();
+        for (target, source) in &install_spec.lua {
+            let _enter = span.enter();
+            let absolute_source = build_dir.join(source);
+            utils::copy_lua_to_module_path(&absolute_source, target, &output_paths.src)?;
+        }
     }
-    tracing::info!(message = "📋 Compiling C libraries...");
-    for (target, source) in &install_spec.lib {
-        let absolute_source = build_dir.join(source);
-        let resolved_target = output_paths.lib.join(target);
-        tokio::fs::copy(absolute_source, resolved_target).await?;
+    {
+        let span = span!(tracing::Level::INFO, "📋 Compiling C libraries");
+        let _enter = span.enter();
+        for (target, source) in &install_spec.lib {
+            let absolute_source = build_dir.join(source);
+            let resolved_target = output_paths.lib.join(target);
+            tokio::fs::copy(absolute_source, resolved_target).await?;
+        }
     }
     if entry_type.is_entrypoint() {
-        tracing::info!(message = "💻 Installing binaries...");
+        let span = span!(tracing::Level::INFO, "💻 Installing binaries");
+        let _enter = span.enter();
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
             utils::install_binary(
@@ -260,8 +269,16 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         }
     }
     if !install_spec.conf.is_empty() {
-        tracing::info!(message = "📋 Copying configuration files...");
+        let span = span!(tracing::Level::INFO, "📋 Copying configuration files");
+        let _enter = span.enter();
         for (target, source) in &install_spec.conf {
+            let span = span!(
+                tracing::Level::TRACE,
+                "📋 Copying configuration file",
+                source = source.to_slash_lossy().to_string(),
+                target,
+            );
+            let _enter = span.enter();
             let absolute_source = build_dir.join(source);
             let target = output_paths.conf.join(target);
             if let Some(parent_dir) = target.parent() {
@@ -279,11 +296,13 @@ where
     T: InstallTree + Sync,
 {
     let rockspec = build.rockspec;
-    span!(
+    let span = span!(
         tracing::Level::INFO,
         "🛠️ Building",
-        package = rockspec.package().to_string()
+        package = rockspec.package().to_string(),
+        version = rockspec.version().to_string(),
     );
+    let _enter = span.enter();
     let lua = build.lua;
 
     rockspec.validate_lua_version(&lua.version)?;
