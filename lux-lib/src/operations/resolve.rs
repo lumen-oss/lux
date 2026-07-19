@@ -310,14 +310,14 @@ where
 
                             Ok::<_, ResolveDependenciesError>(local_spec.id())
                         }
-                        .instrument(tracing::Span::current()),
+                        .instrument(tracing::trace_span!("resolve_worker")),
                     )
                 },
             ),
     )
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()
-    .instrument(tracing::Span::current())
+    .instrument(tracing::trace_span!("resolve_collector"))
     .await
     .into_iter()
     .flatten()
