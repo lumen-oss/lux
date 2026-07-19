@@ -411,7 +411,7 @@ fn test_build_multiple_treesitter_parsers() {
                         .await
                         .unwrap()
                 }
-                .instrument(tracing::Span::current()),
+                .instrument(tracing::trace_span!("test_worker")),
             ),
         );
     }

@@ -259,12 +259,12 @@ async fn vendor_sources(
                 };
                 Ok::<_, VendorError>(())
             }
-            .instrument(tracing::Span::current()),
+            .instrument(tracing::trace_span!("vendor_worker")),
         )
     }))
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()
-    .instrument(tracing::Span::current())
+    .instrument(tracing::trace_span!("vendor_collector"))
     .await
     .into_iter()
     .flatten()

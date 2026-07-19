@@ -9,7 +9,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
-use tracing::span;
+use tracing::{span, Instrument};
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum RemoveError {
@@ -85,7 +85,9 @@ async fn remove(
 
     futures::stream::iter(packages.into_iter().map(|package| {
         let tree = tree.clone();
-        tokio::spawn(remove_package(package, tree))
+        tokio::spawn(
+            remove_package(package, tree).instrument(tracing::trace_span!("remove_worker")),
+        )
     }))
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()

@@ -328,12 +328,12 @@ where
 
                     Ok::<_, InstallError>((pkg.id(), (pkg, install_spec.entry_type)))
                 }
-                .instrument(tracing::Span::current())
+                .instrument(tracing::trace_span!("install_worker"))
             })
         }))
         .buffered(config.max_jobs())
         .collect::<Vec<_>>()
-        .instrument(tracing::Span::current())
+        .instrument(tracing::trace_span!("install_collector"))
         .await
         .into_iter()
         .flatten()
