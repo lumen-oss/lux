@@ -8,6 +8,7 @@ use bon::Builder;
 use bytes::Bytes;
 use miette::Diagnostic;
 use thiserror::Error;
+use tracing::span;
 use url::{ParseError, Url};
 
 use crate::{
@@ -223,12 +224,17 @@ async fn download_rockspec(
     Ok(rockspec)
 }
 
-#[tracing::instrument(name = "📥 Downloading rockspec", skip_all)]
 async fn download_remote_rock(
     package_req: &PackageReq,
     package_db: &RemotePackageDB,
     config: &Config,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
+    let span = span!(
+        tracing::Level::INFO,
+        "📥 Downloading rock",
+        package = package_req.to_string(),
+    );
+    let _enter = span.enter();
     let remote_package = package_db.find(package_req, None)?;
     match &remote_package.source {
         RemotePackageSource::LuarocksRockspec(url) => {
@@ -349,7 +355,6 @@ pub enum SearchAndDownloadError {
     Request(#[from] reqwest::Error),
 }
 
-#[tracing::instrument(name = "📥 Downloading package", skip_all)]
 async fn search_and_download_src_rock(
     package_req: &PackageReq,
     package_db: &RemotePackageDB,
@@ -450,10 +455,19 @@ impl<State> ArchiveDownloadBuilder<'_, State>
 where
     State: archive_download_builder::State + archive_download_builder::IsComplete,
 {
-    #[tracing::instrument(name = "download", skip_all)]
     async fn download(self) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
         let args = self._build();
         let package = args.package;
+
+        let span = span!(
+            tracing::Level::INFO,
+            "📥 Downloading",
+            package = package.name().to_string(),
+            version = package.version().to_string(),
+            server = args.server_url.to_string(),
+        );
+
+        let _enter = span.enter();
         let ext = args.ext;
         let server_url = args.server_url;
         let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);

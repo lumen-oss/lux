@@ -11,6 +11,7 @@ use std::fs::DirEntry;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::{io, path::Path};
+use tracing::span;
 
 use crate::{
     config::Config,
@@ -272,13 +273,17 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     Ok(())
 }
 
-#[tracing::instrument(name = "🛠️ Building package", skip_all)]
 async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LocalPackage, BuildError>
 where
     R: Rockspec + HasIntegrity,
     T: InstallTree + Sync,
 {
     let rockspec = build.rockspec;
+    span!(
+        tracing::Level::INFO,
+        "🛠️ Building",
+        package = rockspec.package().to_string()
+    );
     let lua = build.lua;
 
     rockspec.validate_lua_version(&lua.version)?;

@@ -16,7 +16,7 @@ use lux_lib::{
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_version::LuaVersion,
 };
-use miette::{MietteHandlerOpts, Result};
+use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
 use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -112,9 +112,11 @@ async fn main() -> Result<()> {
         tracing_subscriber::registry().with(fmt_layer).init();
     } else {
         let indicatif_layer = progress::IndicatifLayer::new().with_progress_style(
-            indicatif::ProgressStyle::with_template("{spinner} {span_child_prefix}{span_name}")
-                .unwrap()
-                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
+            indicatif::ProgressStyle::with_template(
+                "{spinner} {span_child_prefix}{span_name}... {span_fields}",
+            )
+            .into_diagnostic()?
+            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
         );
         let fmt_layer = tracing_subscriber::fmt::layer::<tracing_subscriber::Registry>()
             .with_target(false)

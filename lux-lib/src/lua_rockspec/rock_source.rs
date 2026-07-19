@@ -8,7 +8,7 @@ use crate::{
 use miette::Diagnostic;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
-use std::{convert::Infallible, fs, io, ops::Deref, path::PathBuf, str::FromStr};
+use std::{convert::Infallible, fmt::Display, fs, io, ops::Deref, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
 use super::{
@@ -120,6 +120,16 @@ impl RockSourceSpec {
                 url,
                 checkout_ref: None,
             }),
+        }
+    }
+}
+
+impl Display for RockSourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RockSourceSpec::Git(git_source) => git_source.fmt(f),
+            RockSourceSpec::File(path_buf) => path_buf.display().fmt(f),
+            RockSourceSpec::Url(url) => url.fmt(f),
         }
     }
 }
