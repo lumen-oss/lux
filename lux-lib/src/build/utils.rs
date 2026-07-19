@@ -21,6 +21,7 @@ use std::{
 use target_lexicon::Triple;
 use thiserror::Error;
 use tokio::process::Command;
+use tracing::span;
 use which::which;
 
 #[cfg(unix)]
@@ -35,6 +36,14 @@ pub(crate) fn copy_lua_to_module_path(
     target_module: &LuaModule,
     target_dir: &Path,
 ) -> io::Result<()> {
+    let span = span!(
+        tracing::Level::TRACE,
+        "📋 Copying Lua module",
+        source = source.to_slash_lossy().to_string(),
+        target = target_module.to_string(),
+        target_dir = target_dir.to_slash_lossy().to_string(),
+    );
+    let _enter = span.enter();
     // Some rockspecs abuse `install.lua` to install non-lua files, such as teal (`.tl`) files.
     let target_module_path = source
         .extension()
@@ -535,17 +544,15 @@ async fn link_c_artifacts(
             .output()
             .await?
     };
-    if config.verbose() {
-        if !&output.stdout.is_empty() {
-            tracing::info!("{}", String::from_utf8_lossy(&output.stdout));
-        }
-        if !&output.stderr.is_empty() {
-            tracing::warn!("{}", String::from_utf8_lossy(&output.stderr));
-        }
+    if !&output.stdout.is_empty() {
+        tracing::debug!("{}", String::from_utf8_lossy(&output.stdout));
+    }
+    if !&output.stderr.is_empty() {
+        tracing::warn!("{}", String::from_utf8_lossy(&output.stderr));
     }
 
     validate_output(&output)?;
-    log_command_output(&output, config);
+    trace_command_output(&output);
 
     if output_path.exists() {
         Ok(())
@@ -613,6 +620,13 @@ pub(crate) async fn install_binary(
     config: &Config,
 ) -> Result<PathBuf, InstallBinaryError> where
 {
+    let span = span!(
+        tracing::Level::TRACE,
+        "💻 Installing binary...",
+        source = source.to_slash_lossy().to_string(),
+        target,
+    );
+    let _enter = span.enter();
     tokio::fs::create_dir_all(&tree.bin()).await?;
     let paths = Paths::new(tree)?;
     let script = if config.wrap_bin_scripts()
@@ -633,14 +647,12 @@ pub(crate) async fn install_binary(
 }
 
 /// Logs the output's stdout and stderr in verbose mode
-pub(crate) fn log_command_output(output: &Output, config: &Config) {
-    if config.verbose() {
-        if !output.stderr.is_empty() {
-            tracing::info!("{}", String::from_utf8_lossy(&output.stderr));
-        }
-        if !output.stdout.is_empty() {
-            tracing::info!("{}", String::from_utf8_lossy(&output.stdout));
-        }
+pub(crate) fn trace_command_output(output: &Output) {
+    if !output.stderr.is_empty() {
+        tracing::warn!("{}", String::from_utf8_lossy(&output.stderr));
+    }
+    if !output.stdout.is_empty() {
+        tracing::debug!("{}", String::from_utf8_lossy(&output.stdout));
     }
 }
 

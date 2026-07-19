@@ -104,9 +104,7 @@ impl BuildBackend for MakeBuildSpec {
                 .spawn()
             {
                 Ok(child) => match child.wait_with_output().await {
-                    Ok(output) if output.status.success() => {
-                        utils::log_command_output(&output, config)
-                    }
+                    Ok(output) if output.status.success() => utils::trace_command_output(&output),
                     Ok(output) => {
                         return Err(MakeError::CommandFailure {
                             name: match self.build_target {
@@ -156,7 +154,7 @@ impl BuildBackend for MakeBuildSpec {
                 .output()
                 .await
             {
-                Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+                Ok(output) if output.status.success() => utils::trace_command_output(&output),
                 Ok(output) => {
                     return Err(MakeError::CommandFailure {
                         name: format!("{} {}", config.make_cmd(), self.install_target),

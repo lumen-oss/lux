@@ -217,9 +217,12 @@ where
     while let Some(build_dep_spec) = build_dep_rx.recv().await {
         let rockspec = build_dep_spec.downloaded_rock.rockspec();
         let package = rockspec.package().clone();
-        let span = tracing::info_span!("install");
+        let span = tracing::info_span!(
+            "💻 Installing build dependency",
+            package = package.to_string(),
+            version = rockspec.version().to_string()
+        );
         async {
-            tracing::info!(message = format!("💻 Installing build dependency: {package}").as_str());
             let build_tree = tree.build_tree(config)?;
             // We have to write to the build tree's lockfile after each build,
             // so that each transitive build dependency is available for the

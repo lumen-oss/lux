@@ -203,7 +203,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     make_cmd.env("XCFLAGS", xcflags.join(" "));
 
     match make_cmd.output().await {
-        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        Ok(output) if output.status.success() => utils::trace_command_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "build".into(),
@@ -230,7 +230,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         .output()
         .await
     {
-        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        Ok(output) if output.status.success() => utils::trace_command_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "install".into(),
@@ -340,7 +340,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         ))
     })?;
     match msvcbuild.output().await {
-        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        Ok(output) if output.status.success() => utils::trace_command_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "build".into(),
@@ -458,7 +458,7 @@ async fn do_build_lua_unix(
     lua_version: &LuaVersion,
     _pkg_version: &str,
 ) -> Result<(), BuildLuaError> {
-    tracing::info!(message = "🛠️ Compiling Lua (Unix)...");
+    tracing::debug!(message = "🛠️ Compiling Lua (Unix)...");
     let config = args.config;
     let install_dir = args.install_dir;
 
@@ -509,7 +509,7 @@ async fn do_build_lua_unix(
         .output()
         .await
     {
-        Ok(output) if output.status.success() => utils::log_command_output(&output, config),
+        Ok(output) if output.status.success() => utils::trace_command_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "install".into(),
@@ -537,7 +537,7 @@ async fn do_build_lua_msvc(
     lua_version: &LuaVersion,
     _pkg_version: &str,
 ) -> Result<(), BuildLuaError> {
-    tracing::info!(message = "🛠️ Compiling Lua (MSVC)...");
+    tracing::debug!(message = "🛠️ Compiling Lua (MSVC)...");
     let config = args.config;
     let install_dir = args.install_dir;
 
@@ -710,7 +710,7 @@ fn guard_success(
 ) -> Result<(), BuildLuaError> {
     match output {
         Ok(output) if output.status.success() => {
-            utils::log_command_output(&output, config);
+            utils::trace_command_output(&output);
             Ok(())
         }
         Ok(output) => Err(BuildLuaError::CommandFailure {
