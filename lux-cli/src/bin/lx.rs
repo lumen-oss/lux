@@ -17,6 +17,7 @@ use lux_lib::{
     lua_version::LuaVersion,
 };
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
+use tracing_indicatif::span_ext::IndicatifSpanExt;
 use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -117,7 +118,7 @@ async fn main() -> Result<()> {
     } else {
         let indicatif_layer = progress::IndicatifLayer::new().with_progress_style(
             indicatif::ProgressStyle::with_template(
-                "{spinner} {span_child_prefix}{span_name}... {span_fields}",
+                "{spinner} {span_child_prefix}{span_name} {{{span_fields}}}",
             )
             .into_diagnostic()?
             .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
@@ -128,6 +129,7 @@ async fn main() -> Result<()> {
             .with_filter(fmt_filter);
         tracing_subscriber::registry()
             .with(fmt_layer)
+            .with(ProgressStyleTemplateLayer {})
             .with(indicatif_layer)
             .init();
     }
@@ -187,4 +189,24 @@ async fn main() -> Result<()> {
         Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
     }
     Ok(())
+}
+
+/// Checks if the current span has any fields, and if it doesn't, sets the template to exclude them
+struct ProgressStyleTemplateLayer {}
+
+impl<S> tracing_subscriber::Layer<S> for ProgressStyleTemplateLayer
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fn on_enter(&self, id: &tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if let Some(span) = ctx.span(id) {
+            if span.fields().is_empty() {
+                if let Ok(style) =
+                    &indicatif::ProgressStyle::with_template("{span_child_prefix}{span_name}")
+                {
+                    tracing::Span::current().pb_set_style(style);
+                }
+            }
+        }
+    }
 }
