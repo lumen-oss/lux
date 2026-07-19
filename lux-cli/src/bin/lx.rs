@@ -100,8 +100,12 @@ async fn main() -> Result<()> {
         std::env::set_var("CC_ENABLE_DEBUG_OUTPUT", "1");
     }
 
-    let fmt_filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new("warn"));
+    let fmt_filter = if config.verbose() {
+        tracing_subscriber::filter::EnvFilter::new("debug")
+    } else {
+        tracing_subscriber::filter::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new("warn"))
+    };
 
     let fmt_layer = tracing_subscriber::fmt::layer::<tracing_subscriber::Registry>()
         .with_target(false)
