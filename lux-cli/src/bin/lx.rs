@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::time::Duration;
 
 use clap::Parser;
@@ -113,7 +114,7 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .with_filter(fmt_filter.clone());
 
-    if config.no_progress() {
+    if config.no_progress() || !std::io::stderr().is_terminal() {
         tracing_subscriber::registry().with(fmt_layer).init();
     } else {
         let indicatif_layer = progress::IndicatifLayer::new().with_progress_style(
