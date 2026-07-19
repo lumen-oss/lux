@@ -56,7 +56,7 @@ pub struct InstallLuaLibError {
 impl BuildBackend for RustMluaBuildSpec {
     type Err = RustError;
 
-    #[tracing::instrument(name = "🛠️ rust_mlua::run", skip_all, level = "debug")]
+    #[tracing::instrument(name = "rust_mlua::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -88,7 +88,7 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
         {
-            let span = info_span!("🦀 Compiling rust-mlua module");
+            let span = info_span!("Compiling rust-mlua module");
             match Command::new("cargo")
                 .current_dir(build_dir)
                 .args(build_args)

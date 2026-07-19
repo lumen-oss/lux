@@ -272,7 +272,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     let package_db = args.package_db;
     let span = span!(
         tracing::Level::INFO,
-        "📤 Uploading",
+        "Uploading",
         package = project.toml().package().to_string(),
     );
     let _enter = span.enter();

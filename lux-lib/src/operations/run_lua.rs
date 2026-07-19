@@ -98,7 +98,7 @@ where
         let loader_init = if args.disable_loader.unwrap_or(false) {
             "".to_string()
         } else if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
-            tracing::warn!("⚠️ WARNING: lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.");
+            tracing::warn!("lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.");
             "".to_string()
         } else {
             paths.init()

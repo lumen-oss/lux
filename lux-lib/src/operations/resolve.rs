@@ -84,7 +84,7 @@ where
         do_get_all_dependencies(args).await
     }
 }
-#[tracing::instrument(name = "🔗 Resolving dependencies", skip_all)]
+#[tracing::instrument(name = "Resolving dependencies", skip_all)]
 #[async_recursion]
 async fn do_get_all_dependencies<'a, P>(
     args: Resolve<'a, P>,

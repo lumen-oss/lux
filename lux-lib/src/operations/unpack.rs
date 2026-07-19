@@ -27,7 +27,7 @@ pub enum UnpackError {
     UnknownMimeType,
 }
 
-#[tracing::instrument(name = "📦 Unpacking src.rock", skip_all)]
+#[tracing::instrument(name = "Unpacking src.rock", skip_all)]
 pub async fn unpack_src_rock<R: Read + Seek + Send>(
     rock_src: R,
     destination: PathBuf,
@@ -44,7 +44,7 @@ async fn unpack_src_rock_impl<R: Read + Seek + Send>(
     Ok(destination)
 }
 
-#[tracing::instrument(name = "📦 Unpacking file", skip_all)]
+#[tracing::instrument(name = "Unpacking file", skip_all)]
 #[async_recursion]
 pub(crate) async fn unpack<R>(
     mime_type: Option<&str>,

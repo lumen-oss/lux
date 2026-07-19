@@ -107,7 +107,7 @@ async fn remove(
 async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveError> {
     let span = span!(
         tracing::Level::INFO,
-        "🗑️ Removing",
+        "Removing",
         package = package.name().to_string(),
         version = package.version().to_string(),
     );

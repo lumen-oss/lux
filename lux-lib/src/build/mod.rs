@@ -109,7 +109,7 @@ where
         let build = self._build();
         let span = span!(
             tracing::Level::INFO,
-            "🛠️ Building",
+            "Building",
             package = build.rockspec.package().to_string(),
             version = build.rockspec.version().to_string(),
         );
@@ -238,7 +238,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
 ) -> Result<(), BuildError> {
     let install_spec = &rockspec.build().current_platform().install;
     {
-        let span = span!(tracing::Level::INFO, "📋 Copying Lua modules");
+        let span = span!(tracing::Level::INFO, "Copying Lua modules");
         let _enter = span.enter();
         for (target, source) in &install_spec.lua {
             let _enter = span.enter();
@@ -247,7 +247,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         }
     }
     {
-        let span = span!(tracing::Level::INFO, "📋 Compiling C libraries");
+        let span = span!(tracing::Level::INFO, "Compiling C libraries");
         let _enter = span.enter();
         for (target, source) in &install_spec.lib {
             let absolute_source = build_dir.join(source);
@@ -256,7 +256,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         }
     }
     if entry_type.is_entrypoint() {
-        let span = span!(tracing::Level::INFO, "💻 Installing binaries");
+        let span = span!(tracing::Level::INFO, "Installing binaries");
         let _enter = span.enter();
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
@@ -276,12 +276,12 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         }
     }
     if !install_spec.conf.is_empty() {
-        let span = span!(tracing::Level::INFO, "📋 Copying configuration files");
+        let span = span!(tracing::Level::INFO, "Copying configuration files");
         let _enter = span.enter();
         for (target, source) in &install_spec.conf {
             let span = span!(
                 tracing::Level::TRACE,
-                "📋 Copying configuration file",
+                "Copying configuration file",
                 source = source.to_slash_lossy().to_string(),
                 target,
             );
