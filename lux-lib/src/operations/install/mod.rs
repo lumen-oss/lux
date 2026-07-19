@@ -110,10 +110,10 @@ where
         }
         let count = install_built.packages.len();
         let span = if count > 1 {
-            tracing::info_span!("💻 Installing", count,)
+            info_span!("💻 Installing", count,)
         } else {
             let install_spec = &install_built.packages[0];
-            tracing::info_span!("💻 Installing", package = install_spec.package.to_string(),)
+            info_span!("💻 Installing", package = install_spec.package.to_string(),)
         };
         let _enter = span.enter();
         let package_db = match install_built.package_db {
@@ -225,7 +225,7 @@ where
     while let Some(build_dep_spec) = build_dep_rx.recv().await {
         let rockspec = build_dep_spec.downloaded_rock.rockspec();
         let package = rockspec.package().clone();
-        let span = tracing::info_span!(
+        let span = info_span!(
             "💻 Installing build dependency",
             package = package.to_string(),
             version = rockspec.version().to_string()
