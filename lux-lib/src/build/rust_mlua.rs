@@ -1,5 +1,6 @@
 use super::utils::c_dylib_extension;
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
+use crate::build::utils;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::tree::InstallTree;
 use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
@@ -11,6 +12,7 @@ use std::process::ExitStatus;
 use std::{fs, io};
 use thiserror::Error;
 use tokio::process::Command;
+use tracing::{info_span, Instrument};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum RustError {
@@ -54,6 +56,7 @@ pub struct InstallLuaLibError {
 impl BuildBackend for RustMluaBuildSpec {
     type Err = RustError;
 
+    #[tracing::instrument(name = "🛠️ rust_mlua::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -84,21 +87,25 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push("--features");
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
-        match Command::new("cargo")
-            .current_dir(build_dir)
-            .args(build_args)
-            .output()
-            .await
         {
-            Ok(output) if output.status.success() => {}
-            Ok(output) => {
-                return Err(RustError::CargoBuild {
-                    status: output.status,
-                    stdout: String::from_utf8_lossy(&output.stdout).into(),
-                    stderr: String::from_utf8_lossy(&output.stderr).into(),
-                });
+            let span = info_span!("🦀 Compiling rust-mlua module");
+            match Command::new("cargo")
+                .current_dir(build_dir)
+                .args(build_args)
+                .output()
+                .instrument(span)
+                .await
+            {
+                Ok(output) if output.status.success() => utils::trace_command_output(&output),
+                Ok(output) => {
+                    return Err(RustError::CargoBuild {
+                        status: output.status,
+                        stdout: String::from_utf8_lossy(&output.stdout).into(),
+                        stderr: String::from_utf8_lossy(&output.stderr).into(),
+                    });
+                }
+                Err(err) => return Err(RustError::RustBuild(err)),
             }
-            Err(err) => return Err(RustError::RustBuild(err)),
         }
         fs::create_dir_all(&output_paths.lib).map_err(|err| {
             RustError::CreateDir(output_paths.lib.to_string_lossy().to_string(), err)
@@ -159,6 +166,6 @@ async fn cleanup(output_paths: &RockLayout) -> () {
 
     match tokio::fs::remove_dir_all(root_dir).await {
         Ok(_) => (),
-        Err(_) => {}
+        Err(err) => tracing::warn!("failed to clean up {}: {}", root_dir.display(), err),
     };
 }

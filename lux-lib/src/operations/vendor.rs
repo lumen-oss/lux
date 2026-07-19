@@ -13,7 +13,7 @@ use path_slash::PathExt;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 use tokio::{fs::File, io::AsyncWriteExt};
-use tracing::span;
+use tracing::{span, Instrument};
 
 use crate::{
     build::{RemotePackageSourceSpec, SrcRockSource},
@@ -228,38 +228,43 @@ async fn vendor_sources(
     futures::stream::iter(packages.into_iter().map(|dep| {
         let vendor_dir = Arc::clone(&vendor_dir);
         let config = config.clone();
-        tokio::spawn(async move {
-            match dep.downloaded_rock {
-                crate::operations::RemoteRockDownload::RockspecOnly { rockspec_download } => {
-                    vendor_rockspec_sources(&vendor_dir, rockspec_download, None, &config).await?
-                }
-                crate::operations::RemoteRockDownload::BinaryRock {
-                    rockspec_download,
-                    packed_rock,
-                } => vendor_binary_rock(&vendor_dir, rockspec_download, packed_rock).await?,
-                crate::operations::RemoteRockDownload::SrcRock {
-                    rockspec_download,
-                    src_rock,
-                    source_url,
-                } => {
-                    let src_rock_source = SrcRockSource {
-                        bytes: src_rock,
-                        source_url,
-                    };
-                    vendor_rockspec_sources(
-                        &vendor_dir,
+        tokio::spawn(
+            async move {
+                match dep.downloaded_rock {
+                    crate::operations::RemoteRockDownload::RockspecOnly { rockspec_download } => {
+                        vendor_rockspec_sources(&vendor_dir, rockspec_download, None, &config)
+                            .await?
+                    }
+                    crate::operations::RemoteRockDownload::BinaryRock {
                         rockspec_download,
-                        Some(src_rock_source),
-                        &config,
-                    )
-                    .await?
-                }
-            };
-            Ok::<_, VendorError>(())
-        })
+                        packed_rock,
+                    } => vendor_binary_rock(&vendor_dir, rockspec_download, packed_rock).await?,
+                    crate::operations::RemoteRockDownload::SrcRock {
+                        rockspec_download,
+                        src_rock,
+                        source_url,
+                    } => {
+                        let src_rock_source = SrcRockSource {
+                            bytes: src_rock,
+                            source_url,
+                        };
+                        vendor_rockspec_sources(
+                            &vendor_dir,
+                            rockspec_download,
+                            Some(src_rock_source),
+                            &config,
+                        )
+                        .await?
+                    }
+                };
+                Ok::<_, VendorError>(())
+            }
+            .instrument(tracing::Span::current()),
+        )
     }))
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()
+    .instrument(tracing::Span::current())
     .await
     .into_iter()
     .flatten()

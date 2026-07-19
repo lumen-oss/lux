@@ -17,6 +17,8 @@ use super::utils::recursive_copy_dir;
 use miette::Diagnostic;
 use tempfile::tempdir;
 use thiserror::Error;
+use tracing::info_span;
+use tracing::Instrument;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum LuarocksBuildError {
@@ -38,6 +40,7 @@ pub enum LuarocksBuildError {
     LuaVersion(#[from] LuaVersionError),
 }
 
+#[tracing::instrument(name = "🛠️ luarocks::build", skip_all, level = "debug")]
 pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
@@ -63,8 +66,10 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     .await?;
     let luarocks = LuaRocksInstallation::new(config, tree.build_tree(config)?)?;
     let luarocks_tree = tempdir()?;
+    let span = info_span!("🛠️ Delegating to luarocks");
     luarocks
         .make(&rockspec_file, build_dir, luarocks_tree.path(), lua)
+        .instrument(span)
         .await?;
     install(rockspec, luarocks_tree.path(), output_paths, config).await
 }

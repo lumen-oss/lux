@@ -47,6 +47,7 @@ pub enum BuiltinBuildError {
 impl BuildBackend for BuiltinBuildSpec {
     type Err = BuiltinBuildError;
 
+    #[tracing::instrument(name = "🛠️ builtin::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree + Sync,
