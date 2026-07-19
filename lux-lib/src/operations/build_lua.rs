@@ -21,6 +21,7 @@ use target_lexicon::Triple;
 use tempfile::tempdir;
 use thiserror::Error;
 use tokio::{fs, process::Command};
+use tracing::span;
 use url::Url;
 
 const LUA51_VERSION: &str = "5.1.5";
@@ -101,8 +102,14 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
     }
 }
 
-#[tracing::instrument(name = "🦠 Cloning https://github.com/LuaJIT/LuaJIT.git", skip_all)]
 async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
+    let span = span!(
+        tracing::Level::INFO,
+        "🛠️ Building LuaJIT",
+        version = LUAJIT_MM_VERSION,
+    );
+    let _enter = span.enter();
+
     let build_dir = tempdir().map_err(|err| {
         io::Error::other(format!(
             "failed to create lua_installation temp directory:\n{}",
@@ -112,8 +119,15 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     // XXX luajit.org responds with an invalid content-type, so we'll use the github mirror for now.
     // let luajit_url = "https://luajit.org/git/luajit.git";
     let luajit_url = "https://github.com/LuaJIT/LuaJIT.git";
-    tracing::info!(message = format!("🦠 Cloning {luajit_url}").as_str());
+
     {
+        let span = span!(
+            tracing::Level::INFO,
+            "🦠 Cloning LuaJIT sources",
+            url = luajit_url,
+        );
+        let _enter = span.enter();
+
         // We create a new scope because we have to drop fetch_options before the await
         let mut fetch_options = FetchOptions::new();
         fetch_options.update_fetchhead(false);
@@ -123,7 +137,6 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
         let (object, _) = repo.revparse_ext(&format!("v{LUAJIT_MM_VERSION}"))?;
         repo.checkout_tree(&object, None)?;
     }
-    tracing::info!(message = format!("🛠️ Building Luajit {LUAJIT_MM_VERSION}").as_str());
     if cfg!(target_env = "msvc") {
         do_build_luajit_msvc(args, build_dir.path()).await
     } else {
@@ -131,9 +144,8 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     }
 }
 
-#[tracing::instrument(name = "🛠️ Building Luajit on Unix", skip_all)]
+#[tracing::instrument(name = "🛠️ Compiling LuaJIT", skip_all)]
 async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
-    tracing::info!(message = "🛠️ Compiling Luajit (Unix)...");
     let lua_version = args.lua_version;
     let config = args.config;
     let install_dir = args.install_dir;
@@ -277,9 +289,8 @@ async fn move_luajit_includes(install_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-#[tracing::instrument(name = "🛠️ Building Luajit on MSVC", skip_all)]
+#[tracing::instrument(name = "🛠️ Compiling LuaJIT", skip_all)]
 async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
-    tracing::info!(message = "🛠️ Compiling Luajit (MSVC)...");
     let lua_version = args.lua_version;
     let config = args.config;
     let install_dir = args.install_dir;
@@ -367,9 +378,15 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     Ok(())
 }
 
-#[tracing::instrument(name = "📥 Building Lua", skip_all)]
 async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
+    let span = span!(
+        tracing::Level::INFO,
+        "🛠️ Building Lua",
+        version = lua_version.to_string(),
+    );
+    let _enter = span.enter();
+
     let build_dir = tempdir().map_err(|err| {
         io::Error::other(format!(
             "failed to create lua_installation temp directory:\n{}",
@@ -396,14 +413,22 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .unwrap_unchecked()
     };
 
-    tracing::info!(message = format!("📥 Downloading {source_url}").as_str());
-    let response = crate::reqwest::new_https_client(args.config)?
-        .get(source_url.clone())
-        .send()
-        .await?
-        .error_for_status()?
-        .bytes()
-        .await?;
+    let response = {
+        let span = span!(
+            tracing::Level::INFO,
+            "📥 Downloading Lua",
+            url = source_url.to_string(),
+        );
+        let _enter = span.enter();
+
+        crate::reqwest::new_https_client(args.config)?
+            .get(source_url.clone())
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?
+    };
 
     let hash = response.hash()?;
 
@@ -419,7 +444,6 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
     operations::unpack::unpack(mime_type, cursor, true, file_name, build_dir.path()).await?;
 
-    tracing::info!(message = format!("🛠️ Building Lua {pkg_version}").as_str());
     if cfg!(target_env = "msvc") {
         do_build_lua_msvc(args, build_dir.path(), lua_version, pkg_version).await
     } else {
@@ -427,7 +451,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     }
 }
 
-#[tracing::instrument(name = "🛠️ Building Lua on Unix", skip_all)]
+#[tracing::instrument(name = "🛠️ Compiling Lua", skip_all)]
 async fn do_build_lua_unix(
     args: BuildLua<'_>,
     build_dir: &Path,
@@ -506,7 +530,7 @@ async fn do_build_lua_unix(
     Ok(())
 }
 
-#[tracing::instrument(name = "🛠️ Building Lua on MSVC", skip_all)]
+#[tracing::instrument(name = "🛠️ Compiling Lua", skip_all)]
 async fn do_build_lua_msvc(
     args: BuildLua<'_>,
     build_dir: &Path,

@@ -32,7 +32,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use tracing::Instrument;
+use tracing::{span, Instrument};
 pub mod spec;
 
 /// A rocks package installer, providing fine-grained control
@@ -374,7 +374,6 @@ This is likely because an install thread panicked and was interrupted unexpected
 }
 
 #[allow(clippy::too_many_arguments)]
-#[tracing::instrument(name = "💻 Installing package", skip_all)]
 async fn install_rockspec<T>(
     rockspec_download: DownloadedRockspec,
     src_rock_source: Option<SrcRockSource>,
@@ -392,6 +391,13 @@ where
 {
     let package = rockspec_download.rockspec.package().clone();
     let rockspec = rockspec_download.rockspec;
+    let span = span!(
+        tracing::Level::INFO,
+        "💻 Installing",
+        package = package.to_string(),
+        version = rockspec.version().to_string(),
+    );
+    let _enter = span.enter();
     let source = rockspec_download.source;
 
     if let Some(BuildBackendSpec::LuaRock(_)) = &rockspec.build().current_platform().build_backend {
@@ -424,7 +430,6 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-#[tracing::instrument(name = "💻 Installing package (pre-built)", skip_all)]
 async fn install_binary_rock(
     rockspec_download: DownloadedRockspec,
     packed_rock: Bytes,
@@ -438,6 +443,13 @@ async fn install_binary_rock(
 ) -> Result<LocalPackage, InstallError> {
     let rockspec = rockspec_download.rockspec;
     let package = rockspec.package().clone();
+    let span = span!(
+        tracing::Level::INFO,
+        "💻 Installing (pre-built)",
+        package = package.to_string(),
+        version = rockspec.version().to_string(),
+    );
+    let _enter = span.enter();
     let pkg = BinaryRockInstall::new(
         &rockspec,
         rockspec_download.source,

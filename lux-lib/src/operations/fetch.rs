@@ -22,6 +22,7 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
+use tracing::span;
 
 use super::DownloadSrcRockError;
 use super::UnpackError;
@@ -167,7 +168,6 @@ impl Prompter for NullPrompter {
     }
 }
 
-#[tracing::instrument(name = "📥 Fetching source", skip_all)]
 async fn do_fetch_src<R: Rockspec>(
     fetch: &FetchSrc<'_, R>,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
@@ -187,6 +187,13 @@ async fn do_fetch_src<R: Rockspec>(
         },
         None => rock_source.source_spec.clone(),
     };
+    let span = span!(
+        tracing::Level::INFO,
+        "📥 Fetching source",
+        location = source_spec.to_string(),
+    );
+    let _enter = span.enter();
+
     if let Some(vendor_dir) = config.vendor_dir() {
         source_spec = match source_spec {
             // could be a project directory (not vendored) or a local source
@@ -332,11 +339,17 @@ async fn do_fetch_src<R: Rockspec>(
     Ok(metadata)
 }
 
-#[tracing::instrument(name = "📥 Downloading src.rock", skip_all)]
 async fn do_fetch_src_rock(
     fetch: FetchSrcRock<'_>,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
     let package = fetch.package;
+    let span = span!(
+        tracing::Level::INFO,
+        "📥 Fetching src.rock",
+        package = package.to_string(),
+    );
+    let _enter = span.enter();
+
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
     let src_rock = operations::download_src_rock(package, config.server(), fetch.config).await?;
