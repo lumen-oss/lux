@@ -112,8 +112,6 @@ pub(crate) async fn manifest_from_cache_or_server(
     );
     let _enter = span.enter();
 
-    tracing::info!(message = format!("📥 Downloading manifest from {url}").as_str());
-
     let cache = mk_manifest_cache(&url, config).await?;
 
     #[cfg(not(test))]
@@ -160,8 +158,6 @@ pub(crate) async fn manifest_from_server_only(
         url = url.to_string(),
     );
     let _enter = span.enter();
-
-    tracing::info!(message = format!("📥 Downloading manifest from {url}").as_str());
 
     let cache = mk_manifest_cache(&url, config).await?;
     let client = crate::reqwest::new_https_client(config)?;
