@@ -12,7 +12,7 @@ use std::fs::DirEntry;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::{io, path::Path};
-use tracing::span;
+use tracing::{span, Instrument};
 
 use crate::{
     config::Config,
@@ -106,7 +106,14 @@ where
     State: build_builder::State + build_builder::IsComplete,
 {
     pub async fn build(self) -> Result<LocalPackage, BuildError> {
-        do_build(self._build()).await
+        let build = self._build();
+        let span = span!(
+            tracing::Level::INFO,
+            "🛠️ Building",
+            package = build.rockspec.package().to_string(),
+            version = build.rockspec.version().to_string(),
+        );
+        do_build(build).instrument(span).await
     }
 }
 
@@ -296,13 +303,6 @@ where
     T: InstallTree + Sync,
 {
     let rockspec = build.rockspec;
-    let span = span!(
-        tracing::Level::INFO,
-        "🛠️ Building",
-        package = rockspec.package().to_string(),
-        version = rockspec.version().to_string(),
-    );
-    let _enter = span.enter();
     let lua = build.lua;
 
     rockspec.validate_lua_version(&lua.version)?;

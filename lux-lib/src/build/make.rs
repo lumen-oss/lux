@@ -8,6 +8,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::process::Command;
+use tracing::{info_span, Instrument};
 
 use crate::{
     build::{
@@ -53,6 +54,7 @@ pub enum MakeError {
 impl BuildBackend for MakeBuildSpec {
     type Err = MakeError;
 
+    #[tracing::instrument(name = "🛠️ make::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -92,6 +94,7 @@ impl BuildBackend for MakeBuildSpec {
             if let Some(build_target) = &self.build_target {
                 cmd.arg(build_target);
             }
+            let span = info_span!("🛠️ Make build pass");
             match cmd
                 .current_dir(build_dir)
                 .args(["-f", &self.makefile.to_slash_lossy()])
@@ -103,7 +106,7 @@ impl BuildBackend for MakeBuildSpec {
                 .env("LUA_CPATH", &lua_cpath)
                 .spawn()
             {
-                Ok(child) => match child.wait_with_output().await {
+                Ok(child) => match child.wait_with_output().instrument(span).await {
                     Ok(output) if output.status.success() => utils::trace_command_output(&output),
                     Ok(output) => {
                         return Err(MakeError::CommandFailure {
@@ -143,6 +146,7 @@ impl BuildBackend for MakeBuildSpec {
                     Ok(format!("{key}={substituted_value}").trim().to_string())
                 })
                 .try_collect::<_, Vec<_>, Self::Err>()?;
+            let span = info_span!("🛠️ Make install pass");
             match Command::new(config.make_cmd())
                 .current_dir(build_dir)
                 .arg(&self.install_target)
@@ -152,6 +156,7 @@ impl BuildBackend for MakeBuildSpec {
                 .env("LUA_PATH", &lua_path)
                 .env("LUA_CPATH", &lua_cpath)
                 .output()
+                .instrument(span)
                 .await
             {
                 Ok(output) if output.status.success() => utils::trace_command_output(&output),

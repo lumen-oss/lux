@@ -7,6 +7,7 @@ use std::io;
 use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use tracing::info_span;
 use tree_sitter_generate::GenerateError;
 
 const DEFAULT_GENERATE_ABI_VERSION: usize = tree_sitter::LANGUAGE_VERSION;
@@ -48,6 +49,7 @@ pub enum TreesitterBuildError {
 impl BuildBackend for TreesitterParserBuildSpec {
     type Err = TreesitterBuildError;
 
+    #[tracing::instrument(name = "🛠️ treesitter_parser::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -59,10 +61,13 @@ impl BuildBackend for TreesitterParserBuildSpec {
             .map(|dir| build_dir.join(dir))
             .unwrap_or(build_dir.to_path_buf());
         if self.generate {
+            let span = info_span!("🌳 Generating tree-sitter parser");
+            let _enter = span.enter();
             let abi_version = match std::env::var("TREE_SITTER_LANGUAGE_VERSION") {
                 Ok(v) => v.parse()?,
                 Err(_) => DEFAULT_GENERATE_ABI_VERSION,
             };
+            tracing::debug!("ABI version: {abi_version}");
             let out_path: Option<PathBuf> = None;
             let grammar_path: Option<PathBuf> = None;
             tree_sitter_generate::generate_parser_in_directory(
@@ -174,6 +179,8 @@ async fn build_parser(
     parser_dir: &Path,
     lang: &str,
 ) -> Result<(), TreesitterBuildError> {
+    let span = info_span!("🌳 Compiling tree-sitter parser", language = lang);
+    let _enter = span.enter();
     tokio::fs::create_dir_all(parser_dir)
         .await
         .map_err(|err| TreesitterBuildError::CreateDir {

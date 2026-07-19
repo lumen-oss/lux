@@ -17,6 +17,7 @@ use tokio::runtime::Builder;
 
 #[cfg(not(target_env = "msvc"))]
 use lux_lib::build::BuildBehaviour;
+use tracing::Instrument;
 
 #[tokio::test]
 async fn builtin_build() {
@@ -394,20 +395,25 @@ fn test_build_multiple_treesitter_parsers() {
         let tree = tree.clone();
         let rockspec = rockspec.clone();
 
-        handles.push(runtime.spawn(async move {
-            let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        handles.push(
+            runtime.spawn(
+                async move {
+                    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
 
-            Build::new()
-                .rockspec(&rockspec)
-                .lua(&lua)
-                .tree(&tree)
-                .entry_type(tree::EntryType::Entrypoint)
-                .config(&config)
-                .behaviour(Force)
-                .build()
-                .await
-                .unwrap()
-        }));
+                    Build::new()
+                        .rockspec(&rockspec)
+                        .lua(&lua)
+                        .tree(&tree)
+                        .entry_type(tree::EntryType::Entrypoint)
+                        .config(&config)
+                        .behaviour(Force)
+                        .build()
+                        .await
+                        .unwrap()
+                }
+                .instrument(tracing::Span::current()),
+            ),
+        );
     }
 
     runtime.block_on(futures::future::join_all(handles));

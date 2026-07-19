@@ -6,6 +6,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::process::Command;
+use tracing::{info_span, Instrument};
 
 use crate::{
     build::{
@@ -64,6 +65,7 @@ impl HasVariables for CMakeVariables {
 impl BuildBackend for CMakeBuildSpec {
     type Err = CMakeError;
 
+    #[tracing::instrument(name = "🛠️ cmake::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -106,6 +108,7 @@ impl BuildBackend for CMakeBuildSpec {
             })
             .fold_ok((), |(), variable| args.push(format!("-D{variable}")))?;
 
+        let span = info_span!("🛠️ CMake");
         spawn_cmake_cmd(
             Command::new(config.cmake_cmd())
                 .current_dir(build_dir)
@@ -117,9 +120,11 @@ impl BuildBackend for CMakeBuildSpec {
                 .env("LUA_CPATH", &lua_cpath),
             config,
         )
+        .instrument(span)
         .await?;
 
         if self.build_pass {
+            let span = info_span!("🛠️ CMake build pass");
             spawn_cmake_cmd(
                 Command::new(config.cmake_cmd())
                     .current_dir(build_dir)
@@ -132,10 +137,12 @@ impl BuildBackend for CMakeBuildSpec {
                     .env("LUA_CPATH", &lua_cpath),
                 config,
             )
+            .instrument(span)
             .await?
         }
 
         if self.install_pass && !no_install {
+            let span = info_span!("🛠️ CMake install pass");
             spawn_cmake_cmd(
                 Command::new(config.cmake_cmd())
                     .current_dir(build_dir)
@@ -150,6 +157,7 @@ impl BuildBackend for CMakeBuildSpec {
                     .env("LUA_CPATH", &lua_cpath),
                 config,
             )
+            .instrument(span)
             .await?;
         }
 

@@ -32,7 +32,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use tracing::{span, Instrument};
+use tracing::{info_span, span, Instrument};
 pub mod spec;
 
 /// A rocks package installer, providing fine-grained control
@@ -108,6 +108,14 @@ where
         if install_built.packages.is_empty() {
             return Ok(Vec::default());
         }
+        let count = install_built.packages.len();
+        let span = if count > 1 {
+            tracing::info_span!("💻 Installing", count,)
+        } else {
+            let install_spec = &install_built.packages[0];
+            tracing::info_span!("💻 Installing", package = install_spec.package.to_string(),)
+        };
+        let _enter = span.enter();
         let package_db = match install_built.package_db {
             Some(db) => db,
             None => RemotePackageDB::from_config(install_built.config).await?,
@@ -320,10 +328,12 @@ where
 
                     Ok::<_, InstallError>((pkg.id(), (pkg, install_spec.entry_type)))
                 }
+                .instrument(tracing::Span::current())
             })
         }))
         .buffered(config.max_jobs())
         .collect::<Vec<_>>()
+        .instrument(tracing::Span::current())
         .await
         .into_iter()
         .flatten()
@@ -394,8 +404,7 @@ where
 {
     let package = rockspec_download.rockspec.package().clone();
     let rockspec = rockspec_download.rockspec;
-    let span = span!(
-        tracing::Level::INFO,
+    let span = info_span!(
         "💻 Installing",
         package = package.to_string(),
         version = rockspec.version().to_string(),

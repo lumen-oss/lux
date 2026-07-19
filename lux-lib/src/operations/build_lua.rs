@@ -292,7 +292,6 @@ async fn move_luajit_includes(install_dir: &Path) -> io::Result<()> {
 #[tracing::instrument(name = "🛠️ Compiling LuaJIT", skip_all)]
 async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
-    let config = args.config;
     let install_dir = args.install_dir;
     let lib_dir = install_dir.join("lib");
     fs::create_dir_all(&lib_dir).await.map_err(|err| {
