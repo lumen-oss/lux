@@ -14,6 +14,7 @@ use bon::Builder;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
+use tracing::{info_span, Instrument};
 
 use super::{InstallError, Sync, SyncError};
 
@@ -79,30 +80,47 @@ pub struct BuildWorkspace<'a> {
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>
     BuildWorkspaceBuilder<'_, State>
 {
-    #[tracing::instrument(name = "🛠️ Building workspace", skip_all)]
     pub async fn build(self) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
-        let args = self._build();
-        let config = args.config;
-        let workspace = args.workspace;
-        let workspace_tree = workspace.tree(config)?;
-        let build_tree = workspace.build_tree(config)?;
-        let lua = LuaInstallation::new_from_config(config).await?;
-        if !args.no_lock {
-            Sync::new(workspace, config)
-                .sync_dependencies()
-                .await
-                .map_err(BuildWorkspaceError::SyncDependencies)?;
+        let build = self._build();
+        let span = match &build.package {
+            Some(package) => info_span!("🛠️ Building workspace", package = package.to_string()),
+            None => info_span!("🛠️ Building workspace"),
+        };
+        do_build(build).instrument(span).await
+    }
+}
 
-            Sync::new(workspace, config)
-                .sync_build_dependencies()
-                .await
-                .map_err(BuildWorkspaceError::SyncBuildDependencies)?;
+async fn do_build(args: BuildWorkspace<'_>) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
+    let config = args.config;
+    let workspace = args.workspace;
+    let workspace_tree = workspace.tree(config)?;
+    let build_tree = workspace.build_tree(config)?;
+    let lua = LuaInstallation::new_from_config(config).await?;
+    if !args.no_lock {
+        Sync::new(workspace, config)
+            .sync_dependencies()
+            .await
+            .map_err(BuildWorkspaceError::SyncDependencies)?;
+
+        Sync::new(workspace, config)
+            .sync_build_dependencies()
+            .await
+            .map_err(BuildWorkspaceError::SyncBuildDependencies)?;
+    } else {
+        let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
+        let mut dependencies_to_install = Vec::new();
+        let mut build_dependencies_to_install = Vec::new();
+        if let Some(package) = &args.package {
+            let project = workspace.select_member(package)?;
+            let project_toml = project.toml().into_local()?;
+            prepare_dependencies_for_build(
+                &project_toml,
+                &workspace_tree,
+                &mut dependencies_to_install,
+                &mut build_dependencies_to_install,
+            );
         } else {
-            let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
-            let mut dependencies_to_install = Vec::new();
-            let mut build_dependencies_to_install = Vec::new();
-            if let Some(package) = &args.package {
-                let project = workspace.select_member(package)?;
+            for project in workspace.members() {
                 let project_toml = project.toml().into_local()?;
                 prepare_dependencies_for_build(
                     &project_toml,
@@ -110,52 +128,42 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                     &mut dependencies_to_install,
                     &mut build_dependencies_to_install,
                 );
-            } else {
-                for project in workspace.members() {
-                    let project_toml = project.toml().into_local()?;
-                    prepare_dependencies_for_build(
-                        &project_toml,
-                        &workspace_tree,
-                        &mut dependencies_to_install,
-                        &mut build_dependencies_to_install,
-                    );
-                }
             }
-
-            let tree = workspace.tree(config)?;
-
-            InstallDependencies::new()
-                .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
-                .build_dependencies(
-                    build_dependencies_to_install
-                        .into_iter()
-                        .unique()
-                        .collect_vec(),
-                )
-                .tree(&tree)
-                .lua(&lua)
-                .luarocks(&luarocks)
-                .config(config)
-                .build()
-                .await
-                .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
         }
 
-        let mut packages = Vec::new();
-        if !args.only_deps {
-            if let Some(package) = &args.package {
-                let project = workspace.select_member(package)?;
+        let tree = workspace.tree(config)?;
+
+        InstallDependencies::new()
+            .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
+            .build_dependencies(
+                build_dependencies_to_install
+                    .into_iter()
+                    .unique()
+                    .collect_vec(),
+            )
+            .tree(&tree)
+            .lua(&lua)
+            .luarocks(&luarocks)
+            .config(config)
+            .build()
+            .await
+            .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
+    }
+
+    let mut packages = Vec::new();
+    if !args.only_deps {
+        if let Some(package) = &args.package {
+            let project = workspace.select_member(package)?;
+            let pkg = build_project(project, workspace, &lua, config).await?;
+            packages.push(pkg);
+        } else {
+            for project in workspace.members() {
                 let pkg = build_project(project, workspace, &lua, config).await?;
                 packages.push(pkg);
-            } else {
-                for project in workspace.members() {
-                    let pkg = build_project(project, workspace, &lua, config).await?;
-                    packages.push(pkg);
-                }
             }
         }
-        Ok(packages)
     }
+    Ok(packages)
 }
 
 async fn build_project(

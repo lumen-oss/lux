@@ -140,6 +140,7 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 /// Compiles a set of C files into a single dynamic library and places them under `{target_dir}/{target_file}`.
 /// # Panics
 /// Panics if no parent or no filename can be determined for the target path.
+#[tracing::instrument(name = "🛠️ Compiling C files", skip_all)]
 pub(crate) async fn compile_c_files(
     files: &Vec<PathBuf>,
     target_module: &LuaModule,
@@ -328,6 +329,7 @@ pub enum LinkCModulesError {
 /// Compiles a set of C files (with extra metadata) to a given destination.
 /// # Panics
 /// Panics if no filename for the target path can be determined.
+#[tracing::instrument(name = "🛠️ Compiling C modules", skip_all)]
 pub(crate) async fn compile_c_modules(
     data: &ModulePaths,
     source_dir: &Path,
@@ -649,7 +651,7 @@ pub(crate) async fn install_binary(
 /// Logs the output's stdout and stderr in verbose mode
 pub(crate) fn trace_command_output(output: &Output) {
     if !output.stderr.is_empty() {
-        tracing::warn!("{}", String::from_utf8_lossy(&output.stderr));
+        tracing::debug!("{}", String::from_utf8_lossy(&output.stderr));
     }
     if !output.stdout.is_empty() {
         tracing::debug!("{}", String::from_utf8_lossy(&output.stdout));

@@ -7,6 +7,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::process::Command;
+use tracing::{info_span, Instrument};
 use which::which;
 
 use crate::{
@@ -64,6 +65,7 @@ pub enum CommandError {
 impl BuildBackend for CommandBuildSpec {
     type Err = CommandError;
 
+    #[tracing::instrument(name = "🛠️ command::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
         T: InstallTree,
@@ -132,6 +134,7 @@ async fn run_command(
     #[cfg(not(target_env = "msvc"))]
     let (shell, shell_arg) = (which("sh")?, "-c");
 
+    let span = info_span!("🛠️ Running build command", command = substituted_cmd);
     match Command::new(shell)
         .arg(shell_arg)
         .arg(&substituted_cmd)
@@ -149,7 +152,7 @@ async fn run_command(
                 command: substituted_cmd,
             })
         }
-        Ok(child) => match child.wait_with_output().await {
+        Ok(child) => match child.wait_with_output().instrument(span).await {
             Ok(output) if output.status.success() => utils::trace_command_output(&output),
             Ok(output) => {
                 return Err(CommandError::CommandFailure {

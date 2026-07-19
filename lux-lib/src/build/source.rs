@@ -59,6 +59,7 @@ Use a pre-built rock or a different build backend."#
     UnsupportedLuarocksBuildBackend(String),
 }
 
+#[tracing::instrument(name = "🛠️ source::build", skip_all, level = "debug")]
 pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, SourceBuildError>
 where
     T: InstallTree + Sync,

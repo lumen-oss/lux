@@ -7,6 +7,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::Instrument;
 
 use crate::{
     build::BuildBehaviour,
@@ -141,63 +142,121 @@ where
                         None => None,
                     };
 
-                    tokio::spawn(async move {
-                        let downloaded_rock = if let Some(source) = source {
-                            RemoteRockDownload::from_package_req_and_source_spec(
-                                package.clone(),
-                                source,
-                            )?
-                        } else if let Some(vendor_dir) = config.vendor_dir() {
-                            FetchVendored::new()
-                                .vendor_dir(vendor_dir)
-                                .package(&package)
-                                .package_db(&package_db)
-                                .fetch_vendored_rock()
-                                .await
-                                .map_err(|err| {
-                                    ResolveDependenciesError::FetchVendored(package.clone(), err)
-                                })?
-                        } else {
-                            Download::new(&package, &config)
-                                .package_db(&package_db)
-                                .download_remote_rock()
-                                .await?
-                        };
+                    tokio::spawn(
+                        async move {
+                            let downloaded_rock = if let Some(source) = source {
+                                RemoteRockDownload::from_package_req_and_source_spec(
+                                    package.clone(),
+                                    source,
+                                )?
+                            } else if let Some(vendor_dir) = config.vendor_dir() {
+                                FetchVendored::new()
+                                    .vendor_dir(vendor_dir)
+                                    .package(&package)
+                                    .package_db(&package_db)
+                                    .fetch_vendored_rock()
+                                    .await
+                                    .map_err(|err| {
+                                        ResolveDependenciesError::FetchVendored(
+                                            package.clone(),
+                                            err,
+                                        )
+                                    })?
+                            } else {
+                                Download::new(&package, &config)
+                                    .package_db(&package_db)
+                                    .download_remote_rock()
+                                    .await?
+                            };
 
-                        let constraint = constraint.unwrap_or(package.version_req().clone().into());
+                            let constraint =
+                                constraint.unwrap_or(package.version_req().clone().into());
 
-                        let rockspec = downloaded_rock.rockspec();
+                            let rockspec = downloaded_rock.rockspec();
 
-                        if parent_packages.contains(rockspec.package()) {
-                            return Err(ResolveDependenciesError::CyclicDependency(
-                                DependencyCycle(
-                                    parent_packages
-                                        .iter()
-                                        .cloned()
-                                        .chain(std::iter::once(rockspec.package().clone()))
-                                        .collect_vec(),
-                                ),
-                            ));
-                        }
+                            if parent_packages.contains(rockspec.package()) {
+                                return Err(ResolveDependenciesError::CyclicDependency(
+                                    DependencyCycle(
+                                        parent_packages
+                                            .iter()
+                                            .cloned()
+                                            .chain(std::iter::once(rockspec.package().clone()))
+                                            .collect_vec(),
+                                    ),
+                                ));
+                            }
 
-                        // NOTE: We don't need to install build dependencies to install binary rocks.
-                        if !matches!(downloaded_rock, RemoteRockDownload::BinaryRock { .. }) {
-                            let build_dependencies = rockspec
-                                .build_dependencies()
+                            // NOTE: We don't need to install build dependencies to install binary rocks.
+                            if !matches!(downloaded_rock, RemoteRockDownload::BinaryRock { .. }) {
+                                let build_dependencies = rockspec
+                                    .build_dependencies()
+                                    .current_platform()
+                                    .iter()
+                                    .filter(|dep| {
+                                        // Exclude luarocks build backends that we have implemented in lux
+                                        !matches!(
+                                            dep.name().to_string().as_str(),
+                                            "luarocks-build-rust-mlua"
+                                                | "luarocks-build-treesitter-parser"
+                                        )
+                                    })
+                                    .map(|dep| {
+                                        // We always install build dependencies as entrypoints
+                                        // with regard to the build tree
+                                        let entry_type = tree::EntryType::Entrypoint;
+                                        PackageInstallSpec::new(
+                                            dep.package_req().clone(),
+                                            entry_type,
+                                        )
+                                        .build_behaviour(build_behaviour)
+                                        .pin(pin)
+                                        .opt(opt)
+                                        .maybe_source(dep.source().clone())
+                                        .build()
+                                    })
+                                    .collect_vec();
+
+                                // NOTE: We treat transitive regular dependencies of build dependencies
+                                // as build dependencies
+                                Resolve::new()
+                                    .dependencies_tx(build_dependencies_tx.clone())
+                                    .build_dependencies_tx(build_dependencies_tx.clone())
+                                    .packages(build_dependencies)
+                                    .parent_packages(Arc::new(
+                                        parent_packages
+                                            .iter()
+                                            .cloned()
+                                            .chain(std::iter::once(rockspec.package().clone()))
+                                            .collect_vec(),
+                                    ))
+                                    .package_db(package_db.clone())
+                                    .maybe_lockfile(build_lockfile.clone())
+                                    .maybe_build_lockfile(build_lockfile.clone())
+                                    .config(&config)
+                                    .get_all_dependencies()
+                                    .await?;
+                            }
+
+                            let dependencies = rockspec
+                                .dependencies()
                                 .current_platform()
                                 .iter()
-                                .filter(|dep| {
-                                    // Exclude luarocks build backends that we have implemented in lux
-                                    !matches!(
-                                        dep.name().to_string().as_str(),
-                                        "luarocks-build-rust-mlua"
-                                            | "luarocks-build-treesitter-parser"
-                                    )
-                                })
                                 .map(|dep| {
-                                    // We always install build dependencies as entrypoints
-                                    // with regard to the build tree
-                                    let entry_type = tree::EntryType::Entrypoint;
+                                    // If we're forcing a rebuild, retain the `EntryType`
+                                    // of existing dependencies
+                                    let entry_type = if build_behaviour == BuildBehaviour::Force
+                                        && lockfile.as_ref().is_some_and(|lockfile| {
+                                            let installed_rock =
+                                                lockfile.has_rock(dep.package_req(), None);
+                                            installed_rock.is_some_and(|installed_rock| {
+                                                lockfile.is_entrypoint(&installed_rock.id())
+                                            })
+                                        }) {
+                                        tree::EntryType::Entrypoint
+                                    } else {
+                                        tree::EntryType::DependencyOnly
+                                    };
+
                                     PackageInstallSpec::new(dep.package_req().clone(), entry_type)
                                         .build_behaviour(build_behaviour)
                                         .pin(pin)
@@ -207,12 +266,10 @@ where
                                 })
                                 .collect_vec();
 
-                            // NOTE: We treat transitive regular dependencies of build dependencies
-                            // as build dependencies
-                            Resolve::new()
-                                .dependencies_tx(build_dependencies_tx.clone())
-                                .build_dependencies_tx(build_dependencies_tx.clone())
-                                .packages(build_dependencies)
+                            let dependencies = Resolve::new()
+                                .dependencies_tx(dependencies_tx.clone())
+                                .build_dependencies_tx(build_dependencies_tx)
+                                .packages(dependencies)
                                 .parent_packages(Arc::new(
                                     parent_packages
                                         .iter()
@@ -220,92 +277,47 @@ where
                                         .chain(std::iter::once(rockspec.package().clone()))
                                         .collect_vec(),
                                 ))
-                                .package_db(package_db.clone())
-                                .maybe_lockfile(build_lockfile.clone())
-                                .maybe_build_lockfile(build_lockfile.clone())
+                                .package_db(package_db)
+                                .maybe_lockfile(lockfile)
+                                .maybe_build_lockfile(build_lockfile)
                                 .config(&config)
                                 .get_all_dependencies()
                                 .await?;
+
+                            let rockspec = downloaded_rock.rockspec();
+                            let local_spec = LocalPackageSpec::new(
+                                rockspec.package(),
+                                rockspec.version(),
+                                constraint,
+                                dependencies,
+                                &pin,
+                                &opt,
+                                rockspec.binaries(),
+                            );
+
+                            let install_spec = PackageInstallData {
+                                build_behaviour,
+                                pin,
+                                opt,
+                                spec: local_spec.clone(),
+                                downloaded_rock,
+                                entry_type,
+                            };
+
+                            dependencies_tx.send(install_spec).map_err(|err| {
+                                ResolveDependenciesError::ChannelSend(err.to_string())
+                            })?;
+
+                            Ok::<_, ResolveDependenciesError>(local_spec.id())
                         }
-
-                        let dependencies = rockspec
-                            .dependencies()
-                            .current_platform()
-                            .iter()
-                            .map(|dep| {
-                                // If we're forcing a rebuild, retain the `EntryType`
-                                // of existing dependencies
-                                let entry_type = if build_behaviour == BuildBehaviour::Force
-                                    && lockfile.as_ref().is_some_and(|lockfile| {
-                                        let installed_rock =
-                                            lockfile.has_rock(dep.package_req(), None);
-                                        installed_rock.is_some_and(|installed_rock| {
-                                            lockfile.is_entrypoint(&installed_rock.id())
-                                        })
-                                    }) {
-                                    tree::EntryType::Entrypoint
-                                } else {
-                                    tree::EntryType::DependencyOnly
-                                };
-
-                                PackageInstallSpec::new(dep.package_req().clone(), entry_type)
-                                    .build_behaviour(build_behaviour)
-                                    .pin(pin)
-                                    .opt(opt)
-                                    .maybe_source(dep.source().clone())
-                                    .build()
-                            })
-                            .collect_vec();
-
-                        let dependencies = Resolve::new()
-                            .dependencies_tx(dependencies_tx.clone())
-                            .build_dependencies_tx(build_dependencies_tx)
-                            .packages(dependencies)
-                            .parent_packages(Arc::new(
-                                parent_packages
-                                    .iter()
-                                    .cloned()
-                                    .chain(std::iter::once(rockspec.package().clone()))
-                                    .collect_vec(),
-                            ))
-                            .package_db(package_db)
-                            .maybe_lockfile(lockfile)
-                            .maybe_build_lockfile(build_lockfile)
-                            .config(&config)
-                            .get_all_dependencies()
-                            .await?;
-
-                        let rockspec = downloaded_rock.rockspec();
-                        let local_spec = LocalPackageSpec::new(
-                            rockspec.package(),
-                            rockspec.version(),
-                            constraint,
-                            dependencies,
-                            &pin,
-                            &opt,
-                            rockspec.binaries(),
-                        );
-
-                        let install_spec = PackageInstallData {
-                            build_behaviour,
-                            pin,
-                            opt,
-                            spec: local_spec.clone(),
-                            downloaded_rock,
-                            entry_type,
-                        };
-
-                        dependencies_tx.send(install_spec).map_err(|err| {
-                            ResolveDependenciesError::ChannelSend(err.to_string())
-                        })?;
-
-                        Ok::<_, ResolveDependenciesError>(local_spec.id())
-                    })
+                        .instrument(tracing::Span::current()),
+                    )
                 },
             ),
     )
     .buffered(config.max_jobs())
     .collect::<Vec<_>>()
+    .instrument(tracing::Span::current())
     .await
     .into_iter()
     .flatten()
