@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.51.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.50.0...lux-lib-v0.51.0) `lux-lib` - 2026-07-20
+
+### Added
+- *(error-reporting)* [**breaking**] include fields in lua_rockspec diagnostic source code
+- *(error-reporting)* [**breaking**] less lua_rockspec error repetition
+- *(error-reporting)* [**breaking**] lua rockspec diagnostics
+- *(error-reporting)* [**breaking**] exec operation diagnostics
+- *(error-reporting)* [**breaking**] config module diagnostics
+- *(error-reporting)* [**breaking**] download and fetch operation diagnostics
+- *(error-reporting)* [**breaking**] more config diagnostics
+
 ## [0.50.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.2...lux-lib-v0.50.0) `lux-lib` - 2026-07-20
 
 ### Added
