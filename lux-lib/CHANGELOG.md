@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.2...lux-lib-v0.50.0) `lux-lib` - 2026-07-20
+
+### Added
+- reduce emojis in progress spinners
+- *(tracing)* add trace spans for tokio jobs
+- more output on `--verbose`
+- instrument build backends + async tasks
+- *(tracing)* add fields to spans
+- [**breaking**] replace progress bars with `tracing` calls [WIP]
+
+### Fixed
+- prevent intermediates compilation from emitting to stderr
+
+### Other
+- *(tracing)* make CI happy
+- make clippy happy
+
 ## [0.49.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.1...lux-lib-v0.49.2) `lux-lib` - 2026-07-17
 
 ### Dependencies
