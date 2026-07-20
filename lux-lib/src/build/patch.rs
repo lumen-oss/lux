@@ -132,7 +132,6 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::ConfigBuilder;
 
     use super::*;
     use assert_fs::TempDir;
@@ -169,11 +168,6 @@ index 959c7ed..9c6a9a1 100644
         .into_iter()
         .collect();
 
-        let config = ConfigBuilder::new()
-            .unwrap()
-            .no_progress(Some(true))
-            .build()
-            .unwrap();
         Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
 
         let patched_content = std::fs::read_to_string(&patch_file).unwrap();
@@ -198,11 +192,6 @@ index 0000000..1cbadfb
         )]
         .into_iter()
         .collect();
-        let config = ConfigBuilder::new()
-            .unwrap()
-            .no_progress(Some(true))
-            .build()
-            .unwrap();
         Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
         let patch_file = temp_dir.join("foo/README.md");
         let patched_content = std::fs::read_to_string(&patch_file).unwrap();
@@ -229,12 +218,6 @@ index 1cbadfb..0000000
         )]
         .into_iter()
         .collect();
-
-        let config = ConfigBuilder::new()
-            .unwrap()
-            .no_progress(Some(true))
-            .build()
-            .unwrap();
 
         Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
         assert!(!test_file.exists());
