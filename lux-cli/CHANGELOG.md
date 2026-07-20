@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.0](https://github.com/lumen-oss/lux/compare/v0.38.1...v0.39.0) `lux-cli` - 2026-07-20
+
+### Added
+- *(tracing)* add cli tracing output
+- reduce emojis in progress spinners
+- more output on `--verbose`
+- instrument build backends + async tasks
+- format span fields in progress spinners if present
+- output with debug level if `--verbose` is set
+- *(tracing)* add fields to spans
+- [**breaking**] replace progress bars with `tracing` calls [WIP]
+
+### Fixed
+- don't display spinners if not in a terminal/tty
+
+### Other
+- *(tracing)* make CI happy
+- re-add `lx unpack` implementation with tracing info messages
+
 ## [0.38.1](https://github.com/lumen-oss/lux/compare/v0.38.0...v0.38.1) `lux-cli` - 2026-07-16
 
 ### Other
