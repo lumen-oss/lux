@@ -2,6 +2,8 @@ use inquire::Confirm;
 use lux_lib::{config::Config, lua_version::LuaVersion, tree::InstallTree};
 
 use miette::{IntoDiagnostic, Result};
+use path_slash::PathBufExt;
+use tracing::Instrument;
 
 /// Purge the user tree
 pub async fn purge(config: Config) -> Result<()> {
@@ -15,9 +17,11 @@ pub async fn purge(config: Config) -> Result<()> {
             .prompt()
             .into_diagnostic()?
     {
-        let _root_dir = tree.root();
+        let root_dir = tree.root();
 
+        let span = tracing::info_span!("🗑️ Purging", tree = root_dir.to_slash_lossy().to_string());
         tokio::fs::remove_dir_all(tree.root())
+            .instrument(span)
             .await
             .into_diagnostic()?;
     }
