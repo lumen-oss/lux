@@ -126,6 +126,7 @@ impl RockLayout {
 }
 
 impl HasVariables for RockLayout {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, var: &str) -> Result<Option<String>, GetVariableError> {
         Ok(match var {
             "PREFIX" => Some(format_path(&self.rock_path)),

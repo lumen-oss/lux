@@ -35,9 +35,11 @@ pub(crate) trait HasVariables {
 }
 
 /// Helper for variable substitution with environment variables
+#[derive(Debug)]
 pub(crate) struct Environment {}
 
 impl HasVariables for Environment {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(std::env::var(input).ok())
     }
@@ -84,6 +86,7 @@ fn parser<'a>(
 
 /// Substitute variables of the format `$(VAR)`, where `VAR` is the variable name
 /// passed to `get_var`.
+#[tracing::instrument(level = "trace", skip(variables))]
 pub(crate) fn substitute(
     variables: &[&dyn HasVariables],
     input: &str,

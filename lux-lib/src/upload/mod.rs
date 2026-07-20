@@ -263,6 +263,7 @@ impl From<SignatureProtocol> for gpgme::Protocol {
     }
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError> {
     let project = args.project;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
@@ -377,6 +378,7 @@ mod helpers {
             .join(endpoint)
     }
 
+    #[tracing::instrument(level = "trace", skip(client))]
     pub(crate) async fn ensure_tool_version(
         client: &Client,
         server_url: &Url,
@@ -400,6 +402,7 @@ mod helpers {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(client, api_key))]
     pub(crate) async fn verify_tfa_code(
         client: &Client,
         server_url: &Url,
@@ -429,6 +432,7 @@ mod helpers {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(client, api_key))]
     pub(crate) async fn ensure_user_exists(
         client: &Client,
         api_key: &ApiKey,
@@ -448,6 +452,7 @@ mod helpers {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) async fn generate_rockspec(
         project: &Project,
         client: &Client,
@@ -496,6 +501,7 @@ mod helpers {
         Err(UploadError::MaxSpecRevsExceeded)
     }
 
+    #[tracing::instrument(level = "trace", skip(client, api_key))]
     async fn rock_exists(
         client: &Client,
         api_key: &ApiKey,

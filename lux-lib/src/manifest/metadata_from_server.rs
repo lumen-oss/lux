@@ -48,6 +48,7 @@ if you are using a custom server, make sure it returns correctly formatted manif
     LuaVersion(#[from] LuaVersionUnset),
 }
 
+#[tracing::instrument(level = "trace", skip(client))]
 pub(super) async fn get_manifest(
     url: Url,
     manifest_version: String,
@@ -99,6 +100,7 @@ pub(super) async fn get_manifest(
     }
 }
 
+#[tracing::instrument(level = "trace", skip(config))]
 pub(crate) async fn manifest_from_cache_or_server(
     server_url: &Url,
     config: &Config,
@@ -145,6 +147,7 @@ pub(crate) async fn manifest_from_cache_or_server(
     get_manifest(url, manifest_version.clone(), &cache, &client).await
 }
 
+#[tracing::instrument(level = "trace", skip(config))]
 pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
     config: &Config,

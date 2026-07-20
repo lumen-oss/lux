@@ -127,6 +127,7 @@ impl BuildBackend for RustMluaBuildSpec {
     }
 }
 
+#[tracing::instrument(level = "trace")]
 fn install_rust_libs(
     modules: HashMap<String, PathBuf>,
     target_path: &Path,
@@ -145,6 +146,7 @@ fn install_rust_libs(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace")]
 fn install_lua_libs(
     include: HashMap<PathBuf, PathBuf>,
     build_dir: &Path,
@@ -161,6 +163,7 @@ fn install_lua_libs(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace")]
 async fn cleanup(output_paths: &RockLayout) -> () {
     let root_dir = &output_paths.rock_path;
 

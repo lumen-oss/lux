@@ -51,6 +51,7 @@ pub enum RemotePackageDbIntegrityError {
 }
 
 impl RemotePackageDB {
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn from_config(config: &Config) -> Result<Self, RemotePackageDBError> {
         let mut manifests = Vec::new();
         for server in config.enabled_dev_servers()? {

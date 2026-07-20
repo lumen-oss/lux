@@ -68,9 +68,11 @@ pub enum GenerateSourceError {
 }
 
 /// Helper for substituting git variables from a git project
+#[derive(Debug)]
 struct GitProject<'a>(&'a ProjectRoot);
 
 impl HasVariables for GitProject<'_> {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(match input {
             "REF" => {
