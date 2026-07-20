@@ -202,7 +202,6 @@ fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)
 
 #[cfg(test)]
 mod tests {
-    use crate::config::ConfigBuilder;
     use assert_fs::TempDir;
     use std::fs::File;
 
@@ -216,7 +215,6 @@ mod tests {
             .join("luatest-0.2-1.src.rock");
         let file = File::open(&test_rock_path).unwrap();
         let dest = TempDir::new().unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
         unpack_src_rock(file, dest.to_path_buf()).await.unwrap();
     }
 }

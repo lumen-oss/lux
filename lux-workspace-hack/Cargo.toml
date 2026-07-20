@@ -24,6 +24,7 @@ camino = { version = "1", default-features = false, features = ["serde1"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
+console = { version = "0.16", default-features = false, features = ["ansi-parsing", "std", "unicode-width"] }
 crossbeam-utils = { version = "0.8" }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
@@ -51,7 +52,7 @@ parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
 percent-encoding = { version = "2" }
 predicates = { version = "3" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
@@ -69,6 +70,7 @@ toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
+tracing-core = { version = "0.1" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 web-time = { version = "1", default-features = false, features = ["serde"] }
@@ -85,6 +87,7 @@ camino = { version = "1", default-features = false, features = ["serde1"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_builder = { version = "4", default-features = false, features = ["color", "std", "suggestions", "usage", "wrap_help"] }
+console = { version = "0.16", default-features = false, features = ["ansi-parsing", "std", "unicode-width"] }
 crossbeam-utils = { version = "0.8" }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
@@ -112,7 +115,7 @@ parking_lot = { version = "0.12", features = ["arc_lock", "send_guard"] }
 percent-encoding = { version = "2" }
 predicates = { version = "3" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_core = { version = "1", features = ["alloc", "rc"] }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "unbounded_depth"] }
@@ -131,6 +134,7 @@ toml_edit = { version = "0.22", features = ["serde"] }
 toml_parser = { version = "1" }
 toml_writer = { version = "1" }
 tracing = { version = "0.1", features = ["log"] }
+tracing-core = { version = "0.1" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 web-time = { version = "1", default-features = false, features = ["serde"] }
