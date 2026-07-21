@@ -22,6 +22,11 @@ name = "lux-workspace-hack"
 changelog_update = false
 release = false
 
+[[package]]
+name = "lux-lsp"
+changelog_path = "lux-lsp/CHANGELOG.md"
+semver_check = false
+
 [changelog]
 header = """# Changelog
 

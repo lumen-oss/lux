@@ -7,6 +7,7 @@ CHANGELOGS = [
     ROOT / "lux-cli" / "CHANGELOG.md",
     ROOT / "lux-lib" / "CHANGELOG.md",
     ROOT / "lux-macros" / "CHANGELOG.md",
+    ROOT / "lux-lsp" / "CHANGELOG.md",
 ]
 
 OUTPUT = ROOT / "CHANGELOG.md"

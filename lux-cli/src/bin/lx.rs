@@ -20,9 +20,14 @@ use lux_lib::{
 };
 
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
+use tracing::{span::Id, Subscriber};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
-use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{
+    layer::{Context, SubscriberExt},
+    registry::LookupSpan,
+    Layer,
+};
 
 use lux_cli::utils::error::clap_to_miette;
 
@@ -211,11 +216,11 @@ async fn main() -> Result<()> {
 /// Checks if the current span has any fields, and if it doesn't, sets the template to exclude them
 struct ProgressStyleTemplateLayer {}
 
-impl<S> tracing_subscriber::Layer<S> for ProgressStyleTemplateLayer
+impl<S> Layer<S> for ProgressStyleTemplateLayer
 where
-    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    S: Subscriber + for<'a> LookupSpan<'a>,
 {
-    fn on_enter(&self, id: &tracing::span::Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_enter(&self, id: &Id, ctx: Context<'_, S>) {
         if let Some(span) = ctx.span(id) {
             if span.fields().is_empty() {
                 if let Ok(style) =

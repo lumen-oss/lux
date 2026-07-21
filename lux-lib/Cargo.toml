@@ -75,6 +75,7 @@ vfs = "0.13"
 git2 = { workspace = true }
 ignore = { workspace = true }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 itertools = { workspace = true }
 lux-macros = { workspace = true }
 lux-workspace-hack = { workspace = true }
