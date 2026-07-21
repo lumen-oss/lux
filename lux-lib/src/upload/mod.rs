@@ -59,84 +59,127 @@ pub struct VersionCheckResponse {
 #[derive(Error, Debug, Diagnostic)]
 pub enum ToolCheckError {
     #[error("error parsing tool check URL:\n{0}")]
+    #[diagnostic(help("check your server configuration"))]
     ParseError(#[from] url::ParseError),
-    #[error("error sending HTTP request:\n{0}")]
+    #[error("error sending HTTP request")]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Request(#[from] reqwest::Error),
-    #[error(r#"`lux` is out of date with {0}'s expected tool version.
-    `lux` is at version {TOOL_VERSION}, server is at {server_version}"#, server_version = _1.version)]
+    #[error(r#"Lux is out of date with {0}'s expected tool version.
+    Lux is at version {TOOL_VERSION}, server is at {server_version}"#, server_version = _1.version)]
+    #[diagnostic(help("ensure you have an up-to-date version of Lux installed"))]
     ToolOutdated(String, VersionCheckResponse),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UserCheckError {
-    #[error("error parsing user check URL:\n{0}")]
-    ParseError(#[from] url::ParseError),
+    #[error("error parsing user check URL")]
+    #[diagnostic(help("check your server configuration"))]
+    Parse(#[from] url::ParseError),
     #[error(transparent)]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Request(#[from] reqwest::Error),
+    #[diagnostic(help(
+        "ensure that the API key provided via the $LUX_API_KEY environemnt variable is correct"
+    ))]
     #[error("invalid API key provided")]
     UserNotFound,
-    #[error("server {0} responded with error status: {1}")]
+    #[error("server '{0}' responded with error status: '{1}'")]
+    #[diagnostic(help("the server may be temporarily unavailable"))]
     Server(Url, StatusCode),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum RockCheckError {
-    #[error("parse error while checking rock status on server:\n{0}")]
+    #[error("parse error while checking rock status on server")]
+    #[diagnostic(help("check your server configuration"))]
     ParseError(#[from] url::ParseError),
-    #[error("HTTP request error while checking rock status on server:\n{0}")]
+    #[error("HTTP request error while checking rock status on server")]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Request(#[from] reqwest::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum UploadError {
-    #[error("error parsing upload URL:\n{0}")]
+    #[error("error parsing upload URL")]
+    #[diagnostic(help("check your server configuration"))]
     ParseError(#[from] url::ParseError),
-    #[error("HTPP request error while uploading:\n{0}")]
+    #[error("HTPP request error while uploading")]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Request(#[from] reqwest::Error),
-    #[error("server {0} responded with error status: {1}")]
+    #[error("server '{0}' responded with error status: '{1}'")]
+    #[diagnostic(help("the server may be temporarily unavailable"))]
     Server(Url, StatusCode),
     #[error("client error when requesting {0}:\n{1}")]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
     Client(Url, String),
+    #[diagnostic(transparent)]
     RockCheck(#[from] RockCheckError),
-    #[error("a package with the same rockspec content already exists on the server: {0}")]
+    #[error("a package with the same rockspec content already exists on the server: '{0}'")]
+    #[diagnostic(help("try uploading a rockspec with a different version"))]
     RockExists(Url),
-    #[error("unable to read rockspec: {0}")]
+    #[error("unable to read rockspec")]
+    #[diagnostic(help("check that the rockspec exists and is readable"))]
     RockspecRead(#[from] std::io::Error),
     #[cfg(feature = "gpgme")]
-    #[error(
-        r#"{0}.
-
-    HINT: Please ensure that a GPG agent is running and that a valid GPG signing key is registered.
-          If you'd like to skip the signing step, supply `--sign-protocol none`
+    #[error("GPG signing failed")]
+    #[diagnostic(help(
+        r#"ensure that a GPG agent is running and that a valid GPG signing key is registered.
+          if you'd like to skip the signing step, supply `--sign-protocol=none`
         "#
-    )]
+    ))]
     Signature(#[from] gpgme::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     ToolCheck(#[from] ToolCheckError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     UserCheck(#[from] UserCheckError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     ApiKeyUnspecified(#[from] ApiKeyUnspecified),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     ValidationError(#[from] RemoteProjectTomlValidationError),
-    #[error(
-        "unsupported version: '{0}'.\nLux can upload packages with a SemVer version, 'dev' or 'scm'"
-    )]
+    #[error("unsupported version: '{0}'")]
+    #[diagnostic(help("Lux can upload packages with a SemVer version, 'dev' or 'scm'"))]
     UnsupportedVersion(String),
     #[error("{0}")] // We don't know the concrete error type
+    #[diagnostic(help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),)]
     Rockspec(String),
     #[error("the maximum supported number of rockspec revisions per version has been exceeded")]
+    #[diagnostic(help("bump the version to a version that has not yet been published"))]
     MaxSpecRevsExceeded,
-    #[error("rock already exists on server. Error downloading existing rockspec:\n{0}")]
+    #[error("rock already exists on server. Error downloading existing rockspec")]
     #[diagnostic(forward(0))]
     SearchAndDownload(#[from] SearchAndDownloadError),
-    #[error("error computing rockspec hash:\n{0}")]
+    #[error("error computing rockspec hash")]
     Hash(io::Error),
     #[error("the 2FA code '{0}' was rejected by the server: {1}")]
+    #[diagnostic(help("it may have expired; try again with a new code."))]
     TfaCodeRejected(String, String),
 }
 
 pub struct ApiKey(String);
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("no API key provided! Please set the $LUX_API_KEY environment variable")]
+#[error("no API key provided")]
+#[diagnostic(help("please set the $LUX_API_KEY environment variable"))]
 pub struct ApiKeyUnspecified;
 
 impl ApiKey {
