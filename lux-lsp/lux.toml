@@ -1,0 +1,15 @@
+package = "lux-lsp"
+version = "0.1.0"
+lua = ">=5.1"
+
+[description]
+maintainer = "vhyrro"
+
+[dependencies]
+
+[run]
+args = [ "src/main.lua" ]
+
+[build]
+type = "rust-binary"
+binary = "lux-lsp"

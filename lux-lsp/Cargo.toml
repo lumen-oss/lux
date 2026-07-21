@@ -1,0 +1,38 @@
+[package]
+name = "lux-lsp"
+version.workspace = true
+description = "LSP server for Lux"
+authors = ["vhyrro <vhyrro@gmail.com>", "mrcjkb <marc@jakobi.dev>"]
+homepage = "https://github.com/lumen-oss/lux"
+repository = "https://github.com/lumen-oss/lux"
+license = "LGPL-3.0+"
+edition = "2021"
+
+[[bin]]
+name = "lx-lsp"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+eyre = "0.6.12"
+lux-lib = { path = "../lux-lib" }
+lux-workspace-hack = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower-lsp-server = "0.23"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+  "registry",
+  "fmt",
+  "env-filter",
+] }
+
+[lints.clippy]
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+
+[profile.dev.package.backtrace]
+opt-level = 3

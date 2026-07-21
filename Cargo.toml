@@ -5,6 +5,7 @@ members = [
   "lux-lua",
   "lux-definitions",
   "lux-macros",
+  "lux-lsp",
   "lux-workspace-hack",
   "xtask",
   "xtask-lua",
