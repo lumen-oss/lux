@@ -19,6 +19,7 @@ use super::{
 };
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum SourceBuildError {
     #[error("IO operation failed: {0}")]
     Io(#[from] io::Error),

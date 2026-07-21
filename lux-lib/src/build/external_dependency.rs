@@ -16,6 +16,7 @@ use thiserror::Error;
 use super::utils::{c_lib_extension, format_path};
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ExternalDependencyError {
     #[error("external dependency '{0}' not found")]
     #[diagnostic(help("{}", not_found_help(.0)))]

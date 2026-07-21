@@ -15,6 +15,7 @@ use tokio::process::Command;
 use tracing::{info_span, Instrument};
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum RustError {
     #[error("`cargo build` failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
     CargoBuild {
@@ -38,6 +39,7 @@ pub enum RustError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("error installing rust library {lib}")]
 #[diagnostic(help("check that the output directory exists and is writable."))]
 pub struct InstallRustLibError {
@@ -46,6 +48,7 @@ pub struct InstallRustLibError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("error installing Lua library {lib}")]
 #[diagnostic(help("check that the output directory exists and is writable."))]
 pub struct InstallLuaLibError {

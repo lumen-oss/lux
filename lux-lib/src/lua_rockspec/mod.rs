@@ -46,6 +46,7 @@ use crate::{
 };
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuaRockspecError {
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     #[diagnostic(
@@ -127,6 +128,7 @@ impl LuaRockspecError {
 /// ottavino wraps it in an [`ottavino::ExternError`], which Lux wraps inn
 /// a [`LuaRockspecError::ExecutionError`]
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 enum ParseLuaRockspecFieldError {
     #[error("invalid rockspec field '{field}': {source}")]
     Deserialize {
@@ -586,6 +588,7 @@ impl Rockspec for RemoteLuaRockspec {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuaVersionError {
     #[error(
         r#"
@@ -676,6 +679,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("invalid rockspec format: {0}")]
 pub struct InvalidRockspecFormat(String);
 

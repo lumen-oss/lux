@@ -74,6 +74,7 @@ impl LuaModule {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ParseLuaModuleError {
     #[error("path '{0}' resulted in an empty Lua module.")]
     EmptyModule(String),
@@ -230,6 +231,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("cannot resolve ambiguous platform override for `build.modules`.")]
 pub struct ModuleSpecAmbiguousPlatformOverride;
 
@@ -253,6 +255,7 @@ impl PartialOverride for ModuleSpecInternal {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("could not resolve platform override for `build.modules`. THIS IS A BUG!")]
 pub struct BuildModulesPlatformOverride;
 
@@ -268,6 +271,7 @@ impl PlatformOverridable for ModuleSpecInternal {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("missing or empty field `sources`")]
 pub struct ModulePathsMissingSources;
 

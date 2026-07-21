@@ -23,6 +23,7 @@ pub(crate) struct RockManifest {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum RockManifestError {
     #[error("could not parse rock_manifest: {0}")]
     Piccolo(#[from] ottavino::ExternError),

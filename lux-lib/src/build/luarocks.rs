@@ -21,6 +21,7 @@ use tracing::info_span;
 use tracing::Instrument;
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuarocksBuildError {
     #[error(transparent)]
     Io(#[from] io::Error),

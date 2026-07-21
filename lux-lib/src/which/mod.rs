@@ -48,6 +48,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum WhichError {
     #[error(transparent)]
     Io(#[from] io::Error),

@@ -23,6 +23,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum PatchError {
     #[error("error parsing patch {0}: {1}")]
     Parse(PathBuf, ParsePatchError),

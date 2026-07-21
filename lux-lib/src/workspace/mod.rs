@@ -80,6 +80,7 @@ pub enum WorkspaceError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum WorkspaceTreeError {
     #[error(transparent)]
     #[diagnostic(transparent)]

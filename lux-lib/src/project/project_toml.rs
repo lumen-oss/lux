@@ -855,6 +855,7 @@ fn validate_generated_lua(lua_str: &str) -> Result<(), ProjectTomlError> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub enum ProjectTomlIntegrityError {
     LuaRockspecError(#[from] LuaRockspecError),

@@ -25,6 +25,7 @@ const NLUA_EXE: &str = "nlua";
 const NLUA_EXE: &str = "nlua.bat";
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum TestSpecDecodeError {
     #[error("the 'command' test type must specify either a 'command' or 'script' field")]
     NoCommandOrScript,
@@ -33,6 +34,7 @@ pub enum TestSpecDecodeError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum TestSpecError {
     #[error("could not auto-detect the test spec. Please add one to your lux.toml")]
     NoTestSpecDetected,

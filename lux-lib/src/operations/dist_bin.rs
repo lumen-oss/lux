@@ -45,6 +45,7 @@ where
 
 use miette::Diagnostic;
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum DistProjectBinError {
     #[error("error installing project:\n{0}")]
     #[diagnostic(forward(0))]

@@ -117,6 +117,7 @@ impl LuaVersion {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("lua version not set")]
 pub struct LuaVersionUnset {
     #[help]

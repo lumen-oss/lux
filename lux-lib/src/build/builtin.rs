@@ -21,6 +21,7 @@ use crate::{
 use super::utils::{CompileCFilesError, CompileCModulesError, InstallBinaryError};
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum BuiltinBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -150,6 +151,7 @@ fn source_paths(build_dir: &Path, modules: &HashMap<LuaModule, ModuleSpec>) -> H
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum AutoDetectModulesError {
     #[error(transparent)]
     #[diagnostic(transparent)]

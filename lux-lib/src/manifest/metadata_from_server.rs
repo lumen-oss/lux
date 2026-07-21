@@ -16,6 +16,7 @@ use crate::config::Config;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ManifestFromServerError {
     #[error(transparent)]
     Io(#[from] io::Error),

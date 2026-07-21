@@ -57,6 +57,7 @@ pub struct VersionCheckResponse {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ToolCheckError {
     #[error("error parsing tool check URL:\n{0}")]
     #[diagnostic(help("check your server configuration"))]
@@ -74,6 +75,7 @@ if the issue persists, the server may be temporarily unavailable."#
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum UserCheckError {
     #[error("error parsing user check URL")]
     #[diagnostic(help("check your server configuration"))]
@@ -95,6 +97,7 @@ if the issue persists, the server may be temporarily unavailable."#
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum RockCheckError {
     #[error("parse error while checking rock status on server")]
     #[diagnostic(help("check your server configuration"))]
@@ -108,6 +111,7 @@ if the issue persists, the server may be temporarily unavailable."#
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub enum UploadError {
     #[error("error parsing upload URL")]
@@ -178,6 +182,7 @@ if the issue persists, the server may be temporarily unavailable."#
 pub struct ApiKey(String);
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("no API key provided")]
 #[diagnostic(help("please set the $LUX_API_KEY environment variable"))]
 pub struct ApiKeyUnspecified;

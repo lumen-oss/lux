@@ -12,6 +12,7 @@ use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuaDependencySpecParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]

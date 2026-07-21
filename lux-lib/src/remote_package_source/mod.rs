@@ -67,6 +67,7 @@ impl Serialize for RemotePackageSource {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum RemotePackageSourceError {
     #[error("error parsing remote source URL {0}. Missing URL.")]
     MissingUrl(String),

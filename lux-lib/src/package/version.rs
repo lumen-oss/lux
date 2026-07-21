@@ -137,6 +137,7 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum PackageVersionParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -467,6 +468,7 @@ pub(crate) trait HasModRev {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub struct PackageVersionReqError(#[from] Error);
 
@@ -587,6 +589,7 @@ fn trim_specrev(version_str: &str) -> &str {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum SpecrevParseError {
     #[error("specrev {specrev} in version {full_version} contains non-numeric characters")]
     InvalidSpecrev {
