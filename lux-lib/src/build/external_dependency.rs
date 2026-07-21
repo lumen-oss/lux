@@ -54,6 +54,7 @@ pub struct ExternalDependencyInfo {
     pub(crate) lib_info: Option<Library>,
 }
 
+#[tracing::instrument(level = "trace")]
 fn pkg_config_probe(name: &str) -> Option<Library> {
     PkgConfig::new()
         .print_system_libs(false)
@@ -64,6 +65,7 @@ fn pkg_config_probe(name: &str) -> Option<Library> {
 }
 
 impl ExternalDependencyInfo {
+    #[tracing::instrument(level = "trace", skip(config))]
     pub fn probe(
         name: &str,
         dependency: &ExternalDependencySpec,
@@ -126,6 +128,7 @@ impl ExternalDependencyInfo {
         Self::fallback_probe(name, dependency, config)
     }
 
+    #[tracing::instrument(level = "trace", skip(config))]
     fn fallback_probe(
         name: &str,
         dependency: &ExternalDependencySpec,
@@ -279,6 +282,7 @@ impl ExternalDependencyInfo {
 }
 
 impl HasVariables for HashMap<String, ExternalDependencyInfo> {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(input.split_once('_').and_then(|(dep_key, dep_dir_type)| {
             self.get(dep_key)

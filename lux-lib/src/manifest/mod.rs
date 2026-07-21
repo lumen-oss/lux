@@ -46,6 +46,7 @@ impl Manifest {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(config))]
     pub async fn from_config(server_url: Url, config: &Config) -> Result<Self, ManifestError> {
         if let Some(vendor_dir) = config.vendor_dir() {
             let server_url: Url = Url::from_file_path(vendor_dir)

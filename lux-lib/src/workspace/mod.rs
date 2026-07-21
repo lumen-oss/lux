@@ -265,6 +265,7 @@ impl Workspace {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, WorkspaceError> {
         if !start.as_ref().exists() {
             return Ok(None);
@@ -291,6 +292,7 @@ impl Workspace {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(start))]
     pub fn from(start: impl AsRef<Path>) -> Result<Option<Self>, WorkspaceError> {
         if !start.as_ref().exists() {
             return Ok(None);

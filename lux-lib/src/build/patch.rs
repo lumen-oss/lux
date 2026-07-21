@@ -56,6 +56,7 @@ pub enum PatchError {
     },
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
     for (path, patch_str) in args.patches {
         let patch = diffy::Patch::from_str(patch_str)

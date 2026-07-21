@@ -8,6 +8,7 @@ use crate::{
 };
 
 /// Construct manifest metadata from a vendor directory.
+#[tracing::instrument(level = "trace")]
 pub(crate) fn manifest_from_vendor_dir(vendor_dir: &Path) -> ManifestMetadata {
     let mut repository = HashMap::new();
     for (package, package_type) in WalkDir::new(vendor_dir)

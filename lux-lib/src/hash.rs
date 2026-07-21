@@ -10,6 +10,7 @@ pub trait HasIntegrity {
 }
 
 impl HasIntegrity for PathBuf {
+    #[tracing::instrument(level = "trace")]
     fn hash(&self) -> io::Result<Integrity> {
         let mut integrity_opts = IntegrityOpts::new().algorithm(Algorithm::Sha256);
         if self.is_dir() {
@@ -34,6 +35,7 @@ impl HasIntegrity for Path {
 }
 
 impl HasIntegrity for Bytes {
+    #[tracing::instrument(level = "trace")]
     fn hash(&self) -> io::Result<Integrity> {
         let mut integrity_opts = IntegrityOpts::new().algorithm(Algorithm::Sha256);
         integrity_opts.input(self);

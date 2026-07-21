@@ -38,6 +38,7 @@ where
         self
     }
 
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn search(self) -> Result<PathBuf, WhichError>
     where
         State: which_builder::IsComplete,

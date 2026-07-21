@@ -134,7 +134,8 @@ pub struct Cli {
     #[arg(long, value_name = "variable", visible_short_alias = 'v', value_parser = parse_key_val::<String, String>)]
     pub variables: Option<Vec<(String, String)>>,
 
-    /// Display verbose output of commands executed.
+    /// Display verbose output of commands executed, enabling DEBUG logs.{n}
+    /// To enable TRACE logs, set RUST_LOG=trace.
     #[arg(long)]
     pub verbose: bool,
 

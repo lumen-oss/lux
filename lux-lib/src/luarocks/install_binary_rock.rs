@@ -214,6 +214,7 @@ where
     }
 }
 
+#[tracing::instrument(level = "trace", skip(entry))]
 async fn install_manifest_entries<T>(
     entry: &HashMap<PathBuf, T>,
     src: &Path,

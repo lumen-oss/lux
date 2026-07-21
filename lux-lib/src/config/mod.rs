@@ -254,6 +254,7 @@ impl Config {
 }
 
 impl HasVariables for Config {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(self.variables.get(input).cloned())
     }
@@ -291,7 +292,7 @@ pub enum ConfigError {
 ///   or call [`ConfigBuilder::new`] to start from a deserialised configuration file.
 /// - Populate the fields from overriding sources (e.g. CLI arguments).
 /// - Finish with [`ConfigBuilder::build`].
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ConfigBuilder {
     #[serde(
         default,
@@ -555,6 +556,7 @@ impl ConfigBuilder {
         }
     }
 
+    #[tracing::instrument(level = "trace")]
     pub fn build(self) -> Result<Config, ConfigError> {
         let data_dir = self.data_dir.unwrap_or(Config::default_data_path()?);
         let cache_dir = self.cache_dir.unwrap_or(Config::default_cache_path()?);

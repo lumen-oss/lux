@@ -49,9 +49,11 @@ pub enum CMakeError {
     VariableSubstitution(#[from] VariableSubstitutionError),
 }
 
+#[derive(Debug)]
 struct CMakeVariables;
 
 impl HasVariables for CMakeVariables {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(match input {
             "CMAKE_MODULE_PATH" => Some(env::var("CMAKE_MODULE_PATH").unwrap_or("".into())),
@@ -165,6 +167,7 @@ impl BuildBackend for CMakeBuildSpec {
     }
 }
 
+#[tracing::instrument(level = "trace", skip(config))]
 async fn spawn_cmake_cmd(cmd: &mut Command, config: &Config) -> Result<(), CMakeError> {
     match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(child) => match child.wait_with_output().await {

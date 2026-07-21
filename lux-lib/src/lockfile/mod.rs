@@ -1052,6 +1052,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
 
 impl Lockfile<ReadOnly> {
     /// Create a new `Lockfile`, writing an empty file if none exists.
+    #[tracing::instrument(level = "trace")]
     pub(crate) fn new(
         filepath: PathBuf,
         rock_layout: RockLayoutConfig,
@@ -1079,6 +1080,7 @@ impl Lockfile<ReadOnly> {
 
     /// Load a `Lockfile`, failing if none exists.
     /// If `expected_rock_layout` is `Some`, this fails if the rock layouts don't match
+    #[tracing::instrument(level = "trace")]
     pub fn load(
         filepath: PathBuf,
         expected_rock_layout: Option<&RockLayoutConfig>,
@@ -1114,6 +1116,7 @@ impl Lockfile<ReadOnly> {
 
     /// Converts the current lockfile into a writeable one, executes `cb` and flushes
     /// the lockfile.
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn map_then_flush<T, F, E>(self, cb: F) -> Result<T, FlushLockfileError>
     where
         F: FnOnce(&mut Lockfile<ReadWrite>) -> Result<T, E>,
@@ -1154,6 +1157,7 @@ impl Lockfile<ReadOnly> {
 
 impl WorkspaceLockfile<ReadOnly> {
     /// Create a new `ProjectLockfile`, writing an empty file if none exists.
+    #[tracing::instrument(level = "trace")]
     pub fn new(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         // Ensure that the lockfile exists
         match File::options().create_new(true).write(true).open(&filepath) {
@@ -1178,6 +1182,7 @@ impl WorkspaceLockfile<ReadOnly> {
     }
 
     /// Load a `ProjectLockfile`, failing if none exists.
+    #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         let content = std::fs::read_to_string(&filepath).map_err(LockfileError::Load)?;
         let mut lockfile: WorkspaceLockfile<ReadOnly> =

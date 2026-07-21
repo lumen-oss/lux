@@ -156,6 +156,7 @@ pub enum AutoDetectModulesError {
     ParseLuaModule(#[from] ParseLuaModuleError),
 }
 
+#[tracing::instrument(level = "trace")]
 fn autodetect_modules(
     build_dir: &Path,
     exclude: HashSet<PathBuf>,
@@ -213,6 +214,7 @@ fn autodetect_modules(
         .try_collect()
 }
 
+#[tracing::instrument(level = "trace")]
 fn autodetect_bin_scripts(build_dir: &Path) -> Vec<PathBuf> {
     WalkDir::new(build_dir.join("src").join("bin"))
         .into_iter()

@@ -195,6 +195,7 @@ pub struct Project {
 
 impl Project {
     /// Load a project at the specified path, if it exists
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, ProjectError> {
         if !start.as_ref().exists() {
             return Ok(None);

@@ -93,6 +93,7 @@ pub(crate) fn copy_lua_to_module_path(
 
 /// Recursively copy a directory.
 /// This respects ignore files and excludes hidden files and directories.
+#[tracing::instrument(level = "trace")]
 pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), io::Error> {
     if src.exists() {
         for file in project_files(src) {
@@ -237,6 +238,7 @@ pub(crate) async fn compile_c_files(
 }
 
 /// On MSVC, we need to create Lua definitions manually
+#[tracing::instrument(level = "trace")]
 fn mk_def_file(
     dir: &Path,
     output_file_name: &str,
@@ -675,6 +677,7 @@ pub(crate) fn trace_command_output(output: &Output) {
     }
 }
 
+#[tracing::instrument("Installing wrapped binary", level = "trace", skip(tree))]
 async fn install_wrapped_binary(
     source: &Path,
     target: &str,
@@ -737,6 +740,7 @@ exit /b %ERRORLEVEL%
 }
 
 #[cfg(unix)]
+#[tracing::instrument(level = "trace")]
 async fn set_executable_permissions(script: &Path) -> std::io::Result<()> {
     let mut perms = tokio::fs::metadata(&script).await?.permissions();
     perms.set_mode(0o744);
@@ -751,6 +755,7 @@ async fn set_executable_permissions(script: &Path) -> std::io::Result<()> {
 /// But that's unlikely to be the case in practise.
 /// If a script is mistaken for a Lua script, package authors can disable
 /// wrapping with the `deploy.wrap_bin_scripts` rockspec config.
+#[tracing::instrument(level = "trace")]
 async fn is_compatible_lua_script(
     file: &Path,
     lua: &LuaInstallation,
@@ -790,6 +795,7 @@ async fn is_compatible_lua_script(
 /// Uses the bundled Lua interpreter. This may be less reliable,
 /// as it cannot load scripts for an incompatible Lua version.
 /// But it works for test dependencies like nlua.
+#[tracing::instrument(level = "trace")]
 async fn is_compatible_lua_script_fallback(
     file: &Path,
     lua_installation: &LuaInstallation,

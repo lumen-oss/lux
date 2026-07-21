@@ -205,6 +205,7 @@ pub enum BuildBehaviour {
     Force,
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
@@ -227,6 +228,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(level = "trace", skip(rockspec, tree, config))]
 async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
     tree: &T,
@@ -297,6 +299,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LocalPackage, BuildError>
 where
     R: Rockspec + HasIntegrity,
@@ -497,6 +500,7 @@ where
             .any(|copy_dir_name| copy_dir_name == &PathBuf::from(&dir_name))
 }
 
+#[tracing::instrument(level = "trace")]
 async fn recursive_copy_doc_dir(
     output_paths: &RockLayout,
     build_dir: &Path,

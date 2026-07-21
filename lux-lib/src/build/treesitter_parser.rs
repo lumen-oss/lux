@@ -96,6 +96,7 @@ fn is_query_file(path: &Path) -> bool {
     path.extension().is_some_and(|ext| ext == "scm")
 }
 
+#[tracing::instrument(level = "trace")]
 async fn install_inline_queries(
     queries_dir: &Path,
     queries: std::collections::HashMap<PathBuf, String>,
@@ -115,6 +116,7 @@ async fn install_inline_queries(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace")]
 async fn install_source_queries(
     source_queries_dir: &Path,
     queries_dir: &Path,
@@ -155,6 +157,7 @@ async fn install_source_queries(
     Ok(())
 }
 
+#[tracing::instrument(level = "trace")]
 async fn install_queries(
     build_dir: &Path,
     queries_dir: &Path,
@@ -174,6 +177,7 @@ async fn install_queries(
     }
 }
 
+#[tracing::instrument(level = "trace")]
 async fn build_parser(
     build_dir: &Path,
     parser_dir: &Path,

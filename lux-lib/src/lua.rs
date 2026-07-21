@@ -6,6 +6,8 @@ use lazy_static::lazy_static;
 
 lazy_static! {
     static ref LUA_RUNTIME: Runtime = {
+        let span = tracing::debug_span!("Initialising Lua runtime");
+        let _enter = span.enter();
         #[allow(clippy::expect_used)]
         Builder::new_multi_thread()
             .enable_all()

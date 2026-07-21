@@ -28,6 +28,7 @@ pub(crate) enum SemVerTagOrSha {
     CommitSha(String),
 }
 
+#[tracing::instrument(level = "trace")]
 pub(crate) fn latest_semver_tag_or_commit_sha(
     url: &RemoteGitUrl,
 ) -> Result<SemVerTagOrSha, GitError> {
@@ -40,6 +41,7 @@ pub(crate) fn latest_semver_tag_or_commit_sha(
     }
 }
 
+#[tracing::instrument(level = "trace")]
 fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
     let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
 

@@ -97,10 +97,12 @@ pub enum LuaInstallationError {
 }
 
 impl LuaInstallation {
+    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn new_from_config(config: &Config) -> Result<Self, LuaInstallationError> {
         Self::new(LuaVersion::from(config)?, config).await
     }
 
+    #[tracing::instrument(level = "trace", skip(config))]
     pub async fn new(version: &LuaVersion, config: &Config) -> Result<Self, LuaInstallationError> {
         let _lock = NEW_MUTEX.lock().await;
         if let Some(lua_intallation) = Self::probe(version, config.external_deps()) {
@@ -134,6 +136,7 @@ impl LuaInstallation {
         }
     }
 
+    #[tracing::instrument(level = "trace")]
     pub(crate) fn probe(
         version: &LuaVersion,
         search_config: &ExternalDependencySearchConfig,
@@ -181,6 +184,7 @@ impl LuaInstallation {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(config))]
     pub async fn install(
         version: &LuaVersion,
         config: &Config,
@@ -266,6 +270,7 @@ impl LuaInstallation {
 }
 
 impl HasVariables for LuaInstallation {
+    #[tracing::instrument(level = "trace")]
     fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
         Ok(match input {
             "LUA_INCDIR" => self

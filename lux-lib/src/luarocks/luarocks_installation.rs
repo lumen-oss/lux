@@ -121,6 +121,7 @@ impl LuaRocksInstallation {
     }
 
     #[cfg(target_family = "unix")]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn ensure_installed(
         &self,
         lua: &LuaInstallation,
@@ -149,6 +150,7 @@ impl LuaRocksInstallation {
     }
 
     #[cfg(target_family = "windows")]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn ensure_installed(
         &self,
         _lua: &LuaInstallation,
@@ -187,6 +189,7 @@ impl LuaRocksInstallation {
         Ok(())
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn make(
         self,
         rockspec_path: &Path,
