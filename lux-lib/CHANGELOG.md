@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.51.0...lux-lib-v0.52.0) `lux-lib` - 2026-07-21
+
+### Added
+- [**breaking**] mark error enums as non-exhaustive ([#1724](https://github.com/lumen-oss/lux/pull/1724))
+- *(error-reporting)* [**breaking**] upload diagnostics ([#1723](https://github.com/lumen-oss/lux/pull/1723))
+- *(tracing)* more trace spans ([#1718](https://github.com/lumen-oss/lux/pull/1718))
+
 ## [0.51.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.50.0...lux-lib-v0.51.0) `lux-lib` - 2026-07-20
 
 ### Added
