@@ -18,6 +18,7 @@ mod metadata_from_server;
 mod metadata_from_vendor_dir;
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ManifestError {
     #[error(transparent)]
     #[diagnostic(transparent)]

@@ -90,6 +90,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum FetchSrcError {
     #[error("failed to clone rock source:\n{0}")]
     #[diagnostic(help("check your network connection and verify the git URL is correct."))]
@@ -151,6 +152,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub enum FetchSrcRockError {
     DownloadSrcRock(#[from] DownloadSrcRockError),

@@ -156,6 +156,7 @@ impl DisplayAsLuaKV for PlatformSupport {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum PlatformValidationError {
     #[error("error when parsing platform identifier: {0}")]
     ParseError(String),

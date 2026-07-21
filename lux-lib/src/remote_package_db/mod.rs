@@ -33,6 +33,7 @@ pub enum RemotePackageDBError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum SearchError {
     #[error("no rock that matches '{0}' found")]
     RockNotFound(PackageReq),
@@ -44,6 +45,7 @@ pub enum SearchError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum RemotePackageDbIntegrityError {
     #[error(transparent)]
     #[diagnostic(transparent)]

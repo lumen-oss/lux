@@ -86,6 +86,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub enum ProjectError {
     #[error("error reading project TOML at {0}:\n{1}")]
@@ -104,6 +105,7 @@ pub enum ProjectError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub enum IntoLocalRockspecError {
     LocalProjectTomlValidationError(Box<LocalProjectTomlValidationError>),
@@ -111,6 +113,7 @@ pub enum IntoLocalRockspecError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(transparent)]
 pub enum IntoRemoteRockspecError {
     RocksTomlValidationError(Box<RemoteProjectTomlValidationError>),
@@ -118,6 +121,7 @@ pub enum IntoRemoteRockspecError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ProjectEditError {
     #[error(transparent)]
     Io(#[from] tokio::io::Error),
@@ -141,6 +145,7 @@ pub enum ProjectEditError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum PinError {
     #[error("package {0} not found in dependencies")]
     PackageNotFound(PackageName),

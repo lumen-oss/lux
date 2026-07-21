@@ -2,6 +2,7 @@ use chumsky::{prelude::*, Parser};
 use miette::Diagnostic;
 use thiserror::Error;
 #[derive(Error, Debug, Clone, Diagnostic)]
+#[non_exhaustive]
 pub enum VariableSubstitutionError {
     #[error("unable to substitute variables")]
     #[diagnostic(help(
@@ -18,6 +19,7 @@ check the variable definitions for circular references."#
 }
 
 #[derive(Error, Debug, Clone, Diagnostic)]
+#[non_exhaustive]
 #[error("{0}")]
 pub(crate) struct GetVariableError(String);
 

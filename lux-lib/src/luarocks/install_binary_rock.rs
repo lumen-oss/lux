@@ -31,6 +31,7 @@ use thiserror::Error;
 use super::rock_manifest::RockManifestError;
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum InstallBinaryRockError {
     #[error("IO operation failed: {0}")]
     Io(#[from] io::Error),

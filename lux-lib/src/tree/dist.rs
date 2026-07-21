@@ -15,6 +15,7 @@ const SRC_DIR_NAME: &str = "lua";
 const LIB_DIR_NAME: &str = "lib";
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error(
     r#"cannot install conflicting packages in flat tree:
 package: {name}

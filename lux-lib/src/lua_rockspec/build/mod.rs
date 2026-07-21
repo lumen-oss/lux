@@ -63,6 +63,7 @@ impl Default for BuildSpec {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum BuildSpecInternalError {
     #[error("'builtin' modules should not have list elements")]
     ModulesHaveListElements,

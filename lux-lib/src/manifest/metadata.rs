@@ -24,6 +24,7 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ManifestLuaError {
     #[error("failed to parse Lua manifest:\n{0}")]
     ExecutionError(#[from] ottavino::ExternError),

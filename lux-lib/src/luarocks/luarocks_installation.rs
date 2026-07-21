@@ -51,6 +51,7 @@ build = {
 ";
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuaRocksError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -63,6 +64,7 @@ pub enum LuaRocksError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuaRocksInstallError {
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -82,6 +84,7 @@ pub enum LuaRocksInstallError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ExecLuaRocksError {
     #[error(transparent)]
     #[diagnostic(transparent)]

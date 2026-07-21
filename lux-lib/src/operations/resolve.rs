@@ -25,6 +25,7 @@ use crate::{
 use super::{Download, PackageInstallSpec, RemoteRockDownload, SearchAndDownloadError};
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ResolveDependenciesError {
     #[error(transparent)]
     #[diagnostic(transparent)]

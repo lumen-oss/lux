@@ -118,6 +118,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum BuildError {
     #[error("builtin build failed: {0}")]
     #[diagnostic(forward(0))]

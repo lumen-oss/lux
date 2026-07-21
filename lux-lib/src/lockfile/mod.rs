@@ -548,6 +548,7 @@ impl From<PackageVersionReq> for LockConstraint {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LockConstraintParseError {
     #[error("Invalid constraint in LuaPackage: {0}")]
     #[diagnostic(forward(0))]
@@ -778,6 +779,7 @@ pub struct WorkspaceLockfile<P: LockfilePermissions> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LockfileError {
     #[error("error loading lockfile: {0}")]
     Load(io::Error),
@@ -792,6 +794,7 @@ pub enum LockfileError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LockfileIntegrityError {
     #[error(
         r#"rockspec integrity mismatch.
@@ -831,6 +834,7 @@ check the source URL, then rerun the command with `lx --no-lock` to update the h
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("error flushing the lockfile ({filepath}):\n{cause}")]
 pub struct FlushLockfileError {
     filepath: String,

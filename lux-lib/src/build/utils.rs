@@ -111,6 +111,7 @@ pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(),
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum OutputValidationError {
     #[error("compilation failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
     #[diagnostic(help(
@@ -136,6 +137,7 @@ fn validate_output(output: &Output) -> Result<(), OutputValidationError> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum CompileCFilesError {
     #[error("IO operation while compiling C files:\n{0}")]
     Io(#[from] io::Error),
@@ -308,6 +310,7 @@ pub(crate) fn default_libflag() -> &'static str {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum CompileCModulesError {
     #[error("IO operation failed while compiling C modules:\n{0}")]
     Io(#[from] io::Error),
@@ -332,6 +335,7 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LinkCModulesError {
     #[error("IO operation failed while linking C modules:\n{0}")]
     Io(#[from] io::Error),

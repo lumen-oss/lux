@@ -48,6 +48,7 @@ impl Deref for RemoteRockSource {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum RockSourceError {
     #[error("invalid rockspec source field combination")]
     InvalidCombination,
@@ -210,6 +211,7 @@ impl PartialOverride for RockSourceInternal {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("missing source")]
 pub struct RockSourceMissingSource;
 
@@ -240,6 +242,7 @@ pub(crate) enum SourceUrl {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 #[error("failed to parse source url: {0}")]
 pub enum SourceUrlError {
     Io(#[from] io::Error),

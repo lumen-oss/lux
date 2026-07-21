@@ -22,6 +22,7 @@ use crate::{
 };
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum MakeError {
     #[error(transparent)]
     #[diagnostic(transparent)]

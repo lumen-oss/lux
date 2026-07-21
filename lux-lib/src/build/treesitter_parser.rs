@@ -13,6 +13,7 @@ use tree_sitter_generate::GenerateError;
 const DEFAULT_GENERATE_ABI_VERSION: usize = tree_sitter::LANGUAGE_VERSION;
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum TreesitterBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]

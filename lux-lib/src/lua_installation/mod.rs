@@ -73,6 +73,7 @@ in your config, or use `-v LUA=/path/to/lua_binary`.
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum DetectLuaVersionError {
     #[error("failed to run {0}: {1}")]
     RunLuaCommand(String, io::Error),
@@ -87,6 +88,7 @@ pub enum DetectLuaVersionError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum LuaInstallationError {
     #[error("could not find a Lua installation and failed to build Lua from source:\n{0}")]
     #[diagnostic(forward(0))]
