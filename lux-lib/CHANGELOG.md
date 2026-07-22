@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.53.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.52.0...lux-lib-v0.53.0) `lux-lib` - 2026-07-22
+
+### Added
+- *(error-reporting)* [**breaking**] luarocks compatibility layer diagnostics ([#1732](https://github.com/lumen-oss/lux/pull/1732))
+- *(error-reporting)* [**breaking**] pin/unpin diagnostics ([#1730](https://github.com/lumen-oss/lux/pull/1730))
+- *(error-reporting)* [**breaking**] workspace & project diagnostics ([#1728](https://github.com/lumen-oss/lux/pull/1728))
+- *(error-reporting)* rockspec source diagnostics ([#1726](https://github.com/lumen-oss/lux/pull/1726))
+
 ## [0.52.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.51.0...lux-lib-v0.52.0) `lux-lib` - 2026-07-21
 
 ### Added
