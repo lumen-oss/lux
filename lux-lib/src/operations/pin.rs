@@ -14,14 +14,15 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PinError {
-    #[error("package with ID {0} not found in the lockfile")]
+    #[error("package with ID '{0}' not found in the lockfile")]
+    #[diagnostic(help("this is probably a bug"))]
     PackageNotFound(LocalPackageId),
     #[error("rock {rock} is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {
         pin_state: PinnedState,
         rock: PackageSpec,
     },
-    #[error("cannot change pin state of {rock}, since a second version of {rock} is already installed with `pin: {}`", .pin_state.as_bool())]
+    #[error("cannot change the pin state of '{rock}', since a second version of '{rock}' is already installed with 'pin: {}'", .pin_state.as_bool())]
     PinStateConflict {
         pin_state: PinnedState,
         rock: PackageSpec,
@@ -32,14 +33,18 @@ pub enum PinError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
-    #[error("failed to move old package: {0}")]
+    #[error("failed to move the old package")]
+    #[diagnostic(help("make sure Lux has write access to the install directory"))]
     MoveItemsFailure(#[from] fs_extra::error::Error),
     #[error("cannot change pin state of {rock}, because it is not an entrypoint")]
+    #[diagnostic(help("Lux does not allow pinning dependencies, as doing so could break the version requirement in a future update."))]
     NotAnEntrypoint { rock: PackageSpec },
-    #[error("error reading directory {0}:\n{1}")]
-    ReadDir(String, io::Error),
-    #[error("error creating directory {0}:\n{1}")]
-    CreateDir(String, io::Error),
+    #[error("error reading directory '{dir}'")]
+    #[diagnostic(help("make sure Lux has write access to the directory"))]
+    ReadDir { dir: String, source: io::Error },
+    #[error("error creating directory '{dir}'")]
+    #[diagnostic(help("make sure Lux has write access to the parent directory"))]
+    CreateDir { dir: String, source: io::Error },
 }
 
 pub fn set_pinned_state(
@@ -69,7 +74,10 @@ pub fn set_pinned_state(
     let old_package = package.clone();
     let package_root = tree.root_for(&package);
     let items = std::fs::read_dir(&package_root)
-        .map_err(|err| PinError::ReadDir(package_root.to_string_lossy().to_string(), err))?
+        .map_err(|source| PinError::ReadDir {
+            dir: package_root.to_string_lossy().to_string(),
+            source,
+        })?
         .filter_map(Result::ok)
         .map(|dir| dir.path())
         .collect_vec();
@@ -85,8 +93,10 @@ pub fn set_pinned_state(
 
     let new_root = tree.root_for(&package);
 
-    std::fs::create_dir_all(&new_root)
-        .map_err(|err| PinError::CreateDir(new_root.to_string_lossy().to_string(), err))?;
+    std::fs::create_dir_all(&new_root).map_err(|source| PinError::CreateDir {
+        dir: new_root.to_string_lossy().to_string(),
+        source,
+    })?;
 
     fs_extra::move_items(&items, new_root, &CopyOptions::new())?;
 
