@@ -89,6 +89,7 @@ pub enum RunTestsError {
     #[diagnostic(forward(0))]
     BuildWorkspace(#[from] BuildWorkspaceError),
     #[error("tests failed!")]
+    #[diagnostic(help("see the test runner's output for details"))]
     TestFailure,
     #[error("failed to execute '{cmd}'")]
     RunCommandFailure {
