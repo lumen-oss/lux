@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.2](https://github.com/lumen-oss/lux/compare/v0.39.1...v0.39.2) `lux-cli` - 2026-07-22
+
+### Added
+- *(ui)* slow down moon spinner animation ([#1731](https://github.com/lumen-oss/lux/pull/1731))
+
 ## [0.39.1](https://github.com/lumen-oss/lux/compare/v0.39.0...v0.39.1) `lux-cli` - 2026-07-21
 
 ### Added
