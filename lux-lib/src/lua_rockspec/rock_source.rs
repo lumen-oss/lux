@@ -241,6 +241,22 @@ pub(crate) enum SourceUrl {
     Git(RemoteGitUrl),
 }
 
+const SUPPORTED_URL_FORMATS_HELP: &str = r#"supported formats are:
+- 'git://...'
+- 'git+file://...'
+- 'git+https://...'
+- 'git+http://...'
+- 'git+ssh://...'
+- 'https://...'
+- 'http://...'
+- 'ftp://...'
+- 'file://...'
+"#;
+
+const LUX_ISSUES_URL: &str = "https://github.com/lumen-oss/lux/issues";
+const LUAROCKS_BUILD_RULES_URL: &str =
+    "https://github.com/luarocks/luarocks/blob/v3.13.0/docs/rockspec_format.md#build-rules";
+
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error("failed to parse source url: {0}")]
@@ -249,16 +265,40 @@ pub enum SourceUrlError {
     Git(#[from] RemoteGitUrlParseError),
     Url(#[source] <Url as FromStr>::Err),
     #[error("lux does not support rockspecs with CVS sources.")]
+    #[diagnostic(
+        help("if you need support for CVS sources, open an issue"),
+        url("{LUX_ISSUES_URL}")
+    )]
     CVS,
     #[error("lux does not support rockspecs with mercurial sources.")]
+    #[diagnostic(
+        help("if you need support for Mercurial sources, open an issue"),
+        url("{LUX_ISSUES_URL}")
+    )]
     Mercurial,
     #[error("lux does not support rockspecs with SSCM sources.")]
+    #[diagnostic(
+        help("if you need support for SSCM sources, open an issue"),
+        url("{LUX_ISSUES_URL}")
+    )]
     SSCM,
     #[error("lux does not support rockspecs with SVN sources.")]
+    #[diagnostic(
+        help("if you need support for SVN sources, open an issue"),
+        url("{LUX_ISSUES_URL}")
+    )]
     SVN,
-    #[error("unsupported source URL prefix: '{0}+' in URL {1}")]
+    #[error("unsupported source URL prefix: '{0}+' in URL '{1}'")]
+    #[diagnostic(
+        help("{SUPPORTED_URL_FORMATS_HELP}"),
+        url("{LUAROCKS_BUILD_RULES_URL}")
+    )]
     UnsupportedPrefix(String, String),
-    #[error("unsupported source URL: {0}")]
+    #[error("unsupported source URL: '{0}'")]
+    #[diagnostic(
+        help("{SUPPORTED_URL_FORMATS_HELP}"),
+        url("{LUAROCKS_BUILD_RULES_URL}")
+    )]
     Unsupported(String),
 }
 
