@@ -117,13 +117,20 @@ async fn main() -> Result<()> {
     if config.no_progress() || !std::io::stderr().is_terminal() {
         tracing_subscriber::registry().with(fmt_layer).init();
     } else {
-        let indicatif_layer = progress::IndicatifLayer::new().with_progress_style(
-            indicatif::ProgressStyle::with_template(
-                "{spinner} {span_child_prefix}{span_name} {{{span_fields}}}",
+        let indicatif_layer = progress::IndicatifLayer::new()
+            .with_progress_style(
+                indicatif::ProgressStyle::with_template(
+                    "{spinner} {span_child_prefix}{span_name} {{{span_fields}}}",
+                )
+                .into_diagnostic()?
+                .tick_chars("🌑🌒🌓🌔🌕🌖🌗🌘"),
             )
-            .into_diagnostic()?
-            .tick_chars("🌑🌒🌓🌔🌕🌖🌗🌘"),
-        );
+            .with_tick_settings(tracing_indicatif::TickSettings {
+                term_draw_hz: 20,
+                default_tick_interval: Some(Duration::from_millis(165)),
+                footer_tick_interval: Some(Duration::from_millis(165)),
+                ..Default::default()
+            });
         let fmt_layer = tracing_subscriber::fmt::layer::<tracing_subscriber::Registry>()
             .with_target(false)
             .with_writer(indicatif_layer.get_stderr_writer())
