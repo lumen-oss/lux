@@ -50,32 +50,52 @@ impl Deref for WorkspaceRoot {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum WorkspaceError {
-    #[error("cannot get current directory: {0}")]
+    #[error("cannot read the current working directory")]
+    #[diagnostic(help("make sure Lux has permissions to read the current working directory"))]
     GetCwd(io::Error),
-    #[error("error reading lux.toml at {0}:\n{1}")]
-    ReadLuxTOML(String, io::Error),
-    #[error("error deserializing workspace TOML:\n{0}")]
+    #[error("error reading workspace TOML at '{toml_path}'")]
+    #[diagnostic(help("make sure the file exists and contains valid UTF-8"))]
+    ReadLuxTOML {
+        toml_path: String,
+        source: io::Error,
+    },
+    #[error("error deserializing {WORKSPACE_TOML}")]
     #[diagnostic(transparent)]
-    TOML(TomlDeError),
-    #[error("no project found at '{0}'")]
-    ProjectNotFound(PathBuf),
+    TOML { source: TomlDeError },
+    #[error("no workspace found at '{0}'")]
+    #[diagnostic(help("make sure the directory contains a '{WORKSPACE_TOML}'"))]
+    WorkspaceNotFound(PathBuf),
     #[error("glob error: '{0}'")]
+    #[diagnostic(help("check the glob pattern in your {WORKSPACE_TOML}'s '[workspace.members]'"))]
     Glob(String),
-    #[error("error deserializing project TOML:\n{0}")]
+    #[error(transparent)]
     #[diagnostic(forward(0))]
     Project(#[from] ProjectError),
-    #[error("no project or workspace found")]
-    NoWorkspaceOrProject,
+    #[error("no project or workspace found at '{0}'")]
+    #[diagnostic(help("make sure the directory contains a '{WORKSPACE_TOML}'"))]
+    NoWorkspaceOrProject(PathBuf),
     #[error("empty workspace at '{0}'")]
+    #[diagnostic(
+        help(
+            "a Lux workspace must have at least one project, declared using '[workspace.members]'"
+        ),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
+    )]
     EmptyWorkspace(PathBuf),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
-    #[error("not a lux project or workspace directory:\n'{0}'")]
-    NotAWorkspaceDir(PathBuf),
     #[error("package must be specified in a multi-project workspace")]
+    #[diagnostic(help(
+        r#"this workspace contains multiple projects.
+specify the package with '--package=[PACKAGE_NAME]'
+    "#
+    ))]
     NoPackageSpecified,
     #[error("package '{0}' not found in workspace '{1}'")]
+    #[diagnostic(help(
+        "make sure it is declared in your {WORKSPACE_TOML}'s '[workspace.members]'"
+    ))]
     PackageNotFound(PackageName, WorkspaceRoot),
 }
 
@@ -107,7 +127,7 @@ impl Workspace {
 
     pub fn current_or_err() -> Result<Self, WorkspaceError> {
         let cwd = std::env::current_dir().map_err(WorkspaceError::GetCwd)?;
-        Self::current()?.ok_or(WorkspaceError::NotAWorkspaceDir(cwd))
+        Self::current()?.ok_or(WorkspaceError::NoWorkspaceOrProject(cwd))
     }
 
     /// The path where the root `lux.toml` resides.
@@ -273,16 +293,18 @@ impl Workspace {
         }
         if start.as_ref().join(WORKSPACE_TOML).exists() {
             let toml_path = start.as_ref().join(WORKSPACE_TOML);
-            let toml_content = std::fs::read_to_string(&toml_path).map_err(|err| {
-                WorkspaceError::ReadLuxTOML(toml_path.to_string_lossy().to_string(), err)
-            })?;
+            let toml_content =
+                std::fs::read_to_string(&toml_path).map_err(|err| WorkspaceError::ReadLuxTOML {
+                    toml_path: toml_path.to_string_lossy().to_string(),
+                    source: err,
+                })?;
             let root = start.as_ref();
             let toml_obj: Option<toml::Table> = toml::from_str(&toml_content).ok();
             if toml_obj.is_some_and(|toml| toml.contains_key("workspace")) {
                 Ok(Some(Self::from_toml(&toml_content, root)?))
             } else {
-                let project =
-                    Project::from_exact(root)?.ok_or(WorkspaceError::NoWorkspaceOrProject)?;
+                let project = Project::from_exact(root)?
+                    .ok_or_else(|| WorkspaceError::NoWorkspaceOrProject(root.to_path_buf()))?;
                 Ok(Some(Workspace {
                     root: WorkspaceRoot(root.to_path_buf()),
                     members: NonEmpty::new(project),
@@ -308,7 +330,10 @@ impl Workspace {
             Ok(Some(path)) => {
                 if let Some(root) = path.parent() {
                     let toml_content = std::fs::read_to_string(&path).map_err(|err| {
-                        WorkspaceError::ReadLuxTOML(path.to_string_lossy().to_string(), err)
+                        WorkspaceError::ReadLuxTOML {
+                            toml_path: path.to_string_lossy().to_string(),
+                            source: err,
+                        }
                     })?;
                     let toml_obj: Option<toml::Table> = toml::from_str(&toml_content).ok();
                     if toml_obj.is_some_and(|toml| toml.contains_key("workspace")) {
@@ -318,8 +343,9 @@ impl Workspace {
                             match Self::from(parent)? {
                                 Some(workspace) => Ok(Some(workspace)),
                                 None => {
-                                    let project = Project::from_exact(root)?
-                                        .ok_or(WorkspaceError::NoWorkspaceOrProject)?;
+                                    let project = Project::from_exact(root)?.ok_or_else(|| {
+                                        WorkspaceError::NoWorkspaceOrProject(root.to_path_buf())
+                                    })?;
                                     Ok(Some(Workspace {
                                         root: WorkspaceRoot(root.to_path_buf()),
                                         members: NonEmpty::new(project),
@@ -342,8 +368,8 @@ impl Workspace {
     }
 
     fn from_toml(toml_content: &str, root: &Path) -> Result<Self, WorkspaceError> {
-        let toml =
-            WorkspaceToml::new(WORKSPACE_TOML, toml_content).map_err(WorkspaceError::TOML)?;
+        let toml = WorkspaceToml::new(WORKSPACE_TOML, toml_content)
+            .map_err(|source| WorkspaceError::TOML { source })?;
         let mut members = Vec::new();
         for member in toml.workspace.members {
             match member {
@@ -367,7 +393,7 @@ impl Workspace {
                     let project_path = root.join(relative_project_path);
                     match Project::from_exact(&project_path)? {
                         Some(project) => members.push(project),
-                        None => return Err(WorkspaceError::ProjectNotFound(project_path)),
+                        None => return Err(WorkspaceError::WorkspaceNotFound(project_path)),
                     }
                 }
             }

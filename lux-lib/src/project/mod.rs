@@ -51,7 +51,8 @@ pub const EXTRA_ROCKSPEC: &str = "extra.rockspec";
 #[error("{message}", message = _inner.message())]
 #[diagnostic(
     code(lux_lib::toml::deserialize),
-    help("check that the file is valid TOML and matches the expected schema")
+    help("check that the file is valid TOML and matches the expected schema"),
+    url("https://lux.lumen-labs.org/reference/lux-toml")
 )]
 pub struct TomlDeError {
     #[source]
@@ -89,17 +90,17 @@ where
 #[non_exhaustive]
 #[error(transparent)]
 pub enum ProjectError {
-    #[error("error reading project TOML at {0}:\n{1}")]
+    #[error("error reading project TOML at '{toml_path}'")]
     #[diagnostic(help("ensure the file exists and is readable."))]
-    ReadProjectTOML(String, io::Error),
-    #[error("error creating project root at {0}:\n{1}")]
-    #[diagnostic(help("check that the parent directory exists and you have write permissions."))]
-    CreateProjectRoot(String, io::Error),
+    ReadProjectTOML {
+        toml_path: String,
+        source: io::Error,
+    },
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
     #[diagnostic(transparent)]
     Toml(#[from] TomlDeError),
-    #[error("error when parsing `extra.rockspec`: {0}")]
+    #[error("error when parsing 'extra.rockspec'")]
     #[diagnostic(forward(0))]
     Rockspec(#[from] PartialRockspecError),
 }
@@ -133,11 +134,20 @@ pub enum ProjectEditError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Git(#[from] GitError),
-    #[error("unable to query latest version for {0}")]
+    #[error("unable to query latest version for '{0}'")]
+    #[diagnostic(help("check your server config and ensure the package has been published"))]
     LatestVersionNotFound(PackageName),
-    #[error("expected field to be a value, but got {0}")]
+    #[error("expected field to be a value, but got '{0}'")]
+    #[diagnostic(
+        help("ensure your {PROJECT_TOML} matches the specification"),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
+    )]
     ExpectedValue(Box<toml_edit::Item>),
-    #[error("expected string, but got {0}")]
+    #[error("expected string, but got '{0}'")]
+    #[diagnostic(
+        help("ensure your {PROJECT_TOML} matches the specification"),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
+    )]
     ExpectedString(Box<toml_edit::Value>),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -147,15 +157,24 @@ pub enum ProjectEditError {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum PinError {
-    #[error("package {0} not found in dependencies")]
+    #[error("package '{0}' not found in dependencies")]
+    #[diagnostic(help("to add it, run 'lx add {0}'"))]
     PackageNotFound(PackageName),
-    #[error("dependency {dep} is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
+    #[error("dependency '{dep}' is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {
         pin_state: PinnedState,
         dep: PackageName,
     },
-    #[error(transparent)]
-    Toml(#[from] toml_edit::TomlError),
+    #[error("unable to parse {toml_path} for editing")]
+    #[diagnostic(
+        code(lux_lib::toml_edit::parse),
+        help("check that the file is valid TOML and matches the expected schema"),
+        url("https://lux.lumen-labs.org/reference/lux-toml")
+    )]
+    ParseTomlEdit {
+        toml_path: String,
+        source: toml_edit::TomlError,
+    },
     #[error("error parsing lux.toml after edit. This is probably a bug.")]
     #[diagnostic(forward(0))]
     TomlDe(#[from] TomlDeError),
@@ -208,8 +227,11 @@ impl Project {
 
         if start.as_ref().join(PROJECT_TOML).exists() {
             let project_toml_path = start.as_ref().join(PROJECT_TOML);
-            let toml_content = std::fs::read_to_string(&project_toml_path).map_err(|err| {
-                ProjectError::ReadProjectTOML(project_toml_path.to_string_lossy().to_string(), err)
+            let toml_content = std::fs::read_to_string(&project_toml_path).map_err(|source| {
+                ProjectError::ReadProjectTOML {
+                    toml_path: project_toml_path.to_string_lossy().to_string(),
+                    source,
+                }
             })?;
             let root = start.as_ref();
 
@@ -575,7 +597,11 @@ impl Project {
         pin: PinnedState,
     ) -> Result<(), PinError> {
         let mut project_toml =
-            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
+            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)
+                .map_err(|source| PinError::ParseTomlEdit {
+                toml_path: self.toml_path().to_slash_lossy().to_string(),
+                source,
+            })?;
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
