@@ -89,19 +89,32 @@ pub enum ExecLuaRocksError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
-    #[error("could not write luarocks config: {0}")]
-    WriteLuarocksConfigError(io::Error),
-    #[error("could not write luarocks config: {0}")]
+    #[error("could not write luarocks config at '{path}'")]
+    #[diagnostic(help("make sure Lux has write access to the parent directory"))]
+    WriteLuarocksConfigError { path: PathBuf, source: io::Error },
+    #[error("could not substitute '$(LUA_LIBDIR)' and '$(LUA_INCDIR)' variables in the luarocks config template")]
     #[diagnostic(forward(0))]
     VariableSubstitutionInConfig(#[from] VariableSubstitutionError),
-    #[error("failed to run luarocks: {0}")]
+    #[error("failed to run luarocks")]
     Io(#[from] io::Error),
-    #[error("error setting up luarocks paths: {0}")]
+    #[error("error setting up luarocks paths")]
     #[diagnostic(forward(0))]
     Paths(#[from] PathsError),
-    #[error("luarocks binary not found at {0}")]
+    #[error("luarocks binary not found at '{0}'")]
+    #[diagnostic(help(
+        "Lux successfully installed luarocks, but couldn't find the binary to execute"
+    ))]
     LuarocksBinNotFound(PathBuf),
-    #[error("executing luarocks compatibility layer failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
+    #[error(
+        r#"executing luarocks compatibility layer failed.
+status: {status}
+stdout:
+{stdout}
+stderr:
+{stderr}
+"#
+    )]
+    #[diagnostic(help("see the build output for details"))]
     CommandFailure {
         status: ExitStatus,
         stdout: String,
@@ -247,8 +260,12 @@ variables = {{
         let luarocks_config_content =
             variables::substitute(&[lua, &self.config], &luarocks_config_content)?;
         let luarocks_config = temp_dir.path().join("luarocks-config.lua");
-        std::fs::write(luarocks_config.clone(), luarocks_config_content)
-            .map_err(ExecLuaRocksError::WriteLuarocksConfigError)?;
+        std::fs::write(luarocks_config.clone(), luarocks_config_content).map_err(|source| {
+            ExecLuaRocksError::WriteLuarocksConfigError {
+                path: luarocks_config.to_path_buf(),
+                source,
+            }
+        })?;
         let luarocks_bin = self.tree.bin().join(LUAROCKS_EXE);
         if !luarocks_bin.is_file() {
             return Err(ExecLuaRocksError::LuarocksBinNotFound(luarocks_bin));
