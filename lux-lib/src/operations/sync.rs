@@ -4,6 +4,7 @@ use super::{Install, InstallError, PackageInstallSpec, RemoveError, Uninstall};
 use crate::{
     build::BuildBehaviour,
     config::Config,
+    fs,
     lockfile::{
         FlushLockfileError, LocalPackage, LocalPackageLockType, LockfileIntegrityError,
         SyncStrategy,
@@ -128,8 +129,9 @@ pub enum SyncError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
-    #[error("failed to create install tree at {0}:\n{1}")]
-    FailedToCreateDirectory(String, io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
@@ -173,9 +175,7 @@ async fn do_sync(
         LocalPackageLockType::Test => args.workspace.test_tree(args.config)?,
         LocalPackageLockType::Build => args.workspace.build_tree(args.config)?,
     };
-    std::fs::create_dir_all(tree.root()).map_err(|err| {
-        SyncError::FailedToCreateDirectory(tree.root().to_string_lossy().to_string(), err)
-    })?;
+    fs::sync::create_dir_all(tree.root())?;
 
     let mut workspace_lockfile = args.workspace.lockfile()?.write_guard();
     let dest_lockfile = tree.lockfile()?;

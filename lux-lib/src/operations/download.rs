@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Cursor, Read},
+    io::{Cursor, Read},
     path::PathBuf,
     string::FromUtf8Error,
 };
@@ -13,6 +13,7 @@ use url::{ParseError, Url};
 
 use crate::{
     config::Config,
+    fs,
     git::GitSource,
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec, RockSourceSpec},
@@ -336,9 +337,9 @@ pub enum SearchAndDownloadError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     DownloadRockspec(#[from] DownloadRockspecError),
-    #[error("io operation failed: {0}")]
-    #[diagnostic(help("check that the destination directory exists and is writable."))]
-    Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("UTF-8 conversion failed: {0}")]
     #[diagnostic(help(
         r#"the server returned a response that is not valid UTF-8.
@@ -475,7 +476,7 @@ async fn download_src_rock_to_file(
 ) -> Result<DownloadedPackedRock, SearchAndDownloadError> {
     let rock = search_and_download_src_rock(package_req, package_db, config).await?;
     let full_rock_name = mk_packed_rock_name(&rock.name, &rock.version, "src.rock");
-    tokio::fs::write(
+    fs::tokio::write(
         destination_dir
             .map(|dest| dest.join(&full_rock_name))
             .unwrap_or_else(|| full_rock_name.clone().into()),
@@ -577,13 +578,18 @@ pub(crate) async fn unpack_rockspec(
                 .eq(&rockspec_file_name)
         })
         .ok_or(SearchAndDownloadError::RockspecNotFoundInPackedRock(
-            rockspec_file_name,
+            rockspec_file_name.to_string(),
         ))?;
     let mut rockspec_file = zip
         .by_index(rockspec_index)
         .map_err(|err| SearchAndDownloadError::ZipExtract(rock.file_name.clone(), err))?;
     let mut content = String::new();
-    rockspec_file.read_to_string(&mut content)?;
+    rockspec_file
+        .read_to_string(&mut content)
+        .map_err(|source| fs::FsError::ReadToString {
+            path: PathBuf::from(&rockspec_file_name),
+            source,
+        })?;
     let rockspec = RemoteLuaRockspec::new(&content)
         .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?;
     Ok(rockspec)

@@ -1,5 +1,6 @@
 use std::io;
 
+use crate::fs;
 use crate::lockfile::{FlushLockfileError, LocalPackage, LocalPackageId};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::tree::{InstallTree, TreeError};
@@ -15,7 +16,9 @@ use tracing::{span, Instrument};
 pub enum RemoveError {
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
-    Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
@@ -114,19 +117,19 @@ async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveE
     let _enter = span.enter();
 
     let rock_layout = tree.installed_rock_layout(&package)?;
-    tokio::fs::remove_dir_all(&rock_layout.etc).await?;
-    tokio::fs::remove_dir_all(&rock_layout.rock_path).await?;
+    fs::tokio::remove_dir_all(&rock_layout.etc).await?;
+    fs::tokio::remove_dir_all(&rock_layout.rock_path).await?;
 
     for relative_binary_path in package.spec.binaries() {
         if let Some(binary_file_name) = relative_binary_path.file_name() {
             let binary_path = tree.bin().join(binary_file_name);
             if binary_path.is_file() {
-                tokio::fs::remove_file(binary_path).await?;
+                fs::tokio::remove_file(binary_path).await?;
             }
 
             let unwrapped_binary_path = tree.unwrapped_bin().join(binary_file_name);
             if unwrapped_binary_path.is_file() {
-                tokio::fs::remove_file(unwrapped_binary_path).await?;
+                fs::tokio::remove_file(unwrapped_binary_path).await?;
             }
         }
     }

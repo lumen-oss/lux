@@ -4,11 +4,12 @@ use itertools::Itertools;
 
 use miette::Diagnostic;
 use serde::{Deserialize, Serialize, Serializer};
-use std::{collections::HashMap, env, io, path::PathBuf, time::Duration};
+use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 use thiserror::Error;
 use tree::RockLayoutConfig;
 use url::Url;
 
+use crate::fs;
 use crate::lua_version::LuaVersion;
 use crate::project::TomlDeError;
 use crate::tree::{Tree, TreeError};
@@ -262,13 +263,9 @@ impl HasVariables for Config {
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum ConfigError {
-    #[error("failed to read config file {config_file}")]
-    ConfigRead {
-        config_file: String,
-        source: io::Error,
-        #[help]
-        help: Option<String>,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     NoValidHomeDirectory(#[from] NoValidHomeDirectory),
@@ -338,16 +335,7 @@ impl ConfigBuilder {
         let config_file = Self::config_file()?;
         if config_file.is_file() {
             let config_file_name = config_file.to_string_lossy().to_string();
-            let content = std::fs::read_to_string(&config_file).map_err(|source| {
-                ConfigError::ConfigRead {
-                    config_file: config_file_name.clone(),
-                    source,
-                    help: Some(format!(
-                        "check that {} exists and is readable",
-                        config_file.display()
-                    )),
-                }
-            })?;
+            let content = fs::sync::read_to_string(&config_file)?;
             crate::project::parse_toml(&config_file_name, &content).map_err(|source| {
                 ConfigError::Deserialize {
                     config_file: config_file_name,

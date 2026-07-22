@@ -1,8 +1,8 @@
-use std::{fs::Permissions, path::Path};
-
-use tokio::fs;
-
 use super::FsError;
+#[cfg(unix)]
+use std::fs::Permissions;
+use std::path::Path;
+use tokio::fs;
 
 /// Wrapped [`fs::read`].
 pub(crate) async fn read(path: impl AsRef<Path>) -> Result<Vec<u8>, FsError> {
@@ -25,7 +25,10 @@ pub(crate) async fn read_to_string(path: impl AsRef<Path>) -> Result<String, FsE
 }
 
 /// Wrapped [`fs::write`].
-pub(crate) async fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result<(), FsError> {
+pub(crate) async fn write(
+    path: impl AsRef<Path>,
+    contents: impl AsRef<[u8]>,
+) -> Result<(), FsError> {
     let path = path.as_ref();
     fs::write(path, contents)
         .await
@@ -44,17 +47,6 @@ pub(crate) async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result
         to: to.to_path_buf(),
         source,
     })
-}
-
-/// Wrapped [`fs::create_dir`].
-pub(crate) async fn create_dir(path: impl AsRef<Path>) -> Result<(), FsError> {
-    let path = path.as_ref();
-    fs::create_dir(path)
-        .await
-        .map_err(|source| FsError::CreateDir {
-            path: path.to_path_buf(),
-            source,
-        })
 }
 
 /// Wrapped [`fs::create_dir_all`].
@@ -124,7 +116,11 @@ pub(crate) async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Resu
 }
 
 /// Wrapped [`fs::set_permissions`].
-pub(crate) async fn set_permissions(path: impl AsRef<Path>, perm: Permissions) -> Result<(), FsError> {
+#[cfg(unix)]
+pub(crate) async fn set_permissions(
+    path: impl AsRef<Path>,
+    perm: Permissions,
+) -> Result<(), FsError> {
     let path = path.as_ref();
     fs::set_permissions(path, perm)
         .await

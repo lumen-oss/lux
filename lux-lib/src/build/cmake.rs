@@ -14,6 +14,7 @@ use crate::{
         utils,
     },
     config::Config,
+    fs,
     lua_rockspec::CMakeBuildSpec,
     path::{Paths, PathsError},
     tree::{InstallTree, TreeError},
@@ -37,16 +38,17 @@ pub enum CMakeError {
         stdout: String,
         stderr: String,
     },
-    #[error("failed to run `cmake` step: {0}")]
-    Io(io::Error),
-    #[error("failed to write CMakeLists.txt: {0}")]
-    WriteCmakeLists(io::Error),
+    #[error("failed to run `cmake` step")]
+    Io { source: io::Error },
     #[error("failed to run `cmake` step: '{0}' command not found!")]
     #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     CommandNotFound(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     VariableSubstitution(#[from] VariableSubstitutionError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
 }
 
 #[derive(Debug)]
@@ -88,7 +90,7 @@ impl BuildBackend for CMakeBuildSpec {
         let mut args = Vec::new();
         if let Some(content) = self.cmake_lists_content {
             let cmakelists = build_dir.join("CMakeLists.txt");
-            std::fs::write(&cmakelists, content).map_err(CMakeError::WriteCmakeLists)?;
+            fs::tokio::write(&cmakelists, content).await?;
             args.push(format!("-G\"{}\"", cmakelists.display()));
         } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
             // With msvc and x64, CMake does not select it by default so we need to be explicit.
@@ -180,7 +182,7 @@ async fn spawn_cmake_cmd(cmd: &mut Command, config: &Config) -> Result<(), CMake
                     stderr: String::from_utf8_lossy(&output.stderr).into(),
                 });
             }
-            Err(err) => return Err(CMakeError::Io(err)),
+            Err(source) => return Err(CMakeError::Io { source }),
         },
         Err(_) => return Err(CMakeError::CommandNotFound(config.cmake_cmd().clone())),
     }

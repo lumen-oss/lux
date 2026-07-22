@@ -3,6 +3,7 @@ use std::{collections::HashMap, io, path::PathBuf};
 use super::{InstallTree, RockLayout, Tree, TreeError};
 use crate::{
     config::{tree::RockLayoutConfig, Config},
+    fs,
     lockfile::{LocalPackage, Lockfile, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageVersion},
@@ -68,19 +69,19 @@ impl Drop for FlatDistTree {
     fn drop(&mut self) {
         let build_tree_dir = &self.0.build_tree_dir;
         if build_tree_dir.is_dir() {
-            let _ = std::fs::remove_dir_all(build_tree_dir);
+            let _ = fs::sync::remove_dir_all(build_tree_dir);
         }
         let package_rockspec = self.root().join("package.rockspec");
         if package_rockspec.is_file() {
-            let _ = std::fs::remove_file(&package_rockspec);
+            let _ = fs::sync::remove_file(&package_rockspec);
         }
         let lockfile = self.lockfile_path();
         if lockfile.is_file() {
-            let _ = std::fs::remove_file(&lockfile);
+            let _ = fs::sync::remove_file(&lockfile);
         }
         let etc_dir = self.root().join("etc");
         if etc_dir.is_dir() {
-            let _ = std::fs::remove_dir_all(etc_dir);
+            let _ = fs::sync::remove_dir_all(etc_dir);
         }
     }
 }

@@ -2,7 +2,6 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use std::{
     collections::{HashMap, HashSet},
-    io,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -14,6 +13,7 @@ use crate::{
         backend::{BuildBackend, BuildInfo, RunBuildArgs},
         utils,
     },
+    fs,
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
     tree::{InstallTree, TreeError},
 };
@@ -36,7 +36,8 @@ pub enum BuiltinBuildError {
         source: InstallBinaryError,
     },
     #[error(transparent)]
-    Io(#[from] io::Error),
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
@@ -79,14 +80,14 @@ impl BuildBackend for BuiltinBuildSpec {
                             external_dependencies,
                             config,
                         )
-                        .await?
+                        .await?;
                     } else {
                         let absolute_source_path = build_dir.join(source);
                         utils::copy_lua_to_module_path(
                             &absolute_source_path,
                             destination_path,
                             &output_paths.src,
-                        )?
+                        )?;
                     }
                 }
                 ModuleSpec::SourcePaths(files) => {

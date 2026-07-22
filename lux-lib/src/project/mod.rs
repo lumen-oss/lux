@@ -13,6 +13,8 @@ use std::{
 use thiserror::Error;
 use toml_edit::{DocumentMut, Item};
 
+use crate::fs;
+
 use crate::{
     config::Config,
     git::{
@@ -90,12 +92,9 @@ where
 #[non_exhaustive]
 #[error(transparent)]
 pub enum ProjectError {
-    #[error("error reading project TOML at '{toml_path}'")]
-    #[diagnostic(help("ensure the file exists and is readable."))]
-    ReadProjectTOML {
-        toml_path: String,
-        source: io::Error,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
     #[diagnostic(transparent)]
@@ -126,6 +125,9 @@ pub enum IntoRemoteRockspecError {
 pub enum ProjectEditError {
     #[error(transparent)]
     Io(#[from] tokio::io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     Toml(#[from] toml_edit::TomlError),
     #[error("error parsing {PROJECT_TOML} after edit. This is probably a bug.")]
@@ -180,6 +182,9 @@ pub enum PinError {
     TomlDe(#[from] TomlDeError),
     #[error(transparent)]
     Io(#[from] tokio::io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
 }
 
 /// A newtype for the project root directory.
@@ -227,12 +232,7 @@ impl Project {
 
         if start.as_ref().join(PROJECT_TOML).exists() {
             let project_toml_path = start.as_ref().join(PROJECT_TOML);
-            let toml_content = std::fs::read_to_string(&project_toml_path).map_err(|source| {
-                ProjectError::ReadProjectTOML {
-                    toml_path: project_toml_path.to_string_lossy().to_string(),
-                    source,
-                }
-            })?;
+            let toml_content = fs::sync::read_to_string(&project_toml_path)?;
             let root = start.as_ref();
 
             let mut project = Project {
@@ -293,9 +293,9 @@ impl Project {
 
     pub fn extra_rockspec(&self) -> Result<Option<PartialLuaRockspec>, PartialRockspecError> {
         if self.extra_rockspec_path().exists() {
-            Ok(Some(PartialLuaRockspec::new(&std::fs::read_to_string(
-                self.extra_rockspec_path(),
-            )?)?))
+            Ok(Some(PartialLuaRockspec::new(
+                &fs::sync::read_to_string(self.extra_rockspec_path()).map_err(io::Error::other)?,
+            )?))
         } else {
             Ok(None)
         }
@@ -311,7 +311,7 @@ impl Project {
         package_db: &RemotePackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
-            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
+            toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
@@ -351,7 +351,7 @@ impl Project {
         };
 
         let toml_content = project_toml.to_string();
-        tokio::fs::write(self.toml_path(), &toml_content).await?;
+        fs::tokio::write(self.toml_path(), &toml_content).await?;
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
@@ -366,7 +366,7 @@ impl Project {
         dependencies: LuaDependencyType<&RemoteGitUrlShorthand>,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
-            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
+            toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
@@ -402,7 +402,7 @@ impl Project {
         }
 
         let toml_content = project_toml.to_string();
-        tokio::fs::write(self.toml_path(), &toml_content).await?;
+        fs::tokio::write(self.toml_path(), &toml_content).await?;
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
@@ -417,7 +417,7 @@ impl Project {
         dependencies: DependencyType<&PackageName>,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
-            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
+            toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
@@ -448,7 +448,7 @@ impl Project {
         };
 
         let toml_content = project_toml.to_string();
-        tokio::fs::write(self.toml_path(), &toml_content).await?;
+        fs::tokio::write(self.toml_path(), &toml_content).await?;
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
@@ -464,7 +464,7 @@ impl Project {
         package_db: &RemotePackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
-            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)?;
+            toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
@@ -538,7 +538,7 @@ impl Project {
         }
 
         let toml_content = project_toml.to_string();
-        tokio::fs::write(self.toml_path(), &toml_content).await?;
+        fs::tokio::write(self.toml_path(), &toml_content).await?;
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
@@ -597,7 +597,7 @@ impl Project {
         pin: PinnedState,
     ) -> Result<(), PinError> {
         let mut project_toml =
-            toml_edit::DocumentMut::from_str(&tokio::fs::read_to_string(self.toml_path()).await?)
+            toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)
                 .map_err(|source| PinError::ParseTomlEdit {
                 toml_path: self.toml_path().to_slash_lossy().to_string(),
                 source,
@@ -675,7 +675,7 @@ impl Project {
         }
 
         let toml_content = project_toml.to_string();
-        tokio::fs::write(self.toml_path(), &toml_content).await?;
+        fs::tokio::write(self.toml_path(), &toml_content).await?;
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
@@ -740,6 +740,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        fs,
         lua_rockspec::ExternalDependencySpec,
         manifest::{Manifest, ManifestMetadata},
         package::PackageReq,
@@ -929,7 +930,7 @@ mod tests {
         let cargo_dir = project_root.child(".cargo");
         cargo_dir.create_dir_all().unwrap();
         let cargo_config = cargo_dir.join("config.toml");
-        tokio::fs::write(&cargo_config, "").await.unwrap();
+        fs::tokio::write(&cargo_config, "").await.unwrap();
         let project_files = project_files(&project_root);
         assert!(project_files.contains(&cargo_config.to_path_buf()));
     }

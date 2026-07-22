@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Cursor},
+    io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -9,15 +9,15 @@ use bytes::Bytes;
 use futures::StreamExt;
 use itertools::Itertools;
 use miette::Diagnostic;
-use path_slash::PathExt;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tracing::{span, Instrument};
 
 use crate::{
     build::{RemotePackageSourceSpec, SrcRockSource},
     config::Config,
+    fs,
     lockfile::{LocalPackageLockType, ReadOnly},
     lua_rockspec::RemoteLuaRockspec,
     operations::{
@@ -77,16 +77,11 @@ pub enum VendorError {
     #[error("failed to resolve dependencies:\n{0}")]
     #[diagnostic(forward(0))]
     ResolveDependencies(#[from] ResolveDependenciesError),
-    #[error("failed to delete vendor directory {0}:\n{1}")]
-    DeleteVendorDir(String, io::Error),
-    #[error("failed to create vendor directory {0}:\n{1}")]
-    CreateVendorDir(String, io::Error),
-    #[error("failed to create {0}:\n{1}")]
-    CreateSrcRock(String, io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("failed to vendor Lua RockSpec:\n{0}")]
     LuaRockSpec(String),
-    #[error("failed to write Lua RockSpec {0}:\n{1}")]
-    WriteLuaRockSpec(String, io::Error),
     #[error("failed to unpack src.rock:\n{0}")]
     #[diagnostic(forward(0))]
     Unpack(#[from] UnpackError),
@@ -132,11 +127,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     }
 
     if !no_delete && vendor_dir.exists() {
-        tokio::fs::remove_dir_all(&vendor_dir)
-            .await
-            .map_err(|err| {
-                VendorError::DeleteVendorDir(vendor_dir.to_slash_lossy().to_string(), err)
-            })?;
+        fs::tokio::remove_dir_all(&vendor_dir).await?;
     }
 
     vendor_sources(Arc::new(vendor_dir), config.clone(), all_packages).await
@@ -297,11 +288,7 @@ async fn vendor_rockspec_sources(
 
     let package_vendor_dir = vendor_dir.join(&package_version_str);
 
-    tokio::fs::create_dir_all(&package_vendor_dir)
-        .await
-        .map_err(|err| {
-            VendorError::CreateVendorDir(package_vendor_dir.to_slash_lossy().to_string(), err)
-        })?;
+    fs::tokio::create_dir_all(&package_vendor_dir).await?;
 
     let rockspec_lua_content = rockspec
         .to_lua_remote_rockspec_string()
@@ -309,11 +296,7 @@ async fn vendor_rockspec_sources(
 
     let rockspec_file_name = format!("{}-{}.rockspec", package, version);
     let rockspec_path = vendor_dir.join(rockspec_file_name);
-    tokio::fs::write(&rockspec_path, rockspec_lua_content)
-        .await
-        .map_err(|err| {
-            VendorError::WriteLuaRockSpec(rockspec_path.to_slash_lossy().to_string(), err)
-        })?;
+    fs::tokio::write(&rockspec_path, rockspec_lua_content).await?;
 
     match source_spec {
         RemotePackageSourceSpec::SrcRock(SrcRockSource {
@@ -353,19 +336,16 @@ async fn vendor_binary_rock(
 
     let file_name = format!("{}@{}.rock", package, version);
 
-    tokio::fs::create_dir_all(&vendor_dir)
-        .await
-        .map_err(|err| {
-            VendorError::CreateVendorDir(vendor_dir.to_slash_lossy().to_string(), err)
-        })?;
+    fs::tokio::create_dir_all(&vendor_dir).await?;
 
     let dest_file = vendor_dir.join(&file_name);
-    let mut file = File::create(&dest_file)
-        .await
-        .map_err(|err| VendorError::CreateSrcRock(dest_file.to_slash_lossy().to_string(), err))?;
+    let mut file = fs::tokio::create(&dest_file).await?;
     file.write_all(&packed_rock)
         .await
-        .map_err(|err| VendorError::CreateSrcRock(dest_file.to_slash_lossy().to_string(), err))?;
+        .map_err(|source| fs::FsError::Write {
+            path: dest_file.to_path_buf(),
+            source,
+        })?;
 
     Ok(())
 }

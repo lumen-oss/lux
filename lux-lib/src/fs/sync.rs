@@ -2,15 +2,6 @@ use std::{fs, path::Path};
 
 use super::FsError;
 
-/// Wrapped [`fs::read`].
-pub(crate) fn read(path: impl AsRef<Path>) -> Result<Vec<u8>, FsError> {
-    let path = path.as_ref();
-    fs::read(path).map_err(|source| FsError::Read {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
 /// Wrapped [`fs::read_to_string`].
 pub(crate) fn read_to_string(path: impl AsRef<Path>) -> Result<String, FsError> {
     let path = path.as_ref();
@@ -36,15 +27,6 @@ pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, 
     fs::copy(from, to).map_err(|source| FsError::Copy {
         from: from.to_path_buf(),
         to: to.to_path_buf(),
-        source,
-    })
-}
-
-/// Wrapped [`fs::create_dir`].
-pub(crate) fn create_dir(path: impl AsRef<Path>) -> Result<(), FsError> {
-    let path = path.as_ref();
-    fs::create_dir(path).map_err(|source| FsError::CreateDir {
-        path: path.to_path_buf(),
         source,
     })
 }
@@ -85,35 +67,6 @@ pub(crate) fn read_dir(path: impl AsRef<Path>) -> Result<fs::ReadDir, FsError> {
     })
 }
 
-/// Wrapped [`fs::metadata`].
-pub(crate) fn metadata(path: impl AsRef<Path>) -> Result<fs::Metadata, FsError> {
-    let path = path.as_ref();
-    fs::metadata(path).map_err(|source| FsError::Metadata {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-/// Wrapped [`fs::rename`].
-pub(crate) fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), FsError> {
-    let from = from.as_ref();
-    let to = to.as_ref();
-    fs::rename(from, to).map_err(|source| FsError::Rename {
-        from: from.to_path_buf(),
-        to: to.to_path_buf(),
-        source,
-    })
-}
-
-/// Wrapped [`fs::set_permissions`].
-pub(crate) fn set_permissions(path: impl AsRef<Path>, perm: fs::Permissions) -> Result<(), FsError> {
-    let path = path.as_ref();
-    fs::set_permissions(path, perm).map_err(|source| FsError::SetPermissions {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
 /// Wrapped [`fs::File::open`].
 pub(crate) fn open(path: impl AsRef<Path>) -> Result<fs::File, FsError> {
     let path = path.as_ref();
@@ -131,4 +84,3 @@ pub(crate) fn create(path: impl AsRef<Path>) -> Result<fs::File, FsError> {
         source,
     })
 }
-

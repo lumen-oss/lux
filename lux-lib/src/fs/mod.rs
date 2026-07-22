@@ -2,6 +2,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 pub mod sync;
+pub mod tempfile;
 pub mod tokio;
 
 #[derive(Debug, Error, Diagnostic)]
@@ -53,6 +54,12 @@ pub enum FsError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to create a temporaty directory")]
+    #[diagnostic(
+        code(lux_lib::fs::create_tempdir),
+        help("ensure the '{}' exists and is writable", std::env::temp_dir().display())
+    )]
+    CreateTempDir { source: std::io::Error },
     #[error("failed to create directory tree '{}'", path.display())]
     #[diagnostic(
         code(lux_lib::fs::create_dir_all),

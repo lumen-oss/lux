@@ -15,14 +15,17 @@ use thiserror::Error;
 
 use super::utils::{c_lib_extension, format_path};
 
+use crate::fs;
+
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum ExternalDependencyError {
     #[error("external dependency '{0}' not found")]
     #[diagnostic(help("{}", not_found_help(.0)))]
     NotFound(String),
-    #[error("IO error while trying to detect external dependencies: {0}")]
-    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("{0} was probed successfully, but the header {1} could not be found")]
     #[diagnostic(help(
         r#"ensure the header is installed.
@@ -384,7 +387,7 @@ pub(crate) fn to_lib_name(file: &Path) -> String {
 }
 
 fn get_lib_name(lib_dir: &Path, prefix: &str) -> Option<String> {
-    std::fs::read_dir(lib_dir)
+    fs::sync::read_dir(lib_dir)
         .ok()
         .and_then(|entries| {
             entries
@@ -401,6 +404,7 @@ fn get_lib_name(lib_dir: &Path, prefix: &str) -> Option<String> {
         })
         .map(|file| to_lib_name(&file))
 }
+
 fn is_lib_name(file_name: &str, prefix: &str) -> bool {
     #[cfg(target_family = "unix")]
     let file_name = file_name.trim_start_matches("lib");

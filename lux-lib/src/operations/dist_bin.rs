@@ -12,6 +12,7 @@ use walkdir::WalkDir;
 use crate::{
     build::utils::c_dylib_extension,
     config::Config,
+    fs,
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
@@ -70,6 +71,9 @@ Cannot link the following binaries:
     CC(#[from] cc::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("C compilation failed (exit {status}):\nstdout: {stdout}\nstderr: {stderr}")]
     CompilationFailed {
         status: std::process::ExitStatus,
@@ -137,9 +141,9 @@ where
     let lib_root = layout.lib.clone();
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
 
-    let work_dir = tempfile::tempdir()?;
+    let work_dir = fs::tempfile::tempdir()?;
     let c_path = work_dir.path().join(format!("{pkg_name}.static.c"));
-    tokio::fs::write(&c_path, &c_src).await?;
+    fs::tokio::write(&c_path, &c_src).await?;
 
     compile_binary(&c_path, &output, &lua, &files.lib, &work_dir, args.config).await?;
 
@@ -228,7 +232,7 @@ async fn generate_c_source(
     entrypoint_module: &str,
     files: &InstalledFiles,
     lib_root: &Path,
-) -> Result<String, io::Error> {
+) -> Result<String, fs::FsError> {
     let mut out = String::from(C_PREAMBLE);
 
     out.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
@@ -239,9 +243,7 @@ async fn generate_c_source(
     out.push_str("#ifdef __cplusplus\n}\n#endif\n\n");
 
     for (i, (_, path)) in files.src.iter().enumerate() {
-        let bytes = tokio::fs::read(path).await.map_err(|err| {
-            io::Error::other(format!("unable to read '{}': {err}", path.display()))
-        })?;
+        let bytes = fs::tokio::read(path).await?;
         let hex = bytes_to_hex(&bytes);
         out.push_str(&format!(
             "static const unsigned char lua_src_{i}[] = {{{hex}}};\n"
@@ -315,7 +317,7 @@ async fn compile_binary(
     let mut build = cc::Build::new();
     let host = target_lexicon::Triple::host().to_string();
 
-    let intermediate_dir = tempfile::tempdir()?;
+    let intermediate_dir = fs::tempfile::tempdir()?;
     build
         .cargo_output(false)
         .cargo_metadata(false)
@@ -501,6 +503,7 @@ mod tests {
     use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
     #[cfg(target_os = "linux")]
     use crate::{
+        fs,
         lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
         package::PackageSpec,
         remote_package_source::RemotePackageSource,
@@ -544,7 +547,7 @@ mod tests {
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
             .unwrap();
-        tokio::fs::write(layout_a.src.join("foo.lua"), "return {}")
+        fs::tokio::write(layout_a.src.join("foo.lua"), "return {}")
             .await
             .unwrap();
 
@@ -554,14 +557,14 @@ mod tests {
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
             .unwrap();
-        tokio::fs::write(layout_b.src.join("bar.lua"), "return {}")
+        fs::tokio::write(layout_b.src.join("bar.lua"), "return {}")
             .await
             .unwrap();
         staging
             .child(layout_b.lib.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
             .unwrap();
-        tokio::fs::write(
+        fs::tokio::write(
             layout_b.lib.join(format!("bar.{}", c_dylib_extension())),
             "",
         )

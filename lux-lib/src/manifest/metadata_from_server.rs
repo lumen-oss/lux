@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
 use std::time::SystemTime;
 use thiserror::Error;
-use tokio::fs::{File, OpenOptions};
+use tokio::fs::OpenOptions;
+use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tokio::{fs, io};
+
+use crate::fs;
 use tracing::span;
 use url::Url;
 use zip::ZipArchive;
@@ -18,8 +20,11 @@ use crate::lua_version::{LuaVersion, LuaVersionUnset};
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum ManifestFromServerError {
-    #[error(transparent)]
+    #[error("IO error occured while fetching the manifest")]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("failed to pull manifest:\n{0}")]
     #[diagnostic(help(
         r#"check your network connection and server configuration.
@@ -67,35 +72,45 @@ pub(super) async fn get_manifest(
             .bytes()
             .await?;
         let manifest = String::from_utf8(manifest_bytes.to_vec())?;
-        tokio::fs::write(&target, &manifest).await?;
+        fs::tokio::write(&target, &manifest).await?;
         Ok(manifest)
     } else {
         let manifest_bytes = response.error_for_status()?.bytes().await?;
         let mut archive = ZipArchive::new(std::io::Cursor::new(manifest_bytes))
             .map_err(|err| ManifestFromServerError::ZipRead(url.clone(), err))?;
 
-        let temp = tempfile::tempdir()?;
+        let temp = fs::tempfile::tempdir()?;
 
         archive
             .extract_unwrapped_root_dir(&temp, zip::read::root_dir_common_filter)
             .map_err(|err| ManifestFromServerError::ZipExtract(url.clone(), err))?;
 
-        let mut extracted_manifest =
-            File::open(temp.path().join(format!("manifest-{manifest_version}"))).await?;
-        let mut target = OpenOptions::new()
+        let extracted_manifest_path = temp.path().join(format!("manifest-{manifest_version}"));
+        let mut extracted_manifest = fs::tokio::open(&extracted_manifest_path).await?;
+        let mut target_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(true)
             .open(target)
-            .await?;
+            .await
+            .map_err(|source| fs::FsError::FileOpen {
+                path: target.to_path_buf(),
+                source,
+            })?;
 
-        io::copy(&mut extracted_manifest, &mut target).await?;
+        io::copy(&mut extracted_manifest, &mut target_file)
+            .await
+            .map_err(|source| fs::FsError::Copy {
+                from: extracted_manifest_path.to_path_buf(),
+                to: target.to_path_buf(),
+                source,
+            })?;
 
         let mut manifest = String::new();
 
-        target.seek(io::SeekFrom::Start(0)).await?;
-        target.read_to_string(&mut manifest).await?;
+        target_file.seek(io::SeekFrom::Start(0)).await?;
+        target_file.read_to_string(&mut manifest).await?;
 
         Ok(manifest)
     }
@@ -123,7 +138,7 @@ pub(crate) async fn manifest_from_cache_or_server(
     #[cfg(test)]
     let client = crate::reqwest::new_http_client(config)?;
 
-    if let Ok(metadata) = fs::metadata(&cache).await {
+    if let Ok(metadata) = fs::tokio::metadata(&cache).await {
         let last_modified_local: SystemTime = metadata.modified()?;
 
         let response = match client.head(url.clone()).send().await? {
@@ -141,7 +156,7 @@ pub(crate) async fn manifest_from_cache_or_server(
                 return get_manifest(url, manifest_version.clone(), &cache, &client).await;
             }
 
-            return Ok(fs::read_to_string(&cache).await?);
+            return Ok(fs::tokio::read_to_string(&cache).await?);
         }
     }
 
@@ -183,7 +198,7 @@ fn mk_manifest_url(
     Ok(url)
 }
 
-async fn mk_manifest_cache(url: &Url, config: &Config) -> io::Result<PathBuf> {
+async fn mk_manifest_cache(url: &Url, config: &Config) -> Result<PathBuf, fs::FsError> {
     let cache = config.cache_dir().join(
         // Convert the url to a directory name so we don't create too many subdirectories
         url.to_string()
@@ -192,7 +207,7 @@ async fn mk_manifest_cache(url: &Url, config: &Config) -> io::Result<PathBuf> {
     );
     // Ensure all intermediate directories for the cache file are created (e.g. `~/.cache/lux/manifest`)
     if let Some(cache_parent_dir) = cache.parent() {
-        fs::create_dir_all(cache_parent_dir).await?;
+        fs::tokio::create_dir_all(cache_parent_dir).await?;
     }
     Ok(cache)
 }
@@ -207,7 +222,7 @@ mod tests {
     use httptest::{matchers::request, responders::status_code, Expectation, Server};
     use serial_test::serial;
 
-    use crate::config::ConfigBuilder;
+    use crate::{config::ConfigBuilder, fs};
 
     use super::*;
 
@@ -281,14 +296,14 @@ mod tests {
         let server = start_test_server("manifest-5.1".into());
         let mut url_str = server.url_str("/");
         url_str.pop(); // Remove trailing "/"
-        let manifest_content = std::fs::read_to_string(
+        let manifest_content = fs::sync::read_to_string(
             format!("{}/resources/test/manifest-5.1", env!("CARGO_MANIFEST_DIR")).as_str(),
         )
         .unwrap();
         let cache_dir = assert_fs::TempDir::new().unwrap();
         let cache = cache_dir.join("manifest-5.1");
-        fs::write(&cache, &manifest_content).await.unwrap();
-        let _metadata = fs::metadata(&cache).await.unwrap();
+        fs::tokio::write(&cache, &manifest_content).await.unwrap();
+        let _metadata = fs::tokio::metadata(&cache).await.unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir.to_path_buf()))

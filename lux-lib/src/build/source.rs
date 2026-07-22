@@ -1,4 +1,5 @@
-use std::{io, string::FromUtf8Error};
+use crate::fs;
+use std::string::FromUtf8Error;
 
 use crate::{
     build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
@@ -21,8 +22,9 @@ use super::{
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum SourceBuildError {
-    #[error("IO operation failed: {0}")]
-    Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     FromUtf8(#[from] FromUtf8Error),
     #[error(transparent)]
@@ -70,12 +72,12 @@ where
 
     let mut build_spec = BuildSpec::default();
     let mut copy_directories = None;
-    for path in std::fs::read_dir(build_dir)?
+    for path in fs::sync::read_dir(build_dir)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
     {
         if path.file_name().is_some_and(|name| name == PROJECT_TOML) {
-            let toml_content = String::from_utf8(tokio::fs::read(path).await?)?;
+            let toml_content = String::from_utf8(fs::tokio::read(path).await?)?;
             let project_toml =
                 PartialProjectToml::new(PROJECT_TOML, &toml_content, ProjectRoot::new())?
                     .into_local()?;
@@ -83,7 +85,7 @@ where
             copy_directories = Some(build_spec.copy_directories);
             break;
         } else if path.extension().is_some_and(|ext| ext == "rockspec") {
-            let rockspec_content = String::from_utf8(tokio::fs::read(path).await?)?;
+            let rockspec_content = String::from_utf8(fs::tokio::read(path).await?)?;
             let rockspec = LocalLuaRockspec::new(&rockspec_content, ProjectRoot::new())?;
             build_spec = rockspec.build().current_platform().clone();
             copy_directories = Some(build_spec.copy_directories);
@@ -136,7 +138,7 @@ where
         }
         None => {
             // We copy all directories if there is no rockspec
-            for subdirectory in std::fs::read_dir(build_dir)?
+            for subdirectory in fs::sync::read_dir(build_dir)?
                 .filter_map(Result::ok)
                 .filter_map(|entry| {
                     let path = entry.path();
