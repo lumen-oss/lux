@@ -1,11 +1,12 @@
 use crate::build::backend::BuildInfo;
 use crate::build::backend::RunBuildArgs;
+use crate::fs;
 use crate::lua_rockspec::LuaVersionError;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
 use crate::tree::InstallTree;
 use crate::tree::TreeError;
-use std::{io, path::Path};
+use std::path::Path;
 
 use crate::{
     config::Config,
@@ -14,8 +15,8 @@ use crate::{
 };
 
 use super::utils::recursive_copy_dir;
+use crate::fs::tempfile::tempdir;
 use miette::Diagnostic;
-use tempfile::tempdir;
 use thiserror::Error;
 use tracing::info_span;
 use tracing::Instrument;
@@ -24,7 +25,8 @@ use tracing::Instrument;
 #[non_exhaustive]
 pub enum LuarocksBuildError {
     #[error(transparent)]
-    Io(#[from] io::Error),
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("error instantiating luarocks compatibility layer:\n{0}")]
     #[diagnostic(forward(0))]
     LuaRocksError(#[from] LuaRocksError),
@@ -58,7 +60,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
         rockspec.package(),
         rockspec.version()
     ));
-    tokio::fs::write(
+    fs::tokio::write(
         &rockspec_file,
         rockspec
             .to_lua_remote_rockspec_string()
@@ -82,7 +84,7 @@ async fn install<R: Rockspec>(
     config: &Config,
 ) -> Result<BuildInfo, LuarocksBuildError> {
     let lua_version = rockspec.lua_version_matches(config)?;
-    std::fs::create_dir_all(&output_paths.bin)?;
+    fs::tokio::create_dir_all(&output_paths.bin).await?;
     let package_dir = luarocks_tree
         .join("lib")
         .join("lib")

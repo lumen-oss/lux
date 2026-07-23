@@ -14,6 +14,7 @@ use crate::build::external_dependency::to_lib_name;
 use crate::build::external_dependency::ExternalDependencyInfo;
 use crate::build::utils::{c_lib_extension, format_path};
 use crate::config::external_deps::ExternalDependencySearchConfig;
+use crate::fs;
 use crate::lua_rockspec::ExternalDependencySpec;
 use crate::lua_version::LuaVersion;
 use crate::lua_version::LuaVersionUnset;
@@ -402,7 +403,7 @@ pub fn detect_installed_lua_version() -> Option<LuaVersion> {
 }
 
 fn find_lua_executable(bin_path: &Path, version: &LuaVersion) -> Option<PathBuf> {
-    std::fs::read_dir(bin_path).ok().and_then(|entries| {
+    fs::sync::read_dir(bin_path).ok().and_then(|entries| {
         let bin_files = entries
             .filter_map(Result::ok)
             .map(|entry| entry.path().to_path_buf())
@@ -467,7 +468,7 @@ fn is_lua_lib_name(name: &str, lua_version: &LuaVersion) -> bool {
 }
 
 fn get_lua_lib_name(lib_dir: &Path, lua_version: &LuaVersion) -> Option<String> {
-    std::fs::read_dir(lib_dir)
+    fs::sync::read_dir(lib_dir)
         .ok()
         .and_then(|entries| {
             entries

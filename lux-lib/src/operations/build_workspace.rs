@@ -212,7 +212,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        config::ConfigBuilder, fs, lua_installation::detect_installed_lua_version,
         lua_version::LuaVersion,
     };
     use assert_fs::prelude::PathCopy;
@@ -228,15 +228,15 @@ mod tests {
         temp_dir.copy_from(&project_root, &["**"]).unwrap();
         let project_root = temp_dir.path();
         let foo_bin_dir = project_root.join("src").join("bin");
-        tokio::fs::create_dir_all(&foo_bin_dir).await.unwrap();
+        fs::tokio::create_dir_all(&foo_bin_dir).await.unwrap();
         let foo_bin_file = foo_bin_dir.join("foo");
-        tokio::fs::write(&foo_bin_file, "print('hello')")
+        fs::tokio::write(&foo_bin_file, "print('hello')")
             .await
             .unwrap();
         let bar_bin_dir = project_root.join("bin");
-        tokio::fs::create_dir_all(&bar_bin_dir).await.unwrap();
+        fs::tokio::create_dir_all(&bar_bin_dir).await.unwrap();
         let bar_bin_file = bar_bin_dir.join("bar");
-        tokio::fs::write(&bar_bin_file, "print('hello')")
+        fs::tokio::write(&bar_bin_file, "print('hello')")
             .await
             .unwrap();
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
@@ -271,9 +271,9 @@ mod tests {
         temp_dir.copy_from(&project_root, &["**"]).unwrap();
         let project_root = temp_dir.path();
         let src_dir = project_root.join("src");
-        tokio::fs::create_dir_all(&src_dir).await.unwrap();
+        fs::tokio::create_dir_all(&src_dir).await.unwrap();
         let init_lua_file = src_dir.join("init.lua");
-        tokio::fs::write(&init_lua_file, "print('hello')")
+        fs::tokio::write(&init_lua_file, "print('hello')")
             .await
             .unwrap();
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));

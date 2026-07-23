@@ -5,9 +5,9 @@ use crate::git::GitSource;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::RockSourceSpec;
-use crate::operations;
 use crate::package::PackageSpec;
 use crate::rockspec::Rockspec;
+use crate::{fs, operations};
 use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
 use git2::build::RepoBuilder;
@@ -15,12 +15,10 @@ use git2::{FetchOptions, RemoteCallbacks};
 use miette::Diagnostic;
 use remove_dir_all::remove_dir_all;
 use ssri::Integrity;
-use std::fs::File;
 use std::io;
 use std::io::Cursor;
 use std::io::Read;
 use std::path::Path;
-use std::path::PathBuf;
 use thiserror::Error;
 use tracing::span;
 
@@ -114,19 +112,9 @@ pub enum FetchSrcError {
     CleanGitDir(io::Error),
     #[error("unable to compute hash:\n{0}")]
     Hash(io::Error),
-    #[error("unable to copy {src} to {dest}:\n{err}")]
-    #[diagnostic(help("check that the source exists and the destination is writable."))]
-    CopyDir {
-        src: PathBuf,
-        dest: PathBuf,
-        err: io::Error,
-    },
-    #[error("unable to open {file}:\n{err}")]
-    #[diagnostic(help("check that the file exists and is readable."))]
-    FileOpen { file: PathBuf, err: io::Error },
-    #[error("unable to read {file}:\n{err}")]
-    #[diagnostic(help("check that the file exists and is readable."))]
-    FileRead { file: PathBuf, err: io::Error },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
 }
 
 /// A rocks package source fetcher, providing fine-grained control
@@ -305,24 +293,15 @@ async fn do_fetch_src<R: Rockspec>(
             tracing::debug!(message = format!("📋 Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {
-                recursive_copy_dir(&path.to_path_buf(), dest_dir)
-                    .await
-                    .map_err(|err| FetchSrcError::CopyDir {
-                        src: path.to_path_buf(),
-                        dest: dest_dir.to_path_buf(),
-                        err,
-                    })?;
+                recursive_copy_dir(&path.to_path_buf(), dest_dir).await?;
                 dest_dir.hash().map_err(FetchSrcError::Hash)?
             } else {
-                let mut file = File::open(path).map_err(|err| FetchSrcError::FileOpen {
-                    file: path.clone(),
-                    err,
-                })?;
+                let mut file = fs::sync::open(path)?;
                 let mut buffer = Vec::new();
                 file.read_to_end(&mut buffer)
-                    .map_err(|err| FetchSrcError::FileRead {
-                        file: path.clone(),
-                        err,
+                    .map_err(|source| fs::FsError::Read {
+                        path: path.to_path_buf(),
+                        source,
                     })?;
                 let mime_type = infer::get(&buffer).map(|file_type| file_type.mime_type());
                 let file_name = path

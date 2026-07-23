@@ -1,5 +1,6 @@
 use crate::build::utils;
 use crate::build::utils::c_dylib_extension;
+use crate::fs;
 use crate::lockfile::LocalPackage;
 use crate::luarocks;
 use crate::luarocks::rock_manifest::DirOrFileEntry;
@@ -25,7 +26,6 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use tempfile::tempdir;
 use thiserror::Error;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
@@ -60,6 +60,9 @@ where
 pub enum PackError {
     Zip(#[from] zip::result::ZipError),
     Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     Walkdir(#[from] walkdir::Error),
     #[error("expected a `package.rockspec` in the package root.")]
     MissingRockspec,
@@ -78,7 +81,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let temp_file_name = format!("{}-{}.{}.part", package.name(), package.version(), suffix);
     let temp_output_path = args.dest_dir.join(temp_file_name);
     let output_path = args.dest_dir.join(file_name);
-    let file = File::create(&temp_output_path)?;
+    let file = fs::sync::create(&temp_output_path)?;
     let mut zip = ZipWriter::new(file);
 
     let lua_entries = add_rock_entries(&mut zip, &layout.src, "lua".into())?;
@@ -86,16 +89,16 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let doc_entries = add_rock_entries(&mut zip, &layout.doc, "doc".into())?;
     let conf_entries = add_rock_entries(&mut zip, &layout.conf, "conf".into())?;
     // We copy entries from `etc` to the root directory, as luarocks doesn't have an etc directory.
-    let temp_root_dir = tempdir()?;
+    let temp_root_dir = fs::tempfile::tempdir()?;
     utils::recursive_copy_dir(&layout.etc, temp_root_dir.path()).await?;
     // prevent duplicate doc and conf entries
     let doc = temp_root_dir.path().join("doc");
     if doc.is_dir() {
-        tokio::fs::remove_dir_all(&doc).await?;
+        fs::tokio::remove_dir_all(&doc).await?;
     }
     let conf = temp_root_dir.path().join("conf");
     if conf.is_dir() {
-        tokio::fs::remove_dir_all(&conf).await?;
+        fs::tokio::remove_dir_all(&conf).await?;
     }
     // luarocks expects a <package>-<version>.rockspec,
     // so we copy it the package.rockspec to our temporary root directory and rename it
@@ -104,7 +107,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     }
     let packed_rockspec_name = format!("{}-{}.rockspec", &package.name(), &package.version());
     let renamed_rockspec_entry = temp_root_dir.path().join(packed_rockspec_name);
-    tokio::fs::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
+    fs::tokio::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
     let root_entries = add_rock_entries(&mut zip, temp_root_dir.path(), "".into())?;
     let mut bin_entries = HashMap::new();
     for relative_binary_path in package.spec.binaries() {
@@ -141,7 +144,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     zip.start_file("rock_manifest", options)?;
     zip.write_all(manifest_str.as_bytes())?;
-    tokio::fs::rename(&temp_output_path, &output_path).await?;
+    fs::tokio::rename(&temp_output_path, &output_path).await?;
     Ok(output_path)
 }
 
@@ -192,7 +195,7 @@ fn add_rock_entry(
     let relative_path: PathBuf = unsafe {
         pathdiff::diff_paths(source_dir.join(file.clone()), source_dir).unwrap_unchecked()
     };
-    let mut f = File::open(file)?;
+    let mut f = fs::sync::open(file)?;
     let mut buffer = Vec::new();
     f.read_to_end(&mut buffer)?;
     let digest = md5::compute(&buffer);

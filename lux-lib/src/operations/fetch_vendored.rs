@@ -1,9 +1,7 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use crate::{
+    fs,
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
@@ -30,22 +28,20 @@ pub enum FetchVendoredError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Search(#[from] SearchError),
-    #[error("could not find a vendored RockSpec for package {0} in vendor directory {1}.")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
+    #[error("could not find a vendored RockSpec for package '{0}' in vendor directory '{1}'.")]
     RockspecNotFound(PackageSpec, String),
-    #[error("could not read vendored RockSpec content at {rockspec_path}:\n{err}")]
-    ReadRockspecContent {
-        rockspec_path: String,
-        err: io::Error,
-    },
-    #[error("could not parse vendored RockSpec {rockspec_path}:\n{err}")]
+    #[error("could not parse vendored RockSpec '{rockspec_path}'")]
     ParseRockspec {
         rockspec_path: String,
-        err: LuaRockspecError,
+        source: LuaRockspecError,
     },
     #[error("could not find a source or .rock archive for {0} in vendor directory {1}.")]
     PackageNotFound(PackageSpec, String),
     #[error("unable to read binary rock: {0}:\n{1}")]
-    ReadBinaryRock(String, io::Error),
+    ReadBinaryRock(String, fs::FsError),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -90,7 +86,7 @@ async fn do_fetch_vendored_rock(
             },
         }),
         VendoredPackage::BinaryRock(path) => {
-            let packed_rock = tokio::fs::read(&path)
+            let packed_rock = fs::tokio::read(&path)
                 .await
                 .map_err(|err| {
                     FetchVendoredError::ReadBinaryRock(path.to_slash_lossy().to_string(), err)
@@ -127,16 +123,11 @@ async fn load_vendored_rockspec(
             vendor_dir.to_slash_lossy().to_string(),
         ));
     }
-    let rockspec_content = tokio::fs::read_to_string(&rockspec_path)
-        .await
-        .map_err(|err| FetchVendoredError::ReadRockspecContent {
-            rockspec_path: rockspec_path.to_slash_lossy().to_string(),
-            err,
-        })?;
+    let rockspec_content = fs::tokio::read_to_string(&rockspec_path).await?;
     let rockspec = RemoteLuaRockspec::new(&rockspec_content).map_err(|err| {
         FetchVendoredError::ParseRockspec {
             rockspec_path: rockspec_path.to_slash_lossy().to_string(),
-            err,
+            source: err,
         }
     })?;
     Ok(rockspec)

@@ -22,10 +22,9 @@ use crate::{
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
 };
-use crate::{lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
+use crate::{fs, lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
 use bytes::Bytes;
 use miette::Diagnostic;
-use tempfile::tempdir;
 use thiserror::Error;
 
 use super::rock_manifest::RockManifestError;
@@ -35,6 +34,9 @@ use super::rock_manifest::RockManifestError;
 pub enum InstallBinaryRockError {
     #[error("IO operation failed: {0}")]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
@@ -150,7 +152,7 @@ where
         match self.tree.lockfile()?.get(&package.id()) {
             Some(package) if self.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
             _ => {
-                let unpack_dir = tempdir()?;
+                let unpack_dir = fs::tempfile::tempdir()?;
                 let cursor = Cursor::new(self.rock_bytes);
                 let mut zip = zip::ZipArchive::new(cursor)?;
                 zip.extract(&unpack_dir)?;
@@ -163,7 +165,7 @@ where
                 if !rock_manifest_file.is_file() {
                     return Err(InstallBinaryRockError::RockManifestNotFound);
                 }
-                let rock_manifest_content = tokio::fs::read_to_string(rock_manifest_file).await?;
+                let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
                 let output_paths = match self.entry_type {
                     tree::EntryType::Entrypoint => self.tree.entrypoint(&package)?,
                     tree::EntryType::DependencyOnly => self.tree.dependency(&package)?,
@@ -206,8 +208,8 @@ where
                     package.version()
                 ));
                 if rockspec_path.is_file() {
-                    tokio::fs::copy(&rockspec_path, output_paths.rockspec_path()).await?;
-                    tokio::fs::remove_file(&rockspec_path).await?;
+                    fs::tokio::copy(&rockspec_path, output_paths.rockspec_path()).await?;
+                    fs::tokio::remove_file(&rockspec_path).await?;
                 }
                 Ok(package)
             }
@@ -228,11 +230,11 @@ async fn install_manifest_entries<T>(
             recursive_copy_dir(&src_path, &target).await?;
         } else if src_path.is_file() {
             if let Some(target_parent_dir) = target.parent() {
-                tokio::fs::create_dir_all(target_parent_dir).await?;
+                fs::tokio::create_dir_all(target_parent_dir).await?;
             }
-            tokio::fs::copy(src.join(relative_src_path), target).await?;
+            fs::tokio::copy(src.join(relative_src_path), target).await?;
         } else {
-            let metadata = tokio::fs::metadata(&src_path).await?;
+            let metadata = fs::tokio::metadata(&src_path).await?;
             return Err(InstallBinaryRockError::NotAFileOrDirectory(
                 src_path.to_string_lossy().to_string(),
                 metadata,

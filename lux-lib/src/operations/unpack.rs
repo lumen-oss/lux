@@ -1,3 +1,4 @@
+use crate::fs;
 use async_recursion::async_recursion;
 use flate2::read::GzDecoder;
 use itertools::Itertools;
@@ -11,17 +12,19 @@ use std::io::Seek;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
-use tokio::fs;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UnpackError {
-    #[error("failed to unpack source: {0}")]
+    #[error("failed to unpack source")]
     Io(#[from] io::Error),
-    #[error("failed to unpack zip source: {0}")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
+    #[error("failed to unpack zip source")]
     Zip(#[from] zip::result::ZipError),
     #[error("source returned HTML - it may have been moved or deleted")]
     SourceMovedOrDeleted,
-    #[error("rockspec source has unsupported file type {0}")]
+    #[error("rockspec source has unsupported file type '{0}'")]
     UnsupportedFileType(String),
     #[error("could not determine mimetype of rockspec source")]
     UnknownMimeType,
@@ -83,7 +86,7 @@ where
                     if path.components().count() > 0 {
                         let dest = dest_dir.join(path);
                         if let Some(dest_parent_dir) = dest.parent() {
-                            std::fs::create_dir_all(dest_parent_dir)?;
+                            fs::sync::create_dir_all(dest_parent_dir).map_err(io::Error::other)?;
                         }
                         entry.unpack(dest)?;
                     }
@@ -129,7 +132,7 @@ where
                     dest_dir,
                 )
                 .await?;
-                fs::remove_file(nested_archive_path).await?;
+                fs::tokio::remove_file(nested_archive_path).await?;
             }
         }
     }
@@ -166,7 +169,8 @@ fn is_single_tar_directory<R: Read + Seek + Send>(reader: R) -> io::Result<bool>
 }
 
 fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)>, io::Error> {
-    let entries = std::fs::read_dir(dir)?
+    let entries = fs::sync::read_dir(dir)
+        .map_err(io::Error::other)?
         .filter_map(Result::ok)
         .filter_map(|f| {
             let f = f.path();
