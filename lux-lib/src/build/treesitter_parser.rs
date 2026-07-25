@@ -1,9 +1,9 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
+use crate::fs;
 use crate::lua_rockspec::TreesitterParserBuildSpec;
 use crate::lua_version::LuaVersionUnset;
 use crate::tree::InstallTree;
 use miette::Diagnostic;
-use std::io;
 use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -29,22 +29,9 @@ pub enum TreesitterBuildError {
     #[error("error compiling the tree-sitter grammar: {0}")]
     #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     TreesitterCompileError(String),
-    #[error("error creating directory {dir}: {err}")]
-    #[diagnostic(help("check that the parent directory exists and is writable."))]
-    CreateDir { dir: PathBuf, err: io::Error },
-    #[error("error writing query file: {0}")]
-    #[diagnostic(help("check that the output directory exists and is writable."))]
-    WriteQuery(io::Error),
-    #[error("error reading directory {dir}: {err}")]
-    #[diagnostic(help("ensure the directory exists and is accessible."))]
-    ReadDir { dir: PathBuf, err: io::Error },
-    #[error("error copying query file from {from} to {to}: {err}")]
-    #[diagnostic(help("ensure the source file exists and the destination is writable."))]
-    CopyQuery {
-        from: PathBuf,
-        to: PathBuf,
-        err: io::Error,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
 }
 
 impl BuildBackend for TreesitterParserBuildSpec {
@@ -102,17 +89,10 @@ async fn install_inline_queries(
     queries_dir: &Path,
     queries: std::collections::HashMap<PathBuf, String>,
 ) -> Result<(), TreesitterBuildError> {
-    tokio::fs::create_dir_all(queries_dir)
-        .await
-        .map_err(|err| TreesitterBuildError::CreateDir {
-            dir: queries_dir.to_path_buf(),
-            err,
-        })?;
+    fs::tokio::create_dir_all(queries_dir).await?;
     for (path, content) in queries {
         let dest = queries_dir.join(path);
-        tokio::fs::write(&dest, content)
-            .await
-            .map_err(TreesitterBuildError::WriteQuery)?;
+        fs::tokio::write(&dest, content).await?;
     }
     Ok(())
 }
@@ -122,37 +102,20 @@ async fn install_source_queries(
     source_queries_dir: &Path,
     queries_dir: &Path,
 ) -> Result<(), TreesitterBuildError> {
-    tokio::fs::create_dir_all(queries_dir)
+    fs::tokio::create_dir_all(queries_dir).await?;
+    let mut entries = fs::tokio::read_dir(source_queries_dir).await?;
+    while let Some(entry) = entries
+        .next_entry()
         .await
-        .map_err(|err| TreesitterBuildError::CreateDir {
-            dir: queries_dir.to_path_buf(),
-            err,
-        })?;
-    let mut entries = tokio::fs::read_dir(source_queries_dir)
-        .await
-        .map_err(|err| TreesitterBuildError::ReadDir {
-            dir: source_queries_dir.to_path_buf(),
-            err,
-        })?;
-    while let Some(entry) =
-        entries
-            .next_entry()
-            .await
-            .map_err(|err| TreesitterBuildError::ReadDir {
-                dir: source_queries_dir.to_path_buf(),
-                err,
-            })?
+        .map_err(|source| fs::FsError::ReadDir {
+            path: source_queries_dir.to_path_buf(),
+            source,
+        })?
     {
         let path = entry.path();
         if let Some(filename) = path.file_name().filter(|_| is_query_file(&path)) {
             let dest = queries_dir.join(filename);
-            tokio::fs::copy(&path, &dest)
-                .await
-                .map_err(|err| TreesitterBuildError::CopyQuery {
-                    from: path,
-                    to: dest,
-                    err,
-                })?;
+            fs::tokio::copy(&path, &dest).await?;
         }
     }
     Ok(())
@@ -186,12 +149,7 @@ async fn build_parser(
 ) -> Result<(), TreesitterBuildError> {
     let span = info_span!("Compiling tree-sitter parser", language = lang);
     let _enter = span.enter();
-    tokio::fs::create_dir_all(parser_dir)
-        .await
-        .map_err(|err| TreesitterBuildError::CreateDir {
-            dir: parser_dir.to_path_buf(),
-            err,
-        })?;
+    fs::tokio::create_dir_all(parser_dir).await?;
     let loader = tree_sitter_loader::Loader::with_parser_lib_path(build_dir.to_path_buf());
     let output_path = parser_dir.join(format!("{}.{}", lang, std::env::consts::DLL_EXTENSION));
     // HACK(vhyrro): `tree-sitter-loader` will only use a temp directory instead of a

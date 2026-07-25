@@ -1,5 +1,6 @@
 //! Structs and utilities for `lux.toml`
 
+use crate::fs;
 use crate::git::shorthand::RemoteGitUrlShorthand;
 use crate::git::GitSource;
 use crate::hash::HasIntegrity;
@@ -270,7 +271,7 @@ pub struct PartialProjectToml {
 impl HasIntegrity for PartialProjectToml {
     fn hash(&self) -> io::Result<Integrity> {
         let toml_file = self.project_root.join(PROJECT_TOML);
-        let content = std::fs::read_to_string(&toml_file)?;
+        let content = fs::sync::read_to_string(&toml_file).map_err(io::Error::other)?;
         Ok(Integrity::from(&content))
     }
 }
@@ -860,6 +861,9 @@ fn validate_generated_lua(lua_str: &str) -> Result<(), ProjectTomlError> {
 pub enum ProjectTomlIntegrityError {
     LuaRockspecError(#[from] LuaRockspecError),
     IoError(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
 }
 
 impl HasIntegrity for LocalProjectToml {

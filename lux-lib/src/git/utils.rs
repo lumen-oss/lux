@@ -1,16 +1,14 @@
-use std::io;
-
-use crate::git::url::RemoteGitUrl;
+use crate::{fs, git::url::RemoteGitUrl};
 use git2::{AutotagOption, Cred, FetchOptions, RemoteCallbacks, Repository};
 use itertools::Itertools;
 use miette::Diagnostic;
-use tempfile::tempdir;
 use thiserror::Error;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum GitError {
-    #[error("error creating temporary directory to checkout git repositotory: {0}")]
-    CreateTempDir(io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("error initializing temporary bare git repository to fetch metadata: {0}")]
     BareRepoInit(git2::Error),
     #[error("error initializing remote repository '{0}' to fetch metadata: {1}")]
@@ -43,7 +41,7 @@ pub(crate) fn latest_semver_tag_or_commit_sha(
 
 #[tracing::instrument(level = "trace")]
 fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
-    let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
+    let temp_dir = fs::tempfile::tempdir()?;
 
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
@@ -82,7 +80,7 @@ fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
 }
 
 fn latest_commit_sha(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
-    let temp_dir = tempdir().map_err(GitError::CreateTempDir)?;
+    let temp_dir = fs::tempfile::tempdir()?;
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
     let mut remote = repo

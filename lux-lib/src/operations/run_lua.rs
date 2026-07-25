@@ -184,6 +184,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
+    use crate::fs;
     use assert_fs::prelude::{PathChild, PathCreateDir};
     use assert_fs::TempDir;
     use path_slash::PathBufExt;
@@ -196,7 +197,7 @@ mod tests {
         lua_dir.create_dir_all().unwrap();
         let lux_file = lua_dir.child("lux.lua").to_path_buf();
         let lux_path_expr = lua_dir.child("?.lua").to_path_buf();
-        tokio::fs::write(&lux_file, "return true").await.unwrap();
+        fs::tokio::write(&lux_file, "return true").await.unwrap();
         let package_path =
             PackagePath::from_str(lux_path_expr.to_slash_lossy().to_string().as_str()).unwrap();
         let package_cpath = PackagePath::default();

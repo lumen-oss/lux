@@ -3,6 +3,7 @@ use std::{io, ops::Deref, path::PathBuf, process::Command};
 use super::{
     BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
 };
+use crate::fs;
 use crate::tree::InstallTree;
 use crate::workspace::{WorkspaceError, WorkspaceTreeError};
 use crate::{
@@ -99,7 +100,8 @@ pub enum RunTestsError {
         help: Option<String>,
     },
     #[error(transparent)]
-    Io(#[from] io::Error),
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] ProjectError),
@@ -206,13 +208,13 @@ async fn run_project_tests(
         // by initialising empty HOME and XDG base directory paths
         let home = test_tree.root().join("home");
         let xdg = home.join("xdg");
-        let _ = tokio::fs::remove_dir_all(&home).await;
+        let _ = fs::tokio::remove_dir_all(&home).await;
         let xdg_config_home = xdg.join("config");
-        tokio::fs::create_dir_all(&xdg_config_home).await?;
+        fs::tokio::create_dir_all(&xdg_config_home).await?;
         let xdg_state_home = xdg.join("local").join("state");
-        tokio::fs::create_dir_all(&xdg_state_home).await?;
+        fs::tokio::create_dir_all(&xdg_state_home).await?;
         let xdg_data_home = xdg.join("local").join("share");
-        tokio::fs::create_dir_all(&xdg_data_home).await?;
+        fs::tokio::create_dir_all(&xdg_data_home).await?;
         command = command
             .env("HOME", home)
             .env("XDG_CONFIG_HOME", xdg_config_home)
@@ -331,7 +333,7 @@ mod tests {
     use std::path::Path;
 
     use crate::{
-        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        config::ConfigBuilder, fs, lua_installation::detect_installed_lua_version,
         lua_version::LuaVersion,
     };
 
@@ -358,7 +360,7 @@ mod tests {
         let workspace_root = temp_dir.path();
         let workspace = Workspace::from(workspace_root).unwrap().unwrap();
         let tree_root = workspace.root().to_path_buf().join(".lux");
-        let _ = tokio::fs::remove_dir_all(&tree_root).await;
+        let _ = fs::tokio::remove_dir_all(&tree_root).await;
 
         let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 

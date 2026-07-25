@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     config::Config,
+    fs,
     lockfile::{LockfileError, ReadOnly, WorkspaceLockfile},
     lua_rockspec::LuaVersionError,
     lua_version::LuaVersion,
@@ -85,6 +86,9 @@ pub enum WorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("package must be specified in a multi-project workspace")]
     #[diagnostic(help(
         r#"this workspace contains multiple projects.
@@ -293,11 +297,7 @@ impl Workspace {
         }
         if start.as_ref().join(WORKSPACE_TOML).exists() {
             let toml_path = start.as_ref().join(WORKSPACE_TOML);
-            let toml_content =
-                std::fs::read_to_string(&toml_path).map_err(|err| WorkspaceError::ReadLuxTOML {
-                    toml_path: toml_path.to_string_lossy().to_string(),
-                    source: err,
-                })?;
+            let toml_content = fs::sync::read_to_string(&toml_path)?;
             let root = start.as_ref();
             let toml_obj: Option<toml::Table> = toml::from_str(&toml_content).ok();
             if toml_obj.is_some_and(|toml| toml.contains_key("workspace")) {
@@ -329,12 +329,7 @@ impl Workspace {
         ) {
             Ok(Some(path)) => {
                 if let Some(root) = path.parent() {
-                    let toml_content = std::fs::read_to_string(&path).map_err(|err| {
-                        WorkspaceError::ReadLuxTOML {
-                            toml_path: path.to_string_lossy().to_string(),
-                            source: err,
-                        }
-                    })?;
+                    let toml_content = fs::sync::read_to_string(&path)?;
                     let toml_obj: Option<toml::Table> = toml::from_str(&toml_content).ok();
                     if toml_obj.is_some_and(|toml| toml.contains_key("workspace")) {
                         Ok(Some(Self::from_toml(&toml_content, root)?))
@@ -411,7 +406,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ConfigBuilder;
+    use crate::{config::ConfigBuilder, fs};
     use std::path::PathBuf;
 
     use assert_fs::prelude::*;
@@ -466,7 +461,7 @@ mod tests {
 [workspace]
 members = [ "glob:projects/*" ]
 "#;
-        tokio::fs::write(&workspace_toml_file, workspace_toml_content)
+        fs::tokio::write(&workspace_toml_file, workspace_toml_content)
             .await
             .unwrap();
 

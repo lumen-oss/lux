@@ -1,5 +1,6 @@
 use crate::{
     config::Config,
+    fs,
     lua_installation::LuaInstallation,
     lua_rockspec::{DeploySpec, LuaModule, ModulePaths},
     path::{Paths, PathsError},
@@ -53,7 +54,7 @@ pub(crate) fn copy_lua_to_module_path(
     source: &PathBuf,
     target_module: &LuaModule,
     target_dir: &Path,
-) -> io::Result<()> {
+) -> Result<(), fs::FsError> {
     let span = span!(
         tracing::Level::TRACE,
         "Copying Lua module",
@@ -70,23 +71,10 @@ pub(crate) fn copy_lua_to_module_path(
     let target = target_dir.join(target_module_path);
 
     if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent).map_err(|err| {
-            io::Error::other(format!(
-                "Failed to create directory {}:\n{}",
-                parent.display(),
-                err
-            ))
-        })?;
+        fs::sync::create_dir_all(parent)?;
     }
 
-    std::fs::copy(source, &target).map_err(|err| {
-        io::Error::other(format!(
-            "Failed to copy {} to {}:\n{}",
-            source.display(),
-            target.display(),
-            err
-        ))
-    })?;
+    fs::sync::copy(source, &target)?;
 
     Ok(())
 }
@@ -94,17 +82,16 @@ pub(crate) fn copy_lua_to_module_path(
 /// Recursively copy a directory.
 /// This respects ignore files and excludes hidden files and directories.
 #[tracing::instrument(level = "trace")]
-pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), io::Error> {
+pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), fs::FsError> {
     if src.exists() {
         for file in project_files(src) {
-            let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src).ok_or(
-                io::Error::other("failed to diff directories [THIS IS A BUG!]"),
-            )?;
+            let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src)
+                .unwrap_or_else(|| unreachable!("diff_path with self"));
             let target = dest.join(relative_src_path);
             if let Some(parent) = target.parent() {
-                tokio::fs::create_dir_all(parent).await?;
+                fs::tokio::create_dir_all(parent).await?;
             }
-            tokio::fs::copy(&file, target).await?;
+            fs::tokio::copy(&file, target).await?;
         }
     }
     Ok(())
@@ -139,15 +126,16 @@ fn validate_output(output: &Output) -> Result<(), OutputValidationError> {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum CompileCFilesError {
-    #[error("IO operation while compiling C files:\n{0}")]
-    Io(#[from] io::Error),
-    #[error("failed to compile intermediates from C files:\n{0}")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
+    #[error("failed to compile intermediates from C files")]
     #[diagnostic(help(
         r#"check the compiler output above for missing headers or syntax errors.
 ensure the C compiler has access to the required include paths."#
     ))]
-    CompileIntermediates(cc::Error),
-    #[error("error compiling C files (compilation failed):\n{0}")]
+    CompileIntermediates { source: cc::Error },
+    #[error("error compiling C files (compilation failed):")]
     #[diagnostic(help(
         r#"check the compiler output above for details.
 if no C compiler was found, run `lx debug toolchains` to verify your build tools."#
@@ -171,25 +159,26 @@ pub(crate) async fn compile_c_files(
     config: &Config,
 ) -> Result<(), CompileCFilesError> {
     let target = target_dir.join(target_module.to_lib_path());
-
-    let target_parent_dir = target.parent().ok_or(io::Error::other(format!(
-        "couldn't determine build target parent directory:\n{}",
-        target.display()
-    )))?;
+    let target_parent_dir = target.parent().unwrap_or_else(|| {
+        unreachable!(
+            "couldn't determine build target parent directory:\n{}",
+            target.display()
+        )
+    });
     let target_file_name = target
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
 
-    std::fs::create_dir_all(target_parent_dir)?;
+    fs::sync::create_dir_all(target_parent_dir)?;
 
     let host = Triple::host();
 
     // See https://github.com/rust-lang/cc-rs/issues/594#issuecomment-2110551057
 
     let mut build = cc::Build::new();
-    let intermediate_dir = tempfile::tempdir()?;
+    let intermediate_dir = fs::tempfile::tempdir()?;
     let build = build
         .cargo_output(config.verbose())
         .cargo_debug(config.verbose())
@@ -221,7 +210,7 @@ pub(crate) async fn compile_c_files(
 
     let objects = build
         .try_compile_objects(config)
-        .map_err(CompileCFilesError::CompileIntermediates)?;
+        .map_err(|source| CompileCFilesError::CompileIntermediates { source })?;
 
     link_c_artifacts(
         build,
@@ -245,7 +234,7 @@ fn mk_def_file(
     dir: &Path,
     output_file_name: &str,
     target_module: &LuaModule,
-) -> io::Result<PathBuf> {
+) -> Result<PathBuf, fs::FsError> {
     let mut def_file: PathBuf = dir.join(output_file_name);
     def_file.set_extension(".def");
     let exported_name = target_module.to_string().replace(".", "_");
@@ -258,7 +247,7 @@ fn mk_def_file(
 luaopen_{exported_name}
 "#,
     );
-    std::fs::write(&def_file, content)?;
+    fs::sync::write(&def_file, content)?;
     Ok(def_file)
 }
 
@@ -312,8 +301,9 @@ pub(crate) fn default_libflag() -> &'static str {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum CompileCModulesError {
-    #[error("IO operation failed while compiling C modules:\n{0}")]
-    Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("failed to compile intermediates from C modules: {0}")]
     #[diagnostic(help(
         r#"check the compiler output above for missing headers or syntax errors.
@@ -339,6 +329,9 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 pub enum LinkCModulesError {
     #[error("IO operation failed while linking C modules:\n{0}")]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     CC(#[from] cc::Error),
     #[error("error compiling C modules (output validation failed): {0}")]
@@ -366,12 +359,14 @@ pub(crate) async fn compile_c_modules(
 ) -> Result<(), CompileCModulesError> {
     let target = target_dir.join(target_module.to_lib_path());
 
-    let target_parent_dir = target.parent().ok_or(io::Error::other(format!(
-        "couldn't determine build target parent directory:\n{}",
-        target.display()
-    )))?;
+    let target_parent_dir = target.parent().unwrap_or_else(|| {
+        unreachable!(
+            "couldn't determine build target parent directory:\n{}",
+            target.display()
+        )
+    });
 
-    tokio::fs::create_dir_all(target_parent_dir).await?;
+    fs::tokio::create_dir_all(target_parent_dir).await?;
 
     let host = Triple::host();
 
@@ -408,7 +403,7 @@ pub(crate) async fn compile_c_modules(
         .unique() // Some rocks specify the include dirs via variable substitution.
         .collect_vec();
 
-    let intermediate_dir = tempfile::tempdir()?;
+    let intermediate_dir = fs::tempfile::tempdir()?;
     let build = build
         .cargo_output(config.verbose())
         .cargo_debug(config.verbose())
@@ -530,11 +525,7 @@ async fn link_c_artifacts(
     // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
     // the current working directory.
     // See https://github.com/lumen-oss/lux/issues/1106
-    let temp_work_dir = tempfile::tempdir().map_err(|err| {
-        io::Error::other(format!(
-            "failed to create temporary directory for linking:\n{err}"
-        ))
-    })?;
+    let temp_work_dir = fs::tempfile::tempdir()?;
     let is_msvc = compiler.is_like_msvc();
     let cmd = build.try_get_compiler()?.to_command();
     let mut cmd: tokio::process::Command = cmd.into();
@@ -609,7 +600,8 @@ fn add_variable_if_set(config: &Config, name: &str, cmd: &mut Command) {
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallBinaryError {
     #[error(transparent)]
-    Io(#[from] io::Error),
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Paths(#[from] PathsError),
@@ -621,7 +613,8 @@ pub enum InstallBinaryError {
 #[derive(Debug, Error, Diagnostic)]
 pub enum WrapBinaryError {
     #[error(transparent)]
-    Io(#[from] io::Error),
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     Utf8(#[from] FromUtf8Error),
     #[error("no Lua executable found")]
@@ -648,7 +641,7 @@ pub(crate) async fn install_binary(
         target,
     );
     let _enter = span.enter();
-    tokio::fs::create_dir_all(&tree.bin()).await?;
+    fs::tokio::create_dir_all(&tree.bin()).await?;
     let paths = Paths::new(tree)?;
     let script = if config.wrap_bin_scripts()
         && deploy.wrap_bin_scripts
@@ -657,7 +650,7 @@ pub(crate) async fn install_binary(
         install_wrapped_binary(source, target, tree, lua, config).await?
     } else {
         let target = tree.bin().join(target);
-        tokio::fs::copy(source, &target).await?;
+        fs::tokio::copy(source, &target).await?;
         target
     };
 
@@ -690,9 +683,9 @@ async fn install_wrapped_binary(
     config: &Config,
 ) -> Result<PathBuf, WrapBinaryError> {
     let unwrapped_bin_dir = tree.unwrapped_bin();
-    tokio::fs::create_dir_all(&unwrapped_bin_dir).await?;
+    fs::tokio::create_dir_all(&unwrapped_bin_dir).await?;
     let unwrapped_bin = unwrapped_bin_dir.join(target);
-    tokio::fs::copy(source, &unwrapped_bin).await?;
+    fs::tokio::copy(source, &unwrapped_bin).await?;
 
     #[cfg(target_family = "unix")]
     let target = tree.bin().join(target);
@@ -739,16 +732,16 @@ exit /b %ERRORLEVEL%
         unwrapped_bin.display(),
     );
 
-    tokio::fs::write(&target, content).await?;
+    fs::tokio::write(&target, content).await?;
     Ok(target)
 }
 
 #[cfg(unix)]
 #[tracing::instrument(level = "trace")]
-async fn set_executable_permissions(script: &Path) -> std::io::Result<()> {
-    let mut perms = tokio::fs::metadata(&script).await?.permissions();
+async fn set_executable_permissions(script: &Path) -> Result<(), fs::FsError> {
+    let mut perms = fs::tokio::metadata(&script).await?.permissions();
     perms.set_mode(0o744);
-    tokio::fs::set_permissions(&script, perms).await?;
+    fs::tokio::set_permissions(&script, perms).await?;
     Ok(())
 }
 
@@ -805,7 +798,7 @@ async fn is_compatible_lua_script_fallback(
     lua_installation: &LuaInstallation,
     config: &Config,
 ) -> bool {
-    if let Ok(file_content) = tokio::fs::read_to_string(&file).await {
+    if let Ok(file_content) = fs::tokio::read_to_string(&file).await {
         let file_content_without_comments = file_content
             .lines()
             .filter(|line| !line.trim_start().starts_with("#"))

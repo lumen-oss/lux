@@ -1,4 +1,5 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
+use crate::fs;
 use crate::lockfile::{LockfileError, OptState, RemotePackageSourceUrl};
 use crate::lua_installation::LuaInstallationError;
 use crate::lua_rockspec::LuaVersionError;
@@ -148,6 +149,9 @@ pub enum BuildError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -255,7 +259,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         for (target, source) in &install_spec.lib {
             let absolute_source = build_dir.join(source);
             let resolved_target = output_paths.lib.join(target);
-            tokio::fs::copy(absolute_source, resolved_target).await?;
+            fs::tokio::copy(absolute_source, resolved_target).await?;
         }
     }
     if entry_type.is_entrypoint() {
@@ -292,9 +296,9 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
             let absolute_source = build_dir.join(source);
             let target = output_paths.conf.join(target);
             if let Some(parent_dir) = target.parent() {
-                tokio::fs::create_dir_all(parent_dir).await?;
+                fs::tokio::create_dir_all(parent_dir).await?;
             }
-            tokio::fs::copy(absolute_source, target).await?;
+            fs::tokio::copy(absolute_source, target).await?;
         }
     }
     Ok(())
@@ -313,7 +317,7 @@ where
 
     let tree = build.tree;
 
-    let temp_dir = tempfile::tempdir()?;
+    let temp_dir = fs::tempfile::tempdir()?;
 
     let source_metadata = match build.source_spec {
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
@@ -388,7 +392,7 @@ where
                     //
                     // LuaRocks implementation:
                     // https://github.com/luarocks/luarocks/blob/4188fdb235aca66530d274c782374cf6afba09b8/src/luarocks/fetch.tl?plain=1#L526
-                    let has_lua_or_c_sources = std::fs::read_dir(temp_dir.path())?
+                    let has_lua_or_c_sources = fs::sync::read_dir(temp_dir.path())?
                         .filter_map(Result::ok)
                         .filter(|f| f.path().is_file())
                         .any(|f| {
@@ -399,7 +403,7 @@ where
                     if has_lua_or_c_sources {
                         temp_dir.path().into()
                     } else {
-                        let dir_entries = std::fs::read_dir(temp_dir.path())?
+                        let dir_entries = fs::sync::read_dir(temp_dir.path())?
                             .filter_map(Result::ok)
                             .filter(|f| f.path().is_dir())
                             .collect_vec();
@@ -481,7 +485,7 @@ where
             recursive_copy_doc_dir(&output_paths, &build_dir).await?;
 
             if let Ok(rockspec_str) = rockspec.to_lua_remote_rockspec_string() {
-                std::fs::write(output_paths.rockspec_path(), rockspec_str)?;
+                fs::sync::write(output_paths.rockspec_path(), rockspec_str)?;
             }
 
             Ok(package)

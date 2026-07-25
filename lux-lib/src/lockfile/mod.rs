@@ -17,6 +17,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::config::tree::RockLayoutConfig;
+use crate::fs;
 use crate::package::{
     PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq,
     PackageVersionReqError, RemotePackageTypeFilterSpec,
@@ -781,10 +782,9 @@ pub struct WorkspaceLockfile<P: LockfilePermissions> {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum LockfileError {
-    #[error("error loading lockfile: {0}")]
-    Load(io::Error),
-    #[error("error creating lockfile: {0}")]
-    Create(io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("error parsing lockfile from JSON: {0}")]
     ParseJson(serde_json::Error),
     #[error("error writing lockfile to JSON: {0}")]
@@ -835,10 +835,11 @@ check the source URL, then rerun the command with `lx --no-lock` to update the h
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-#[error("error flushing the lockfile ({filepath}):\n{cause}")]
+#[error("error flushing the lockfile ({})", .filepath.display())]
+#[diagnostic(help("make sure the parent directory is writeable"))]
 pub struct FlushLockfileError {
-    filepath: String,
-    cause: io::Error,
+    filepath: PathBuf,
+    source: io::Error,
 }
 
 /// A specification for syncing a list of packages with a lockfile
@@ -971,13 +972,13 @@ impl<P: LockfilePermissions> Lockfile<P> {
 
     fn flush(&self) -> Result<(), FlushLockfileError> {
         let content = serde_json::to_string_pretty(&self).map_err(|err| FlushLockfileError {
-            filepath: self.filepath.to_string_lossy().to_string(),
-            cause: io::Error::other(err),
+            filepath: self.filepath.to_path_buf(),
+            source: io::Error::other(err),
         })?;
 
-        std::fs::write(&self.filepath, content).map_err(|err| FlushLockfileError {
-            filepath: self.filepath.to_string_lossy().to_string(),
-            cause: err,
+        fs::sync::write(&self.filepath, content).map_err(|err| FlushLockfileError {
+            filepath: self.filepath.to_path_buf(),
+            source: io::Error::other(err),
         })
     }
 }
@@ -1048,7 +1049,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
     fn flush(&self) -> io::Result<()> {
         let content = serde_json::to_string_pretty(&self)?;
 
-        std::fs::write(&self.filepath, content)?;
+        fs::sync::write(&self.filepath, content).map_err(io::Error::other)?;
 
         Ok(())
     }
@@ -1073,10 +1074,18 @@ impl Lockfile<ReadOnly> {
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
-                write!(file, "{json_str}").map_err(LockfileError::Create)?;
+                write!(file, "{json_str}").map_err(|source| fs::FsError::Write {
+                    path: filepath.to_path_buf(),
+                    source,
+                })?;
             }
             Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
-            Err(err) => return Err(LockfileError::Create(err)),
+            Err(source) => {
+                return Err(LockfileError::Fs(fs::FsError::FileOpen {
+                    path: filepath.to_path_buf(),
+                    source,
+                }))
+            }
         }
 
         Self::load(filepath, Some(&rock_layout))
@@ -1089,7 +1098,7 @@ impl Lockfile<ReadOnly> {
         filepath: PathBuf,
         expected_rock_layout: Option<&RockLayoutConfig>,
     ) -> Result<Lockfile<ReadOnly>, LockfileError> {
-        let content = std::fs::read_to_string(&filepath).map_err(LockfileError::Load)?;
+        let content = fs::sync::read_to_string(&filepath)?;
         let mut lockfile: Lockfile<ReadOnly> =
             serde_json::from_str(&content).map_err(LockfileError::ParseJson)?;
         lockfile.filepath = filepath;
@@ -1131,8 +1140,8 @@ impl Lockfile<ReadOnly> {
         let mut writeable_lockfile = self.into_temporary();
 
         let result = cb(&mut writeable_lockfile).map_err(|err| FlushLockfileError {
-            filepath: writeable_lockfile.filepath.to_string_lossy().to_string(),
-            cause: io::Error::other(err),
+            filepath: writeable_lockfile.filepath.to_path_buf(),
+            source: io::Error::other(err),
         })?;
 
         writeable_lockfile.flush()?;
@@ -1176,10 +1185,18 @@ impl WorkspaceLockfile<ReadOnly> {
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
-                write!(file, "{json_str}").map_err(LockfileError::Create)?;
+                write!(file, "{json_str}").map_err(|source| fs::FsError::Write {
+                    path: filepath.to_path_buf(),
+                    source,
+                })?;
             }
             Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
-            Err(err) => return Err(LockfileError::Create(err)),
+            Err(source) => {
+                return Err(LockfileError::Fs(fs::FsError::FileOpen {
+                    path: filepath.to_path_buf(),
+                    source,
+                }))
+            }
         }
 
         Self::load(filepath)
@@ -1188,7 +1205,7 @@ impl WorkspaceLockfile<ReadOnly> {
     /// Load a `ProjectLockfile`, failing if none exists.
     #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
-        let content = std::fs::read_to_string(&filepath).map_err(LockfileError::Load)?;
+        let content = fs::sync::read_to_string(&filepath)?;
         let mut lockfile: WorkspaceLockfile<ReadOnly> =
             serde_json::from_str(&content).map_err(LockfileError::ParseJson)?;
 

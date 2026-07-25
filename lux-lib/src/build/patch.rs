@@ -1,7 +1,7 @@
+use crate::fs;
 use bon::Builder;
 use diffy::{self, ApplyError, ParsePatchError};
 use miette::Diagnostic;
-use std::io;
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
 #[derive(Builder)]
@@ -27,34 +27,11 @@ where
 pub enum PatchError {
     #[error("error parsing patch {0}: {1}")]
     Parse(PathBuf, ParsePatchError),
-    #[error("failed to apply patch {patch_file}: error reading original file {orig_file}: {err}")]
-    OriginalFileRead {
-        patch_file: PathBuf,
-        orig_file: PathBuf,
-        err: io::Error,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error("error applying patch {0}: {1}")]
     Apply(PathBuf, ApplyError),
-    #[error("failed to apply patch {patch_file}: error creating directory {dir}: {err}")]
-    CreateDir {
-        patch_file: PathBuf,
-        dir: PathBuf,
-        err: io::Error,
-    },
-    #[error(
-        "failed to apply patch {patch_file}: error writing modified file {modified_file}: {err}"
-    )]
-    ModifiedFileWrite {
-        patch_file: PathBuf,
-        modified_file: PathBuf,
-        err: io::Error,
-    },
-    #[error("failed to apply patch {patch_file}: error deleting file {file}: {err}")]
-    Delete {
-        patch_file: PathBuf,
-        file: PathBuf,
-        err: io::Error,
-    },
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
@@ -76,13 +53,7 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
 
         let original_content = original_file
             .as_ref()
-            .map(|file| {
-                std::fs::read_to_string(file).map_err(|err| PatchError::OriginalFileRead {
-                    patch_file: path.clone(),
-                    orig_file: file.clone(),
-                    err,
-                })
-            })
+            .map(fs::sync::read_to_string)
             .map_or(Ok(None), |v| v.map(Some))?
             .unwrap_or_default();
 
@@ -99,33 +70,19 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
             .map(|modified_file| {
                 let modified_content = diffy::apply(&original_content, &patch)
                     .map_err(|err| PatchError::Apply(path.clone(), err))?;
-                Ok((modified_file, modified_content))
+                Ok::<_, PatchError>((modified_file, modified_content))
             })
             .map_or(Ok(None), |v| v.map(Some))?
             .map(|(file, modified_content)| {
                 let parent = file.parent().unwrap_or(args.dir);
-                std::fs::create_dir_all(parent).map_err(|err| PatchError::CreateDir {
-                    patch_file: path.clone(),
-                    dir: parent.to_path_buf(),
-                    err,
-                })?;
-                std::fs::write(&file, modified_content).map_err(|err| {
-                    PatchError::ModifiedFileWrite {
-                        patch_file: path.clone(),
-                        modified_file: file,
-                        err,
-                    }
-                })
+                fs::sync::create_dir_all(parent)?;
+                Ok::<_, PatchError>(fs::sync::write(&file, modified_content)?)
             })
             .map_or(Ok(None), |v| v.map(Some))?;
 
         if modified.is_none() {
             if let Some(original) = original_file {
-                std::fs::remove_file(&original).map_err(|err| PatchError::Delete {
-                    patch_file: path.clone(),
-                    file: original,
-                    err,
-                })?
+                fs::sync::remove_file(&original)?;
             }
         }
     }
@@ -136,21 +93,22 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
 mod tests {
 
     use super::*;
+    use crate::fs;
     use assert_fs::TempDir;
-    use std::{fs, path::PathBuf};
+    use std::path::PathBuf;
 
     #[test]
     fn test_simple_patch() {
         let temp_dir = TempDir::new().unwrap();
         let test_file =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/patch_test/pack.lua");
-        let orig_content = std::fs::read_to_string(&test_file).unwrap();
+        let orig_content = crate::fs::sync::read_to_string(&test_file).unwrap();
         let added_line = r#"_G._ENV = rawget(_G, "_ENV") -- to satisfy tarantool strict mode"#;
         assert!(!orig_content.contains(added_line));
         let scripts_dir = temp_dir.join("scripts");
-        fs::create_dir_all(&scripts_dir).unwrap();
+        fs::sync::create_dir_all(&scripts_dir).unwrap();
         let patch_file = scripts_dir.join("pack.lua");
-        fs::copy(&test_file, &patch_file).unwrap();
+        fs::sync::copy(&test_file, &patch_file).unwrap();
         let patches = vec![(
             PathBuf::from("test_patch.diff"),
             r#"
@@ -172,7 +130,7 @@ index 959c7ed..9c6a9a1 100644
 
         Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
 
-        let patched_content = std::fs::read_to_string(&patch_file).unwrap();
+        let patched_content = crate::fs::sync::read_to_string(&patch_file).unwrap();
         assert!(patched_content.contains(added_line));
     }
 
@@ -196,7 +154,7 @@ index 0000000..1cbadfb
         .collect();
         Patch::new(&temp_dir.join(""), &patches).apply().unwrap();
         let patch_file = temp_dir.join("foo/README.md");
-        let patched_content = std::fs::read_to_string(&patch_file).unwrap();
+        let patched_content = crate::fs::sync::read_to_string(&patch_file).unwrap();
         assert!(patched_content.contains("# title"));
     }
 
@@ -204,7 +162,7 @@ index 0000000..1cbadfb
     fn test_git_patch_delete_file() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.join("README.md");
-        std::fs::write(&test_file, "# title").unwrap();
+        crate::fs::sync::write(&test_file, "# title").unwrap();
         let patches = vec![(
             PathBuf::from("test.patch"),
             r#"

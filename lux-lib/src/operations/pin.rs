@@ -1,6 +1,7 @@
 use std::io;
 
 use crate::{
+    fs,
     lockfile::{FlushLockfileError, LocalPackageId, PinnedState},
     package::PackageSpec,
     tree::{InstallTree, Tree, TreeError},
@@ -39,12 +40,9 @@ pub enum PinError {
     #[error("cannot change pin state of {rock}, because it is not an entrypoint")]
     #[diagnostic(help("Lux does not allow pinning dependencies, as doing so could break the version requirement in a future update."))]
     NotAnEntrypoint { rock: PackageSpec },
-    #[error("error reading directory '{dir}'")]
-    #[diagnostic(help("make sure Lux has write access to the directory"))]
-    ReadDir { dir: String, source: io::Error },
-    #[error("error creating directory '{dir}'")]
-    #[diagnostic(help("make sure Lux has write access to the parent directory"))]
-    CreateDir { dir: String, source: io::Error },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
 }
 
 pub fn set_pinned_state(
@@ -73,11 +71,7 @@ pub fn set_pinned_state(
 
     let old_package = package.clone();
     let package_root = tree.root_for(&package);
-    let items = std::fs::read_dir(&package_root)
-        .map_err(|source| PinError::ReadDir {
-            dir: package_root.to_string_lossy().to_string(),
-            source,
-        })?
+    let items = fs::sync::read_dir(&package_root)?
         .filter_map(Result::ok)
         .map(|dir| dir.path())
         .collect_vec();
@@ -93,10 +87,7 @@ pub fn set_pinned_state(
 
     let new_root = tree.root_for(&package);
 
-    std::fs::create_dir_all(&new_root).map_err(|source| PinError::CreateDir {
-        dir: new_root.to_string_lossy().to_string(),
-        source,
-    })?;
+    fs::sync::create_dir_all(&new_root)?;
 
     fs_extra::move_items(&items, new_root, &CopyOptions::new())?;
 

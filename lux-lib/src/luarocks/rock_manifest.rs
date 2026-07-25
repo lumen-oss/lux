@@ -259,6 +259,8 @@ pub(crate) struct RockManifestRoot {
 
 #[cfg(test)]
 mod tests {
+    use crate::fs;
+
     use super::*;
 
     #[tokio::test]
@@ -336,7 +338,7 @@ rock_manifest = {
     pub async fn regression_http_rock_manifest_from_lua() {
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/http-0.4-0-rock_manifest");
-        let content = String::from_utf8(tokio::fs::read(manifest).await.unwrap()).unwrap();
+        let content = String::from_utf8(fs::tokio::read(manifest).await.unwrap()).unwrap();
         RockManifest::new(&content).unwrap();
     }
 }

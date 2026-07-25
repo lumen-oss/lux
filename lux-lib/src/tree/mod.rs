@@ -1,6 +1,7 @@
 use crate::{
     build::utils::format_path,
     config::{tree::RockLayoutConfig, Config},
+    fs,
     lockfile::{LocalPackage, LocalPackageId, Lockfile, LockfileError, OptState, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageReq},
@@ -78,10 +79,9 @@ pub struct Tree {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum TreeError {
-    #[error("unable to create directory {0}:\n{1}")]
-    CreateDir(String, io::Error),
-    #[error("unable to write to {0}:\n{1}")]
-    WriteFile(String, io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Lockfile(#[from] LockfileError),
@@ -164,20 +164,15 @@ impl Tree {
         let path_with_version = root.join(version.to_string());
 
         // Ensure that the root and the version directory exist.
-        std::fs::create_dir_all(&path_with_version).map_err(|err| {
-            TreeError::CreateDir(path_with_version.to_string_lossy().to_string(), err)
-        })?;
+        fs::sync::create_dir_all(&path_with_version)?;
 
         // In case the tree is in a git repository, we tell git to ignore it.
         let gitignore_file = root.join(".gitignore");
-        std::fs::write(&gitignore_file, "*").map_err(|err| {
-            TreeError::WriteFile(gitignore_file.to_string_lossy().to_string(), err)
-        })?;
+        fs::sync::write(&gitignore_file, "*")?;
 
         // Ensure that the bin directory exists.
         let bin_dir = path_with_version.join("bin");
-        std::fs::create_dir_all(&bin_dir)
-            .map_err(|err| TreeError::CreateDir(bin_dir.to_string_lossy().to_string(), err))?;
+        fs::sync::create_dir_all(&bin_dir)?;
 
         let lockfile_path = root.join(LOCKFILE_NAME);
         let rock_layout_config = if lockfile_path.is_file() {
@@ -247,15 +242,15 @@ impl InstallTree for Tree {
 
     fn entrypoint(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         let rock_layout = self.entrypoint_layout(package);
-        std::fs::create_dir_all(&rock_layout.lib)?;
-        std::fs::create_dir_all(&rock_layout.src)?;
+        fs::sync::create_dir_all(&rock_layout.lib).map_err(io::Error::other)?;
+        fs::sync::create_dir_all(&rock_layout.src).map_err(io::Error::other)?;
         Ok(rock_layout)
     }
 
     fn dependency(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         let rock_layout = self.dependency_layout(package);
-        std::fs::create_dir_all(&rock_layout.lib)?;
-        std::fs::create_dir_all(&rock_layout.src)?;
+        fs::sync::create_dir_all(&rock_layout.lib).map_err(io::Error::other)?;
+        fs::sync::create_dir_all(&rock_layout.src).map_err(io::Error::other)?;
         Ok(rock_layout)
     }
 

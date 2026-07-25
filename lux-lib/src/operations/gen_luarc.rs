@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::fs;
 use crate::lockfile::LocalPackageLockType;
 use crate::tree::InstallTree;
 use crate::workspace::Workspace;
@@ -12,13 +13,14 @@ use path_slash::PathBufExt;
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::io;
 use std::path::PathBuf;
 use thiserror::Error;
-use tokio::fs;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum GenLuaRcError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
@@ -29,8 +31,6 @@ pub enum GenLuaRcError {
     Serialize(String),
     #[error("failed to deserialize luarc content:\n{0}")]
     Deserialize(String),
-    #[error("failed to write {0}:\n{1}")]
-    Write(PathBuf, io::Error),
 }
 
 #[derive(Builder)]
@@ -78,7 +78,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
     let luarc_path = workspace.luarc_path(config);
 
     // read the existing .luarc file or initialise a new one if it doesn't exist
-    let luarc_content = fs::read_to_string(&luarc_path)
+    let luarc_content = fs::tokio::read_to_string(&luarc_path)
         .await
         .unwrap_or_else(|_| "{}".into());
 
@@ -111,9 +111,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
 
     let luarc_content = update_luarc_content(&luarc_content, library_dirs)?;
 
-    fs::write(&luarc_path, luarc_content)
-        .await
-        .map_err(|err| GenLuaRcError::Write(luarc_path, err))?;
+    fs::tokio::write(&luarc_path, luarc_content).await?;
 
     Ok(())
 }
