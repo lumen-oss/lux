@@ -16,7 +16,9 @@ use lux_lib::{
     config::{tree::RockLayoutConfig, ConfigBuilder},
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_version::LuaVersion,
+    workspace::Workspace,
 };
+
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 use tracing_subscriber::layer::{Layer, SubscriberExt};
@@ -57,13 +59,20 @@ async fn main() -> Result<()> {
         }
     };
 
-    let lua_version = cli.lua_version.or({
-        if cli.nvim {
-            Some(LuaVersion::Lua51)
-        } else {
-            None
-        }
-    });
+    let lua_version = cli
+        .lua_version
+        .or({
+            if cli.nvim {
+                Some(LuaVersion::Lua51)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            let current_workspace = Workspace::current().ok().flatten()?;
+            let member = current_workspace.members().first().toml();
+            member.exact_lua_version()
+        });
 
     let mut config_builder = ConfigBuilder::new()?
         .dev(Some(cli.dev))

@@ -287,6 +287,28 @@ impl PartialProjectToml {
             ..super::parse_toml(name, str)?
         })
     }
+    pub fn exact_lua_version(&self) -> Option<LuaVersion> {
+        let lua = self.lua.as_ref()?;
+        let mut matches = [
+            ("5.5.0", LuaVersion::Lua55),
+            ("5.4.0", LuaVersion::Lua54),
+            ("5.3.0", LuaVersion::Lua53),
+            ("5.2.0", LuaVersion::Lua52),
+            ("5.1.0", LuaVersion::Lua51),
+        ]
+        .into_iter()
+        .filter(|(possibility, _)| {
+            let possibility = unsafe { possibility.parse().unwrap_unchecked() };
+            lua.matches(&possibility)
+        })
+        .map(|(_, version)| version);
+        let version = matches.next()?;
+        if matches.next().is_none() {
+            Some(version)
+        } else {
+            None
+        }
+    }
 
     /// Convert the `PartialProjectToml` struct into a `LocalProjectToml` struct, making
     /// it ready to be used for building a project.
