@@ -1,7 +1,6 @@
 use std::io::IsTerminal;
 
 use std::time::Duration;
-use strum::IntoEnumIterator;
 
 use clap::Parser;
 use lux_cli::{
@@ -18,8 +17,6 @@ use lux_lib::{
     config::{tree::RockLayoutConfig, ConfigBuilder},
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_version::LuaVersion,
-    project::project_toml::PartialProjectToml,
-    workspace::Workspace,
 };
 
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
@@ -71,12 +68,7 @@ async fn main() -> Result<()> {
                 None
             }
         })
-        .or_else(|| {
-            let subcommand = cli.command.project_package()?;
-            let current_workspace = Workspace::current().ok().flatten()?;
-            let item = current_workspace.single_member_or_select(subcommand).ok()?;
-            exact_lua_version(item.toml())
-        });
+        .or_else(|| cli.command.detect_lua_version());
 
     let mut config_builder = ConfigBuilder::new()?
         .dev(Some(cli.dev))
@@ -233,18 +225,5 @@ where
                 }
             }
         }
-    }
-}
-
-fn exact_lua_version(toml: &PartialProjectToml) -> Option<LuaVersion> {
-    let lua = toml.lua_requirements()?;
-    let mut matches = LuaVersion::iter().filter(|v| {
-        !matches!(v, LuaVersion::LuaJIT | LuaVersion::LuaJIT52) && lua.matches(&v.as_version())
-    });
-    let version = matches.next()?;
-    if matches.next().is_none() {
-        return Some(version);
-    } else {
-        None
     }
 }

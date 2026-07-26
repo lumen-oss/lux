@@ -1,4 +1,6 @@
-use crate::{completion::Completion, dist::Dist, format::Fmt, project::NewProject};
+use crate::{
+    args::PackageOrRockspec, completion::Completion, dist::Dist, format::Fmt, project::NewProject,
+};
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -17,7 +19,10 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::{lua_version::LuaVersion, package::PackageName};
+use lux_lib::{
+    lua_version::LuaVersion, package::PackageName, project::project_toml::PartialProjectToml,
+    workspace::Workspace,
+};
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;
@@ -27,6 +32,7 @@ use run::Run;
 use run_lua::RunLua;
 use search::Search;
 use shell::Shell;
+use strum::IntoEnumIterator;
 use sync::SyncProject;
 use test::Test;
 use uninstall::Uninstall;
@@ -351,23 +357,53 @@ pub enum Commands {
     Sync(SyncProject),
 }
 impl Commands {
-    pub fn project_package(&self) -> Option<&Option<PackageName>> {
+    pub fn detect_lua_version(&self) -> Option<LuaVersion> {
         match self {
-            Self::Add(a) => Some(&a.package),
-            Self::Build(b) => Some(&b.package),
-            Self::Fmt(f) => Some(&f.package),
-            Self::Upload(u) => Some(&u.package),
-            Self::GenerateRockspec(gr) => Some(&gr.package),
-            Self::Pin(p) | Self::Unpin(p) => Some(&p.package),
-            Self::Remove(r) => Some(&r.package),
-            Self::Test(t) => Some(&t.package),
-            Self::Update(u) => Some(&u.package),
-            Self::Run(r) => Some(&r.build.package),
-            Self::Dist(b) => match b {
-                Dist::Bin(b) => Some(&b.package),
-                Dist::FlatArchive(_) => None,
+            Self::Add(a) => lua_version_for_package(&a.package),
+            Self::Build(b) => lua_version_for_package(&b.package),
+            Self::Fmt(f) => lua_version_for_package(&f.package),
+            Self::Upload(u) => lua_version_for_package(&u.package),
+            Self::GenerateRockspec(gr) => lua_version_for_package(&gr.package),
+            Self::Pin(p) | Self::Unpin(p) => lua_version_for_package(&p.package),
+            Self::Remove(r) => lua_version_for_package(&r.package),
+            Self::Test(t) => lua_version_for_package(&t.package),
+            Self::Update(u) => lua_version_for_package(&u.package),
+            Self::Run(r) => lua_version_for_package(&r.build.package),
+            Self::Dist(d) => match d {
+                Dist::Bin(b) => lua_version_for_package(&b.package),
+                Dist::FlatArchive(fa) => match &fa.package_or_rockspec {
+                    Some(PackageOrRockspec::Package(p)) => {
+                        lua_version_for_package(&Some(p.name().clone()))
+                    }
+                    Some(PackageOrRockspec::RockSpec(_)) => None,
+                    None => lua_version_for_package(&None),
+                },
             },
-            _ => None,
+            Self::Check(_) => None,
+            Self::Config(_) => None,
+            Self::Completion(_) => None,
+            Self::Debug(_) => None,
+            Self::Doc(_) => None,
+            Self::Download(_) => None,
+            Self::Info(_) => None,
+            Self::Install(_) => None,
+            Self::InstallRockspec(_) => None,
+            Self::InstallLua => None,
+            Self::Lint(_) => None,
+            Self::List(_) => None,
+            Self::Lua(_) => None,
+            Self::New(_) => None,
+            Self::Outdated(_) => None,
+            Self::Pack(_) => None,
+            Self::Path(_) => None,
+            Self::Purge => None,
+            Self::Exec(_) => None,
+            Self::Search(_) => None,
+            Self::Uninstall(_) => None,
+            Self::Which(_) => None,
+            Self::Shell(_) => None,
+            Self::Sync(_) => lua_version_for_package(&None),
+            Self::Vendor(_) => lua_version_for_package(&None),
         }
     }
 }
@@ -384,4 +420,23 @@ where
         .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+fn lua_version_for_package(pkg: &Option<PackageName>) -> Option<LuaVersion> {
+    let current_workspace = Workspace::current().ok().flatten()?;
+    let item = current_workspace.single_member_or_select(pkg).ok()?;
+    exact_lua_version(item.toml())
+}
+
+fn exact_lua_version(toml: &PartialProjectToml) -> Option<LuaVersion> {
+    let lua = toml.lua_requirements()?;
+    let mut matches = LuaVersion::iter().filter(|v| {
+        !matches!(v, LuaVersion::LuaJIT | LuaVersion::LuaJIT52) && lua.matches(&v.as_version())
+    });
+    let version = matches.next()?;
+    if matches.next().is_none() {
+        Some(version)
+    } else {
+        None
+    }
 }
