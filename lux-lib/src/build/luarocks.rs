@@ -85,24 +85,19 @@ async fn install<R: Rockspec>(
 ) -> Result<BuildInfo, LuarocksBuildError> {
     let lua_version = rockspec.lua_version_matches(config)?;
     fs::tokio::create_dir_all(&output_paths.bin).await?;
+    let lua_version = lua_version.version_compatibility_str();
     let package_dir = luarocks_tree
         .join("lib")
         .join("lib")
         .join("luarocks")
-        .join(format!("lux-{}", &lua_version.version_compatibility_str()))
+        .join(format!("lux-{}", lua_version))
         .join(format!("{}", rockspec.package()))
         .join(format!("{}", rockspec.version()));
     recursive_copy_dir(&package_dir.join("doc"), &output_paths.doc).await?;
     recursive_copy_dir(&luarocks_tree.join("bin"), &output_paths.bin).await?;
-    let src_dir = luarocks_tree
-        .join("share")
-        .join("lua")
-        .join(lua_version.version_compatibility_str());
+    let src_dir = luarocks_tree.join("share").join("lua").join(&lua_version);
     recursive_copy_dir(&src_dir, &output_paths.src).await?;
-    let lib_dir = luarocks_tree
-        .join("lib")
-        .join("lua")
-        .join(lua_version.version_compatibility_str());
+    let lib_dir = luarocks_tree.join("lib").join("lua").join(&lua_version);
     recursive_copy_dir(&lib_dir, &output_paths.lib).await?;
     Ok(BuildInfo::default())
 }

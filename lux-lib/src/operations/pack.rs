@@ -105,7 +105,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     if !layout.rockspec_path().is_file() {
         return Err(PackError::MissingRockspec);
     }
-    let packed_rockspec_name = format!("{}-{}.rockspec", &package.name(), &package.version());
+    let packed_rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
     let renamed_rockspec_entry = temp_root_dir.path().join(packed_rockspec_name);
     fs::tokio::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
     let root_entries = add_rock_entries(&mut zip, temp_root_dir.path(), "".into())?;

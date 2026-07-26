@@ -250,7 +250,7 @@ async fn download_remote_rock(
             let package = &remote_package.package;
             let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
             let bytes = crate::reqwest::new_https_client(config)?
-                .get(format!("{}/{}", &url, rockspec_name))
+                .get(format!("{}/{}", url, rockspec_name))
                 .send()
                 .await
                 .map_err(DownloadRockspecError::Request)?

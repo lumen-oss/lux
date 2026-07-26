@@ -456,10 +456,10 @@ version = "{}"
 build = {{
   type = "source"
 }}"#,
-            &rockspec_format,
+            rockspec_format,
             package_spec.name(),
-            &version,
-            &source_spec.display_lua(),
+            version,
+            source_spec.display_lua(),
         );
 
         let source: RemoteRockSource = source_spec.into();

@@ -98,7 +98,7 @@ where
                             (None, None, None) => Ok(None),
                             (None, Some(_), None) => Err(de::Error::custom(format!(
                                 "dependency {} specifies a 'rev', but missing a 'git' field",
-                                &name
+                                name
                             ))),
                             (Some(git), Some(rev), None) => Ok(Some(RockSourceSpec::Git(GitSource {
                                 url: git.into(),
@@ -118,7 +118,7 @@ where
                             (None, None, Some(path)) => Ok(Some(RockSourceSpec::File(path))),
                             (_, _, Some(_)) => Err(de::Error::custom(format!(
                                 "dependency '{}' specifies a 'path', which cannot be combined with 'git' or 'rev'",
-                                &name
+                                name
                             ))),
                         }?;
                         Ok(LuaDependencySpec {
@@ -767,7 +767,7 @@ version = "{}""#,
                 .as_ref()
                 .unwrap_or(&RockspecFormat::default()),
             self.package,
-            &version
+            version
         );
 
         let mut template = Vec::new();
@@ -1479,7 +1479,7 @@ mod tests {
                 dir = "my-package-1.0.0",
             }}
         "#,
-            &mergable_rockspec_content
+            mergable_rockspec_content
         );
 
         let project_toml =
