@@ -21,6 +21,7 @@ use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::ROCKSPEC_FUEL_LIMIT;
 use std::io;
 use std::{collections::HashMap, path::PathBuf};
+use strum::IntoEnumIterator;
 
 use crate::{
     config::Config,
@@ -289,22 +290,12 @@ impl PartialProjectToml {
     }
     pub fn exact_lua_version(&self) -> Option<LuaVersion> {
         let lua = self.lua.as_ref()?;
-        let mut matches = [
-            ("5.5.0", LuaVersion::Lua55),
-            ("5.4.0", LuaVersion::Lua54),
-            ("5.3.0", LuaVersion::Lua53),
-            ("5.2.0", LuaVersion::Lua52),
-            ("5.1.0", LuaVersion::Lua51),
-        ]
-        .into_iter()
-        .filter(|(possibility, _)| {
-            let possibility = unsafe { possibility.parse().unwrap_unchecked() };
-            lua.matches(&possibility)
-        })
-        .map(|(_, version)| version);
+        let mut matches = LuaVersion::iter().filter(|v| {
+            !matches!(v, LuaVersion::LuaJIT | LuaVersion::LuaJIT52) && lua.matches(&v.as_version())
+        });
         let version = matches.next()?;
         if matches.next().is_none() {
-            Some(version)
+            return Some(version);
         } else {
             None
         }

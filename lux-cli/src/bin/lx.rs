@@ -70,8 +70,12 @@ async fn main() -> Result<()> {
         })
         .or_else(|| {
             let current_workspace = Workspace::current().ok().flatten()?;
-            let member = current_workspace.members().first().toml();
-            member.exact_lua_version()
+            let member = current_workspace.members();
+            if member.len() == 1 {
+                member.first().toml().exact_lua_version()
+            } else {
+                None
+            }
         });
 
     let mut config_builder = ConfigBuilder::new()?
