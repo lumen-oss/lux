@@ -333,10 +333,10 @@ fn get_libdir(name: &str, config: &ExternalDependencySearchConfig) -> Option<Pat
     .filter(|dir| dir.is_dir())
 }
 
-fn not_found_help(name: &String) -> String {
-    let env_dir = format!("{}_DIR", &name.to_uppercase());
-    let env_inc = format!("{}_INCDIR", &name.to_uppercase());
-    let env_lib = format!("{}_LIBDIR", &name.to_uppercase());
+fn not_found_help(name: &str) -> String {
+    let env_dir = format!("{}_DIR", name.to_uppercase());
+    let env_inc = format!("{}_INCDIR", name.to_uppercase());
+    let env_lib = format!("{}_LIBDIR", name.to_uppercase());
 
     format!(
         r#"run `lx debug toolchains` to check pkg-config availability, or set:

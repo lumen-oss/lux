@@ -120,11 +120,11 @@ To suppress this warning, run `lx path full --no-loader`."#
                 result.push_str(format_export(&shell, "LUA_INIT", &paths.init()).as_str());
                 result.push('\n')
             }
-            println!("{}", &result);
+            println!("{}", result);
         }
-        PathCmd::Lua => println!("{}", &mk_package_path(&paths, prepend)),
-        PathCmd::C => println!("{}", &mk_package_cpath(&paths, prepend)),
-        PathCmd::Bin => println!("{}", &mk_bin_path(&paths, prepend)?),
+        PathCmd::Lua => println!("{}", mk_package_path(&paths, prepend)),
+        PathCmd::C => println!("{}", mk_package_cpath(&paths, prepend)),
+        PathCmd::Bin => println!("{}", mk_bin_path(&paths, prepend)?),
         PathCmd::Init => println!("{}", paths.init()),
     }
     Ok(())

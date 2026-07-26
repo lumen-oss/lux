@@ -527,8 +527,8 @@ impl Display for PackageVersionReq {
                 }
                 str.fmt(f)
             }
-            PackageVersionReq::DevVer(name_req) => write!(f, "=={}", &name_req),
-            PackageVersionReq::StringVer(name_req) => write!(f, "=={}", &name_req),
+            PackageVersionReq::DevVer(name_req) => write!(f, "=={}", name_req),
+            PackageVersionReq::StringVer(name_req) => write!(f, "=={}", name_req),
             PackageVersionReq::Any => f.write_str("any"),
         }
     }
@@ -653,7 +653,7 @@ fn parse_version_req(version_constraints: &str) -> Result<VersionReq, Error> {
             .find(|c: char| c.is_alphanumeric())
             .is_some_and(|idx| idx == 0) =>
         {
-            format!("={}", &s)
+            format!("={}", s)
         }
         s => s,
     };

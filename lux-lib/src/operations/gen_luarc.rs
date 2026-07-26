@@ -200,7 +200,7 @@ mod tests {
                 "Case failed: {}\nInitial input:\n{}\nNew libs: {:?}",
                 description,
                 initial,
-                &new_libs
+                new_libs
             );
         }
     }

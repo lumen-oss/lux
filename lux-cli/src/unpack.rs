@@ -41,7 +41,7 @@ pub async fn unpack_remote(data: UnpackRemote, config: Config) -> Result<()> {
 
     let destination = data
         .destination
-        .unwrap_or_else(|| PathBuf::from(format!("{}-{}", &rock.name, &rock.version)));
+        .unwrap_or_else(|| PathBuf::from(format!("{}-{}", rock.name, rock.version)));
 
     let unpack_path = lux_lib::operations::unpack_src_rock(cursor, destination).await?;
     tracing::info!("unpacked rock to: {}", unpack_path.display());
