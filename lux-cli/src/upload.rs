@@ -18,7 +18,7 @@ pub struct Upload {
 
     /// Package to upload.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 
     /// Code to use for two-factor authentication (2FA).{n}
     /// It is recommended to enable 2FA for luarocks uploads (see https://luarocks.org/settings/two-factor-auth).{n}

@@ -17,7 +17,7 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::lua_version::LuaVersion;
+use lux_lib::{lua_version::LuaVersion, package::PackageName};
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;
@@ -349,6 +349,27 @@ pub enum Commands {
     /// Synchronize the project tree with the current lux.toml,{n}
     /// ensuring all packages are installed correctly.
     Sync(SyncProject),
+}
+impl Commands {
+    pub fn project_package(&self) -> Option<&Option<PackageName>> {
+        match self {
+            Self::Add(a) => Some(&a.package),
+            Self::Build(b) => Some(&b.package),
+            Self::Fmt(f) => Some(&f.package),
+            Self::Upload(u) => Some(&u.package),
+            Self::GenerateRockspec(gr) => Some(&gr.package),
+            Self::Pin(p) | Self::Unpin(p) => Some(&p.package),
+            Self::Remove(r) => Some(&r.package),
+            Self::Test(t) => Some(&t.package),
+            Self::Update(u) => Some(&u.package),
+            Self::Run(r) => Some(&r.build.package),
+            Self::Dist(b) => match b {
+                Dist::Bin(b) => Some(&b.package),
+                Dist::FlatArchive(_) => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 /// Parse a key=value pair.

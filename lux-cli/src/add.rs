@@ -42,7 +42,7 @@ pub struct Add {
 
     /// Project to modify.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 }
 
 pub async fn add(data: Add, config: Config) -> Result<()> {

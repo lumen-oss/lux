@@ -22,7 +22,7 @@ pub struct Test {
 
     /// Package to run tests for.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 }
 
 pub async fn test(test: Test, config: Config) -> Result<()> {

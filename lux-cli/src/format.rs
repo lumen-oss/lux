@@ -24,7 +24,7 @@ pub struct Fmt {
 
     /// Package to format.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

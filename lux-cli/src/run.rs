@@ -23,7 +23,7 @@ pub struct Run {
     dir: Option<PathBuf>,
 
     #[clap(flatten)]
-    build: Build,
+    pub(crate) build: Build,
 }
 
 pub async fn run(run_args: Run, config: Config) -> Result<()> {

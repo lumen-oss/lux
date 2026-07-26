@@ -21,7 +21,6 @@ use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::ROCKSPEC_FUEL_LIMIT;
 use std::io;
 use std::{collections::HashMap, path::PathBuf};
-use strum::IntoEnumIterator;
 
 use crate::{
     config::Config,
@@ -288,17 +287,8 @@ impl PartialProjectToml {
             ..super::parse_toml(name, str)?
         })
     }
-    pub fn exact_lua_version(&self) -> Option<LuaVersion> {
-        let lua = self.lua.as_ref()?;
-        let mut matches = LuaVersion::iter().filter(|v| {
-            !matches!(v, LuaVersion::LuaJIT | LuaVersion::LuaJIT52) && lua.matches(&v.as_version())
-        });
-        let version = matches.next()?;
-        if matches.next().is_none() {
-            return Some(version);
-        } else {
-            None
-        }
+    pub fn lua_requirements(&self) -> Option<&PackageVersionReq> {
+        self.lua.as_ref()
     }
 
     /// Convert the `PartialProjectToml` struct into a `LocalProjectToml` struct, making
