@@ -70,9 +70,8 @@ impl ManifestMetadata {
     pub fn latest_match(
         &self,
         lua_package_req: &PackageReq,
-        filter: Option<RemotePackageTypeFilterSpec>,
+        filter: RemotePackageTypeFilterSpec,
     ) -> Option<(PackageSpec, RemotePackageType)> {
-        let filter = filter.unwrap_or_default();
         if !self.has_rock(lua_package_req.name()) {
             return None;
         }
@@ -203,7 +202,9 @@ mod tests {
         let metadata = ManifestMetadata::new(&manifest).unwrap();
 
         let package_req: PackageReq = "30log > 1.3.0".parse().unwrap();
-        assert!(metadata.latest_match(&package_req, None).is_none());
+        assert!(metadata
+            .latest_match(&package_req, RemotePackageTypeFilterSpec::default())
+            .is_none());
     }
     #[tokio::test]
     pub async fn latest_match_respects_type_filter() {
@@ -212,12 +213,14 @@ mod tests {
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&manifest).unwrap();
         let package_req: PackageReq = "combine == 1.0-1".parse().unwrap();
-        assert!(metadata.latest_match(&package_req, None).is_some());
+        assert!(metadata
+            .latest_match(&package_req, RemotePackageTypeFilterSpec::default())
+            .is_some());
         let filter = RemotePackageTypeFilterSpec {
             rockspec: false,
             src: true,
             binary: true,
         };
-        assert!(metadata.latest_match(&package_req, Some(filter)).is_none());
+        assert!(metadata.latest_match(&package_req, filter).is_none());
     }
 }

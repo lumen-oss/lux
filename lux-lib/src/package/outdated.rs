@@ -72,7 +72,7 @@ mod tests {
 
     use crate::{
         manifest::{Manifest, ManifestMetadata},
-        package::PackageSpec,
+        package::{PackageSpec, RemotePackageTypeFilterSpec},
     };
 
     #[test]
@@ -81,7 +81,12 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
+        let package_db = Manifest::new(
+            Url::parse("https://example.com").unwrap(),
+            metadata,
+            RemotePackageTypeFilterSpec::default(),
+        )
+        .into();
 
         let test_package =
             PackageSpec::parse("lua-cjson".to_string(), "2.0.0".to_string()).unwrap();

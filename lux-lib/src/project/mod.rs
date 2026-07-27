@@ -743,7 +743,7 @@ mod tests {
         fs,
         lua_rockspec::ExternalDependencySpec,
         manifest::{Manifest, ManifestMetadata},
-        package::PackageReq,
+        package::{PackageReq, RemotePackageTypeFilterSpec},
         rockspec::Rockspec,
     };
 
@@ -764,7 +764,12 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(Url::parse("https://example.com").unwrap(), metadata).into();
+        let package_db = Manifest::new(
+            Url::parse("https://example.com").unwrap(),
+            metadata,
+            RemotePackageTypeFilterSpec::default(),
+        )
+        .into();
 
         project
             .add(

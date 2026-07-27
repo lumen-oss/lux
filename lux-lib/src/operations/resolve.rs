@@ -155,7 +155,7 @@ where
                                     .vendor_dir(vendor_dir)
                                     .package(&package)
                                     .package_db(&package_db)
-                                    .filter(config.package_type_filter())
+                                    .filter(config.package_types())
                                     .fetch_vendored_rock()
                                     .await
                                     .map_err(|err| {
