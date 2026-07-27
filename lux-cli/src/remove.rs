@@ -27,7 +27,7 @@ pub struct Remove {
 
     /// Package to remove from.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 }
 
 pub async fn remove(data: Remove, config: Config) -> Result<()> {

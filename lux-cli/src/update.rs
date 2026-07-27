@@ -35,7 +35,7 @@ pub struct Update {
 
     /// Project to modify.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 }
 
 pub async fn update(args: Update, config: Config) -> Result<()> {

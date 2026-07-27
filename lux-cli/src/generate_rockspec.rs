@@ -9,7 +9,7 @@ use crate::args::OutputFormat;
 pub struct GenerateRockspec {
     /// Package to generate the rockspec for.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,
