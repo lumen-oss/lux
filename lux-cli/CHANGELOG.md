@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.4](https://github.com/lumen-oss/lux/compare/v0.39.3...v0.39.4) `lux-cli` - 2026-07-27
+
+### Added
+- default `--lua-version` to project's exact Lua constraint ([#1737](https://github.com/lumen-oss/lux/pull/1737))
+
+### Dependencies
+- *(deps)* bump serial_test from 3.5.0 to 4.0.1 ([#1739](https://github.com/lumen-oss/lux/pull/1739))
+
 ## [0.39.3](https://github.com/lumen-oss/lux/compare/v0.39.2...v0.39.3) `lux-cli` - 2026-07-25
 
 ### Other
