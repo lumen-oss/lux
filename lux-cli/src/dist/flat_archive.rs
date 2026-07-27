@@ -46,7 +46,7 @@ pub struct FlatArchive {
     /// If not set, lux will attempt to distribute the current project.{n}
     /// Must be set in multi-project workspaces.
     #[clap(value_parser)]
-    package_or_rockspec: Option<PackageOrRockspec>,
+    pub(crate) package_or_rockspec: Option<PackageOrRockspec>,
 
     /// The destination path. Defaults to '<cwd>/<package>-<version>.zip'.{n}
     #[arg(short, long, visible_short_alias = 'd')]

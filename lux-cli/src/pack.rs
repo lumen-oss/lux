@@ -37,7 +37,7 @@ pub struct Pack {
     /// or the current project.{n}
     /// To pack a project, lux must be able to generate a release or dev RockSpec.{n}
     #[clap(value_parser)]
-    package_or_rockspec: Option<PackageOrRockspec>,
+    pub(crate) package_or_rockspec: Option<PackageOrRockspec>,
 }
 
 async fn pack_workspace(

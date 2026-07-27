@@ -25,7 +25,7 @@ pub struct Bin {
     /// If not set, lux will attempt to compile the current project.{n}
     /// Must be set in multi-project workspaces.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    pub(crate) package: Option<PackageName>,
 
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,

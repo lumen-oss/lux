@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+
 use std::time::Duration;
 
 use clap::Parser;
@@ -17,6 +18,7 @@ use lux_lib::{
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_version::LuaVersion,
 };
+
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
 use tracing_indicatif::span_ext::IndicatifSpanExt;
 use tracing_subscriber::layer::{Layer, SubscriberExt};
@@ -57,13 +59,16 @@ async fn main() -> Result<()> {
         }
     };
 
-    let lua_version = cli.lua_version.or({
-        if cli.nvim {
-            Some(LuaVersion::Lua51)
-        } else {
-            None
-        }
-    });
+    let lua_version = cli
+        .lua_version
+        .or({
+            if cli.nvim {
+                Some(LuaVersion::Lua51)
+            } else {
+                None
+            }
+        })
+        .or_else(|| cli.command.lua_version());
 
     let mut config_builder = ConfigBuilder::new()?
         .dev(Some(cli.dev))

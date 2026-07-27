@@ -1,4 +1,10 @@
-use crate::{completion::Completion, dist::Dist, format::Fmt, project::NewProject};
+use crate::{
+    args::PackageOrRockspec,
+    completion::Completion,
+    dist::{Bin, Dist, FlatArchive},
+    format::Fmt,
+    project::NewProject,
+};
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -17,7 +23,7 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::lua_version::LuaVersion;
+use lux_lib::{lua_version::LuaVersion, package::PackageName, workspace::Workspace};
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;
@@ -27,6 +33,7 @@ use run::Run;
 use run_lua::RunLua;
 use search::Search;
 use shell::Shell;
+use strum::IntoEnumIterator;
 use sync::SyncProject;
 use test::Test;
 use uninstall::Uninstall;
@@ -105,7 +112,10 @@ pub struct Cli {
     pub lua_dir: Option<PathBuf>,
 
     /// Which Lua installation to use.{n}
-    /// Valid versions are: '5.1', '5.2', '5.3', '5.4', 'jit' and 'jit52'.
+    /// Valid versions are: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit' and 'jit52'.{n}
+    /// If not set, Lux will detempt to detect the Lua version:{n}
+    ///   - From the current project, if it has an exact Lua version requirement.{n}
+    ///   - From the Lua installation that is available on the PATH.
     #[arg(long, value_name = "ver")]
     pub lua_version: Option<LuaVersion>,
 
@@ -350,6 +360,81 @@ pub enum Commands {
     /// ensuring all packages are installed correctly.
     Sync(SyncProject),
 }
+impl Commands {
+    /// For project commands, try to determine the project's Lua version.
+    ///
+    /// Returns [`None`]:
+    /// - if the project does not have an exact Lua version
+    /// - if there is more than one project an no `--package` has been specified
+    /// - if the command is not a project command
+    /// - if the workspace cannot be loaded
+    pub fn lua_version(&self) -> Option<LuaVersion> {
+        match self {
+            Self::Add(Add { package, .. })
+            | Self::Build(Build { package, .. })
+            | Self::Fmt(Fmt { package, .. })
+            | Self::Upload(Upload { package, .. })
+            | Self::GenerateRockspec(GenerateRockspec { package, .. })
+            | Self::Pin(ChangePin { package, .. })
+            | Self::Unpin(ChangePin { package, .. })
+            | Self::Remove(Remove { package, .. })
+            | Self::Test(Test { package, .. })
+            | Self::Update(Update { package, .. })
+            | Self::Run(Run {
+                build: Build { package, .. },
+                ..
+            }) => project_lua_version(package),
+            Self::Dist(d) => match d {
+                Dist::Bin(Bin { package, .. }) => project_lua_version(package),
+                Dist::FlatArchive(FlatArchive {
+                    package_or_rockspec,
+                    ..
+                }) => match package_or_rockspec {
+                    Some(PackageOrRockspec::Package(p)) => {
+                        project_lua_version(&Some(p.name().clone()))
+                    }
+                    Some(PackageOrRockspec::RockSpec(_)) => None,
+                    None => project_lua_version(&None),
+                },
+            },
+            Self::Pack(Pack {
+                package_or_rockspec,
+            }) => match package_or_rockspec {
+                Some(PackageOrRockspec::Package(p)) => project_lua_version(&Some(p.name().clone())),
+                Some(PackageOrRockspec::RockSpec(_)) => None,
+                None => project_lua_version(&None),
+            },
+            // project commands without a --package flag
+            Self::Check(_)
+            | Self::Exec(_)
+            | Self::Info(_)
+            | Self::Lua(_)
+            | Self::Lint(_)
+            | Self::Outdated(_)
+            | Self::Path(_)
+            | Self::Shell(_)
+            | Self::Sync(_)
+            | Self::Vendor(_) => {
+                project_lua_version(&None)
+            },
+            | Self::New(_)
+            // non-project commands
+            | Self::Config(_)
+            | Self::Completion(_)
+            | Self::Debug(_)
+            | Self::Doc(_)
+            | Self::Download(_)
+            | Self::Install(_)
+            | Self::InstallRockspec(_)
+            | Self::InstallLua
+            | Self::List(_)
+            | Self::Purge
+            | Self::Search(_)
+            | Self::Uninstall(_)
+            | Self::Which(_) => None,
+        }
+    }
+}
 
 /// Parse a key=value pair.
 fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<dyn Error + Send + Sync + 'static>>
@@ -363,4 +448,19 @@ where
         .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+fn project_lua_version(pkg: &Option<PackageName>) -> Option<LuaVersion> {
+    let current_workspace = Workspace::current().ok().flatten()?;
+    let project = current_workspace.single_member_or_select(pkg).ok()?;
+    let lua = project.toml().lua()?;
+    let mut matches = LuaVersion::iter().filter(|v| {
+        !matches!(v, LuaVersion::LuaJIT | LuaVersion::LuaJIT52) && lua.matches(&v.as_version())
+    });
+    let version = matches.next()?;
+    if matches.next().is_none() {
+        Some(version)
+    } else {
+        None
+    }
 }
