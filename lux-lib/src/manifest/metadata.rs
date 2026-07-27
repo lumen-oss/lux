@@ -172,7 +172,7 @@ mod tests {
 
     use tokio::fs;
 
-    use crate::{fs::tokio::metadata, manifest::metadata, package::PackageReq};
+    use crate::package::PackageReq;
 
     use super::*;
 
@@ -212,7 +212,7 @@ mod tests {
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&manifest).unwrap();
         let package_req: PackageReq = "combine == 1.0-1".parse().unwrap();
-        assert!(metadata.latest_match(&package_req, Some(filter)).is_none());
+        assert!(metadata.latest_match(&package_req, None).is_some());
         let filter = RemotePackageTypeFilterSpec {
             rockspec: false,
             src: true,
