@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.0...lux-lib-v0.54.1) `lux-lib` - 2026-07-27
+
+### Added
+- expose `PartialProjectToml::lua`
+
+### Dependencies
+- *(deps)* bump serial_test from 3.5.0 to 4.0.1 ([#1739](https://github.com/lumen-oss/lux/pull/1739))
+
 ## [0.54.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.53.0...lux-lib-v0.54.0) `lux-lib` - 2026-07-25
 
 ### Added
