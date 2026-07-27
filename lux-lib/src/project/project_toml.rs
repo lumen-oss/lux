@@ -288,6 +288,11 @@ impl PartialProjectToml {
         })
     }
 
+    /// This project's Lua version requirement, if any
+    pub fn lua(&self) -> Option<&PackageVersionReq> {
+        self.lua.as_ref()
+    }
+
     /// Convert the `PartialProjectToml` struct into a `LocalProjectToml` struct, making
     /// it ready to be used for building a project.
     pub fn into_local(&self) -> Result<LocalProjectToml, LocalProjectTomlValidationError> {
