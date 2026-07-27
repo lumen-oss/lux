@@ -67,7 +67,7 @@ which = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
-serial_test = { version = "3.5" }
+serial_test = { version = "4.0" }
 assert_fs = "1.1"
 
 [dependencies.lux-lib]

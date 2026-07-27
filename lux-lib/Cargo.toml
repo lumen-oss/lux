@@ -103,7 +103,7 @@ gag = "1.0.0"
 
 [dev-dependencies]
 httptest = { version = "0.16" }
-serial_test = { version = "3.5" }
+serial_test = { version = "4.0" }
 proptest = "1.11"
 dir-diff = "0.3"
 insta = { version = "1.47", features = ["redactions", "yaml", "json"] }
