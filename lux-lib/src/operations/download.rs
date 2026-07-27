@@ -244,7 +244,7 @@ async fn download_remote_rock(
         package = package_req.to_string(),
     );
     let _enter = span.enter();
-    let remote_package = package_db.find(package_req, None)?;
+    let remote_package = package_db.find(package_req, Some(config.package_type_filter()))?;
     match &remote_package.source {
         RemotePackageSource::LuarocksRockspec(url) => {
             let package = &remote_package.package;

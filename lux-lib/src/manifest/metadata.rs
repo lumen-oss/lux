@@ -172,7 +172,7 @@ mod tests {
 
     use tokio::fs;
 
-    use crate::package::PackageReq;
+    use crate::{fs::tokio::metadata, manifest::metadata, package::PackageReq};
 
     use super::*;
 
@@ -204,5 +204,20 @@ mod tests {
 
         let package_req: PackageReq = "30log > 1.3.0".parse().unwrap();
         assert!(metadata.latest_match(&package_req, None).is_none());
+    }
+    #[tokio::test]
+    pub async fn latest_match_respects_type_filter() {
+        let test_manifest_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
+        let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
+        let metadata = ManifestMetadata::new(&manifest).unwrap();
+        let package_req: PackageReq = "combine == 1.0-1".parse().unwrap();
+        assert!(metadata.latest_match(&package_req, Some(filter)).is_none());
+        let filter = RemotePackageTypeFilterSpec {
+            rockspec: false,
+            src: true,
+            binary: true,
+        };
+        assert!(metadata.latest_match(&package_req, Some(filter)).is_none());
     }
 }

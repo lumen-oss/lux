@@ -11,6 +11,7 @@ use url::Url;
 
 use crate::fs;
 use crate::lua_version::LuaVersion;
+use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
 use crate::tree::{Tree, TreeError};
 use crate::variables::GetVariableError;
@@ -62,6 +63,7 @@ pub struct Config {
     generate_luarc: bool,
     luarc_file_name: String,
     wrap_bin_scripts: bool,
+    package_type_filter: RemotePackageTypeFilterSpec,
 }
 
 impl Config {
@@ -252,6 +254,10 @@ impl Config {
     pub fn wrap_bin_scripts(&self) -> bool {
         self.wrap_bin_scripts
     }
+
+    pub fn package_type_filter(&self) -> RemotePackageTypeFilterSpec {
+        self.package_type_filter.clone()
+    }
 }
 
 impl HasVariables for Config {
@@ -325,6 +331,7 @@ pub struct ConfigBuilder {
     generate_luarc: Option<bool>,
     luarc_file_name: Option<String>,
     wrap_bin_scripts: Option<bool>,
+    package_type_filter: Option<RemotePackageTypeFilterSpec>,
 }
 
 /// A builder for the lux `Config`.
@@ -543,6 +550,12 @@ impl ConfigBuilder {
             ..self
         }
     }
+    pub fn package_type_filter(self, filter: Option<RemotePackageTypeFilterSpec>) -> Self {
+        Self {
+            package_type_filter: filter.or(self.package_type_filter),
+            ..self
+        }
+    }
 
     #[tracing::instrument(level = "trace")]
     pub fn build(self) -> Result<Config, ConfigError> {
@@ -586,6 +599,7 @@ impl ConfigBuilder {
                 .luarc_file_name
                 .unwrap_or_else(|| ".luarc.json".to_string()),
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
+            package_type_filter: self.package_type_filter.unwrap_or_default(),
         })
     }
 }
@@ -620,6 +634,7 @@ impl From<Config> for ConfigBuilder {
             generate_luarc: Some(value.generate_luarc),
             luarc_file_name: Some(value.luarc_file_name),
             wrap_bin_scripts: Some(value.wrap_bin_scripts),
+            package_type_filter: Some(value.package_type_filter),
         }
     }
 }
@@ -681,5 +696,16 @@ where
             serializer.serialize_some(&url_strings)
         }
         None => serializer.serialize_none(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn config_defaults_to_including_all_package_types() {
+        let config = ConfigBuilder::default().build().unwrap();
+        let filter = config.package_type_filter();
+        assert!(filter.rockspec && filter.binary && filter.src);
     }
 }
