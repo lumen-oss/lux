@@ -34,6 +34,11 @@ pub fn definitions() -> Definitions {
             Type::named("OperationsModule"),
             "Module for Lux operations",
         )
+        .field(
+            "progress",
+            Type::named("ProgressModule"),
+            "Module for connecting Lux progress reports to the LSP server",
+        )
         .build();
 
     let def = inventory::iter::<LuxDefinition>

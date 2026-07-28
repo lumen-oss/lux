@@ -11,6 +11,7 @@ mod loader;
 
 pub mod lua_impls;
 mod operations;
+mod progress;
 mod project;
 mod workspace;
 
@@ -33,6 +34,7 @@ impl TypedUserData for LuxModule {
         fields.add_field("workspace", workspace::WorkspaceModule);
         fields.add_field("project", project::ProjectModule);
         fields.add_field("operations", operations::OperationsModule);
+        fields.add_field("progress", progress::ProgressModule);
     }
 }
 
