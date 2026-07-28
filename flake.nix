@@ -47,6 +47,7 @@
           inherit
             xtask
             lux-cli
+            lux-lsp
             lux-lua51
             lux-lua52
             lux-lua53

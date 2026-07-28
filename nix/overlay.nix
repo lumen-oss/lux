@@ -166,8 +166,15 @@
 
         meta.mainProgram = "lx";
       });
+  lux-lsp = craneLib.buildPackage (individualCrateArgs
+    // {
+      pname = "lux-lsp";
+      inherit (luxCargo) version;
+      cargoExtraArgs = "-p lux-lsp --locked";
+      meta.mainProgram = "lx-lsp";
+    });
 in {
-  inherit xtask;
+  inherit xtask lux-lsp;
   lux-cli = mk-lux-cli {};
   lux-cli-debug = mk-lux-cli {buildType = "debug";};
   lux-lua51 = mk-lux-lua {
