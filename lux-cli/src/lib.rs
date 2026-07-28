@@ -162,8 +162,7 @@ pub struct Cli {
     pub nvim: bool,
     /// Disable 2FA prompts for `lx upload`.{n}
     /// It is strongly recommended to enable 2FA instead
-    /// see https://luarocks.org/settings/two-factor-auth).
-
+    /// see (https://luarocks.org/settings/two-factor-auth).
     #[arg(long)]
     pub no_tfa: bool,
 
