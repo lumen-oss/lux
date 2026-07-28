@@ -5,7 +5,7 @@ use crate::{
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
-    package::{PackageReq, PackageSpec, RemotePackageTypeFilterSpec},
+    package::{PackageReq, PackageSpec},
     remote_package_db::{RemotePackageDB, SearchError},
     remote_package_source::RemotePackageSource,
 };
@@ -21,7 +21,6 @@ pub(crate) struct FetchVendored<'a> {
     vendor_dir: &'a Path,
     package: &'a PackageReq,
     package_db: &'a RemotePackageDB,
-    filter: Option<RemotePackageTypeFilterSpec>,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -69,7 +68,6 @@ async fn do_fetch_vendored_rock(
     let vendor_dir = args.vendor_dir;
     let package = args.package;
     let package_db = args.package_db;
-    let filter = args.filter;
 
     let span = span!(
         tracing::Level::INFO,
@@ -78,7 +76,7 @@ async fn do_fetch_vendored_rock(
     );
     let _enter = span.enter();
 
-    let package_spec = package_db.find(package, filter)?.package;
+    let package_spec = package_db.find(package, None)?.package;
     let rockspec = load_vendored_rockspec(vendor_dir, &package_spec).await?;
     match load_vendored_package(vendor_dir, &package_spec)? {
         VendoredPackage::Source(path) => Ok(RemoteRockDownload::RockspecOnly {
