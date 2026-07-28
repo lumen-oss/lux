@@ -160,6 +160,12 @@ pub struct Cli {
     /// Configure lux for installing Neovim packages.
     #[arg(long)]
     pub nvim: bool,
+    /// Disable 2FA prompts for `lx upload`.{n}
+    /// It is strongly recommended to enable 2FA instead
+    /// see https://luarocks.org/settings/two-factor-auth).
+
+    #[arg(long)]
+    pub no_tfa: bool,
 
     /// Timeout on network operations, in seconds.{n}
     /// 0 means no timeout (wait forever). Default is 30.

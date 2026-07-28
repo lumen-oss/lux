@@ -95,7 +95,8 @@ async fn main() -> Result<()> {
         .verbose(Some(cli.verbose))
         .no_progress(Some(cli.no_progress))
         .no_prompt(Some(cli.no_prompt))
-        .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())));
+        .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())))
+        .no_tfa(Some(cli.no_tfa));
 
     if cli.nvim {
         config_builder = config_builder.entrypoint_layout(RockLayoutConfig::new_nvim_layout());
