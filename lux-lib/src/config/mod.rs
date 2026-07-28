@@ -64,6 +64,7 @@ pub struct Config {
     luarc_file_name: String,
     wrap_bin_scripts: bool,
     package_types: RemotePackageTypeFilterSpec,
+    no_tfa: bool,
 }
 
 impl Config {
@@ -259,6 +260,10 @@ impl Config {
     pub fn package_types(&self) -> &RemotePackageTypeFilterSpec {
         &self.package_types
     }
+    /// Whether to disable prompts for two-factor authentication (2FA) codes.
+    pub fn no_tfa(&self) -> bool {
+        self.no_tfa
+    }
 }
 
 impl HasVariables for Config {
@@ -333,6 +338,7 @@ pub struct ConfigBuilder {
     luarc_file_name: Option<String>,
     wrap_bin_scripts: Option<bool>,
     package_types: Option<RemotePackageTypeFilterSpec>,
+    no_tfa: Option<bool>,
 }
 
 /// A builder for the lux `Config`.
@@ -551,6 +557,14 @@ impl ConfigBuilder {
             ..self
         }
     }
+    /// Whether to disable prompts for two-factor authentication (2FA) codes.
+    /// Default: `false`.
+    pub fn no_tfa(self, tfa: Option<bool>) -> Self {
+        Self {
+            no_tfa: tfa.or(self.no_tfa),
+            ..self
+        }
+    }
 
     #[tracing::instrument(level = "trace")]
     pub fn build(self) -> Result<Config, ConfigError> {
@@ -595,6 +609,7 @@ impl ConfigBuilder {
                 .unwrap_or_else(|| ".luarc.json".to_string()),
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
             package_types: self.package_types.unwrap_or_default(),
+            no_tfa: self.no_tfa.unwrap_or(false),
         })
     }
 }
@@ -630,6 +645,7 @@ impl From<Config> for ConfigBuilder {
             luarc_file_name: Some(value.luarc_file_name),
             wrap_bin_scripts: Some(value.wrap_bin_scripts),
             package_types: Some(value.package_types),
+            no_tfa: Some(value.no_tfa),
         }
     }
 }

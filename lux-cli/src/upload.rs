@@ -32,7 +32,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
 
     let package_db = RemotePackageDB::from_config(&config).await?;
-    let tfa_code = tfa_code_from_args_or_secret(&data)?;
+    let tfa_code = tfa_code_from_args_or_secret(&data, &config)?;
     if let Some(package) = data.package {
         let project = workspace.select_member(&package)?;
         ProjectUpload::new()
@@ -63,7 +63,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
 pub async fn upload(data: Upload, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
     let package_db = RemotePackageDB::from_config(&config).await?;
-    let tfa_code = tfa_code_from_args_or_secret(&data)?;
+    let tfa_code = tfa_code_from_args_or_secret(&data, &config)?;
     if let Some(package) = data.package {
         let project = workspace.select_member(&package)?;
         ProjectUpload::new()
@@ -88,7 +88,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
     Ok(())
 }
 
-fn tfa_code_from_args_or_secret(data: &Upload) -> Result<Option<String>> {
+fn tfa_code_from_args_or_secret(data: &Upload, config: &Config) -> Result<Option<String>> {
     match &data.tfa_code {
         Some(code) => Ok(Some(code.to_owned())),
         None => match std::env::var("LUAROCKS_2FA_SECRET") {
@@ -100,7 +100,17 @@ fn tfa_code_from_args_or_secret(data: &Upload) -> Result<Option<String>> {
                     .into_diagnostic()?;
                 Ok(Some(totp.generate_current().into_diagnostic()?))
             }
-            Err(_) => Ok(None),
+            Err(_) => {
+                if config.no_prompt() || config.no_tfa() {
+                    Ok(None)
+                } else {
+                    let code = inquire::Password::new("Enter your 2FA code:")
+                        .without_confirmation()
+                        .prompt()
+                        .into_diagnostic()?;
+                    Ok(Some(code))
+                }
+            }
         },
     }
 }
