@@ -160,7 +160,7 @@ pub struct Cli {
     /// Configure lux for installing Neovim packages.
     #[arg(long)]
     pub nvim: bool,
-    /// Disable 2FA prompts for two-factor authentication (2FA) codes.{n}
+    /// Disable prompts for two-factor authentication (2FA) codes.{n}
     /// It is strongly recommended to enable 2FA instead
     /// see (https://luarocks.org/settings/two-factor-auth).
     #[arg(long)]
