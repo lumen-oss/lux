@@ -18,8 +18,10 @@ pub fn set_connection(workspace: &Workspace) {
                 *guard = Some(Arc::new(client));
             }
         }
-        Err(_) => {
-            tracing::trace!("no lx-lsp server found; LSP progress disabled");
+        Err(err) => {
+            tracing::debug!(
+                "no lx-lsp server found, LSP progress forwarding remains disabled: {err}"
+            );
         }
     }
 }
