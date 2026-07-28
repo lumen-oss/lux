@@ -11,6 +11,7 @@ use url::Url;
 
 use crate::fs;
 use crate::lua_version::LuaVersion;
+use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
 use crate::tree::{Tree, TreeError};
 use crate::variables::GetVariableError;
@@ -62,6 +63,7 @@ pub struct Config {
     generate_luarc: bool,
     luarc_file_name: String,
     wrap_bin_scripts: bool,
+    package_types: RemotePackageTypeFilterSpec,
 }
 
 impl Config {
@@ -252,6 +254,11 @@ impl Config {
     pub fn wrap_bin_scripts(&self) -> bool {
         self.wrap_bin_scripts
     }
+
+    /// Filter specification for package types to include in searches.
+    pub fn package_types(&self) -> &RemotePackageTypeFilterSpec {
+        &self.package_types
+    }
 }
 
 impl HasVariables for Config {
@@ -325,6 +332,7 @@ pub struct ConfigBuilder {
     generate_luarc: Option<bool>,
     luarc_file_name: Option<String>,
     wrap_bin_scripts: Option<bool>,
+    package_types: Option<RemotePackageTypeFilterSpec>,
 }
 
 /// A builder for the lux `Config`.
@@ -586,6 +594,7 @@ impl ConfigBuilder {
                 .luarc_file_name
                 .unwrap_or_else(|| ".luarc.json".to_string()),
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
+            package_types: self.package_types.unwrap_or_default(),
         })
     }
 }
@@ -620,6 +629,7 @@ impl From<Config> for ConfigBuilder {
             generate_luarc: Some(value.generate_luarc),
             luarc_file_name: Some(value.luarc_file_name),
             wrap_bin_scripts: Some(value.wrap_bin_scripts),
+            package_types: Some(value.package_types),
         }
     }
 }

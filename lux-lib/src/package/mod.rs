@@ -152,7 +152,7 @@ impl PartialOrd for RemotePackageType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RemotePackageTypeFilterSpec {
     /// Include Rockspec
     pub rockspec: bool,

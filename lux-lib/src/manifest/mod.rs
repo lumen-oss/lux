@@ -37,13 +37,19 @@ pub enum ManifestError {
 pub(crate) struct Manifest {
     server_url: Url,
     metadata: ManifestMetadata,
+    default_filter: RemotePackageTypeFilterSpec,
 }
 
 impl Manifest {
-    pub fn new(server_url: Url, metadata: ManifestMetadata) -> Self {
+    pub fn new(
+        server_url: Url,
+        metadata: ManifestMetadata,
+        default_filter: RemotePackageTypeFilterSpec,
+    ) -> Self {
         Self {
             server_url,
             metadata,
+            default_filter,
         }
     }
 
@@ -52,7 +58,11 @@ impl Manifest {
         if let Some(vendor_dir) = config.vendor_dir() {
             let server_url: Url = Url::from_file_path(vendor_dir)
                 .map_err(|_err| ManifestError::Vendor(vendor_dir.to_slash_lossy().to_string()))?;
-            return Ok(Self::new(server_url, manifest_from_vendor_dir(vendor_dir)));
+            return Ok(Self::new(
+                server_url,
+                manifest_from_vendor_dir(vendor_dir),
+                config.package_types().clone(),
+            ));
         }
         let content = manifest_from_cache_or_server(&server_url, config)
             .await
@@ -61,7 +71,11 @@ impl Manifest {
                 source: Box::new(source),
             })?;
         match ManifestMetadata::new(&content) {
-            Ok(metadata) => Ok(Self::new(server_url, metadata)),
+            Ok(metadata) => Ok(Self::new(
+                server_url,
+                metadata,
+                config.package_types().clone(),
+            )),
             Err(_) => {
                 let manifest = manifest_from_server_only(&server_url, config)
                     .await
@@ -69,7 +83,11 @@ impl Manifest {
                         url: server_url.to_string(),
                         source: Box::new(source),
                     })?;
-                Ok(Self::new(server_url, ManifestMetadata::new(&manifest)?))
+                Ok(Self::new(
+                    server_url,
+                    ManifestMetadata::new(&manifest)?,
+                    config.package_types().clone(),
+                ))
             }
         }
     }
@@ -88,6 +106,7 @@ impl Manifest {
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<RemotePackage> {
+        let filter = filter.as_ref().unwrap_or(&self.default_filter);
         match self.metadata().latest_match(package_req, filter) {
             None => None,
             Some((package, package_type)) => {
