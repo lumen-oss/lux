@@ -50,11 +50,11 @@ impl LspClient {
 
 #[derive(Debug, Diagnostic, Error)]
 pub(crate) enum ConnectError {
-    #[error("failed to read LSP port file: {0}")]
+    #[error("failed to read LSP port file")]
     ReadPort(#[from] io::Error),
-    #[error("invalid port in LSP port file: {0}")]
+    #[error("invalid port in LSP port file")]
     ParsePort(#[from] num::ParseIntError),
-    #[error("failed to connect to lx-lsp at 127.0.0.1:{port}: {source}")]
+    #[error("failed to connect to lx-lsp at 127.0.0.1:{port}")]
     Connect {
         port: u16,
         #[source]

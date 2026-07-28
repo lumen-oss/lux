@@ -8,7 +8,7 @@ maintainer = "vhyrro"
 [dependencies]
 
 [run]
-args = [ "src/main.lua" ]
+args = ["src/main.lua"]
 
 [build]
 type = "rust-binary"
