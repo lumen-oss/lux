@@ -260,6 +260,7 @@ impl Config {
     pub fn package_types(&self) -> &RemotePackageTypeFilterSpec {
         &self.package_types
     }
+    /// Whether to disable prompts for two-factor authentication (2FA) codes.
     pub fn no_tfa(&self) -> bool {
         self.no_tfa
     }
@@ -556,6 +557,8 @@ impl ConfigBuilder {
             ..self
         }
     }
+    /// Whether to disable prompts for two-factor authentication (2FA) codes.
+    /// Default: `false`.
     pub fn no_tfa(self, tfa: Option<bool>) -> Self {
         Self {
             no_tfa: tfa.or(self.no_tfa),

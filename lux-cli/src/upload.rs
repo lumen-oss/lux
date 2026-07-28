@@ -104,7 +104,7 @@ fn tfa_code_from_args_or_secret(data: &Upload, config: &Config) -> Result<Option
                 if config.no_prompt() || config.no_tfa() {
                     Ok(None)
                 } else {
-                    let code = inquire::Password::new("Enter your luarocks.org 2FA code:")
+                    let code = inquire::Password::new("Enter your 2FA code:")
                         .without_confirmation()
                         .prompt()
                         .into_diagnostic()?;
