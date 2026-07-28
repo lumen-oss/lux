@@ -1,6 +1,7 @@
 use std::sync::Once;
 
 use lux_lib::progress;
+use lux_lib::progress::layer::LspProgressLayer;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -27,7 +28,7 @@ impl TypedUserData for ProgressModule {
             static INIT: Once = Once::new();
             INIT.call_once(|| {
                 let _ = tracing_subscriber::registry()
-                    .with(lux_lib::progress::progress_layer())
+                    .with(LspProgressLayer::default())
                     .try_init();
             });
 

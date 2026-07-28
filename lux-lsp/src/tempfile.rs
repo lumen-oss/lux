@@ -4,9 +4,10 @@ use std::{
     path::Path,
 };
 
+// NOTE: We can't use the `tempfile` crate because it doesn't support creating
+// named files without adding its own random bytes.
+
 /// Wrapper around a temporary file that gets deleted when the file is dropped.
-/// // NOTE: We can't use the `tempfile` crate because it doesn't support creating
-/// // named files without adding its own random bytes.
 pub struct TempFile {
     file: fs::File,
     path: std::path::PathBuf,

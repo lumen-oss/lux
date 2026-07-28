@@ -3,6 +3,7 @@ use std::io::Write;
 use std::sync::Mutex;
 
 use eyre::{Context, Result};
+use lux_lib::progress::client::ProgressMessage;
 use lux_lib::workspace::Workspace;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -14,7 +15,7 @@ use tower_lsp_server::ls_types::{
 };
 use tower_lsp_server::{jsonrpc, Client, LanguageServer, LspService, Server};
 
-use lux_lib::progress::{self, ProgressMessage};
+use lux_lib::progress;
 
 use crate::tempfile::TempFile;
 
@@ -139,10 +140,11 @@ impl LanguageServer for Backend {
             .map_or_else(Workspace::current, Workspace::from_exact)
             .map_err(|_| jsonrpc::Error::internal_error())?;
 
-        #[allow(clippy::unwrap_used)]
         match workspace {
             Some(ws) => {
-                *self.workspace.lock().unwrap() = Some(ws);
+                if let Ok(mut lock) = self.workspace.lock() {
+                    *lock = Some(ws);
+                }
             }
             None => {
                 self.client
