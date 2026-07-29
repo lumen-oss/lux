@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.2...lux-lib-v0.54.3) `lux-lib` - 2026-07-29
+
+### Added
+- lux-lsp for progress reports
+- add 2FA prompt ([#1745](https://github.com/lumen-oss/lux/pull/1745))
+
+### Fixed
+- altered error messages
+
 ## [0.54.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.1...lux-lib-v0.54.2) `lux-lib` - 2026-07-28
 
 ### Added
