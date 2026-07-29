@@ -41,10 +41,6 @@ jobs:
       run: nix build ".#checks.${{matrix.job.target}}.clippy" --accept-flake-config --log-lines 500 --fallback
       shell: bash
 
-    - name: Taplo formatting
-      run: nix build ".#checks.${{matrix.job.target}}.taplo" --accept-flake-config --log-lines 500 --fallback
-      if: ${{ matrix.job.target == 'x86_64-linux' }}
-
     - name: Workspace hack
       run: nix build ".#checks.${{matrix.job.target}}.workspace-hack" --accept-flake-config --log-lines 500 --fallback
       if: ${{ matrix.job.target == 'x86_64-linux' }}

@@ -39,6 +39,15 @@
             # to update CONTRIBUTING.md for non-nix users.
             alejandra.enable = true;
             rustfmt.enable = true;
+            taplo = {
+              enable = true;
+              name = "taplo";
+              description = "Format TOML files with taplo fmt";
+              extraPackages = [pkgs.taplo];
+              entry = "taplo fmt";
+              types = ["toml"];
+              excludes = ["lux-workspace-hack/Cargo.toml"];
+            };
           };
         };
       in {
@@ -128,7 +137,6 @@
           lua-tests = pkgs.lux-nextest-lua;
           clippy = pkgs.lux-clippy;
           workspace-hack = pkgs.lux-workspace-hack;
-          taplo = pkgs.lux-taplo;
         };
 
         formatter = let
