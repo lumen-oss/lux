@@ -246,11 +246,23 @@ Libs: -L${{libdir}}"#
 }
 
 fn project_root() -> PathBuf {
-    Path::new(&env!("CARGO_MANIFEST_DIR"))
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut project_root = Path::new(&manifest_dir)
         .ancestors()
         .nth(1)
         .unwrap()
-        .to_path_buf()
+        .to_path_buf();
+    if project_root.is_dir() {
+        let md = fs::metadata(&project_root).expect("failed to get manifest directory metadata");
+        let permissions = md.permissions();
+        if permissions.readonly() {
+            // Probably in a nix build
+            project_root = std::env::current_dir().expect("error getting current directory");
+        }
+    } else {
+        project_root = std::env::current_dir().expect("error getting current directory");
+    }
+    project_root
 }
 
 fn dist_dir() -> PathBuf {

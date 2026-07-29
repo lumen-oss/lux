@@ -1,7 +1,7 @@
 use std::{
     env,
     fs::{self, File},
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -139,8 +139,21 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
     #[cfg(target_env = "msvc")]
     let dist_file = dist_dir().join("lx.exe");
 
-    fs::create_dir_all(dist_dir())?;
-    fs::copy(&dest_bin, dist_file)?;
+    fs::create_dir_all(dist_dir()).map_err(|err| {
+        io::Error::other(format!(
+            "error creating directory '{}': {}",
+            dist_dir().display(),
+            err
+        ))
+    })?;
+    fs::copy(&dest_bin, &dist_file).map_err(|err| {
+        io::Error::other(format!(
+            "error copying '{}' to '{}': {}",
+            dest_bin.display(),
+            dist_file.display(),
+            err
+        ))
+    })?;
 
     if opts.release
         && Command::new("strip")
@@ -161,14 +174,22 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
 }
 
 fn dist_man() -> Result<(), DynError> {
-    fs::create_dir_all(dist_dir())?;
+    fs::create_dir_all(dist_dir()).map_err(|err| {
+        io::Error::other(format!(
+            "error creating directory '{}': {}",
+            dist_dir().display(),
+            err
+        ))
+    })?;
 
     fn dist_manpage(dir: &Path, app: &clap::Command) -> Result<(), DynError> {
         let name = app.get_display_name().unwrap_or_else(|| app.get_name());
-        let mut out = File::create(dir.join(format!("{name}.1")))?;
+        let out_path = dir.join(format!("{name}.1"));
+        let mut out = File::create(&out_path)?;
 
         clap_mangen::Man::new(app.clone()).render(&mut out)?;
         out.flush()?;
+        println!("generated {}", out_path.display());
 
         for sub in app.get_subcommands() {
             dist_manpage(dir, sub)?;
@@ -186,12 +207,19 @@ fn dist_man() -> Result<(), DynError> {
 }
 
 fn dist_completions() -> Result<(), DynError> {
-    fs::create_dir_all(dist_dir())?;
+    fs::create_dir_all(dist_dir()).map_err(|err| {
+        io::Error::other(format!(
+            "error creating directory '{}': {}",
+            dist_dir().display(),
+            err
+        ))
+    })?;
 
     let cmd = &mut Cli::command();
 
     for shell in Shell::value_variants() {
-        generate_to(*shell, cmd, "lx", dist_dir()).unwrap();
+        let output = generate_to(*shell, cmd, "lx", dist_dir()).unwrap();
+        println!("generated {}", output.display());
     }
 
     Ok(())
@@ -381,11 +409,23 @@ fn gen_definitions() -> Result<(), DynError> {
 }
 
 fn project_root() -> PathBuf {
-    Path::new(&env!("CARGO_MANIFEST_DIR"))
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut project_root = Path::new(&manifest_dir)
         .ancestors()
         .nth(1)
         .unwrap()
-        .to_path_buf()
+        .to_path_buf();
+    if project_root.is_dir() {
+        let md = fs::metadata(&project_root).expect("failed to get manifest directory metadata");
+        let permissions = md.permissions();
+        if permissions.readonly() {
+            // Probably in a nix build
+            project_root = std::env::current_dir().expect("error getting current directory");
+        }
+    } else {
+        project_root = std::env::current_dir().expect("error getting current directory");
+    }
+    project_root
 }
 
 fn dist_dir() -> PathBuf {
