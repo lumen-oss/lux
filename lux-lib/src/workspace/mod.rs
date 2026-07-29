@@ -336,8 +336,15 @@ impl Workspace {
                     } else {
                         if let Some(parent) = root.parent() {
                             match Self::from(parent)? {
-                                Some(workspace) => Ok(Some(workspace)),
-                                None => {
+                                Some(workspace)
+                                    if workspace
+                                        .members
+                                        .iter()
+                                        .any(|project| project.root().as_ref() == root) =>
+                                {
+                                    Ok(Some(workspace))
+                                }
+                                _ => {
                                     let project = Project::from_exact(root)?.ok_or_else(|| {
                                         WorkspaceError::NoWorkspaceOrProject(root.to_path_buf())
                                     })?;
@@ -422,6 +429,22 @@ mod tests {
         assert_eq!(workspace.members.len(), 1);
         let project = workspace.members.first();
         assert_eq!(project.root().to_path_buf(), project_root.to_path_buf());
+    }
+
+    #[tokio::test]
+    async fn find_nested_single_project_workspace() {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/nested/");
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+        let nested_project_root: PathBuf = project_root.join("nested");
+        let workspace = Workspace::from(&nested_project_root).unwrap().unwrap();
+        assert_eq!(workspace.members.len(), 1);
+        let project = workspace.members.first();
+        assert_eq!(
+            project.root().to_path_buf(),
+            nested_project_root.to_path_buf()
+        );
     }
 
     #[tokio::test]
