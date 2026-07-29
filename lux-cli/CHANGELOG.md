@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.6](https://github.com/lumen-oss/lux/compare/v0.39.5...v0.39.6) `lux-cli` - 2026-07-29
+
+### Added
+- lux-lsp for progress reports
+- add 2FA prompt ([#1745](https://github.com/lumen-oss/lux/pull/1745))
+
 ## [0.39.5](https://github.com/lumen-oss/lux/compare/v0.39.4...v0.39.5) `lux-cli` - 2026-07-28
 
 ### Other
