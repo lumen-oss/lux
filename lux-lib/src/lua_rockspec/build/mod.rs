@@ -727,8 +727,8 @@ impl BuildType {
             | &BuildType::CMake
             | &BuildType::Command
             | &BuildType::None
-            | &BuildType::LuaRock(_)
             | &BuildType::Source => None,
+            BuildType::LuaRock(s) => Some(PackageName::new(format!("luarocks-build-{s}")).into()),
             &BuildType::RustMlua => unsafe {
                 Some(
                     PackageReq::parse("luarocks-build-rust-mlua >= 0.2.6")

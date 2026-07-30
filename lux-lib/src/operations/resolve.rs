@@ -15,8 +15,9 @@ use crate::{
     lockfile::{
         LocalPackageId, LocalPackageSpec, Lockfile, LockfilePermissions, OptState, PinnedState,
     },
+    lua_rockspec::BuildBackendSpec,
     operations::{FetchVendored, FetchVendoredError},
-    package::{PackageName, PackageReq},
+    package::{PackageName, PackageReq, PackageVersionReqError},
     remote_package_db::RemotePackageDB,
     rockspec::Rockspec,
     tree,
@@ -36,6 +37,9 @@ pub enum ResolveDependenciesError {
     ChannelSend(String),
     #[error("error fetching vendored dependency {0}:\n{1}")]
     FetchVendored(PackageReq, FetchVendoredError),
+    #[error("invalid build type provided: {0}")]
+    #[diagnostic(help("ensure that `luarocks-build-{0}` is available on `luarocks.org`"))]
+    InvalidBuildType(String, #[source] PackageVersionReqError),
 }
 
 #[derive(Debug)]
@@ -189,7 +193,7 @@ where
 
                             // NOTE: We don't need to install build dependencies to install binary rocks.
                             if !matches!(downloaded_rock, RemoteRockDownload::BinaryRock { .. }) {
-                                let build_dependencies = rockspec
+                                let mut build_dependencies = rockspec
                                     .build_dependencies()
                                     .current_platform()
                                     .iter()
@@ -216,6 +220,32 @@ where
                                         .build()
                                     })
                                     .collect_vec();
+
+                                if let Some(BuildBackendSpec::LuaRock(backend)) =
+                                    &rockspec.build().current_platform().build_backend
+                                {
+                                    let full_backend_name = format!("luarocks-build-{backend}");
+                                    let backend_req =
+                                        PackageReq::new(full_backend_name.clone(), None).map_err(
+                                            |err| {
+                                                ResolveDependenciesError::InvalidBuildType(
+                                                    full_backend_name,
+                                                    err,
+                                                )
+                                            },
+                                        )?;
+
+                                    let backend_spec = PackageInstallSpec::new(
+                                        backend_req,
+                                        tree::EntryType::Entrypoint,
+                                    )
+                                    .build_behaviour(build_behaviour)
+                                    .pin(pin)
+                                    .opt(opt)
+                                    .build();
+
+                                    build_dependencies.insert(0, backend_spec);
+                                }
 
                                 // NOTE: We treat transitive regular dependencies of build dependencies
                                 // as build dependencies
