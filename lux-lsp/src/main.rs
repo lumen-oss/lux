@@ -34,30 +34,28 @@ impl Backend {
 
         let port_path = progress::lsp_port_path(workspace);
 
-        let mut tempfile =
-            TempFile::create(&port_path).wrap_err("failed to create temp file for port")?;
+        let mut port_file = TempFile::create(&port_path).wrap_err("failed to create port file")?;
+        port_file
+            .write_all(port.to_string().as_bytes())
+            .wrap_err("failed to write port to file")?;
 
         tracing::info!("progress listener on 127.0.0.1:{port}");
-
-        tempfile.write_all(port.to_string().as_bytes())?;
 
         let client = self.client.clone();
 
         tokio::spawn(async move {
+            let _port_file = port_file;
+
             loop {
-                tokio::select! {
-                    result = listener.accept() => {
-                        match result {
-                            Ok((stream, addr)) => {
-                                tracing::debug!("progress connection from {addr}");
-                                let client = client.clone();
-                                tokio::spawn(handle_connection(stream, client));
-                            }
-                            Err(e) => {
-                                tracing::error!("accept error: {e}");
-                                break;
-                            }
-                        }
+                match listener.accept().await {
+                    Ok((stream, addr)) => {
+                        tracing::debug!("progress connection from {addr}");
+                        let client = client.clone();
+                        tokio::spawn(handle_connection(stream, client));
+                    }
+                    Err(e) => {
+                        tracing::error!("accept error: {e}");
+                        break;
                     }
                 }
             }
@@ -141,9 +139,9 @@ impl LanguageServer for Backend {
             .map_err(|_| jsonrpc::Error::internal_error())?;
 
         match workspace {
-            Some(ws) => {
+            Some(ref ws) => {
                 if let Ok(mut lock) = self.workspace.lock() {
-                    *lock = Some(ws);
+                    *lock = Some(ws.clone());
                 }
             }
             None => {
