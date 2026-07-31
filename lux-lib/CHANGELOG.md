@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.5](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.4...lux-lib-v0.54.5) `lux-lib` - 2026-07-31
+
+### Fixed
+- *(lux-lsp)* create port file immediately and clean up code ([#1756](https://github.com/lumen-oss/lux/pull/1756))
+- Lua installations on non-nixos distros ([#1755](https://github.com/lumen-oss/lux/pull/1755))
+
 ## [0.54.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.3...lux-lib-v0.54.4) `lux-lib` - 2026-07-29
 
 ### Fixed
