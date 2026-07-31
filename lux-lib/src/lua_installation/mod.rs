@@ -165,6 +165,9 @@ impl LuaInstallation {
             .find_map(Result::ok);
 
         if let Some(info) = &mut dependency_info {
+            if info.include_dir.is_none() || info.lib_dir.is_none() {
+                return None;
+            }
             let bin = info.lib_dir.as_ref().and_then(|lib_dir| {
                 lib_dir
                     .parent()
