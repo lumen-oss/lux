@@ -44,6 +44,10 @@ where
     S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<'_, S>) {
+        if *attrs.metadata().level() > tracing::Level::INFO {
+            return;
+        }
+
         with_client(|client| {
             let pid = self.next_id();
             if let Ok(mut ids) = self.span_ids.lock() {
