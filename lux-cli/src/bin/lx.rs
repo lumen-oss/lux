@@ -92,7 +92,8 @@ async fn main() -> Result<()> {
                 .map(|duration| Duration::from_secs(duration as u64)),
         )
         .max_jobs(cli.max_jobs)
-        .user_tree(cli.tree)
+        .user_tree(cli.tree.clone())
+        .workspace_tree(cli.tree)
         .variables(
             cli.variables
                 .map(|variables| variables.into_iter().collect()),

@@ -71,6 +71,9 @@ to initialise a config file.
         }
         ConfigCmd::Show => {
             let cfg: ConfigBuilder = config.into();
+            // NOTE: We want `lx --tree=<tree> config --current` to display
+            // a config with the user tree set, but not the workspace tree.
+            let cfg = cfg.workspace_tree(None);
             print!("{}", toml::to_string(&cfg).into_diagnostic()?);
         }
     }

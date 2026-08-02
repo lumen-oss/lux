@@ -43,6 +43,7 @@ pub struct Config {
     lua_dir: Option<PathBuf>,
     lua_version: Option<LuaVersion>,
     user_tree: PathBuf,
+    workspace_tree_root: Option<PathBuf>,
     verbose: bool,
     /// Don't display progress bars
     no_progress: bool,
@@ -101,6 +102,14 @@ impl Config {
         }
     }
 
+    /// Create a copy of this config with the specified workspace tree root
+    pub fn with_workspace_tree_root(self, tree: Option<PathBuf>) -> Self {
+        Self {
+            workspace_tree_root: tree,
+            ..self
+        }
+    }
+
     /// The luarocks repository server
     pub fn server(&self) -> &Url {
         &self.server
@@ -155,6 +164,11 @@ impl Config {
     /// If installing packages for a project, use `Project::tree` instead.
     pub fn user_tree(&self, version: LuaVersion) -> Result<Tree, TreeError> {
         Tree::new(self.user_tree.clone(), version, self)
+    }
+
+    /// The detached workspace tree root, if set.
+    pub(crate) fn workspace_tree_root(&self) -> Option<&PathBuf> {
+        self.workspace_tree_root.as_ref()
     }
 
     /// Whether to display verbose output of commands executed
@@ -318,6 +332,7 @@ pub struct ConfigBuilder {
     namespace: Option<String>,
     lua_version: Option<LuaVersion>,
     user_tree: Option<PathBuf>,
+    workspace_tree: Option<PathBuf>,
     lua_dir: Option<PathBuf>,
     cache_dir: Option<PathBuf>,
     data_dir: Option<PathBuf>,
@@ -423,6 +438,15 @@ impl ConfigBuilder {
     pub fn user_tree(self, tree: Option<PathBuf>) -> Self {
         Self {
             user_tree: tree.or(self.user_tree),
+            ..self
+        }
+    }
+
+    /// Which tree to operate on when in a workspace
+    /// Default: A `.lux` directory in the workspace root.
+    pub fn workspace_tree(self, tree: Option<PathBuf>) -> Self {
+        Self {
+            workspace_tree: tree.or(self.workspace_tree),
             ..self
         }
     }
@@ -586,6 +610,7 @@ impl ConfigBuilder {
             lua_dir: self.lua_dir,
             lua_version,
             user_tree,
+            workspace_tree_root: self.workspace_tree,
             verbose: self.verbose.unwrap_or(false),
             no_progress: self.no_progress.unwrap_or(false),
             no_prompt: self.no_prompt.unwrap_or(false),
@@ -625,6 +650,7 @@ impl From<Config> for ConfigBuilder {
             lua_dir: value.lua_dir,
             lua_version: value.lua_version,
             user_tree: Some(value.user_tree),
+            workspace_tree: value.workspace_tree_root,
             verbose: Some(value.verbose),
             no_progress: Some(value.no_progress),
             no_prompt: Some(value.no_prompt),
