@@ -162,8 +162,11 @@ impl LanguageServer for Backend {
             .log_message(MessageType::INFO, "lx-lsp initialized")
             .await;
 
-        #[allow(clippy::unwrap_used)]
-        let workspace = self.workspace.lock().unwrap().clone();
+        let workspace = self
+            .workspace
+            .lock()
+            .unwrap_or_else(|err| unreachable!("we don't panic while holding the mutex.\n{}", err))
+            .clone();
 
         match workspace {
             Some(ref ws) => {
