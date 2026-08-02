@@ -3457,6 +3457,7 @@ dependencies = [
  "base32",
  "clap 4.6.4",
  "clap_complete",
+ "clap_mangen",
  "edit",
  "emmylua_check",
  "emmylua_codestyle",

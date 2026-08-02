@@ -8,8 +8,8 @@ use lux_cli::{
     debug::{self, Debug},
     dist::{self, Dist},
     doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
-    install_rockspec, lint, list, outdated, pack, path, pin, progress, project, purge, remove, run,
-    run_lua, search, shell, sync, test, uninstall, unpack, update,
+    install_rockspec, lint, list, man, outdated, pack, path, pin, progress, project, purge, remove,
+    run, run_lua, search, shell, sync, test, uninstall, unpack, update,
     upload::{self},
     vendor, which, Cli, Commands,
 };
@@ -173,6 +173,7 @@ async fn main() -> Result<()> {
             Dist::FlatArchive(archive) => dist::dist_archive(archive, config).await?,
             Dist::Bin(bin) => dist::bin(bin, config).await?,
         },
+        Commands::Man(man_data) => man::man(man_data).await?,
         Commands::New(project_data) => {
             project::write_project_rockspec(project_data, config).await?
         }
