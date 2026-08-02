@@ -34,6 +34,19 @@
     };
   };
 
+  xtask-lua-deps = craneLib.buildDepsOnly (commonArgs
+    // {
+      pname = "xtask-lua";
+      version = "0.1.0";
+      src = cleanCargoSrc;
+
+      cargoCheckCommand = "cargo check --profile dev";
+      cargoBuildCommand = "cargo build --profile dev";
+      cargoExtraArgs = "-p xtask-lua --locked";
+
+      buildInputs = commonArgs.buildInputs;
+    });
+
   lux-deps = {release ? true}:
     craneLib.buildDepsOnly (commonArgs
       // {
@@ -77,6 +90,7 @@
 
         buildInputs = crateArgs.buildInputs ++ [final.lua5_4];
 
+        cargoArtifacts = xtask-lua-deps;
         cargoExtraArgs = "-p xtask-lua --features ${luaFeature}";
 
         meta.mainProgram = "xtask-lua";
@@ -102,13 +116,13 @@
       else "dist-debug";
     crateArgs = individualCrateArgs {inherit release;};
   in
-    craneLib.buildPackage (crateArgs
+    craneLib.mkCargoDerivation (crateArgs
       // {
         pname = "lux-lua";
         inherit (luxCargo) version;
 
         # FIXME: This fails with permission denied on darwin
-        cargoBuildCommand = "xtask-lua ${dist-cmd}";
+        buildPhaseCargoCommand = "xtask-lua ${dist-cmd}";
         nativeBuildInputs =
           crateArgs.nativeBuildInputs
           ++ [
