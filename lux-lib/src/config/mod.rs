@@ -70,7 +70,7 @@ pub struct Config {
 
 impl Config {
     /// Lux application directories
-    fn project_dirs() -> Result<ProjectDirs, NoValidHomeDirectory> {
+    pub(crate) fn project_dirs() -> Result<ProjectDirs, NoValidHomeDirectory> {
         directories::ProjectDirs::from("org", "lumenlabs", "lux").ok_or(NoValidHomeDirectory)
     }
 
