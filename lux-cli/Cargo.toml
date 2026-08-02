@@ -20,7 +20,6 @@ bench = false
 [dependencies]
 base32 = "0.5"
 clap = { version = "4.6", features = ["derive"] }
-clap_complete = "4.6"
 edit = { version = "0.1", features = ["quoted-env"] }
 emmylua_check = { version = "0.23", features = [] }
 emmylua_formatter = { version = "0.24", features = [] }
@@ -50,6 +49,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 tracing-indicatif = "0.3.14"
 indicatif = "0.18"
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
 itertools = { workspace = true }
 lux-workspace-hack = { workspace = true }
 path-absolutize = { workspace = true }

@@ -24,6 +24,7 @@ use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
 use lux_lib::{lua_version::LuaVersion, package::PackageName, workspace::Workspace};
+use man::Man;
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;
@@ -63,6 +64,7 @@ pub mod install_lua;
 pub mod install_rockspec;
 pub mod lint;
 pub mod list;
+pub mod man;
 pub mod outdated;
 pub mod pack;
 pub mod path;
@@ -241,6 +243,8 @@ pub enum Commands {
     List(ListCmd),
     /// Run lua, with the `LUA_PATH` and `LUA_CPATH` set to the specified lux tree.
     Lua(RunLua),
+    /// Generate manpages.
+    Man(Man),
     /// Create a new Lua project.
     New(NewProject),
     /// List outdated rocks.
@@ -422,6 +426,7 @@ impl Commands {
             | Self::Vendor(_) => {
                 project_lua_version(&None)
             },
+            | Self::Man(_)
             | Self::New(_)
             // non-project commands
             | Self::Config(_)

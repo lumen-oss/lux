@@ -17,6 +17,8 @@ resolver = "2"
 version = "0.39.9"
 
 [workspace.dependencies]
+clap_mangen = "0.3"
+clap_complete = "4"
 mlua = { version = "0.11", features = [
   "serialize",
   "macros",
