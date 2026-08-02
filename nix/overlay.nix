@@ -34,34 +34,48 @@
     };
   };
 
-  lux-deps = craneLib.buildDepsOnly (commonArgs
-    // {
-      pname = "lux";
-      version = "0.1.0";
-      src = cleanCargoSrc;
+  lux-deps = {release ? true}:
+    craneLib.buildDepsOnly (commonArgs
+      // {
+        pname = "lux";
+        version = "0.1.0";
+        src = cleanCargoSrc;
 
-      # perl is needed to build openssl-sys
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [final.perl];
+        cargoCheckCommand = "cargo check ${
+          if release
+          then "--profile release"
+          else "--profile dev"
+        }";
+        cargoBuildCommand = "cargo build ${
+          if release
+          then "--profile release"
+          else "--profile dev"
+        }";
 
-      buildInputs = commonArgs.buildInputs;
-    });
+        # perl is needed to build openssl-sys
+        nativeBuildInputs = commonArgs.nativeBuildInputs ++ [final.perl];
 
-  individualCrateArgs =
+        buildInputs = commonArgs.buildInputs;
+      });
+
+  individualCrateArgs = args:
     commonArgs
     // {
       src = cleanCargoSrc;
-      cargoArtifacts = lux-deps;
+      cargoArtifacts = lux-deps args;
       # NOTE: We disable tests since we run them via cargo-nextest in a separate derivation
       doCheck = false;
     };
 
-  mk-xtask-lua = luaFeature:
-    craneLib.buildPackage (individualCrateArgs
+  mk-xtask-lua = luaFeature: let
+    crateArgs = individualCrateArgs {release = false;};
+  in
+    craneLib.buildPackage (crateArgs
       // {
         pname = "xtask-${luaFeature}";
         inherit (luxCargo) version;
 
-        buildInputs = individualCrateArgs.buildInputs ++ [final.lua5_4];
+        buildInputs = crateArgs.buildInputs ++ [final.lua5_4];
 
         cargoExtraArgs = "-p xtask-lua --features ${luaFeature}";
 
@@ -69,7 +83,7 @@
       });
 
   mk-lux-lua = {
-    buildType ? "release",
+    release ? true,
     luaPkg,
     isLuaJIT,
   }: let
@@ -82,25 +96,30 @@
       if isLuaJIT
       then "luajit"
       else "lua${lib.concatStringsSep "" luaMajorMinor}";
+    dist-cmd =
+      if release
+      then "dist"
+      else "dist-debug";
+    crateArgs = individualCrateArgs {inherit release;};
   in
-    craneLib.buildPackage (individualCrateArgs
+    craneLib.buildPackage (crateArgs
       // {
         pname = "lux-lua";
         inherit (luxCargo) version;
 
         # FIXME: This fails with permission denied on darwin
-        cargoBuildCommand = "xtask-lua dist";
+        cargoBuildCommand = "xtask-lua ${dist-cmd}";
         nativeBuildInputs =
-          individualCrateArgs.nativeBuildInputs
+          crateArgs.nativeBuildInputs
           ++ [
             (mk-xtask-lua luaFeature)
           ];
 
-        buildInputs = individualCrateArgs.buildInputs ++ [luaPkg];
+        buildInputs = crateArgs.buildInputs ++ [luaPkg];
 
         # HACK: For some reason, linking via pkg-config fails on darwin
         env =
-          (individualCrateArgs.env or {})
+          (crateArgs.env or {})
           // final.lib.optionalAttrs final.stdenv.isDarwin {
             LUA_LIB = "${luaPkg}/lib";
             LUA_INCLUDE_DIR = "${luaPkg}/include";
@@ -115,35 +134,48 @@
         '';
       });
 
-  xtask = craneLib.buildPackage (individualCrateArgs
-    // {
-      pname = "xtask";
-      inherit (luxCargo) version;
+  xtask = let
+    crateArgs = individualCrateArgs {release = false;};
+  in
+    craneLib.buildPackage (crateArgs
+      // {
+        pname = "xtask";
+        inherit (luxCargo) version;
 
-      buildInputs = individualCrateArgs.buildInputs ++ [final.lua5_4];
+        buildInputs = crateArgs.buildInputs ++ [final.lua5_4];
 
-      cargoExtraArgs = "-p xtask";
+        cargoExtraArgs = "-p xtask";
 
-      meta.mainProgram = "xtask";
-    });
+        meta.mainProgram = "xtask";
+      });
 
-  # can't seem to override the buildType with override or overrideAttrs :(
-  mk-lux-cli = {buildType ? "release"}:
-    craneLib.buildPackage (individualCrateArgs
+  mk-lux-cli = args @ {release ? true}: let
+    crateArgs = individualCrateArgs args;
+  in
+    craneLib.buildPackage (crateArgs
       // {
         pname = "lux-cli";
         inherit (luxCargo) version;
 
         nativeBuildInputs =
-          individualCrateArgs.nativeBuildInputs
+          crateArgs.nativeBuildInputs
           ++ [
             xtask
           ];
 
         buildInputs =
-          individualCrateArgs.buildInputs;
+          crateArgs.buildInputs;
 
-        cargoBuildCommand = "cargo build --profile ${buildType}";
+        cargoCheckCommand = "cargo check ${
+          if release
+          then "--profile release"
+          else "--profile dev"
+        }";
+        cargoBuildCommand = "cargo build ${
+          if release
+          then "--profile release"
+          else "--profile dev"
+        }";
         cargoExtraArgs = "-p lux-cli --locked";
 
         postBuild =
@@ -165,41 +197,102 @@
 
         meta.mainProgram = "lx";
       });
-  lux-lsp = craneLib.buildPackage (individualCrateArgs
-    // {
-      pname = "lux-lsp";
-      inherit (luxCargo) version;
-      cargoExtraArgs = "-p lux-lsp --locked";
-      meta.mainProgram = "lx-lsp";
-    });
+  mk-lux-lsp = args @ {release ? true}: let
+    crateArgs = individualCrateArgs args;
+  in
+    craneLib.buildPackage (crateArgs
+      // {
+        pname = "lux-lsp";
+        inherit (luxCargo) version;
+
+        cargoCheckCommand = "cargo check ${
+          if release
+          then "--profile release"
+          else "--profile dev"
+        }";
+        cargoBuildCommand = "cargo build ${
+          if release
+          then "--profile release"
+          else "--profile dev"
+        }";
+        cargoExtraArgs = "-p lux-lsp --locked";
+
+        meta.mainProgram = "lx-lsp";
+      });
 in {
-  inherit xtask lux-lsp;
-  lux-cli = mk-lux-cli {};
-  lux-cli-debug = mk-lux-cli {buildType = "debug";};
-  lux-lua51 = mk-lux-lua {
-    luaPkg = final.lua5_1;
-    isLuaJIT = false;
+  inherit xtask;
+  lux-cli = (mk-lux-cli {}).overrideAttrs {
+    passthru.debug = mk-lux-cli {release = false;};
   };
-  lux-lua52 = mk-lux-lua {
-    luaPkg = final.lua5_2;
-    isLuaJIT = false;
+  lux-lsp = (mk-lux-lsp {}).overrideAttrs {
+    passthru.debug = mk-lux-lsp {release = false;};
   };
-  lux-lua53 = mk-lux-lua {
-    luaPkg = final.lua5_3;
-    isLuaJIT = false;
-  };
-  lux-lua54 = mk-lux-lua {
-    luaPkg = final.lua5_4;
-    isLuaJIT = false;
-  };
-  lux-lua55 = mk-lux-lua {
-    luaPkg = final.lua5_5;
-    isLuaJIT = false;
-  };
-  lux-luajit = mk-lux-lua {
-    luaPkg = final.luajit;
-    isLuaJIT = true;
-  };
+  lux-lua51 =
+    (mk-lux-lua {
+      luaPkg = final.lua5_1;
+      isLuaJIT = false;
+    }).overrideAttrs {
+      passthru.debug = mk-lux-lua {
+        luaPkg = final.lua5_1;
+        isLuaJIT = false;
+        release = false;
+      };
+    };
+  lux-lua52 =
+    (mk-lux-lua {
+      luaPkg = final.lua5_2;
+      isLuaJIT = false;
+    }).overrideAttrs {
+      passthru.debug = mk-lux-lua {
+        luaPkg = final.lua5_2;
+        isLuaJIT = false;
+        release = false;
+      };
+    };
+  lux-lua53 =
+    (mk-lux-lua {
+      luaPkg = final.lua5_3;
+      isLuaJIT = false;
+    }).overrideAttrs {
+      passthru.debug = mk-lux-lua {
+        luaPkg = final.lua5_3;
+        isLuaJIT = false;
+        release = false;
+      };
+    };
+  lux-lua54 =
+    (mk-lux-lua {
+      luaPkg = final.lua5_4;
+      isLuaJIT = false;
+    }).overrideAttrs {
+      passthru.debug = mk-lux-lua {
+        luaPkg = final.lua5_4;
+        isLuaJIT = false;
+        release = false;
+      };
+    };
+  lux-lua55 =
+    (mk-lux-lua {
+      luaPkg = final.lua5_5;
+      isLuaJIT = false;
+    }).overrideAttrs {
+      passthru.debug = mk-lux-lua {
+        luaPkg = final.lua5_5;
+        isLuaJIT = false;
+        release = false;
+      };
+    };
+  lux-luajit =
+    (mk-lux-lua {
+      luaPkg = final.luajit;
+      isLuaJIT = true;
+    }).overrideAttrs {
+      passthru.debug = mk-lux-lua {
+        luaPkg = final.luajit;
+        isLuaJIT = true;
+        release = false;
+      };
+    };
 
   lux-workspace-hack = craneLib.mkCargoDerivation {
     src = cleanCargoSrc;
@@ -232,6 +325,12 @@ in {
           final.lua5_4
         ];
 
+      env =
+        commonArgs.env
+        // {
+          CARGO_PROFILE = "test";
+        };
+
       nativeCheckInputs = with final; [
         # Must be the same as the buildInputs lua, otherwise pkg-config won't find it
         lua5_4
@@ -241,7 +340,7 @@ in {
         nix # we use nix-hash in tests
       ];
 
-      cargoArtifacts = lux-deps;
+      cargoArtifacts = lux-deps {release = false;};
       partitions = 1;
       partitionType = "count";
       cargoNextestExtraArgs = "--no-fail-fast --lib"; # Disable integration tests
@@ -261,6 +360,12 @@ in {
           final.lua5_1
         ];
 
+      env =
+        commonArgs.env
+        // {
+          CARGO_PROFILE = "test";
+        };
+
       nativeCheckInputs = with final; [
         cacert
         cargo-nextest
@@ -270,7 +375,7 @@ in {
         nix # we use nix-hash in tests
       ];
 
-      cargoArtifacts = lux-deps;
+      cargoArtifacts = lux-deps {release = false;};
       partitions = 1;
       partitionType = "count";
       cargoNextestExtraArgs = "--no-fail-fast --lib"; # Disable integration tests
@@ -283,7 +388,7 @@ in {
       inherit (luxCargo) version;
       src = cleanCargoSrc;
       buildInputs = commonArgs.buildInputs ++ [final.lua5_4];
-      cargoArtifacts = lux-deps;
+      cargoArtifacts = lux-deps {release = false;};
       cargoClippyExtraArgs = "--all-targets -- --deny warnings";
     });
 }
