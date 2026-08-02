@@ -119,7 +119,8 @@ pub struct Cli {
     #[arg(long, value_name = "ver")]
     pub lua_version: Option<LuaVersion>,
 
-    /// Which tree to operate on.
+    /// Which tree to operate on.{n}
+    /// In a workspace, this can be used to specify a detached workspace tree.
     #[arg(long, value_name = "tree")]
     pub tree: Option<PathBuf>,
 
@@ -365,8 +366,9 @@ pub enum Commands {
     /// ensuring all packages are installed correctly.
     Sync(SyncProject),
 }
+
 impl Commands {
-    /// For project commands, try to determine the project's Lua version.
+    /// For workspace commands, try to determine the project's Lua version.
     ///
     /// Returns [`None`]:
     /// - if the project does not have an exact Lua version
@@ -409,7 +411,7 @@ impl Commands {
                 Some(PackageOrRockspec::RockSpec(_)) => None,
                 None => project_lua_version(&None),
             },
-            // project commands without a --package flag
+            // workspace commands without a --package flag
             Self::Check(_)
             | Self::Exec(_)
             | Self::Info(_)

@@ -254,11 +254,11 @@ impl Workspace {
         lua_version: LuaVersion,
         config: &Config,
     ) -> Result<Tree, WorkspaceTreeError> {
-        Ok(Tree::new(
-            self.default_tree_root_dir(),
-            lua_version,
-            config,
-        )?)
+        let root_dir = config
+            .workspace_tree_root()
+            .map(|p| p.to_path_buf())
+            .unwrap_or(self.default_tree_root_dir());
+        Ok(Tree::new(root_dir, lua_version, config)?)
     }
 
     pub(crate) fn default_tree_root_dir(&self) -> PathBuf {
