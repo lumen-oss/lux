@@ -7949,9 +7949,6 @@ version = "0.1.0"
 dependencies = [
  "cargo-packager",
  "clap 4.6.4",
- "clap_complete",
- "clap_mangen",
- "lux-cli",
  "lux-workspace-hack",
  "serde",
  "strum 0.28.0",

@@ -1,7 +1,7 @@
 use std::{
     env,
-    fs::{self, File},
-    io::{self, Write},
+    fs::{self},
+    io::{self},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -10,9 +10,6 @@ use cargo_packager::{
     config::{AppImageConfig, Binary, DebianConfig, PacmanConfig, Resource},
     PackageFormat, SigningConfig,
 };
-use clap::{CommandFactory, ValueEnum};
-use clap_complete::{generate_to, Shell};
-use lux_cli::Cli;
 use serde::Deserialize;
 use strum::IntoEnumIterator;
 use xtask_lua::LuaFeature;
@@ -173,56 +170,47 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
     Ok(())
 }
 
-fn dist_man() -> Result<(), DynError> {
-    fs::create_dir_all(dist_dir()).map_err(|err| {
-        io::Error::other(format!(
-            "error creating directory '{}': {}",
-            dist_dir().display(),
-            err
-        ))
-    })?;
+fn lx(args: Vec<String>) -> Result<(), DynError> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let args = vec![
+        "--locked".into(),
+        "run".into(),
+        "--bin".into(),
+        "lx".into(),
+        "--".into(),
+    ]
+    .into_iter()
+    .chain(args)
+    .collect::<Vec<_>>();
 
-    fn dist_manpage(dir: &Path, app: &clap::Command) -> Result<(), DynError> {
-        let name = app.get_display_name().unwrap_or_else(|| app.get_name());
-        let out_path = dir.join(format!("{name}.1"));
-        let mut out = File::create(&out_path)?;
+    let status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(args)
+        .status()?;
 
-        clap_mangen::Man::new(app.clone()).render(&mut out)?;
-        out.flush()?;
-        println!("generated {}", out_path.display());
-
-        for sub in app.get_subcommands() {
-            dist_manpage(dir, sub)?;
-        }
-
-        // So that `man lx` brings up `lux-cli.1`
-        fs::copy(dist_dir().join("lux-cli.1"), dist_dir().join("lx.1"))?;
-
-        Ok(())
-    }
-
-    let mut cmd = Cli::command();
-    cmd.build();
-    dist_manpage(&dist_dir(), &cmd)
-}
-
-fn dist_completions() -> Result<(), DynError> {
-    fs::create_dir_all(dist_dir()).map_err(|err| {
-        io::Error::other(format!(
-            "error creating directory '{}': {}",
-            dist_dir().display(),
-            err
-        ))
-    })?;
-
-    let cmd = &mut Cli::command();
-
-    for shell in Shell::value_variants() {
-        let output = generate_to(*shell, cmd, "lx", dist_dir()).unwrap();
-        println!("generated {}", output.display());
+    if !status.success() {
+        Err("cargo run failed")?;
     }
 
     Ok(())
+}
+
+fn dist_man() -> Result<(), DynError> {
+    lx(vec![
+        "util".into(),
+        "man".into(),
+        "--target-dir".into(),
+        dist_dir().to_string_lossy().to_string(),
+    ])
+}
+
+fn dist_completions() -> Result<(), DynError> {
+    lx(vec![
+        "util".into(),
+        "completion".into(),
+        "--target-dir".into(),
+        dist_dir().to_string_lossy().to_string(),
+    ])
 }
 
 #[derive(Deserialize)]
