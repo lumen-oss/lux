@@ -134,34 +134,19 @@
         '';
       });
 
-  xtask = let
-    crateArgs = individualCrateArgs {release = false;};
-  in
-    craneLib.buildPackage (crateArgs
-      // {
-        pname = "xtask";
-        inherit (luxCargo) version;
-
-        buildInputs = crateArgs.buildInputs ++ [final.lua5_4];
-
-        cargoExtraArgs = "-p xtask";
-
-        meta.mainProgram = "xtask";
-      });
-
   mk-lux-cli = args @ {release ? true}: let
     crateArgs = individualCrateArgs args;
+    cargoRunCommand = "cargo run ${
+      if release
+      then "--profile release"
+      else "--profile dev"
+    }";
+    cargoExtraArgs = "-p lux-cli --locked";
   in
     craneLib.buildPackage (crateArgs
       // {
         pname = "lux-cli";
         inherit (luxCargo) version;
-
-        nativeBuildInputs =
-          crateArgs.nativeBuildInputs
-          ++ [
-            xtask
-          ];
 
         buildInputs =
           crateArgs.buildInputs;
@@ -176,24 +161,18 @@
           then "--profile release"
           else "--profile dev"
         }";
-        cargoExtraArgs = "-p lux-cli --locked";
+        inherit cargoExtraArgs;
 
-        postBuild =
-          if final.stdenv.isDarwin
-          # For some reason, xtask errors with "permission denied" on darwin
-          then ""
-          else ''
-            xtask dist-man
-            xtask dist-completions
-          '';
+        postBuild = ''
+          mkdir -p target/dist
+          ${cargoRunCommand} ${cargoExtraArgs} --bin lx -- util man --target-dir="target/dist"
+          ${cargoRunCommand} ${cargoExtraArgs} --bin lx -- util completion --target-dir="target/dist"
+        '';
 
-        postInstall =
-          if final.stdenv.isDarwin
-          then ""
-          else ''
-            installManPage target/dist/*.1
-            installShellCompletion target/dist/lx.{bash,fish} --zsh target/dist/_lx
-          '';
+        postInstall = ''
+          installManPage target/dist/*.1
+          installShellCompletion target/dist/lx.{bash,fish} --zsh target/dist/_lx
+        '';
 
         meta.mainProgram = "lx";
       });
@@ -220,7 +199,6 @@
         meta.mainProgram = "lx-lsp";
       });
 in {
-  inherit xtask;
   lux-cli = (mk-lux-cli {}).overrideAttrs {
     passthru.debug = mk-lux-cli {release = false;};
   };

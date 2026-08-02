@@ -54,7 +54,6 @@
         packages = with pkgs; {
           default = lux-cli;
           inherit
-            xtask
             lux-cli
             lux-lsp
             lux-lua51
