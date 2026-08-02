@@ -29,7 +29,6 @@
 
     env = {
       # disable vendored packages
-      LIBGIT2_NO_VENDOR = 1;
       LIBSSH2_SYS_USE_PKG_CONFIG = 1;
       LUX_SKIP_IMPURE_TESTS = 1;
     };
