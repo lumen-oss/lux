@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0](https://github.com/lumen-oss/lux/compare/v0.39.9...v0.40.0) `lux-cli` - 2026-08-03
+
+### Added
+- support detached workspace trees
+- [**breaking**] `lx util` subcommand for manpages & completions
+- man subcommand for generating manpages
+- *(completion)* support specifying output directory
+
 ## [0.39.9](https://github.com/lumen-oss/lux/compare/v0.39.8...v0.39.9) `lux-cli` - 2026-08-01
 
 ### Other
