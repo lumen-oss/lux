@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    config::Config,
+    config::{Config, ConfigBuilder, ConfigError},
     fs,
     lockfile::{LockfileError, ReadOnly, WorkspaceLockfile},
     lua_rockspec::LuaVersionError,
@@ -28,6 +28,7 @@ pub mod workspace_toml;
 pub const WORKSPACE_TOML: &str = PROJECT_TOML;
 pub(crate) const LUX_DIR_NAME: &str = ".lux";
 const EMMYRC: &str = ".emmyrc.json";
+const CONFIG_TOML: &str = "config.toml";
 
 /// A newtype for the workspace root directory.
 /// This is used to ensure that the workspace root is a valid project directory.
@@ -119,6 +120,15 @@ pub enum WorkspaceTreeError {
 pub struct Workspace {
     root: WorkspaceRoot,
     members: NonEmpty<Project>,
+}
+
+#[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
+#[error("error loading '{}'", .path.display())]
+pub struct WorkspaceConfigError {
+    path: PathBuf,
+    #[diagnostic(source)]
+    source: Box<ConfigError>,
 }
 
 // TODO: move lockfile from project to workspace
@@ -257,11 +267,12 @@ impl Workspace {
         let root_dir = config
             .workspace_tree_root()
             .map(|p| p.to_path_buf())
-            .unwrap_or(self.default_tree_root_dir());
+            .unwrap_or(self.workspace_dir());
         Ok(Tree::new(root_dir, lua_version, config)?)
     }
 
-    pub(crate) fn default_tree_root_dir(&self) -> PathBuf {
+    /// This workspace's .lux directory.
+    pub(crate) fn workspace_dir(&self) -> PathBuf {
         self.root.join(LUX_DIR_NAME)
     }
 
@@ -271,6 +282,27 @@ impl Workspace {
 
     pub fn build_tree(&self, config: &Config) -> Result<Tree, WorkspaceTreeError> {
         Ok(self.tree(config)?.build_tree(config)?)
+    }
+
+    /// The path to this workspace's local config file.
+    pub fn config_file(&self) -> PathBuf {
+        self.workspace_dir().join(CONFIG_TOML)
+    }
+
+    /// Load a [`ConfigBuilder`] from a config.toml that resides in [`Self::workspace_dir`],
+    /// if present.
+    pub fn config(&self) -> Result<Option<ConfigBuilder>, WorkspaceConfigError> {
+        let config_file = self.config_file();
+        if config_file.is_file() {
+            Ok(Some(ConfigBuilder::from_file(&config_file).map_err(
+                |err| WorkspaceConfigError {
+                    path: config_file.to_path_buf(),
+                    source: Box::new(err),
+                },
+            )?))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get the `.luarc.json` or `.emmyrc.json` path.
@@ -413,7 +445,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::ConfigBuilder, fs};
+    use crate::{config::ConfigBuilder, fs, lua_version::LuaVersion};
     use std::path::PathBuf;
 
     use assert_fs::prelude::*;
@@ -558,5 +590,47 @@ members = [ "glob:projects/*" ]
 
         let path = workspace.luarc_path(&config);
         assert_eq!(path, emmyrc_file.path().to_path_buf());
+    }
+
+    #[tokio::test]
+    async fn test_workspace_local_config() {
+        let sample_workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/multi-project/");
+        let workspace_root = assert_fs::TempDir::new().unwrap();
+        workspace_root
+            .copy_from(&sample_workspace, &["**"])
+            .unwrap();
+
+        let workspace_config_dir = workspace_root.join(LUX_DIR_NAME);
+        fs::tokio::create_dir_all(&workspace_config_dir)
+            .await
+            .unwrap();
+        fs::tokio::write(
+            workspace_config_dir.join(CONFIG_TOML),
+            r#"
+lua_version = "5.4"
+generate_luarc = false
+no_tfa = true
+"#,
+        )
+        .await
+        .unwrap();
+
+        let workspace = Workspace::from(&workspace_root).unwrap().unwrap();
+        let workspace_config = workspace.config().unwrap().unwrap();
+
+        let config = ConfigBuilder::default()
+            .lua_version(Some(LuaVersion::Lua53))
+            .merge(workspace_config)
+            .build()
+            .unwrap();
+
+        // The workspace-local config takes precedence over the base config,
+        assert_eq!(config.lua_version(), Some(&LuaVersion::Lua54));
+        assert!(!config.generate_luarc());
+        assert!(config.no_tfa());
+
+        // ... and unspecified keys keep the base/default values.
+        assert_eq!(config.server().as_str(), "https://luarocks.org/");
     }
 }

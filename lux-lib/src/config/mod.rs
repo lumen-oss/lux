@@ -4,6 +4,7 @@ use itertools::Itertools;
 
 use miette::Diagnostic;
 use serde::{Deserialize, Serialize, Serializer};
+use std::path::Path;
 use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 use thiserror::Error;
 use tree::RockLayoutConfig;
@@ -363,17 +364,21 @@ impl ConfigBuilder {
     pub fn new() -> Result<Self, ConfigError> {
         let config_file = Self::config_file()?;
         if config_file.is_file() {
-            let config_file_name = config_file.to_string_lossy().to_string();
-            let content = fs::sync::read_to_string(&config_file)?;
-            crate::project::parse_toml(&config_file_name, &content).map_err(|source| {
-                ConfigError::Deserialize {
-                    config_file: config_file_name,
-                    source,
-                }
-            })
+            Self::from_file(&config_file)
         } else {
             Ok(Self::default())
         }
+    }
+
+    pub(crate) fn from_file(config_file: &Path) -> Result<Self, ConfigError> {
+        let config_file_name = config_file.to_string_lossy().to_string();
+        let content = fs::sync::read_to_string(config_file)?;
+        crate::project::parse_toml(&config_file_name, &content).map_err(|source| {
+            ConfigError::Deserialize {
+                config_file: config_file_name,
+                source,
+            }
+        })
     }
 
     /// Get the path to the lux config file.
@@ -587,6 +592,39 @@ impl ConfigBuilder {
         Self {
             no_tfa: tfa.or(self.no_tfa),
             ..self
+        }
+    }
+
+    /// Merge with another [`ConfigBuilder`]. The other one takes precedence.
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            server: other.server.or(self.server),
+            extra_servers: other.extra_servers.or(self.extra_servers),
+            namespace: other.namespace.or(self.namespace),
+            lua_version: other.lua_version.or(self.lua_version),
+            user_tree: other.user_tree.or(self.user_tree),
+            workspace_tree: other.workspace_tree.or(self.workspace_tree),
+            lua_dir: other.lua_dir.or(self.lua_dir),
+            cache_dir: other.cache_dir.or(self.cache_dir),
+            data_dir: other.data_dir.or(self.data_dir),
+            vendor_dir: other.vendor_dir.or(self.vendor_dir),
+            enable_development_packages: other
+                .enable_development_packages
+                .or(self.enable_development_packages),
+            verbose: other.verbose.or(self.verbose),
+            no_progress: other.no_progress.or(self.no_progress),
+            no_prompt: other.no_prompt.or(self.no_prompt),
+            timeout: other.timeout.or(self.timeout),
+            max_jobs: other.max_jobs.or(self.max_jobs),
+            variables: other.variables.or(self.variables),
+            external_deps: other.external_deps,
+            entrypoint_layout: other.entrypoint_layout,
+            user_agent: other.user_agent.or(self.user_agent),
+            generate_luarc: other.generate_luarc.or(self.generate_luarc),
+            luarc_file_name: other.luarc_file_name.or(self.luarc_file_name),
+            wrap_bin_scripts: other.wrap_bin_scripts.or(self.wrap_bin_scripts),
+            package_types: other.package_types.or(self.package_types),
+            no_tfa: other.no_tfa.or(self.no_tfa),
         }
     }
 
