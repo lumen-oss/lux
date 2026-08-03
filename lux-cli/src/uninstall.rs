@@ -52,13 +52,13 @@ pub async fn uninstall(uninstall_args: Uninstall, config: Config) -> Result<()> 
 
     if !duplicate_packages.is_empty() {
         return Err(miette!(
-            "
-Multiple packages satisfying your version requirements were found:
-{:#?}
-
-Please specify the exact package to uninstall:
+            help = r#"specify the exact package to uninstall:
 > lux uninstall '<name>@<version>'
-",
+"#,
+            r#"
+multiple packages satisfying your version requirements were found:
+{:#?}
+"#,
             duplicate_packages,
         ));
     }
@@ -76,10 +76,9 @@ Please specify the exact package to uninstall:
         .collect_vec();
     if !non_entrypoints.is_empty() {
         return Err(miette!(
-            "
-Cannot uninstall dependencies:
+            r#"cannot uninstall dependencies:
 {:#?}
-",
+"#,
             non_entrypoints,
         ));
     }
@@ -124,7 +123,7 @@ Reinstall?
                 .with_default(false)
                 .prompt()
                 .into_diagnostic()
-                .map_err(|_| miette!("Error prompting for reinstall"))?
+                .map_err(|_| miette!("error prompting for reinstall"))?
         {
             operations::Uninstall::new()
                 .config(&config)
@@ -158,7 +157,7 @@ Reinstall?
                 .install()
                 .await?;
         } else {
-            return Err(miette!("Operation cancelled."));
+            return Err(miette!("operation cancelled"));
         }
     };
 

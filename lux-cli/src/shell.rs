@@ -29,7 +29,11 @@ pub struct Shell {
 
 pub async fn shell(data: Shell, config: Config) -> Result<()> {
     if env::var("LUX_SHELL").is_ok_and(|lx_shell_var| lx_shell_var == "1") {
-        return Err(miette!("Already in a Lux shell."));
+        return Err(miette!(
+            help = r#"Lux does not support nested shells.
+exit the current shell if you would like to enter a new one."#,
+            "already in a Lux shell"
+        ));
     }
 
     let tree = current_workspace_or_user_tree(&config)?;
@@ -53,17 +57,17 @@ pub async fn shell(data: Shell, config: Config) -> Result<()> {
             #[cfg(any(target_os = "linux", target_os = "android"))]
             let fallback = which("bash")
                 .into_diagnostic()
-                .map_err(|_| miette!("Cannot find `bash` on your system!"))?;
+                .map_err(|_| miette!("cannot find `bash` on your system!"))?;
 
             #[cfg(target_os = "windows")]
             let fallback = which("cmd.exe")
                 .into_diagnostic()
-                .map_err(|_| miette!("Cannot find `cmd.exe` on your system!"))?;
+                .map_err(|_| miette!("cannot find `cmd.exe` on your system!"))?;
 
             #[cfg(target_os = "macos")]
             let fallback = which("zsh")
                 .into_diagnostic()
-                .map_err(|_| miette!("Cannot find `zsh` on your system!"))?;
+                .map_err(|_| miette!("cannot find `zsh` on your system!"))?;
 
             fallback
         }

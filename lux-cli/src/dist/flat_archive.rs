@@ -191,6 +191,7 @@ async fn install_rockspec(
     {
         "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
         _ => Err(miette!(
+            help = "for example '/path/to/package-1.0.0-1.rockpec' or package@1.0.0",
             "expected a path to a .rockspec or a package requirement."
         )),
     }?;
@@ -240,7 +241,8 @@ async fn zip_dir(src_dir: &Path, dest_file: &Path, method: &CompressionMethod) -
     for entry_result in walkdir.into_iter() {
         let entry = entry_result.map_err(|err| {
             miette!(
-                "Error while traversing directory {}: {}.",
+                help = format!("ensure the path to '{}' is accessible", src_dir.display()),
+                "error while traversing directory '{}': {}.",
                 src_dir.display(),
                 err,
             )

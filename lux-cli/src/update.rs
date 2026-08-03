@@ -123,8 +123,14 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
 
 fn to_package_names(packages: Option<&Vec<PackageReq>>) -> Result<Option<Vec<PackageName>>> {
     if packages.is_some_and(|pkgs| !pkgs.iter().any(|pkg| pkg.version_req().is_any())) {
+        let names_str = if packages.is_some_and(|pkgs| pkgs.len() == 1) {
+            "package names"
+        } else {
+            "a package name"
+        };
         return Err(miette!(
-            "Cannot use version constraints to upgrade dependencies in lux.toml."
+            help = format!("specify {names_str} using the '--toml' flag"),
+            "cannot use version constraints to upgrade dependencies in lux.toml."
         ));
     }
     Ok(packages

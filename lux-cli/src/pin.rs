@@ -46,7 +46,8 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                 .any(|pkg| !pkg.version_req().is_any())
             {
                 return Err(miette!(
-                    "Cannot pin project dependencies using version constraints."
+                    help = "if pinning a dependency in a project, specify the package name",
+                    "cannot pin project dependencies using version constraints."
                 ));
             }
             let packages = data
@@ -109,9 +110,13 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                         operations::set_pinned_state(&rock, &tree, pin)?;
                     }
                     RockMatches::Many(_) => {
-                        todo!("Add an error here about many conflicting types and to use `all:`")
+                        return Err(miette!(
+                            help = "narrow down the version constraint",
+                            "multiple packages found that match '{}'",
+                            package
+                        ));
                     }
-                    RockMatches::NotFound(_) => return Err(miette!("Rock {} not found!", package)),
+                    RockMatches::NotFound(_) => return Err(miette!("rock {} not found!", package)),
                 }
             }
         }

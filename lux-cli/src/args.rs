@@ -25,9 +25,8 @@ impl FromStr for PackageOrRockspec {
         } else {
             let pkg = PackageReq::from_str(s).map_err(|err| {
                 miette!(
-                    "No file {0} found and cannot parse package query: {1}",
-                    s,
-                    err
+                    help = format!("if '{s}' is a path to a file, ensure it exists"),
+                    "No file '{s}' found and cannot parse package query: {err}",
                 )
             })?;
             Ok(Self::Package(pkg))

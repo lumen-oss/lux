@@ -8,11 +8,16 @@ pub async fn install_lua(config: Config) -> Result<()> {
     // TODO: Detect when path already exists by checking `Lua::path()` and prompt the user
     // whether they'd like to forcefully reinstall.
     let lua = LuaInstallation::install(version_stringified, &config).await?;
-    let lua_root = lua
-        .includes()
-        .first()
-        .and_then(|dir| dir.parent())
-        .ok_or_else(|| miette!("error getting lua include parent directory"))?;
+    let lua_root =
+        lua.includes()
+            .first()
+            .and_then(|dir| dir.parent())
+            .ok_or_else(|| {
+                miette!(
+            help = "ensure that pkg-config is installed and configured, and that you have Lua installed",
+            "error getting lua include parent directory"
+    )
+            })?;
 
     tracing::info!(
         "Installed Lua ({}) to {}",

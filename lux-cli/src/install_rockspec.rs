@@ -36,7 +36,7 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
         .map(|ext| ext != "rockspec")
         .unwrap_or(true)
     {
-        return Err(miette!("Provided path is not a valid rockspec!"));
+        return Err(miette!("provided path is not a valid rockspec!"));
     }
 
     let content = std::fs::read_to_string(path).into_diagnostic()?;
