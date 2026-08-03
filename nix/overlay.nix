@@ -40,8 +40,11 @@
       version = "0.1.0";
       src = cleanCargoSrc;
 
-      cargoCheckCommand = "cargo check --profile dev";
-      cargoBuildCommand = "cargo build --profile dev";
+      env =
+        commonArgs.env
+        // {
+          CARGO_PROFILE = "dev";
+        };
       cargoExtraArgs = "-p xtask-lua --locked";
 
       buildInputs = commonArgs.buildInputs;
@@ -54,16 +57,14 @@
         version = "0.1.0";
         src = cleanCargoSrc;
 
-        cargoCheckCommand = "cargo check ${
-          if release
-          then "--profile release"
-          else "--profile dev"
-        }";
-        cargoBuildCommand = "cargo build ${
-          if release
-          then "--profile release"
-          else "--profile dev"
-        }";
+        env =
+          commonArgs.env
+          // {
+            CARGO_PROFILE =
+              if release
+              then "release"
+              else "dev";
+          };
 
         # perl is needed to build openssl-sys
         nativeBuildInputs = commonArgs.nativeBuildInputs ++ [final.perl];
@@ -71,9 +72,17 @@
         buildInputs = commonArgs.buildInputs;
       });
 
-  individualCrateArgs = args:
+  individualCrateArgs = args @ {release ? true}:
     commonArgs
     // {
+      env =
+        commonArgs.env
+        // {
+          CARGO_PROFILE =
+            if release
+            then "release"
+            else "dev";
+        };
       src = cleanCargoSrc;
       cargoArtifacts = lux-deps args;
       # NOTE: We disable tests since we run them via cargo-nextest in a separate derivation
@@ -165,22 +174,12 @@
         buildInputs =
           crateArgs.buildInputs;
 
-        cargoCheckCommand = "cargo check ${
-          if release
-          then "--profile release"
-          else "--profile dev"
-        }";
-        cargoBuildCommand = "cargo build ${
-          if release
-          then "--profile release"
-          else "--profile dev"
-        }";
         inherit cargoExtraArgs;
 
         postBuild = ''
           mkdir -p target/dist
-          ${cargoRunCommand} ${cargoExtraArgs} --bin lx -- util man --target-dir="target/dist"
-          ${cargoRunCommand} ${cargoExtraArgs} --bin lx -- util completion --target-dir="target/dist"
+          ${cargoRunCommand}  ${cargoExtraArgs} --bin lx -- util man --target-dir="target/dist"
+          ${cargoRunCommand}  ${cargoExtraArgs} --bin lx -- util completion --target-dir="target/dist"
         '';
 
         postInstall = ''
@@ -198,16 +197,6 @@
         pname = "lux-lsp";
         inherit (luxCargo) version;
 
-        cargoCheckCommand = "cargo check ${
-          if release
-          then "--profile release"
-          else "--profile dev"
-        }";
-        cargoBuildCommand = "cargo build ${
-          if release
-          then "--profile release"
-          else "--profile dev"
-        }";
         cargoExtraArgs = "-p lux-lsp --locked";
 
         meta.mainProgram = "lx-lsp";
@@ -376,6 +365,11 @@ in {
 
   lux-clippy = craneLib.cargoClippy (commonArgs
     // {
+      env =
+        commonArgs.env
+        // {
+          CARGO_PROFILE = "dev";
+        };
       pname = "lux-clippy";
       inherit (luxCargo) version;
       src = cleanCargoSrc;
