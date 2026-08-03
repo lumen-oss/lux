@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.6...lux-lib-v0.55.0) `lux-lib` - 2026-08-03
+
+### Added
+- *(lsp)* [**breaking**] allow setting port file via `LUX_LSP_PORT_FILE`
+- support detached workspace trees
+
 ## [0.54.6](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.5...lux-lib-v0.54.6) `lux-lib` - 2026-08-01
 
 ### Fixed
