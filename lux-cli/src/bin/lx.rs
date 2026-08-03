@@ -4,14 +4,14 @@ use std::time::Duration;
 
 use clap::Parser;
 use lux_cli::{
-    add, build, check, completion, config,
+    add, build, check, config,
     debug::{self, Debug},
     dist::{self, Dist},
     doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
-    install_rockspec, lint, list, man, outdated, pack, path, pin, progress, project, purge, remove,
-    run, run_lua, search, shell, sync, test, uninstall, unpack, update,
+    install_rockspec, lint, list, outdated, pack, path, pin, progress, project, purge, remove, run,
+    run_lua, search, shell, sync, test, uninstall, unpack, update,
     upload::{self},
-    vendor, which, Cli, Commands,
+    util, vendor, which, Cli, Commands,
 };
 use lux_lib::{
     config::{tree::RockLayoutConfig, ConfigBuilder},
@@ -159,7 +159,6 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Check(check_args) => check::check(check_args, config).await?,
-        Commands::Completion(completion_args) => completion::completion(completion_args).await?,
         Commands::Search(search_data) => search::search(search_data, config).await?,
         Commands::Download(download_data) => download::download(download_data, config).await?,
         Commands::Debug(debug) => match debug {
@@ -173,7 +172,6 @@ async fn main() -> Result<()> {
             Dist::FlatArchive(archive) => dist::dist_archive(archive, config).await?,
             Dist::Bin(bin) => dist::bin(bin, config).await?,
         },
-        Commands::Man(man_data) => man::man(man_data).await?,
         Commands::New(project_data) => {
             project::write_project_rockspec(project_data, config).await?
         }
@@ -205,6 +203,7 @@ async fn main() -> Result<()> {
         Commands::Doc(doc_args) => doc::doc(doc_args, config).await?,
         Commands::Pack(pack_args) => pack::pack(pack_args, config).await?,
         Commands::Uninstall(uninstall_data) => uninstall::uninstall(uninstall_data, config).await?,
+        Commands::Util(util) => util::util(util, config).await?,
         Commands::Vendor(vendor_args) => vendor::vendor(vendor_args, config).await?,
         Commands::Which(which_args) => which::which(which_args, config)?,
         Commands::Run(run_args) => run::run(run_args, config).await?,

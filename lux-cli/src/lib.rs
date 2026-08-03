@@ -1,9 +1,9 @@
 use crate::{
     args::PackageOrRockspec,
-    completion::Completion,
     dist::{Bin, Dist, FlatArchive},
     format::Fmt,
     project::NewProject,
+    util::Util,
 };
 use std::error::Error;
 use std::path::PathBuf;
@@ -24,7 +24,6 @@ use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
 use lux_lib::{lua_version::LuaVersion, package::PackageName, workspace::Workspace};
-use man::Man;
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;
@@ -48,7 +47,6 @@ pub mod add;
 pub mod args;
 pub mod build;
 pub mod check;
-pub mod completion;
 pub mod config;
 pub mod debug;
 pub mod dist;
@@ -64,7 +62,6 @@ pub mod install_lua;
 pub mod install_rockspec;
 pub mod lint;
 pub mod list;
-pub mod man;
 pub mod outdated;
 pub mod pack;
 pub mod path;
@@ -83,6 +80,7 @@ pub mod uninstall;
 pub mod unpack;
 pub mod update;
 pub mod upload;
+pub mod util;
 pub mod utils;
 pub mod vendor;
 pub mod which;
@@ -209,9 +207,6 @@ pub enum Commands {
     /// Interact with the lux configuration.
     #[command(subcommand, arg_required_else_help = true)]
     Config(ConfigCmd),
-    /// Generate autocompletion scripts for the shell.{n}
-    /// Example: `lx completion zsh > ~/.zsh/completions/_lx`
-    Completion(Completion),
     /// Internal commands for debugging Lux itself.
     #[command(subcommand, arg_required_else_help = true)]
     Debug(Debug),
@@ -243,8 +238,6 @@ pub enum Commands {
     List(ListCmd),
     /// Run lua, with the `LUA_PATH` and `LUA_CPATH` set to the specified lux tree.
     Lua(RunLua),
-    /// Generate manpages.
-    Man(Man),
     /// Create a new Lua project.
     New(NewProject),
     /// List outdated rocks.
@@ -356,6 +349,9 @@ pub enum Commands {
     /// If the `version` is not set in the lux.toml, lux will search the current
     /// commit for SemVer tags and if found, will use it to generate the package version.
     Upload(Upload),
+    /// Infrequently used commands such as for generating shell completions and man pages.
+    #[command(subcommand, arg_required_else_help = true)]
+    Util(Util),
     /// Vendor the dependencies of a project or RockSpec locally.
     /// When building or installing a package with the `--vendor-dir` option{n}
     /// or the `[vendor_dir]` config option, Lux will fetch sources from the <vendor-dir>{n}
@@ -426,11 +422,10 @@ impl Commands {
             | Self::Vendor(_) => {
                 project_lua_version(&None)
             },
-            | Self::Man(_)
             | Self::New(_)
             // non-project commands
             | Self::Config(_)
-            | Self::Completion(_)
+            | Self::Util(_)
             | Self::Debug(_)
             | Self::Doc(_)
             | Self::Download(_)
