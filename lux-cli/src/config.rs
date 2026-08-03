@@ -1,5 +1,8 @@
 use inquire::Confirm;
-use lux_lib::config::{Config, ConfigBuilder};
+use lux_lib::{
+    config::{Config, ConfigBuilder},
+    workspace::Workspace,
+};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
 #[derive(clap::Subcommand)]
@@ -7,7 +10,11 @@ pub enum ConfigCmd {
     /// Initialise a new config file
     Init(Init),
     /// Edit the current config file.
-    Edit,
+    Edit {
+        /// Edit the current workspace config.
+        #[arg(long)]
+        workspace: bool,
+    },
     /// Show the current config.
     /// This includes options picked up from CLI flags.
     Show,
@@ -24,12 +31,20 @@ pub struct Init {
     /// with options picked up from CLI flags.
     #[arg(long, conflicts_with = "default")]
     current: bool,
+
+    /// Initialise the config in the current workspace.
+    #[arg(long)]
+    workspace: bool,
 }
 
 pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
     match cmd {
         ConfigCmd::Init(init) => {
-            let config_file = ConfigBuilder::config_file()?;
+            let config_file = if init.workspace {
+                Workspace::current_or_err().into_diagnostic()?.config_file()
+            } else {
+                ConfigBuilder::config_file()?
+            };
             if !config_file.is_file() && !config.no_prompt()
                 || Confirm::new("Config already exists. Overwrite?")
                     .with_default(false)
@@ -56,24 +71,28 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
                 print!("Config initialised at {}", config_file.display());
             }
         }
-        ConfigCmd::Edit => {
-            let config_file = ConfigBuilder::config_file()?;
+        ConfigCmd::Edit { workspace } => {
+            let config_file = if workspace {
+                Workspace::current_or_err().into_diagnostic()?.config_file()
+            } else {
+                ConfigBuilder::config_file()?
+            };
             if !config_file.is_file() {
+                let workspace_flag = if workspace { " --workspace " } else { "" };
                 return Err(miette!(
-                    "
-No config file found.
-Use 'lux config init', 'lux config init --default', or 'lux config init --current'
-to initialise a config file.
-"
+                    help = format!(
+                        r#"
+Use 'lx config init{workspace_flag}', 'lx config init{workspace_flag} --default',
+or 'lx config init{workspace_flag} --current' to initialise a config file.
+"#
+                    ),
+                    "No config file found."
                 ));
             }
             edit::edit_file(config_file).into_diagnostic()?;
         }
         ConfigCmd::Show => {
             let cfg: ConfigBuilder = config.into();
-            // NOTE: We want `lx --tree=<tree> config --current` to display
-            // a config with the user tree set, but not the workspace tree.
-            let cfg = cfg.workspace_tree(None);
             print!("{}", toml::to_string(&cfg).into_diagnostic()?);
         }
     }

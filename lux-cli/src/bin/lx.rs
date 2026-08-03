@@ -14,7 +14,7 @@ use lux_cli::{
     util, vendor, which, Cli, Commands,
 };
 use lux_lib::{
-    config::{tree::RockLayoutConfig, ConfigBuilder},
+    config::tree::RockLayoutConfig,
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_version::LuaVersion,
 };
@@ -75,7 +75,9 @@ async fn main() -> Result<()> {
         })
         .or_else(|| cli.command.lua_version());
 
-    let mut config_builder = ConfigBuilder::new()?
+    let mut config_builder = cli
+        .command
+        .config()?
         .dev(Some(cli.dev))
         .extra_servers(cli.extra_servers)
         .generate_luarc(Some(!cli.no_luarc))

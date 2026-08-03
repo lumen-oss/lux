@@ -5,6 +5,7 @@ use crate::{
     project::NewProject,
     util::Util,
 };
+use miette::Result;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -23,7 +24,10 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::{lua_version::LuaVersion, package::PackageName, workspace::Workspace};
+use lux_lib::{
+    config::ConfigBuilder, lua_version::LuaVersion, package::PackageName, workspace::Workspace,
+};
+use miette::IntoDiagnostic;
 use outdated::Outdated;
 use pack::Pack;
 use path::Path;
@@ -411,6 +415,7 @@ impl Commands {
                 Some(PackageOrRockspec::RockSpec(_)) => None,
                 None => project_lua_version(&None),
             },
+            | Self::Debug(Debug::Project(_)) => project_lua_version(&None),
             // workspace commands without a --package flag
             Self::Check(_)
             | Self::Exec(_)
@@ -428,7 +433,10 @@ impl Commands {
             // non-project commands
             | Self::Config(_)
             | Self::Util(_)
-            | Self::Debug(_)
+            | Self::Debug(Debug::Unpack(_))
+            | Self::Debug(Debug::FetchRemote(_))
+            | Self::Debug(Debug::UnpackRemote(_))
+            | Self::Debug(Debug::Toolchains(_))
             | Self::Doc(_)
             | Self::Download(_)
             | Self::Install(_)
@@ -439,6 +447,91 @@ impl Commands {
             | Self::Search(_)
             | Self::Uninstall(_)
             | Self::Which(_) => None,
+        }
+    }
+
+    /// Load the user [`ConfigBuilder`], merged with the workspace-local [`ConfigBuilder`],
+    /// if present and running a workspace command.
+    pub fn config(&self) -> Result<ConfigBuilder> {
+        let config = ConfigBuilder::new()?;
+        if let Some(workspace_config) = self
+            .workspace()?
+            .map(|ws| ws.config())
+            .transpose()
+            .into_diagnostic()?
+            .flatten()
+        {
+            Ok(config.merge(workspace_config))
+        } else {
+            Ok(config)
+        }
+    }
+
+    /// For commands that can operate on a workspace, load the current workspace, if present.
+    fn workspace(&self) -> Result<Option<Workspace>> {
+        match self {
+            Self::Add(_)
+            | Self::Build(_)
+            | Self::Fmt(_)
+            | Self::Upload(_)
+            | Self::GenerateRockspec(_)
+            | Self::Pin(_)
+            | Self::Unpin(_)
+            | Self::Remove(_)
+            | Self::Test(_)
+            | Self::Update(_)
+            | Self::Check(_)
+            | Self::Exec(_)
+            | Self::Info(_)
+            | Self::Lua(_)
+            | Self::Lint(_)
+            | Self::Outdated(_)
+            | Self::Path(_)
+            | Self::Shell(_)
+            | Self::Sync(_)
+            | Self::Config(_)
+            | Self::Vendor(_)
+            | Self::New(_)
+            | Self::Run(_)
+            | Self::Dist(Dist::Bin(_))
+            | Self::Dist(Dist::FlatArchive(FlatArchive {
+                package_or_rockspec: Some(PackageOrRockspec::Package(_)),
+                ..
+            }))
+            | Self::Dist(Dist::FlatArchive(FlatArchive {
+                package_or_rockspec: None,
+                ..
+            }))
+            | Self::Pack(Pack {
+                package_or_rockspec: Some(PackageOrRockspec::Package(_)),
+            })
+            | Self::Pack(Pack {
+                package_or_rockspec: None,
+            })
+            | Self::Debug(Debug::Project(_)) => Workspace::current().into_diagnostic(),
+            // non-project commands
+            Self::Debug(Debug::Unpack(_))
+            | Self::Debug(Debug::FetchRemote(_))
+            | Self::Debug(Debug::UnpackRemote(_))
+            | Self::Debug(Debug::Toolchains(_))
+            | Self::Dist(Dist::FlatArchive(FlatArchive {
+                package_or_rockspec: Some(PackageOrRockspec::RockSpec(_)),
+                ..
+            }))
+            | Self::Pack(Pack {
+                package_or_rockspec: Some(PackageOrRockspec::RockSpec(_)),
+            })
+            | Self::Util(_)
+            | Self::Doc(_)
+            | Self::Download(_)
+            | Self::Install(_)
+            | Self::InstallRockspec(_)
+            | Self::InstallLua
+            | Self::List(_)
+            | Self::Purge
+            | Self::Search(_)
+            | Self::Uninstall(_)
+            | Self::Which(_) => Ok(None),
         }
     }
 }
