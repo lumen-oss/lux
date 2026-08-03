@@ -27,13 +27,11 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
     let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
     let package_id = match tree.match_rocks(&args.package)? {
         RockMatches::NotFound(package_req) => {
-            Err(miette!("No package matching {} found.", package_req))
+            Err(miette!("no package matching {package_req} found"))
         }
         RockMatches::Many(_package_ids) => Err(miette!(
-            "
-Found multiple packages matching {}.
-Please specify an exact package (<name>@<version>) or narrow the version requirement.
-",
+            help = "specify an exact package (<name>@<version>) or narrow the version requirement",
+            "found multiple packages matching {}",
             &args.package
         )),
         RockMatches::Single(package_id) => Ok(package_id),
@@ -54,7 +52,7 @@ async fn open_homepage(pkg: LocalPackage, tree: &Tree) -> Result<()> {
     let homepage = match get_homepage(&pkg, tree)? {
         Some(homepage) => Ok(homepage),
         None => Err(miette!(
-            "Package {} does not have a homepage in its RockSpec.",
+            "package {} does not have a homepage in its RockSpec",
             pkg.into_package_spec()
         )),
     }?;
@@ -102,13 +100,13 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
         }
         None => match get_homepage(&pkg, tree)? {
             None => Err(miette!(
-                "No documentation found for package {}",
+                "no documentation found for package '{}'",
                 pkg.into_package_spec()
             )),
             Some(homepage) => {
                 if config.no_prompt() {
                     return Err(miette!(
-                        "No local documentation found for package {}",
+                        "no local documentation found for package '{}'",
                         pkg.into_package_spec()
                     ));
                 } else if Confirm::new("No local documentation found. Open homepage?")

@@ -43,7 +43,7 @@ pub async fn vendor(data: Vendor, config: Config) -> Result<()> {
             {
                 "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
                 _ => Err(miette!(
-                    "expected a path to a .rockspec file, but got:\n{}",
+                    "expected a path to a .rockspec file, but got:\n'{}'",
                     rockspec_path.display()
                 )),
             }?;
@@ -64,9 +64,8 @@ pub async fn vendor(data: Vendor, config: Config) -> Result<()> {
         .or_else(|| config.vendor_dir().cloned())
         .ok_or_else(|| {
             miette!(
-                r#"<vendor-dir> not set.
-        It must either be specified via `--vendor-dir` or passed to this command.
-        "#
+                help = "it must either be specified via `--vendor-dir` or passed to this command",
+                "<vendor-dir> not set",
             )
         })?;
 
