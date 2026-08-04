@@ -159,11 +159,6 @@
 
   mk-lux-cli = args @ {release ? true}: let
     crateArgs = individualCrateArgs args;
-    cargoRunCommand = "cargo run ${
-      if release
-      then "--profile release"
-      else "--profile dev"
-    }";
     cargoExtraArgs = "-p lux-cli --locked";
   in
     craneLib.buildPackage (crateArgs
@@ -176,13 +171,11 @@
 
         inherit cargoExtraArgs;
 
-        postBuild = ''
-          mkdir -p target/dist
-          ${cargoRunCommand}  ${cargoExtraArgs} --bin lx -- util man --target-dir="target/dist"
-          ${cargoRunCommand}  ${cargoExtraArgs} --bin lx -- util completion --target-dir="target/dist"
-        '';
-
-        postInstall = ''
+        postInstall = let
+          lx = "${final.stdenv.hostPlatform.emulator final.buildPackages} $out/bin/lx";
+        in ''
+          ${lx} util man --target-dir="target/dist"
+          ${lx} util completion --target-dir="target/dist"
           installManPage target/dist/*.1
           installShellCompletion target/dist/lx.{bash,fish} --zsh target/dist/_lx
         '';
