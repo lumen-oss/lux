@@ -321,8 +321,8 @@ where
 
     let source_metadata = match build.source_spec {
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
-            let hash = bytes.hash()?;
-            let cursor = Cursor::new(&bytes);
+            let hash = bytes.hash().await?;
+            let cursor = Cursor::new(bytes);
             operations::unpack_src_rock(cursor, temp_dir.path().to_path_buf())
                 .await
                 .map_err(BuildError::UnpackSrcRock)?;
@@ -342,7 +342,7 @@ where
     };
 
     let hashes = LocalPackageHashes {
-        rockspec: rockspec.hash()?,
+        rockspec: rockspec.hash().await?,
         source: source_metadata.hash.clone(),
     };
 

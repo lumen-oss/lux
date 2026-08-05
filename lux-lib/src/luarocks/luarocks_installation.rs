@@ -179,7 +179,7 @@ impl LuaRocksInstallation {
         let file_name = "luarocks-3.13.0-windows-64";
         let url = format!("https://luarocks.github.io/luarocks/releases/{file_name}.zip");
         let response = reqwest::get(url).await?.error_for_status()?.bytes().await?;
-        let hash = response.hash()?;
+        let hash = response.hash().await?;
         let expected_hash: Integrity = unsafe {
             "sha256-CJet5dRZ1VzRliqUgVN0WmdJ/rNFQDxoqqkgc4hVerk="
                 .parse()

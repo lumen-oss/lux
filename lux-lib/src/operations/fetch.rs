@@ -209,42 +209,44 @@ async fn do_fetch_src<R: Rockspec>(
             let url = git.url.to_string();
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
-            let auth = if config.no_prompt() {
-                GitAuthenticator::default()
-                    .try_password_prompt(0)
-                    .prompt_ssh_key_password(false)
-                    .set_prompter(NullPrompter)
-            } else {
-                GitAuthenticator::default()
-            };
-            let git_config = git2::Config::open_default()?;
-            let mut callbacks = RemoteCallbacks::new();
-            callbacks.credentials(auth.credentials(&git_config));
-            let mut fetch_options = FetchOptions::new();
-            fetch_options.update_fetchhead(false);
-            fetch_options.remote_callbacks(callbacks);
-            if git.checkout_ref.is_none() {
-                fetch_options.depth(1);
-            };
-            let mut repo_builder = RepoBuilder::new();
-            repo_builder.fetch_options(fetch_options);
-            let repo = repo_builder.clone(&url, dest_dir)?;
+            let checkout_ref = {
+                let auth = if config.no_prompt() {
+                    GitAuthenticator::default()
+                        .try_password_prompt(0)
+                        .prompt_ssh_key_password(false)
+                        .set_prompter(NullPrompter)
+                } else {
+                    GitAuthenticator::default()
+                };
+                let git_config = git2::Config::open_default()?;
+                let mut callbacks = RemoteCallbacks::new();
+                callbacks.credentials(auth.credentials(&git_config));
+                let mut fetch_options = FetchOptions::new();
+                fetch_options.update_fetchhead(false);
+                fetch_options.remote_callbacks(callbacks);
+                if git.checkout_ref.is_none() {
+                    fetch_options.depth(1);
+                };
+                let mut repo_builder = RepoBuilder::new();
+                repo_builder.fetch_options(fetch_options);
+                let repo = repo_builder.clone(&url, dest_dir)?;
 
-            let checkout_ref = match &git.checkout_ref {
-                Some(checkout_ref) => {
-                    let (object, _) = repo.revparse_ext(checkout_ref)?;
-                    repo.checkout_tree(&object, None)?;
-                    checkout_ref.clone()
-                }
-                None => {
-                    let head = repo.head()?;
-                    let commit = head.peel_to_commit()?;
-                    commit.id().to_string()
+                match &git.checkout_ref {
+                    Some(checkout_ref) => {
+                        let (object, _) = repo.revparse_ext(checkout_ref)?;
+                        repo.checkout_tree(&object, None)?;
+                        checkout_ref.clone()
+                    }
+                    None => {
+                        let head = repo.head()?;
+                        let commit = head.peel_to_commit()?;
+                        commit.id().to_string()
+                    }
                 }
             };
             // The .git directory is not deterministic
             remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
-            let hash = fetch.dest_dir.hash().map_err(FetchSrcError::Hash)?;
+            let hash = fetch.dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
                 source_url: RemotePackageSourceUrl::Git { url, checkout_ref },
@@ -262,7 +264,7 @@ async fn do_fetch_src<R: Rockspec>(
                 .error_for_status()?
                 .bytes()
                 .await?;
-            let hash = response.hash().map_err(FetchSrcError::Hash)?;
+            let hash = response.hash().await.map_err(FetchSrcError::Hash)?;
             let file_name = url
                 .path_segments()
                 .and_then(|mut segments| segments.next_back())
@@ -294,7 +296,7 @@ async fn do_fetch_src<R: Rockspec>(
 
             let hash = if path.is_dir() {
                 recursive_copy_dir(&path.to_path_buf(), dest_dir).await?;
-                dest_dir.hash().map_err(FetchSrcError::Hash)?
+                dest_dir.hash().await.map_err(FetchSrcError::Hash)?
             } else {
                 let mut file = fs::sync::open(path)?;
                 let mut buffer = Vec::new();
@@ -317,7 +319,7 @@ async fn do_fetch_src<R: Rockspec>(
                     dest_dir,
                 )
                 .await?;
-                path.hash().map_err(FetchSrcError::Hash)?
+                path.hash().await.map_err(FetchSrcError::Hash)?
             };
             RemotePackageSourceMetadata {
                 hash,
@@ -342,7 +344,7 @@ async fn do_fetch_src_rock(
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
     let src_rock = operations::download_src_rock(package, config.server(), fetch.config).await?;
-    let hash = src_rock.bytes.hash()?;
+    let hash = src_rock.bytes.hash().await?;
     let cursor = Cursor::new(src_rock.bytes);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
     operations::unpack::unpack(mime_type, cursor, true, src_rock.file_name, dest_dir).await?;

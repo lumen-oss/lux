@@ -303,7 +303,7 @@ async fn vendor_rockspec_sources(
             bytes,
             source_url: _,
         }) => {
-            let cursor = Cursor::new(&bytes);
+            let cursor = Cursor::new(bytes);
             operations::unpack_src_rock(cursor, package_vendor_dir).await?;
         }
         RemotePackageSourceSpec::RockSpec(source_url) => {
