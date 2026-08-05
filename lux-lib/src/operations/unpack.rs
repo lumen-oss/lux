@@ -4,9 +4,9 @@ use flate2::read::GzDecoder;
 use itertools::Itertools;
 use miette::Diagnostic;
 use path_slash::PathExt;
-use std::fs::File;
 use std::io;
 use std::io::BufReader;
+use std::io::Cursor;
 use std::io::Read;
 use std::io::Seek;
 use std::path::Path;
@@ -31,20 +31,18 @@ pub enum UnpackError {
 }
 
 #[tracing::instrument(name = "Unpacking src.rock", skip_all)]
-pub async fn unpack_src_rock<R: Read + Seek + Send>(
+pub async fn unpack_src_rock<R: Read + Seek + Send + 'static>(
     rock_src: R,
     destination: PathBuf,
 ) -> Result<PathBuf, UnpackError> {
-    unpack_src_rock_impl(rock_src, destination).await
-}
-
-async fn unpack_src_rock_impl<R: Read + Seek + Send>(
-    rock_src: R,
-    destination: PathBuf,
-) -> Result<PathBuf, UnpackError> {
-    let mut zip = zip::ZipArchive::new(rock_src)?;
-    zip.extract(&destination)?;
-    Ok(destination)
+    let dest = tokio::task::spawn_blocking(move || {
+        let mut zip = zip::ZipArchive::new(rock_src)?;
+        zip.extract(&destination)?;
+        Ok::<PathBuf, UnpackError>(destination)
+    })
+    .await
+    .map_err(|err| UnpackError::Io(io::Error::other(err)))??;
+    Ok(dest)
 }
 
 #[tracing::instrument(name = "Unpacking file", skip_all)]
@@ -57,8 +55,56 @@ pub(crate) async fn unpack<R>(
     dest_dir: &Path,
 ) -> Result<(), UnpackError>
 where
-    R: Read + Seek + Send,
+    // NOTE: tokio::spawn_blocking requires Send + 'static
+    R: Read + Seek + Send + 'static,
 {
+    let mime_type = mime_type.map(str::to_string);
+    let dest_dir = dest_dir.to_path_buf();
+    let dest_dir_inner = dest_dir.clone();
+
+    tokio::task::spawn_blocking(move || {
+        // NOTE: unpacking does not support async IO
+        // Maybe in the future: https://github.com/zip-rs/zip2/issues/108
+        extract_archive(
+            mime_type.as_deref(),
+            reader,
+            extract_nested_archive,
+            &dest_dir_inner,
+        )
+    })
+    .await
+    .map_err(|err| UnpackError::Io(io::Error::other(err)))??;
+
+    if extract_nested_archive {
+        // If the source is an archive, luarocks will pack the source archive and the rockspec.
+        // So we need to unpack the source archive.
+        if let Some((nested_archive_path, mime_type)) = get_single_archive_entry(&dest_dir)? {
+            let file_name = nested_archive_path
+                .file_name()
+                .map(|os_str| os_str.to_string_lossy())
+                .unwrap_or(nested_archive_path.to_string_lossy())
+                .to_string();
+            let buffer = fs::tokio::read(&nested_archive_path).await?;
+            unpack(
+                mime_type,
+                Cursor::new(buffer),
+                extract_nested_archive, // It might be a nested archive inside a .src.rock
+                file_name,
+                &dest_dir,
+            )
+            .await?;
+            fs::tokio::remove_file(&nested_archive_path).await?;
+        }
+    }
+    Ok(())
+}
+
+fn extract_archive<R: Read + Seek + Send>(
+    mime_type: Option<&str>,
+    reader: R,
+    extract_nested_archive: bool,
+    dest_dir: &Path,
+) -> Result<(), UnpackError> {
     match mime_type {
         Some("application/zip") => {
             let mut archive = zip::ZipArchive::new(reader)?;
@@ -111,31 +157,6 @@ where
         }
     }
 
-    if extract_nested_archive {
-        // If the source is an archive, luarocks will pack the source archive and the rockspec.
-        // So we need to unpack the source archive.
-        if let Some((nested_archive_path, mime_type)) = get_single_archive_entry(dest_dir)? {
-            {
-                let mut file = File::open(&nested_archive_path)?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)?;
-                let file_name = nested_archive_path
-                    .file_name()
-                    .map(|os_str| os_str.to_string_lossy())
-                    .unwrap_or(nested_archive_path.to_string_lossy())
-                    .to_string();
-                unpack(
-                    mime_type,
-                    file,
-                    extract_nested_archive, // It might be a nested archive inside a .src.rock
-                    file_name,
-                    dest_dir,
-                )
-                .await?;
-                fs::tokio::remove_file(nested_archive_path).await?;
-            }
-        }
-    }
     Ok(())
 }
 

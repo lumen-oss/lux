@@ -130,8 +130,8 @@ where
         rockspec.validate_lua_version_from_config(self.config)?;
 
         let hashes = LocalPackageHashes {
-            rockspec: rockspec.hash()?,
-            source: self.rock_bytes.hash()?,
+            rockspec: rockspec.hash().await?,
+            source: self.rock_bytes.hash().await?,
         };
         let source_url = match &self.source {
             RemotePackageSource::LuarocksBinaryRock(url) => {
@@ -365,7 +365,7 @@ mod tests {
 
         assert!(rock_layout.lib.join("toml_edit.so").is_file());
 
-        let orig_install_tree_integrity = rock_layout.rock_path.hash().unwrap();
+        let orig_install_tree_integrity = rock_layout.rock_path.hash().await.unwrap();
 
         let pack_dest_dir = assert_fs::TempDir::new().unwrap();
         let packed_rock = Pack::new(
@@ -423,7 +423,7 @@ mod tests {
         .unwrap();
         let rock_layout = tree.entrypoint_layout(&local_package);
         assert!(rock_layout.rockspec_path().is_file());
-        let new_install_tree_integrity = rock_layout.rock_path.hash().unwrap();
+        let new_install_tree_integrity = rock_layout.rock_path.hash().await.unwrap();
         assert_eq!(orig_install_tree_integrity, new_install_tree_integrity);
     }
 }

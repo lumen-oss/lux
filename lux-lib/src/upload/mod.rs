@@ -534,7 +534,8 @@ mod helpers {
                     .download_rockspec()
                     .await?
                     .rockspec;
-                let existing_rockspec_hash = existing_rockspec.hash().map_err(UploadError::Hash)?;
+                let existing_rockspec_hash =
+                    existing_rockspec.hash().await.map_err(UploadError::Hash)?;
                 let rockspec_content_hash = Integrity::from(&rockspec_content);
                 if existing_rockspec_hash
                     .matches(&rockspec_content_hash)

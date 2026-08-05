@@ -382,7 +382,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .await?
     };
 
-    let hash = response.hash()?;
+    let hash = response.hash().await?;
 
     if hash.matches(&source_integrity).is_none() {
         return Err(BuildLuaError::SourceIntegrityMismatch {

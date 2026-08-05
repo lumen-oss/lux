@@ -396,7 +396,7 @@ impl Rockspec for LocalLuaRockspec {
 }
 
 impl HasIntegrity for LocalLuaRockspec {
-    fn hash(&self) -> io::Result<Integrity> {
+    async fn hash(&self) -> io::Result<Integrity> {
         Ok(Integrity::from(&self.raw_content))
     }
 }
@@ -606,7 +606,7 @@ HINT: If Lux has auto-detected an incompatible Lua installation,
 }
 
 impl HasIntegrity for RemoteLuaRockspec {
-    fn hash(&self) -> io::Result<Integrity> {
+    async fn hash(&self) -> io::Result<Integrity> {
         Ok(Integrity::from(&self.local.raw_content))
     }
 }

@@ -269,7 +269,7 @@ pub struct PartialProjectToml {
 }
 
 impl HasIntegrity for PartialProjectToml {
-    fn hash(&self) -> io::Result<Integrity> {
+    async fn hash(&self) -> io::Result<Integrity> {
         let toml_file = self.project_root.join(PROJECT_TOML);
         let content = fs::sync::read_to_string(&toml_file).map_err(io::Error::other)?;
         Ok(Integrity::from(&content))
@@ -872,10 +872,10 @@ pub enum ProjectTomlIntegrityError {
 }
 
 impl HasIntegrity for LocalProjectToml {
-    fn hash(&self) -> io::Result<Integrity> {
+    async fn hash(&self) -> io::Result<Integrity> {
         match self.to_lua_rockspec() {
-            Ok(lua_rockspec) => lua_rockspec.hash(),
-            Err(_) => self.internal.hash(),
+            Ok(lua_rockspec) => lua_rockspec.hash().await,
+            Err(_) => self.internal.hash().await,
         }
     }
 }
@@ -1068,7 +1068,7 @@ version = "{}""#,
 }
 
 impl HasIntegrity for RemoteProjectToml {
-    fn hash(&self) -> io::Result<Integrity> {
+    async fn hash(&self) -> io::Result<Integrity> {
         self.to_lua_rockspec()
             .map_err(|err| {
                 io::Error::other(format!(
@@ -1077,6 +1077,7 @@ impl HasIntegrity for RemoteProjectToml {
                 ))
             })?
             .hash()
+            .await
     }
 }
 
