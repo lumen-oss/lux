@@ -49,6 +49,17 @@ pub(crate) fn remove_file(path: impl AsRef<Path>) -> Result<(), FsError> {
     })
 }
 
+/// Wrapped [`fs::rename`].
+pub(crate) fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), FsError> {
+    let from = from.as_ref();
+    let to = to.as_ref();
+    fs::rename(from, to).map_err(|source| FsError::Rename {
+        from: from.to_path_buf(),
+        to: to.to_path_buf(),
+        source,
+    })
+}
+
 /// Wrapped [`fs::remove_dir_all`].
 pub(crate) fn remove_dir_all(path: impl AsRef<Path>) -> Result<(), FsError> {
     let path = path.as_ref();
