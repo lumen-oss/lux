@@ -326,13 +326,13 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     );
     let _enter = span.enter();
 
-    let client = crate::reqwest::new_https_client(args.config)?;
+    let client = crate::reqwest::https_client(args.config)?;
 
-    helpers::ensure_tool_version(&client, config.server()).await?;
-    helpers::ensure_user_exists(&client, &api_key, config.server()).await?;
+    helpers::ensure_tool_version(client, config.server()).await?;
+    helpers::ensure_user_exists(client, &api_key, config.server()).await?;
 
     let (rockspec, rockspec_content) =
-        helpers::generate_rockspec(project, &client, &api_key, config, package_db).await?;
+        helpers::generate_rockspec(project, client, &api_key, config, package_db).await?;
 
     #[cfg(not(feature = "gpgme"))]
     let signed: Option<String> = None;
@@ -378,7 +378,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
         .multipart(multipart);
 
     if let Some(code) = args.tfa_code {
-        let token = helpers::verify_tfa_code(&client, config.server(), &api_key, &code).await?;
+        let token = helpers::verify_tfa_code(client, config.server(), &api_key, &code).await?;
         request = request.header(TFA_TOKEN_HEADER, unsafe { token.get() });
     }
 

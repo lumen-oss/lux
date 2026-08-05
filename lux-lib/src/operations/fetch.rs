@@ -255,7 +255,7 @@ async fn do_fetch_src<R: Rockspec>(
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
-            let response = crate::reqwest::new_http_client(config)?
+            let response = crate::reqwest::http_client(config)?
                 .get(url.clone())
                 .send()
                 .await?

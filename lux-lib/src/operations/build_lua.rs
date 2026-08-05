@@ -373,7 +373,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
         );
         let _enter = span.enter();
 
-        crate::reqwest::new_https_client(args.config)?
+        crate::reqwest::https_client(args.config)?
             .get(source_url.clone())
             .send()
             .await?

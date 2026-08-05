@@ -133,10 +133,10 @@ pub(crate) async fn manifest_from_cache_or_server(
     let cache = mk_manifest_cache(&url, config).await?;
 
     #[cfg(not(test))]
-    let client = crate::reqwest::new_https_client(config)?;
+    let client = crate::reqwest::https_client(config)?;
 
     #[cfg(test)]
-    let client = crate::reqwest::new_http_client(config)?;
+    let client = crate::reqwest::http_client(config)?;
 
     if let Ok(metadata) = fs::tokio::metadata(&cache).await {
         let last_modified_local: SystemTime = metadata.modified()?;
@@ -153,14 +153,14 @@ pub(crate) async fn manifest_from_cache_or_server(
             let server_last_modified = httpdate::parse_http_date(last_modified_header.to_str()?)?;
 
             if server_last_modified > last_modified_local {
-                return get_manifest(url, manifest_version.clone(), &cache, &client).await;
+                return get_manifest(url, manifest_version.clone(), &cache, client).await;
             }
 
             return Ok(fs::tokio::read_to_string(&cache).await?);
         }
     }
 
-    get_manifest(url, manifest_version.clone(), &cache, &client).await
+    get_manifest(url, manifest_version.clone(), &cache, client).await
 }
 
 #[tracing::instrument(level = "trace", skip(config))]
@@ -179,8 +179,8 @@ pub(crate) async fn manifest_from_server_only(
     let _enter = span.enter();
 
     let cache = mk_manifest_cache(&url, config).await?;
-    let client = crate::reqwest::new_https_client(config)?;
-    get_manifest(url, manifest_version.clone(), &cache, &client).await
+    let client = crate::reqwest::https_client(config)?;
+    get_manifest(url, manifest_version.clone(), &cache, client).await
 }
 
 fn mk_manifest_url(

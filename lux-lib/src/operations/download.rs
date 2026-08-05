@@ -249,7 +249,7 @@ async fn download_remote_rock(
         RemotePackageSource::LuarocksRockspec(url) => {
             let package = &remote_package.package;
             let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
-            let bytes = crate::reqwest::new_https_client(config)?
+            let bytes = crate::reqwest::https_client(config)?
                 .get(format!("{}/{}", url, rockspec_name))
                 .send()
                 .await
@@ -527,7 +527,7 @@ where
         let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
         tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
         let url = server_url.join(&full_rock_name)?;
-        let response = crate::reqwest::new_https_client(args.config)?
+        let response = crate::reqwest::https_client(args.config)?
             .get(url.clone())
             .send()
             .await?;
@@ -539,7 +539,7 @@ where
                     let full_rock_name =
                         mk_packed_rock_name(package.name(), package.version(), ext);
                     let url = server_url.join(&full_rock_name)?;
-                    crate::reqwest::new_https_client(args.config)?
+                    crate::reqwest::https_client(args.config)?
                         .get(url.clone())
                         .send()
                         .await?
