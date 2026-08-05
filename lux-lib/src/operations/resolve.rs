@@ -17,7 +17,7 @@ use crate::{
     },
     lua_rockspec::BuildBackendSpec,
     operations::{FetchVendored, FetchVendoredError},
-    package::{PackageName, PackageReq, PackageVersionReqError},
+    package::{PackageName, PackageReq},
     remote_package_db::RemotePackageDB,
     rockspec::Rockspec,
     tree,
@@ -37,9 +37,6 @@ pub enum ResolveDependenciesError {
     ChannelSend(String),
     #[error("error fetching vendored dependency {0}:\n{1}")]
     FetchVendored(PackageReq, FetchVendoredError),
-    #[error("invalid build type provided: {0}")]
-    #[diagnostic(help("ensure that `luarocks-build-{0}` is available on `luarocks.org`"))]
-    InvalidBuildType(String, #[source] PackageVersionReqError),
 }
 
 #[derive(Debug)]
@@ -89,6 +86,32 @@ where
         do_get_all_dependencies(args).await
     }
 }
+/// The names of the build dependencies of a rockspec, including the
+/// build backend rock (if any), excluding the luarocks build backends
+/// that Lux implements natively.
+pub(crate) fn build_dependency_names<R: Rockspec>(rockspec: &R) -> Vec<PackageName> {
+    let mut names = rockspec
+        .build_dependencies()
+        .current_platform()
+        .iter()
+        .filter(|dep| {
+            !matches!(
+                dep.name().to_string().as_str(),
+                "luarocks-build-rust-mlua" | "luarocks-build-treesitter-parser"
+            )
+        })
+        .map(|dep| dep.name().clone())
+        .collect_vec();
+
+    if let Some(BuildBackendSpec::LuaRock(backend)) =
+        &rockspec.build().current_platform().build_backend
+    {
+        let full_backend_name = format!("luarocks-build-{backend}");
+        names.insert(0, PackageName::new(full_backend_name));
+    }
+    names
+}
+
 #[tracing::instrument(name = "Resolving dependencies", skip_all)]
 #[async_recursion]
 async fn do_get_all_dependencies<'a, P>(
@@ -193,59 +216,43 @@ where
 
                             // NOTE: We don't need to install build dependencies to install binary rocks.
                             if !matches!(downloaded_rock, RemoteRockDownload::BinaryRock { .. }) {
-                                let mut build_dependencies = rockspec
-                                    .build_dependencies()
-                                    .current_platform()
-                                    .iter()
-                                    .filter(|dep| {
-                                        // Exclude luarocks build backends that we have implemented in lux
-                                        !matches!(
-                                            dep.name().to_string().as_str(),
-                                            "luarocks-build-rust-mlua"
-                                                | "luarocks-build-treesitter-parser"
-                                        )
-                                    })
-                                    .map(|dep| {
-                                        // We always install build dependencies as entrypoints
-                                        // with regard to the build tree
-                                        let entry_type = tree::EntryType::Entrypoint;
-                                        PackageInstallSpec::new(
-                                            dep.package_req().clone(),
-                                            entry_type,
-                                        )
-                                        .build_behaviour(build_behaviour)
-                                        .pin(pin)
-                                        .opt(opt)
-                                        .maybe_source(dep.source().clone())
-                                        .build()
+                                let build_dependencies = build_dependency_names(rockspec)
+                                    .into_iter()
+                                    .filter_map(|name| {
+                                        rockspec
+                                            .build_dependencies()
+                                            .current_platform()
+                                            .iter()
+                                            .find(|dep| dep.name() == &name)
+                                            .map(|dep| {
+                                                // We always install build dependencies as entrypoints
+                                                // with regard to the build tree
+                                                let entry_type = tree::EntryType::Entrypoint;
+                                                PackageInstallSpec::new(
+                                                    dep.package_req().clone(),
+                                                    entry_type,
+                                                )
+                                                .build_behaviour(build_behaviour)
+                                                .pin(pin)
+                                                .opt(opt)
+                                                .maybe_source(dep.source().clone())
+                                                .build()
+                                            })
+                                            // The build backend rock (e.g. `luarocks-build-foo`)
+                                            // is not declared as a build dependency in the rockspec.
+                                            .or_else(|| {
+                                                PackageInstallSpec::new(
+                                                    PackageReq::from(name),
+                                                    tree::EntryType::Entrypoint,
+                                                )
+                                                .build_behaviour(build_behaviour)
+                                                .pin(pin)
+                                                .opt(opt)
+                                                .build()
+                                                .into()
+                                            })
                                     })
                                     .collect_vec();
-
-                                if let Some(BuildBackendSpec::LuaRock(backend)) =
-                                    &rockspec.build().current_platform().build_backend
-                                {
-                                    let full_backend_name = format!("luarocks-build-{backend}");
-                                    let backend_req =
-                                        PackageReq::new(full_backend_name.clone(), None).map_err(
-                                            |err| {
-                                                ResolveDependenciesError::InvalidBuildType(
-                                                    full_backend_name,
-                                                    err,
-                                                )
-                                            },
-                                        )?;
-
-                                    let backend_spec = PackageInstallSpec::new(
-                                        backend_req,
-                                        tree::EntryType::Entrypoint,
-                                    )
-                                    .build_behaviour(build_behaviour)
-                                    .pin(pin)
-                                    .opt(opt)
-                                    .build();
-
-                                    build_dependencies.insert(0, backend_spec);
-                                }
 
                                 // NOTE: We treat transitive regular dependencies of build dependencies
                                 // as build dependencies
