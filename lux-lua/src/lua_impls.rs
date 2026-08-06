@@ -1195,6 +1195,14 @@ If installing packages for a project, use `project:tree(config)` instead"#,
             this.0.user_tree(lua_version.0).map(TreeLua).into_lua_err()
         });
 
+        methods.document(r#"The detached workspace tree root."#);
+        methods.add_method("workspace_tree", |_, this, ()| {
+            Ok(this
+                .0
+                .workspace_tree()
+                .map(|p| p.to_slash_lossy().into_owned()))
+        });
+
         methods.document("Whether to display verbose output of commands executed");
         methods.add_method("verbose", |_, this, ()| Ok(this.0.verbose()));
 
@@ -1341,6 +1349,18 @@ impl TypedUserData for ConfigBuilderLua {
         methods.add_method("user_tree", |_, this, tree: Option<String>| {
             Ok(ConfigBuilderLua(
                 this.0.clone().user_tree(tree.map(PathBuf::from)),
+            ))
+        });
+
+        methods.document(
+            r#"Which tree to operate on when in a workspace.
+Default: A `.lux` directory in the workspace root.
+"#,
+        );
+        methods.param("tree", "Tree root directory");
+        methods.add_method("workspace_tree", |_, this, tree: Option<String>| {
+            Ok(ConfigBuilderLua(
+                this.0.clone().workspace_tree(tree.map(PathBuf::from)),
             ))
         });
 

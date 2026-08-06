@@ -44,7 +44,7 @@ pub struct Config {
     lua_dir: Option<PathBuf>,
     lua_version: Option<LuaVersion>,
     user_tree: PathBuf,
-    workspace_tree_root: Option<PathBuf>,
+    workspace_tree: Option<PathBuf>,
     verbose: bool,
     /// Don't display progress bars
     no_progress: bool,
@@ -104,9 +104,9 @@ impl Config {
     }
 
     /// Create a copy of this config with the specified workspace tree root
-    pub fn with_workspace_tree_root(self, tree: Option<PathBuf>) -> Self {
+    pub fn with_workspace_tree(self, tree: Option<PathBuf>) -> Self {
         Self {
-            workspace_tree_root: tree,
+            workspace_tree: tree,
             ..self
         }
     }
@@ -168,8 +168,8 @@ impl Config {
     }
 
     /// The detached workspace tree root, if set.
-    pub(crate) fn workspace_tree_root(&self) -> Option<&PathBuf> {
-        self.workspace_tree_root.as_ref()
+    pub fn workspace_tree(&self) -> Option<&PathBuf> {
+        self.workspace_tree.as_ref()
     }
 
     /// Whether to display verbose output of commands executed
@@ -648,7 +648,7 @@ impl ConfigBuilder {
             lua_dir: self.lua_dir,
             lua_version,
             user_tree,
-            workspace_tree_root: self.workspace_tree,
+            workspace_tree: self.workspace_tree,
             verbose: self.verbose.unwrap_or(false),
             no_progress: self.no_progress.unwrap_or(false),
             no_prompt: self.no_prompt.unwrap_or(false),
@@ -688,7 +688,7 @@ impl From<Config> for ConfigBuilder {
             lua_dir: value.lua_dir,
             lua_version: value.lua_version,
             user_tree: Some(value.user_tree),
-            workspace_tree: value.workspace_tree_root,
+            workspace_tree: value.workspace_tree,
             verbose: Some(value.verbose),
             no_progress: Some(value.no_progress),
             no_prompt: Some(value.no_prompt),
