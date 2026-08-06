@@ -265,7 +265,7 @@ impl Workspace {
         config: &Config,
     ) -> Result<Tree, WorkspaceTreeError> {
         let root_dir = config
-            .workspace_tree_root()
+            .workspace_tree()
             .map(|p| p.to_path_buf())
             .unwrap_or(self.workspace_dir());
         Ok(Tree::new(root_dir, lua_version, config)?)
