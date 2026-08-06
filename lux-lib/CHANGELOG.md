@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.55.1...lux-lib-v0.56.0) `lux-lib` - 2026-08-06
+
+### Fixed
+- *(debug/toolchains)* compiler detection ([#1789](https://github.com/lumen-oss/lux/pull/1789))
+
+### Performance
+- *(fetch)* cache sources
+- *(install)* [**breaking**] parallelise install and dependency resolution
+- offload hashing & archive unpack from async runtime
+- [**breaking**] reuse HTTP(S) clients
+
 ## [0.55.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.55.0...lux-lib-v0.55.1) `lux-lib` - 2026-08-04
 
 ### Added
