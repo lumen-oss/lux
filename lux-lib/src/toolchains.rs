@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use target_lexicon::Triple;
 use which::which;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,7 +95,13 @@ fn check_executable(name: &str) -> Tool {
 }
 
 fn check_c_compiler() -> Tool {
-    match cc::Build::new().try_get_compiler() {
+    let host = Triple::host();
+    match cc::Build::new()
+        .host(&host.to_string())
+        .target(&host.to_string())
+        .opt_level(2)
+        .try_get_compiler()
+    {
         Ok(compiler) => {
             let path = compiler.path().to_path_buf();
 
