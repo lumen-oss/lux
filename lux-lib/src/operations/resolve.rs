@@ -86,10 +86,11 @@ where
         do_get_all_dependencies(args).await
     }
 }
-/// The names of the build dependencies of a rockspec, including the
+
+/// The names of the build dependencies to install, including the
 /// build backend rock (if any), excluding the luarocks build backends
 /// that Lux implements natively.
-pub(crate) fn build_dependency_names<R: Rockspec>(rockspec: &R) -> Vec<PackageName> {
+pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<PackageName> {
     let mut names = rockspec
         .build_dependencies()
         .current_platform()
@@ -216,7 +217,7 @@ where
 
                             // NOTE: We don't need to install build dependencies to install binary rocks.
                             if !matches!(downloaded_rock, RemoteRockDownload::BinaryRock { .. }) {
-                                let build_dependencies = build_dependency_names(rockspec)
+                                let build_dependencies = build_dependencies_to_install(rockspec)
                                     .into_iter()
                                     .filter_map(|name| {
                                         rockspec
