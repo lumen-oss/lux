@@ -19,7 +19,7 @@ use crate::{
         luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     },
     operations::resolve::{
-        build_dependency_names, PackageInstallData, Resolve, ResolveDependenciesError,
+        build_dependencies_to_install, PackageInstallData, Resolve, ResolveDependenciesError,
     },
     package::{PackageName, PackageNameList, PackageReq},
     remote_package_db::{RemotePackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
@@ -38,6 +38,8 @@ use futures::StreamExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::task::{JoinError, JoinHandle};
 
 use tracing::{info_span, span, Instrument};
 pub mod spec;
@@ -206,8 +208,6 @@ retrying with fewer parallel jobs (`--max-jobs`) may avoid the panic in the mean
     Join(#[from] tokio::task::JoinError),
 }
 
-// TODO(vhyrro): This function has too many arguments. Refactor it.
-#[allow(clippy::too_many_arguments)]
 async fn install_impl<T>(
     packages: Vec<PackageInstallSpec>,
     package_db: Arc<RemotePackageDB>,
@@ -218,7 +218,7 @@ where
     T: InstallTree + Clone + Send + Sync + 'static,
 {
     let (dep_tx, mut dep_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (build_dep_tx, mut build_dep_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (build_dep_tx, build_dep_rx) = tokio::sync::mpsc::unbounded_channel();
     let (build_dep_install_done_tx, mut build_dep_install_done_rx) =
         tokio::sync::mpsc::unbounded_channel::<PackageName>();
 
@@ -227,10 +227,143 @@ where
 
     let lua = Arc::new(LuaInstallation::new_from_config(config).await?);
 
-    let mut resolve = tokio::spawn({
+    let mut resolve_worker = spawn_resolve_worker(
+        config,
+        packages,
+        package_db,
+        lockfile.clone(),
+        build_lockfile.clone(),
+        dep_tx,
+        build_dep_tx,
+    );
+    let mut build_deps_worker = spawn_build_deps_worker(
+        config,
+        tree,
+        lua.clone(),
+        build_dep_rx,
+        build_dep_install_done_tx,
+    );
+
+    let mut all_packages: HashMap<LocalPackageId, PackageInstallData> = HashMap::new();
+    let mut scheduled_packages: HashSet<LocalPackageId> = HashSet::new();
+    let mut installed_packages: HashMap<LocalPackageId, (LocalPackage, tree::EntryType)> =
+        HashMap::new();
+    let mut installed_build_deps: HashSet<PackageName> = HashSet::new();
+    let mut ongoing_installs: FuturesUnordered<
+        tracing::instrument::Instrumented<tokio::task::JoinHandle<InstallWorkerOutput>>,
+    > = FuturesUnordered::new();
+    let mut resolve_done = false;
+    let mut build_deps_done = false;
+    let mut dep_rx_drained = false;
+    let mut build_dep_rx_drained = false;
+    let mut install_loop_result: Result<(), InstallError> = Ok(());
+    let max_jobs = config.max_jobs();
+
+    'install: loop {
+        if resolve_done && build_deps_done && dep_rx_drained && build_dep_rx_drained {
+            break;
+        }
+        tokio::select! {
+            resolve_result = &mut resolve_worker, if !resolve_done => {
+                if let Err(err) = worker_result(resolve_result) {
+                    install_loop_result = Err(*err);
+                    break 'install;
+                }
+                resolve_done = true;
+            }
+            build_deps_result = &mut build_deps_worker, if !build_deps_done => {
+                if let Err(err) = worker_result(build_deps_result) {
+                    install_loop_result = Err(*err);
+                    break 'install;
+                }
+                build_deps_done = true;
+            }
+            name = build_dep_install_done_rx.recv(), if !build_dep_rx_drained => {
+                if let Some(name) = name {
+                    installed_build_deps.insert(name);
+                } else {
+                    build_dep_rx_drained = true;
+                }
+            }
+            dep = dep_rx.recv(), if !dep_rx_drained => {
+                if let Some(dep) = dep {
+                    all_packages.insert(dep.spec.id(), dep);
+                } else {
+                    dep_rx_drained = true;
+                }
+            }
+        }
+
+        for (package_id, package_install_data) in ready_to_install(
+            &all_packages,
+            &scheduled_packages,
+            &build_lockfile,
+            &installed_build_deps,
+        ) {
+            if max_jobs > 0 && ongoing_installs.len() >= max_jobs {
+                if let Err(err) =
+                    wait_for_next_install(&mut ongoing_installs, &mut installed_packages).await
+                {
+                    install_loop_result = Err(err);
+                    break 'install;
+                }
+            }
+            scheduled_packages.insert(package_id);
+            ongoing_installs.push(spawn_install_worker(
+                package_install_data,
+                &lua,
+                tree,
+                config,
+            ));
+        }
+    }
+
+    match install_loop_result {
+        Ok(_) => {
+            while wait_for_next_install(&mut ongoing_installs, &mut installed_packages).await? {}
+
+            lockfile.map_then_flush(|lockfile| {
+                for (package_id, (package, is_entrypoint)) in installed_packages.iter() {
+                    lockfile.add_dependencies(
+                        package_id,
+                        package,
+                        *is_entrypoint,
+                        &all_packages,
+                        &installed_packages,
+                    )?;
+                }
+                Ok::<_, io::Error>(())
+            })?;
+
+            Ok(installed_packages
+                .into_values()
+                .map(|(pkg, _)| pkg)
+                .collect_vec())
+        }
+        Err(err) => {
+            resolve_worker.into_inner().abort();
+            build_deps_worker.into_inner().abort();
+            for install in ongoing_installs {
+                install.into_inner().abort();
+            }
+            Err(err)
+        }
+    }
+}
+
+fn spawn_resolve_worker(
+    config: &Config,
+    packages: Vec<PackageInstallSpec>,
+    package_db: Arc<RemotePackageDB>,
+    lockfile: Lockfile<ReadOnly>,
+    build_lockfile: Lockfile<ReadOnly>,
+    dep_tx: UnboundedSender<PackageInstallData>,
+    build_dep_tx: UnboundedSender<PackageInstallData>,
+) -> tracing::instrument::Instrumented<JoinHandle<Result<(), InstallError>>> {
+    tokio::spawn({
         let config = config.clone();
-        let lockfile = Arc::new(lockfile.clone());
-        let build_lockfile = Arc::new(build_lockfile.clone());
+        let lockfile = Arc::new(lockfile);
+        let build_lockfile = Arc::new(build_lockfile);
         async move {
             Resolve::new()
                 .dependencies_tx(dep_tx)
@@ -245,11 +378,20 @@ where
             Ok::<(), InstallError>(())
         }
     })
-    .instrument(tracing::trace_span!("resolve_worker"));
+    .instrument(tracing::trace_span!("resolve_worker"))
+}
 
-    // We have to install transitive build dependencies sequentially,
-    // because a build dependency can itself depend on other build dependencies.
-    let mut build_deps = tokio::spawn({
+fn spawn_build_deps_worker<T>(
+    config: &Config,
+    tree: &T,
+    lua: Arc<LuaInstallation>,
+    mut build_dep_rx: UnboundedReceiver<PackageInstallData>,
+    build_dep_install_done_tx: UnboundedSender<PackageName>,
+) -> tracing::instrument::Instrumented<JoinHandle<Result<(), InstallError>>>
+where
+    T: InstallTree + Clone + Send + Sync + 'static,
+{
+    tokio::spawn({
         let config = config.clone();
         let tree = tree.clone();
         let lua = lua.clone();
@@ -264,9 +406,6 @@ where
                 );
                 async {
                     let build_tree = tree.build_tree(&config)?;
-                    // We have to write to the build tree's lockfile after each build,
-                    // so that each transitive build dependency is available for the
-                    // next build dependencies that may depend on it.
                     let mut build_lockfile = build_tree.lockfile()?.write_guard();
                     let pkg = Build::new()
                         .rockspec(rockspec)
@@ -289,207 +428,173 @@ where
             Ok::<(), InstallError>(())
         }
     })
-    .instrument(tracing::trace_span!("build_deps_worker"));
+    .instrument(tracing::trace_span!("build_deps_worker"))
+}
 
-    let mut all_packages: HashMap<LocalPackageId, PackageInstallData> = HashMap::new();
-    let mut scheduled: HashSet<LocalPackageId> = HashSet::new();
-    let mut installed_packages: HashMap<LocalPackageId, (LocalPackage, tree::EntryType)> =
-        HashMap::new();
-    let mut installed_build_deps: HashSet<PackageName> = HashSet::new();
-    let mut installs: FuturesUnordered<
+fn ready_to_install(
+    all_packages: &HashMap<LocalPackageId, PackageInstallData>,
+    scheduled: &HashSet<LocalPackageId>,
+    build_lockfile: &Lockfile<ReadOnly>,
+    installed_build_deps: &HashSet<PackageName>,
+) -> Vec<(LocalPackageId, PackageInstallData)> {
+    all_packages
+        .iter()
+        .filter(|(id, data)| {
+            !scheduled.contains(*id)
+                && match &data.downloaded_rock {
+                    RemoteRockDownload::BinaryRock { .. } => true,
+                    _ => build_dependencies_ready(
+                        data.downloaded_rock.rockspec(),
+                        data.build_behaviour,
+                        build_lockfile,
+                        installed_build_deps,
+                    ),
+                }
+        })
+        .map(|(id, data)| (id.clone(), data.clone()))
+        .collect()
+}
+
+fn spawn_install_worker<T>(
+    data: PackageInstallData,
+    lua: &Arc<LuaInstallation>,
+    tree: &T,
+    config: &Config,
+) -> tracing::instrument::Instrumented<JoinHandle<InstallWorkerOutput>>
+where
+    T: InstallTree + Clone + Send + Sync + 'static,
+{
+    let config = config.clone();
+    let tree = tree.clone();
+    let lua = lua.clone();
+    let entry_type = data.entry_type;
+    tokio::spawn(async move {
+        let pkg = install_package(data, &lua, &tree, &config).await?;
+        Ok::<_, InstallError>((pkg.id(), (pkg, entry_type)))
+    })
+    .instrument(tracing::trace_span!("install_worker"))
+}
+
+#[tracing::instrument(level = "trace", skip_all)]
+async fn install_package<T>(
+    data: PackageInstallData,
+    lua: &Arc<LuaInstallation>,
+    tree: &T,
+    config: &Config,
+) -> Result<LocalPackage, InstallError>
+where
+    T: InstallTree + Sync,
+{
+    match data.downloaded_rock {
+        RemoteRockDownload::RockspecOnly { rockspec_download } => {
+            install_rockspec(
+                rockspec_download,
+                None,
+                data.spec.constraint(),
+                data.build_behaviour,
+                data.pin,
+                data.opt,
+                data.entry_type,
+                lua,
+                tree,
+                config,
+            )
+            .await
+        }
+        RemoteRockDownload::BinaryRock {
+            rockspec_download,
+            packed_rock,
+        } => {
+            install_binary_rock(
+                rockspec_download,
+                packed_rock,
+                data.spec.constraint(),
+                data.build_behaviour,
+                data.pin,
+                data.opt,
+                data.entry_type,
+                config,
+                tree,
+            )
+            .await
+        }
+        RemoteRockDownload::SrcRock {
+            rockspec_download,
+            src_rock,
+            source_url,
+        } => {
+            let src_rock_source = SrcRockSource {
+                bytes: src_rock,
+                source_url,
+            };
+            install_rockspec(
+                rockspec_download,
+                Some(src_rock_source),
+                data.spec.constraint(),
+                data.build_behaviour,
+                data.pin,
+                data.opt,
+                data.entry_type,
+                lua,
+                tree,
+                config,
+            )
+            .await
+        }
+    }
+}
+
+fn worker_result(
+    result: Result<Result<(), InstallError>, JoinError>,
+) -> Result<(), Box<InstallError>> {
+    match result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(err)) => Err(err.into()),
+        Err(join) => Err(InstallError::from(join).into()),
+    }
+}
+
+async fn wait_for_next_install(
+    ongoing_installs: &mut FuturesUnordered<
         tracing::instrument::Instrumented<tokio::task::JoinHandle<InstallWorkerOutput>>,
-    > = FuturesUnordered::new();
-    let mut resolve_done = false;
-    let mut build_deps_done = false;
-    let mut dep_rx_drained = false;
-    let mut build_dep_rx_drained = false;
-    let mut error: Option<InstallError> = None;
-    let max_jobs = config.max_jobs();
-
-    'install: loop {
-        if resolve_done && build_deps_done && dep_rx_drained && build_dep_rx_drained {
-            break;
-        }
-        tokio::select! {
-            resolve_result = &mut resolve, if !resolve_done => {
-                match resolve_result {
-                    Ok(Ok(_)) => resolve_done = true,
-                    Ok(Err(err)) => {
-                        error = Some(err);
-                        break 'install;
-                    }
-                    Err(join) => {
-                        error = Some(join.into());
-                        break 'install;
-                    }
-                }
-            }
-            build_deps_result = &mut build_deps, if !build_deps_done => {
-                match build_deps_result {
-                    Ok(Ok(_)) => build_deps_done = true,
-                    Ok(Err(err)) => {
-                        error = Some(err);
-                        break 'install;
-                    }
-                    Err(join) => {
-                        error = Some(join.into());
-                        break 'install;
-                    }
-                }
-            }
-            name = build_dep_install_done_rx.recv(), if !build_dep_rx_drained => {
-                if let Some(name) = name {
-                    installed_build_deps.insert(name);
-                } else {
-                    build_dep_rx_drained = true;
-                }
-            }
-            dep = dep_rx.recv(), if !dep_rx_drained => {
-                if let Some(dep) = dep {
-                    all_packages.insert(dep.spec.id(), dep);
-                } else {
-                    dep_rx_drained = true;
-                }
-            }
-        }
-
-        // Schedule installs for packages whose build dependencies have all
-        // been installed into the build tree.
-        // NOTE: Binary rocks don't need their build dependencies installed.
-        let ready: Vec<(LocalPackageId, PackageInstallData)> = all_packages
-            .iter()
-            .filter(|(id, data)| {
-                !scheduled.contains(*id)
-                    && match &data.downloaded_rock {
-                        RemoteRockDownload::BinaryRock { .. } => true,
-                        _ => build_dependencies_ready(
-                            data.downloaded_rock.rockspec(),
-                            data.build_behaviour,
-                            &build_lockfile,
-                            &installed_build_deps,
-                        ),
-                    }
-            })
-            .map(|(id, data)| (id.clone(), data.clone()))
-            .collect();
-
-        for (package_id, data) in ready {
-            if max_jobs > 0 && installs.len() >= max_jobs {
-                if let Some(result) = installs.next().await {
-                    match result {
-                        Ok(Ok(installed)) => {
-                            installed_packages.insert(installed.0, installed.1);
-                        }
-                        Ok(Err(err)) => {
-                            error = Some(err);
-                            break 'install;
-                        }
-                        Err(join) => {
-                            error = Some(join.into());
-                            break 'install;
-                        }
-                    }
-                }
-            }
-            scheduled.insert(package_id);
-            let config = config.clone();
-            let tree = tree.clone();
-            let lua = lua.clone();
-            installs.push(
-                tokio::spawn({
-                    async move {
-                        let pkg = match data.downloaded_rock {
-                            RemoteRockDownload::RockspecOnly { rockspec_download } => {
-                                install_rockspec(
-                                    rockspec_download,
-                                    None,
-                                    data.spec.constraint(),
-                                    data.build_behaviour,
-                                    data.pin,
-                                    data.opt,
-                                    data.entry_type,
-                                    &lua,
-                                    &tree,
-                                    &config,
-                                )
-                                .await?
-                            }
-                            RemoteRockDownload::BinaryRock {
-                                rockspec_download,
-                                packed_rock,
-                            } => {
-                                install_binary_rock(
-                                    rockspec_download,
-                                    packed_rock,
-                                    data.spec.constraint(),
-                                    data.build_behaviour,
-                                    data.pin,
-                                    data.opt,
-                                    data.entry_type,
-                                    &config,
-                                    &tree,
-                                )
-                                .await?
-                            }
-                            RemoteRockDownload::SrcRock {
-                                rockspec_download,
-                                src_rock,
-                                source_url,
-                            } => {
-                                let src_rock_source = SrcRockSource {
-                                    bytes: src_rock,
-                                    source_url,
-                                };
-                                install_rockspec(
-                                    rockspec_download,
-                                    Some(src_rock_source),
-                                    data.spec.constraint(),
-                                    data.build_behaviour,
-                                    data.pin,
-                                    data.opt,
-                                    data.entry_type,
-                                    &lua,
-                                    &tree,
-                                    &config,
-                                )
-                                .await?
-                            }
-                        };
-
-                        Ok::<_, InstallError>((pkg.id(), (pkg, data.entry_type)))
-                    }
-                })
-                .instrument(tracing::trace_span!("install_worker")),
-            );
-        }
-    }
-
-    if let Some(err) = error {
-        resolve.into_inner().abort();
-        build_deps.into_inner().abort();
-        for install in installs {
-            install.into_inner().abort();
-        }
-        return Err(err);
-    }
-
-    while let Some(result) = installs.next().await {
+    >,
+    installed_packages: &mut HashMap<LocalPackageId, (LocalPackage, tree::EntryType)>,
+) -> Result<bool, InstallError> {
+    if let Some(result) = ongoing_installs.next().await {
         match result {
-            Ok(Ok(installed)) => {
-                installed_packages.insert(installed.0, installed.1);
+            Ok(Ok((id, installed))) => {
+                installed_packages.insert(id, installed);
+                Ok(true)
             }
-            Ok(Err(err)) => return Err(err),
-            Err(join) => return Err(join.into()),
+            Ok(Err(err)) => Err(err),
+            Err(join) => Err(InstallError::from(join)),
         }
+    } else {
+        Ok(false)
     }
+}
+trait LockfileExt {
+    fn add_dependencies(
+        self,
+        id: &LocalPackageId,
+        pkg: &LocalPackage,
+        entry_type: tree::EntryType,
+        all_packages: &HashMap<LocalPackageId, PackageInstallData>,
+        installed_packages: &HashMap<LocalPackageId, (LocalPackage, tree::EntryType)>,
+    ) -> io::Result<()>;
+}
 
-    let write_dependency = |lockfile: &mut Lockfile<ReadWrite>,
-                            id: &LocalPackageId,
-                            pkg: &LocalPackage,
-                            entry_type: tree::EntryType|
-     -> io::Result<()> {
+impl LockfileExt for &mut Lockfile<ReadWrite> {
+    fn add_dependencies(
+        self,
+        id: &LocalPackageId,
+        pkg: &LocalPackage,
+        entry_type: tree::EntryType,
+        all_packages: &HashMap<LocalPackageId, PackageInstallData>,
+        installed_packages: &HashMap<LocalPackageId, (LocalPackage, tree::EntryType)>,
+    ) -> io::Result<()> {
         if entry_type == tree::EntryType::Entrypoint {
-            lockfile.add_entrypoint(pkg);
+            self.add_entrypoint(pkg);
         }
 
         for dependency_id in all_packages
@@ -498,7 +603,7 @@ where
             .unwrap_or_default()
             .into_iter()
         {
-            lockfile.add_dependency(
+            self.add_dependency(
                 pkg,
                 installed_packages
                     .get(dependency_id)
@@ -515,19 +620,7 @@ This is likely because an install thread panicked and was interrupted unexpected
             );
         }
         Ok(())
-    };
-
-    lockfile.map_then_flush(|lockfile| {
-        for (id, (pkg, is_entrypoint)) in installed_packages.iter() {
-            write_dependency(lockfile, id, pkg, *is_entrypoint)?;
-        }
-        Ok::<_, io::Error>(())
-    })?;
-
-    Ok(installed_packages
-        .into_values()
-        .map(|(pkg, _)| pkg)
-        .collect_vec())
+    }
 }
 
 /// Whether all build dependencies of the given rockspec have been installed
@@ -543,7 +636,7 @@ fn build_dependencies_ready(
     installed: &HashSet<PackageName>,
 ) -> bool {
     let build_deps = rockspec.build_dependencies().current_platform();
-    build_dependency_names(rockspec).iter().all(|name| {
+    build_dependencies_to_install(rockspec).iter().all(|name| {
         installed.contains(name)
             || (behaviour != BuildBehaviour::Force
                 && build_lockfile
