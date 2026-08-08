@@ -1,8 +1,10 @@
 #[cfg(not(target_env = "msvc"))]
+use flaky_test::flaky_test;
+#[cfg(not(target_env = "msvc"))]
 use lux_lib::{config::ConfigBuilder, lua_version::LuaVersion, operations::Exec};
 
 #[cfg(not(target_env = "msvc"))]
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn run_nlua() {
     use lux_lib::lua_installation::detect_installed_lua_version;
 

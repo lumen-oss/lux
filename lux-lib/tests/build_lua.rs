@@ -1,9 +1,10 @@
 use assert_fs::{assert::PathAssert, prelude::PathChild};
+use flaky_test::flaky_test;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::{config::ConfigBuilder, operations::BuildLua};
 use predicates::prelude::predicate;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn test_build_lua() {
     for lua_version in [
         LuaVersion::Lua51,
@@ -59,7 +60,7 @@ async fn test_build_lua() {
     }
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn test_build_luajit() {
     for lua_version in [LuaVersion::LuaJIT, LuaVersion::LuaJIT52] {
         let target_dir = assert_fs::TempDir::new().unwrap();

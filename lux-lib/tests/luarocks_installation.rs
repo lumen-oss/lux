@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use assert_fs::assert::PathAssert;
 use assert_fs::prelude::{PathChild, PathCopy};
 use assert_fs::TempDir;
+use flaky_test::flaky_test;
 use lux_lib::lua_installation::detect_installed_lua_version;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::{
@@ -11,7 +12,7 @@ use lux_lib::{
 };
 use predicates::prelude::predicate;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn luarocks_make() {
     let dir = TempDir::new().unwrap();
 

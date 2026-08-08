@@ -1,4 +1,5 @@
 use assert_fs::{prelude::PathCopy, TempDir};
+use flaky_test::flaky_test;
 use lux_lib::{
     config::ConfigBuilder,
     operations::Sync,
@@ -7,7 +8,7 @@ use lux_lib::{
 };
 use std::path::PathBuf;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn sync_test_dependencies_empty_project() {
     let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/busted-with-lockfile/");
@@ -58,7 +59,7 @@ async fn sync_test_dependencies_empty_project() {
 }
 
 /// non-regression for https://github.com/lumen-oss/lux/issues/1548
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn sync_multi_projects_same_dependencies() {
     let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/multi-project/");

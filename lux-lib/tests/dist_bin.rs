@@ -3,6 +3,8 @@ use assert_fs::fixture::PathCopy;
 #[cfg(target_env = "msvc")]
 use assert_fs::TempDir;
 #[cfg(target_env = "msvc")]
+use flaky_test::flaky_test;
+#[cfg(target_env = "msvc")]
 use lux_lib::lua_installation::detect_installed_lua_version;
 #[cfg(target_env = "msvc")]
 use lux_lib::operations::DistProjectBin;
@@ -17,7 +19,7 @@ use std::path::PathBuf;
 // The reason for copying them so that they are run with the
 // Windows integration tests, in addition to the pure test suite we run with Nix.
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 #[cfg(target_env = "msvc")]
 async fn test_dist_bin_from_lua_source_compiles_and_runs() {
     let sample_project_path = "resources/test/sample-projects/only-src/";

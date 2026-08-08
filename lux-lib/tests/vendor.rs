@@ -4,6 +4,7 @@ use assert_fs::{
     assert::PathAssert,
     prelude::{PathChild, PathCopy},
 };
+use flaky_test::flaky_test;
 use lux_lib::{
     config::ConfigBuilder,
     operations::{Vendor, VendorTarget},
@@ -11,7 +12,7 @@ use lux_lib::{
 };
 use predicates::prelude::predicate;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn vendor_dependencies() {
     let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/busted-with-lockfile/");

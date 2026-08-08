@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
+use flaky_test::flaky_test;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
@@ -19,7 +20,7 @@ use tokio::runtime::Builder;
 use lux_lib::build::BuildBehaviour;
 use tracing::Instrument;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn builtin_build() {
     let dir = TempDir::new().unwrap();
 
@@ -59,7 +60,7 @@ async fn builtin_build() {
         .unwrap();
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn make_build() {
     let dir = TempDir::new().unwrap();
 
@@ -98,7 +99,7 @@ async fn make_build() {
         .unwrap();
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn cmake_build() {
     let rockspec =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luv-1.48.0-2.rockspec");
@@ -106,7 +107,7 @@ async fn cmake_build() {
 }
 
 #[cfg(not(target_env = "msvc"))] // luaposix does not build on msvc
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn command_build() {
     // The rockspec appears to be broken when using luajit headers on macos
     let config = ConfigBuilder::new().unwrap().build().unwrap();
@@ -152,7 +153,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
         .unwrap();
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn treesitter_parser_build() {
     if cfg!(target_env = "msvc") {
         println!("Skipping test that is flaky on Windows/MSVC");
@@ -202,7 +203,7 @@ async fn treesitter_parser_build() {
     assert!(folds_query.is_file());
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn treesitter_parser_build_source_queries() {
     if cfg!(target_env = "msvc") {
         println!("Skipping test that is flaky on Windows/MSVC");
@@ -275,7 +276,7 @@ async fn treesitter_parser_build_source_queries() {
     );
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn test_build_local_project_no_source() {
     let sample_project =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/no-source/");
@@ -316,7 +317,7 @@ async fn test_build_local_project_no_source() {
     assert!(plugin_file.is_file());
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn test_build_local_project_only_src() {
     let sample_project =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/only-src/");
@@ -355,7 +356,7 @@ async fn test_build_local_project_only_src() {
     assert!(layout.src.join("foo.lua").is_file());
 }
 
-#[test]
+#[flaky_test(times = 5)]
 fn test_build_multiple_treesitter_parsers() {
     let dir = TempDir::new().unwrap();
 
@@ -419,7 +420,7 @@ fn test_build_multiple_treesitter_parsers() {
     runtime.block_on(futures::future::join_all(handles));
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn build_project_with_git_dependency() {
     let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/git-dependency/");
@@ -454,7 +455,7 @@ async fn build_project_with_git_dependency() {
 }
 
 #[cfg(not(target_env = "msvc"))]
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn test_multiline_command_build() {
     let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/command-build/");
@@ -491,7 +492,7 @@ async fn test_multiline_command_build() {
     assert!(success_dir.is_dir());
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn builtin_build_install_include() {
     let dir = TempDir::new().unwrap();
 

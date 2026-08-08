@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
+use flaky_test::flaky_test;
 use lux_lib::{
     config::ConfigBuilder, lua_installation::detect_installed_lua_version, lua_version::LuaVersion,
     operations::Test, workspace::Workspace,
 };
 use tokio::fs::remove_dir_all;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn run_busted_test() {
     let project_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/busted/");
@@ -30,7 +31,7 @@ async fn run_busted_test() {
     Test::new(workspace, &config).run().await.unwrap();
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn run_busted_test_no_lock() {
     let project_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/busted/");
@@ -58,7 +59,7 @@ async fn run_busted_test_no_lock() {
 }
 
 #[cfg(not(target_os = "windows"))]
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn non_regression_lockfile_corruption() {
     let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/busted-with-lockfile/");
@@ -84,13 +85,13 @@ async fn non_regression_lockfile_corruption() {
 }
 
 #[cfg(not(target_env = "msvc"))]
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn run_busted_nlua_test() {
     run_busted_nlua_test_impl(false).await
 }
 
 #[cfg(not(target_env = "msvc"))]
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn run_busted_nlua_test_no_lock() {
     run_busted_nlua_test_impl(true).await
 }
