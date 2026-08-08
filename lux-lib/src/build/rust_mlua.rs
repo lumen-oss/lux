@@ -12,7 +12,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use thiserror::Error;
-use tokio::process::Command;
+
 use tracing::{info_span, Instrument};
 
 #[derive(Error, Debug, Diagnostic)]
@@ -70,9 +70,9 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
         {
             let span = info_span!("Compiling rust-mlua module");
-            match Command::new("cargo")
+            match config
+                .wrapped_command("cargo", build_args)
                 .current_dir(build_dir)
-                .args(build_args)
                 .output()
                 .instrument(span)
                 .await
