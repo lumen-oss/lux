@@ -22,7 +22,7 @@ use std::{
 use target_lexicon::Triple;
 use thiserror::Error;
 use tokio::process::Command;
-use tracing::span;
+use tracing::{info_span, span};
 use which::which;
 
 #[cfg(unix)]
@@ -149,7 +149,6 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 /// Compiles a set of C files into a single dynamic library and places them under `{target_dir}/{target_file}`.
 /// # Panics
 /// Panics if no parent or no filename can be determined for the target path.
-#[tracing::instrument(name = "Compiling C files", skip_all)]
 pub(crate) async fn compile_c_files(
     files: &Vec<PathBuf>,
     target_module: &LuaModule,
@@ -158,6 +157,11 @@ pub(crate) async fn compile_c_files(
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<(), CompileCFilesError> {
+    let span = info_span!(
+        "Compiling C files",
+        profile = config.build_profile().to_string()
+    );
+    let _enter = span.enter();
     let target = target_dir.join(target_module.to_lib_path());
     let target_parent_dir = target.parent().unwrap_or_else(|| {
         unreachable!(
@@ -194,7 +198,7 @@ pub(crate) async fn compile_c_files(
                 .values()
                 .filter_map(|dep| dep.include_dir.as_ref()),
         )
-        .opt_level(3)
+        .opt_level(config.build_profile().opt_level())
         .out_dir(intermediate_dir);
 
     let compiler = build.try_get_compiler()?;
@@ -347,7 +351,6 @@ pub enum LinkCModulesError {
 /// Compiles a set of C files (with extra metadata) to a given destination.
 /// # Panics
 /// Panics if no filename for the target path can be determined.
-#[tracing::instrument(name = "Compiling C modules", skip_all)]
 pub(crate) async fn compile_c_modules(
     data: &ModulePaths,
     source_dir: &Path,
@@ -357,6 +360,11 @@ pub(crate) async fn compile_c_modules(
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<(), CompileCModulesError> {
+    let span = info_span!(
+        "Compiling C modules",
+        profile = config.build_profile().to_string()
+    );
+    let _enter = span.enter();
     let target = target_dir.join(target_module.to_lib_path());
 
     let target_parent_dir = target.parent().unwrap_or_else(|| {
@@ -420,7 +428,7 @@ pub(crate) async fn compile_c_modules(
                 .values()
                 .filter_map(|dep| dep.include_dir.as_ref()),
         )
-        .opt_level(3)
+        .opt_level(config.build_profile().opt_level())
         .out_dir(intermediate_dir);
 
     let compiler = build.try_get_compiler()?;

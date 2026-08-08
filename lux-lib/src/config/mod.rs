@@ -58,6 +58,7 @@ pub struct Config {
     max_jobs: usize,
     variables: HashMap<String, String>,
     external_deps: ExternalDependencySearchConfig,
+
     build: BuildConfig,
     entrypoint_layout: RockLayoutConfig,
 
@@ -243,6 +244,15 @@ impl Config {
         }
     }
 
+    /// The build profile to use when compiling packages.
+    pub(crate) fn build_profile(&self) -> build::Profile {
+        self.build
+            .profile
+            .as_ref()
+            .cloned()
+            .unwrap_or(build::Profile::Release)
+    }
+
     /// Variable names, mapped to their values.
     /// Lux populates variables in the `lux.toml` and in RockSpecs
     /// with these before building.
@@ -377,6 +387,7 @@ pub struct ConfigBuilder {
     external_deps: ExternalDependencySearchConfig,
     #[serde(default)]
     build: BuildConfig,
+
     #[serde(default)]
     entrypoint_layout: RockLayoutConfig,
     user_agent: Option<String>,
@@ -678,6 +689,30 @@ impl ConfigBuilder {
         Self {
             build: BuildConfig {
                 runner: runner.unwrap_or(self.build.runner),
+                ..self.build
+            },
+            ..self
+        }
+    }
+
+    /// The build profile to use when compiling packages.
+    /// Default: [`BuildProfile::Release`], if not set by [`Self::default_build_profile`].
+    pub fn build_profile(self, profile: Option<build::Profile>) -> Self {
+        Self {
+            build: BuildConfig {
+                profile: profile.or(self.build.profile),
+                ..self.build
+            },
+            ..self
+        }
+    }
+
+    /// set the default build profile to use when compiling packages.
+    pub fn default_build_profile(self, profile: build::Profile) -> Self {
+        Self {
+            build: BuildConfig {
+                profile: self.build.profile.or(Some(profile)),
+                ..self.build
             },
             ..self
         }
@@ -706,7 +741,10 @@ impl ConfigBuilder {
             max_jobs: other.max_jobs.or(self.max_jobs),
             variables: other.variables.or(self.variables),
             external_deps: other.external_deps,
-            build: other.build,
+            build: BuildConfig {
+                profile: other.build.profile.or(self.build.profile),
+                ..other.build
+            },
             entrypoint_layout: other.entrypoint_layout,
             user_agent: other.user_agent.or(self.user_agent),
             generate_luarc: other.generate_luarc.or(self.generate_luarc),
