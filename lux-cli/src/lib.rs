@@ -149,6 +149,11 @@ pub struct Cli {
     #[arg(long, value_name = "variable", visible_short_alias = 'v', value_parser = parse_key_val::<String, String>)]
     pub variables: Option<Vec<(String, String)>>,
 
+    /// The build profile to use when compiling packages.{n}
+    /// Default: `release`.
+    #[arg(long, value_enum, value_name = "profile")]
+    pub profile: Option<lux_lib::config::build::Profile>,
+
     /// Display verbose output of commands executed, enabling DEBUG logs.{n}
     /// To enable TRACE logs, set RUST_LOG=trace.
     #[arg(long)]
@@ -454,14 +459,17 @@ impl Commands {
     /// if present and running a workspace command.
     pub fn config(&self) -> Result<ConfigBuilder> {
         let config = ConfigBuilder::new()?;
-        if let Some(workspace_config) = self
-            .workspace()?
-            .map(|ws| ws.config())
-            .transpose()
-            .into_diagnostic()?
-            .flatten()
-        {
-            Ok(config.merge(workspace_config))
+        if let Some(workspace) = self.workspace()? {
+            let config = if let Some(workspace_config) = workspace.config()? {
+                config.merge(workspace_config)
+            } else {
+                config
+            };
+            if let Self::Dist(_) = self {
+                Ok(config)
+            } else {
+                Ok(config.default_build_profile(lux_lib::config::build::Profile::Dev))
+            }
         } else {
             Ok(config)
         }
