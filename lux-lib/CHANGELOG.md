@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.0...lux-lib-v0.56.1) `lux-lib` - 2026-08-08
+
+### Reverted
+- *(fetch)* cache sources ([#1795](https://github.com/lumen-oss/lux/pull/1795))
+
 ## [0.56.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.55.1...lux-lib-v0.56.0) `lux-lib` - 2026-08-06
 
 ### Fixed
