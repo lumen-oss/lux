@@ -75,3 +75,69 @@ async fn sync_multi_projects_same_dependencies() {
         .await
         .unwrap();
 }
+
+#[cfg(not(target_os = "windows"))]
+#[tokio::test]
+async fn sync_clean_install_tree() {
+    use lux_lib::{lua_installation::detect_installed_lua_version, lua_version::LuaVersion};
+
+    let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/test/sample-projects/dependencies/");
+    let _ = tokio::fs::remove_dir_all(sample_project_dir.join(".lux")).await;
+    let project_dir = TempDir::new().unwrap();
+    project_dir.copy_from(sample_project_dir, &["**"]).unwrap();
+    tokio::fs::remove_file(project_dir.join("lux.toml"))
+        .await
+        .unwrap();
+    tokio::fs::write(
+        project_dir.join("lux.toml"),
+        r#"
+package = "sample-project"
+version = "0.1.0"
+lua = ">=5.1"
+
+[source]
+url = "https://github.com/lumen-oss/luarocks-stub"
+
+[dependencies]
+fallo = "2.3.0"
+"#,
+    )
+    .await
+    .unwrap();
+    let workspace_tree = TempDir::new().unwrap();
+    let workspace = Workspace::from_exact(project_dir.path()).unwrap().unwrap();
+    let lua_version = detect_installed_lua_version().unwrap_or(LuaVersion::Lua51);
+    let config = ConfigBuilder::new()
+        .unwrap()
+        .lua_version(Some(lua_version.clone()))
+        .workspace_tree(Some(workspace_tree.to_path_buf()))
+        .build()
+        .unwrap();
+
+    let workspace_lockfile = project_dir.join("lux.lock");
+
+    Sync::new(&workspace, &config)
+        .validate_integrity(cfg!(not(target_os = "windows")))
+        .sync_dependencies()
+        .await
+        .unwrap();
+
+    let workspace_lockfile_content_1 = tokio::fs::read_to_string(&workspace_lockfile)
+        .await
+        .unwrap();
+
+    tokio::fs::remove_dir_all(workspace_tree).await.unwrap();
+
+    Sync::new(&workspace, &config)
+        .validate_integrity(cfg!(not(target_os = "windows")))
+        .sync_dependencies()
+        .await
+        .unwrap();
+
+    let workspace_lockfile_content_2 = tokio::fs::read_to_string(&workspace_lockfile)
+        .await
+        .unwrap();
+
+    assert_eq!(workspace_lockfile_content_1, workspace_lockfile_content_2);
+}

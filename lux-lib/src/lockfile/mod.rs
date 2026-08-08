@@ -1236,7 +1236,10 @@ impl WorkspaceLockfile<ReadOnly> {
 impl Lockfile<ReadWrite> {
     pub(crate) fn add_entrypoint(&mut self, rock: &LocalPackage) {
         self.add(rock);
-        self.lock.entrypoints.push(rock.id().clone())
+        let id = rock.id().clone();
+        if !self.lock.entrypoints.contains(&id) {
+            self.lock.entrypoints.push(id)
+        }
     }
 
     pub(crate) fn remove_entrypoint(&mut self, rock: &LocalPackage) {
@@ -1264,10 +1267,18 @@ impl Lockfile<ReadWrite> {
         self.lock
             .rocks
             .entry(target.id())
-            .and_modify(|rock| rock.spec.dependencies.push(dependency.id()))
+            .and_modify(|rock| {
+                let id = dependency.id();
+                if !rock.spec.dependencies.contains(&id) {
+                    rock.spec.dependencies.push(id);
+                }
+            })
             .or_insert_with(|| {
+                let id = dependency.id();
                 let mut target = target.clone();
-                target.spec.dependencies.push(dependency.id());
+                if !target.spec.dependencies.contains(&id) {
+                    target.spec.dependencies.push(id);
+                }
                 target
             });
         self.add(dependency);

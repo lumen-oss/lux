@@ -323,7 +323,7 @@ where
             while wait_for_next_install(&mut ongoing_installs, &mut installed_packages).await? {}
 
             lockfile.map_then_flush(|lockfile| {
-                for (package_id, (package, is_entrypoint)) in installed_packages.iter() {
+                for (package_id, (package, is_entrypoint)) in installed_packages.iter().unique() {
                     lockfile.add_dependencies(
                         package_id,
                         package,
