@@ -7,7 +7,7 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 use thiserror::Error;
-use tokio::process::Command;
+
 use tracing::{info_span, Instrument};
 
 use crate::{
@@ -91,22 +91,22 @@ impl BuildBackend for MakeBuildSpec {
                     Ok(format!("{key}={substituted_value}").trim().to_string())
                 })
                 .try_collect::<_, Vec<_>, Self::Err>()?;
-            let mut cmd = Command::new(config.make_cmd());
+            let mut make_args: Vec<String> = Vec::new();
             if let Some(build_target) = &self.build_target {
-                cmd.arg(build_target);
+                make_args.push(build_target.clone());
             }
-            let span = info_span!("Make build pass");
-            match cmd
-                .current_dir(build_dir)
-                .args(["-f", &self.makefile.to_slash_lossy()])
+            make_args.push("-f".into());
+            make_args.push(self.makefile.to_slash_lossy().into());
+            make_args.extend(build_args);
+            let mut cmd = config.wrapped_command(config.make_cmd(), make_args);
+            cmd.current_dir(build_dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
-                .args(build_args)
                 .env("PATH", &bin_path)
                 .env("LUA_PATH", &lua_path)
-                .env("LUA_CPATH", &lua_cpath)
-                .spawn()
-            {
+                .env("LUA_CPATH", &lua_cpath);
+            let span = info_span!("Make build pass");
+            match cmd.spawn() {
                 Ok(child) => match child.wait_with_output().instrument(span).await {
                     Ok(output) if output.status.success() => utils::trace_command_output(&output),
                     Ok(output) => {
@@ -148,11 +148,14 @@ impl BuildBackend for MakeBuildSpec {
                 })
                 .try_collect::<_, Vec<_>, Self::Err>()?;
             let span = info_span!("Make install pass");
-            match Command::new(config.make_cmd())
+            let mut install_cmd_args: Vec<String> = Vec::with_capacity(install_args.len() + 3);
+            install_cmd_args.push(self.install_target.clone());
+            install_cmd_args.push("-f".into());
+            install_cmd_args.push(self.makefile.to_slash_lossy().into());
+            install_cmd_args.extend(install_args);
+            match config
+                .wrapped_command(config.make_cmd(), install_cmd_args)
                 .current_dir(build_dir)
-                .arg(&self.install_target)
-                .args(["-f", &self.makefile.to_slash_lossy()])
-                .args(install_args)
                 .env("PATH", &bin_path)
                 .env("LUA_PATH", &lua_path)
                 .env("LUA_CPATH", &lua_cpath)

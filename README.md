@@ -112,7 +112,8 @@ The following table provides a brief comparison:
 | Vendor sources for offline use                                                          | :white_check_mark:           | :x:                |
 | Distribute install tree archives                                                        | :white_check_mark:           | :x:                |
 | Distribute static binaries                                                              | :white_check_mark:           | :x:                |
-| Load RockSpecs and LuaRocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:       | :x:                |
+| Load RockSpecs and LuaRocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:    | :x:                |
+| Sandbox build execution                                                                 | :white_check_mark: [^4]      | :x:                |
 
 [^1]: Supported via a compatibility layer that uses LuaRocks as a backend.
 [^2]: Mostly compatible with the LuaRocks version parser,
@@ -120,6 +121,7 @@ The following table provides a brief comparison:
       To comply with SemVer, we treat anything after the third version component
       (except for the specrev) as a prerelease/build version.
 [^3]: [You Aren't Gonna Need It.](https://martinfowler.com/bliki/Yagni.html)
+[^4]: Opt-in via a `build.runner` config.
 
 ## :package: Packages
 

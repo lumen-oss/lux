@@ -6,7 +6,7 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 use thiserror::Error;
-use tokio::process::Command;
+
 use tracing::{info_span, Instrument};
 use which::which;
 
@@ -136,9 +136,8 @@ async fn run_command(
     let (shell, shell_arg) = (which("sh")?, "-c");
 
     let span = info_span!("Running build command", command = substituted_cmd);
-    match Command::new(shell)
-        .arg(shell_arg)
-        .arg(&substituted_cmd)
+    match config
+        .wrapped_command(shell, [shell_arg, &substituted_cmd])
         .current_dir(build_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

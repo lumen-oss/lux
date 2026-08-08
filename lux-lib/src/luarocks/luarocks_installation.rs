@@ -7,7 +7,6 @@ use std::{
     process::ExitStatus,
 };
 use thiserror::Error;
-use tokio::process::Command;
 
 use crate::{
     build::{self, BuildError},
@@ -268,9 +267,10 @@ variables = {{
         if !luarocks_bin.is_file() {
             return Err(ExecLuaRocksError::LuarocksBinNotFound(luarocks_bin));
         }
-        let output = Command::new(luarocks_bin)
+        let output = self
+            .config
+            .wrapped_command(luarocks_bin, args)
             .current_dir(cwd)
-            .args(args)
             .env("PATH", luarocks_paths.path_prepended().joined())
             .env("LUA_PATH", luarocks_paths.package_path().joined())
             .env("LUA_CPATH", luarocks_paths.package_cpath().joined())
