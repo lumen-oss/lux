@@ -10,9 +10,8 @@ use crate::rockspec::Rockspec;
 use crate::{fs, operations};
 use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
-use bytes::Bytes;
 use git2::build::RepoBuilder;
-use git2::{Direction, FetchOptions, RemoteCallbacks};
+use git2::{FetchOptions, RemoteCallbacks};
 use miette::Diagnostic;
 use remove_dir_all::remove_dir_all;
 use ssri::Integrity;
@@ -20,7 +19,6 @@ use std::io;
 use std::io::Cursor;
 use std::io::Read;
 use std::path::Path;
-use std::path::PathBuf;
 use thiserror::Error;
 use tracing::span;
 
@@ -211,24 +209,6 @@ async fn do_fetch_src<R: Rockspec>(
             let url = git.url.to_string();
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
-            let resolved_ref = resolve_remote_ref(&url, git.checkout_ref.as_deref(), config);
-
-            if let Some(oid) = resolved_ref {
-                let cache_dir = source_cache_dir(config, &url).join(oid.to_string());
-                if fs::sync::read_dir(&cache_dir).is_ok_and(|mut entries| entries.next().is_some())
-                {
-                    tracing::debug!("using cached git source");
-                    recursive_copy_dir_no_ignore(&cache_dir, dest_dir).await?;
-                    let hash = fetch.dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
-                    let checkout_ref = git.checkout_ref.clone().unwrap_or(oid.to_string());
-                    return Ok(RemotePackageSourceMetadata {
-                        hash,
-                        source_url: RemotePackageSourceUrl::Git { url, checkout_ref },
-                    });
-                }
-            }
-            tracing::debug!("fetching git source");
-
             let checkout_ref = {
                 let auth = if config.no_prompt() {
                     GitAuthenticator::default()
@@ -266,15 +246,6 @@ async fn do_fetch_src<R: Rockspec>(
             };
             // The .git directory is not deterministic
             remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
-
-            if let Some(oid) = resolved_ref {
-                populate_source_cache(
-                    dest_dir,
-                    &source_cache_dir(config, &url).join(oid.to_string()),
-                )
-                .await;
-            }
-
             let hash = fetch.dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
@@ -284,27 +255,15 @@ async fn do_fetch_src<R: Rockspec>(
         RockSourceSpec::Url(url) => {
             tracing::debug!(message = format!("📥 Downloading {url}").as_str());
 
-            let cache_path = source_cache_dir(config, url.as_ref()).join("archive");
-            let response = match fs::tokio::read(&cache_path).await {
-                Ok(bytes) => {
-                    tracing::debug!("using cached source archive");
-                    Bytes::from(bytes)
-                }
-                Err(_) => {
-                    tracing::debug!("fetching source archive");
-                    // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
-                    // have HTTP URLs in `source.url`.
-                    let response = crate::reqwest::http_client(config)?
-                        .get(url.clone())
-                        .send()
-                        .await?
-                        .error_for_status()?
-                        .bytes()
-                        .await?;
-                    write_source_cache_archive(&cache_path, &response).await;
-                    response
-                }
-            };
+            // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
+            // have HTTP URLs in `source.url`.
+            let response = crate::reqwest::http_client(config)?
+                .get(url.clone())
+                .send()
+                .await?
+                .error_for_status()?
+                .bytes()
+                .await?;
             let hash = response.hash().await.map_err(FetchSrcError::Hash)?;
             let file_name = url
                 .path_segments()
@@ -371,138 +330,6 @@ async fn do_fetch_src<R: Rockspec>(
     Ok(metadata)
 }
 
-/// Directory in which fetched sources are cached, keyed by source URL.
-fn source_cache_dir(config: &Config, url: &str) -> PathBuf {
-    config.cache_dir().join("sources").join(sanitize_url(url))
-}
-
-fn sanitize_url(url: &str) -> String {
-    url.replace(&[':', '*', '?', '"', '<', '>', '|', '/', '\\'][..], "_")
-}
-
-/// Recursively copy a directory.
-/// Unlike [`crate::build::utils::recursive_copy_dir`], this does not respect ignore files.
-#[tracing::instrument(level = "trace")]
-async fn recursive_copy_dir_no_ignore(src: &Path, dest: &Path) -> Result<(), fs::FsError> {
-    let mut dirs: Vec<PathBuf> = vec![src.to_path_buf()];
-    while let Some(dir) = dirs.pop() {
-        for entry in fs::sync::read_dir(&dir)?.filter_map(Result::ok) {
-            let entry_path = entry.path();
-            let relative_path: PathBuf = pathdiff::diff_paths(&entry_path, src)
-                .unwrap_or_else(|| unreachable!("diff_path with self"));
-            let target = dest.join(relative_path);
-            let file_type = entry.file_type().map_err(|source| fs::FsError::Read {
-                path: entry_path.clone(),
-                source,
-            })?;
-            if file_type.is_dir() {
-                fs::tokio::create_dir_all(&target).await?;
-                dirs.push(entry_path);
-            } else if file_type.is_file() {
-                if let Some(parent) = target.parent() {
-                    fs::tokio::create_dir_all(parent).await?;
-                }
-                fs::tokio::copy(&entry_path, &target).await?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Copy the fetched source into the cache, atomically (best-effort).
-#[tracing::instrument(level = "trace")]
-async fn populate_source_cache(dest_dir: &Path, cache_dir: &Path) {
-    let Some(parent) = cache_dir.parent() else {
-        return;
-    };
-    if fs::tokio::create_dir_all(parent).await.is_err() {
-        return;
-    }
-    let temp = parent.join(format!(
-        ".tmp-{}",
-        cache_dir.file_name().unwrap_or_default().to_string_lossy()
-    ));
-    if recursive_copy_dir_no_ignore(dest_dir, &temp)
-        .await
-        .and_then(|_| fs::sync::rename(&temp, cache_dir))
-        .is_err()
-    {
-        let _ = remove_dir_all(&temp);
-        tracing::debug!("failed to populate the source cache");
-    }
-}
-
-/// Write the downloaded archive to the cache, atomically (best-effort).
-#[tracing::instrument(level = "trace")]
-async fn write_source_cache_archive(path: &Path, contents: &Bytes) {
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    if fs::tokio::create_dir_all(parent).await.is_err() {
-        return;
-    }
-    let temp = parent.join(format!(
-        ".tmp-{}",
-        path.file_name().unwrap_or_default().to_string_lossy()
-    ));
-    if fs::tokio::write(&temp, contents).await.is_err()
-        || fs::tokio::rename(&temp, path).await.is_err()
-    {
-        let _ = fs::tokio::remove_file(&temp).await;
-        tracing::debug!("failed to write the source cache");
-    }
-}
-
-/// Resolve a git `checkout_ref` to an immutable commit SHA without cloning,
-/// using the remote's ref advertisement (equivalent to `git ls-remote`).
-/// Returns `None` if the ref cannot be resolved.
-#[tracing::instrument(level = "trace")]
-fn resolve_remote_ref(url: &str, checkout_ref: Option<&str>, config: &Config) -> Option<git2::Oid> {
-    if let Some(reference) = checkout_ref {
-        if let Ok(oid) = git2::Oid::from_str(reference) {
-            return Some(oid);
-        }
-    }
-    let result: Result<git2::Oid, git2::Error> = (|| {
-        let auth = if config.no_prompt() {
-            GitAuthenticator::default()
-                .try_password_prompt(0)
-                .prompt_ssh_key_password(false)
-                .set_prompter(NullPrompter)
-        } else {
-            GitAuthenticator::default()
-        };
-        let git_config = git2::Config::open_default()?;
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(auth.credentials(&git_config));
-        let tempdir = fs::tempfile::tempdir().map_err(|err| {
-            git2::Error::from_str(&format!("unable to create temporary directory: {err}"))
-        })?;
-        let repo = git2::Repository::init_bare(tempdir.path())?;
-        let mut remote = repo.remote_anonymous(url)?;
-        let connection = remote.connect_auth(Direction::Fetch, Some(callbacks), None)?;
-        let refs = connection.list()?;
-        let oid = match checkout_ref {
-            Some(reference) => {
-                let candidates = [
-                    reference.to_string(),
-                    format!("refs/heads/{reference}"),
-                    format!("refs/tags/{reference}"),
-                ];
-                refs.iter()
-                    .find(|head| candidates.iter().any(|c| c.as_str() == head.name()))
-                    .map(|head| head.oid())
-            }
-            None => refs
-                .iter()
-                .find(|head| head.name() == "HEAD")
-                .map(|head| head.oid()),
-        };
-        oid.ok_or_else(|| git2::Error::from_str("no matching ref advertised"))
-    })();
-    result.ok()
-}
-
 async fn do_fetch_src_rock(
     fetch: FetchSrcRock<'_>,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
@@ -525,142 +352,4 @@ async fn do_fetch_src_rock(
         hash,
         source_url: RemotePackageSourceUrl::Url { url: src_rock.url },
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::Write;
-
-    use assert_fs::prelude::*;
-    use httptest::{matchers::request, responders::status_code, Expectation, Server};
-    use serial_test::serial;
-
-    use crate::config::ConfigBuilder;
-    use crate::lua_rockspec::RemoteLuaRockspec;
-
-    use super::*;
-
-    fn source_zip() -> Vec<u8> {
-        let mut cursor = std::io::Cursor::new(Vec::new());
-        let mut zip = zip::ZipWriter::new(&mut cursor);
-        zip.start_file("test.lua", zip::write::SimpleFileOptions::default())
-            .unwrap();
-        zip.write_all(b"return 1").unwrap();
-        zip.finish().unwrap();
-        cursor.into_inner()
-    }
-
-    fn test_config(cache_dir: std::path::PathBuf) -> Config {
-        ConfigBuilder::new()
-            .unwrap()
-            .cache_dir(Some(cache_dir))
-            .no_progress(Some(true))
-            .build()
-            .unwrap()
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn fetch_url_source_hits_cache() {
-        let cache_dir = assert_fs::TempDir::new().unwrap().to_path_buf();
-        let server = Server::run();
-        server.expect(
-            // We only allow one call, so the second one has to hit the cache or fail
-            Expectation::matching(request::path("/source.zip"))
-                .times(1)
-                .respond_with(status_code(200).body(source_zip())),
-        );
-        let url = server.url_str("/source.zip");
-        let rockspec = RemoteLuaRockspec::new(&format!(
-            r#"
-rockspec_format = '3.0'
-package = 'cached-package'
-version = '1.0-1'
-description = {{ summary = 'test package' }}
-source = {{ url = '{url}', dir = 'source' }}
-build = {{ type = 'builtin', modules = {{ ['test'] = 'source/test.lua' }} }}
-"#
-        ))
-        .unwrap();
-        let config = test_config(cache_dir);
-
-        let dest_dir = assert_fs::TempDir::new().unwrap();
-        let first = FetchSrc::new(dest_dir.path(), &rockspec, &config)
-            .fetch_internal()
-            .await
-            .unwrap();
-
-        let dest_dir = assert_fs::TempDir::new().unwrap();
-        let second = FetchSrc::new(dest_dir.path(), &rockspec, &config)
-            .fetch_internal()
-            .await
-            .unwrap();
-
-        assert_eq!(first.hash, second.hash);
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn resolves_git_ref_to_oid_without_cloning() {
-        let repo_dir = assert_fs::TempDir::new().unwrap();
-        let bare_path = repo_dir.path().join("repo.git");
-        let (commit_id, default_branch) = {
-            let bare = git2::Repository::init_bare(&bare_path).unwrap();
-            let signature = git2::Signature::now("test", "test@example.com").unwrap();
-            let tree_id = {
-                let mut builder = bare.treebuilder(None).unwrap();
-                let blob = bare.blob(b"hello").unwrap();
-                builder.insert("hello.txt", blob, 0o100644).unwrap();
-                builder.write().unwrap()
-            };
-            let tree = bare.find_tree(tree_id).unwrap();
-            let commit_id = bare
-                .commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
-                .unwrap();
-            let head_ref = bare.find_reference("HEAD").unwrap();
-            let default_branch = head_ref
-                .symbolic_target()
-                .unwrap()
-                .unwrap()
-                .strip_prefix("refs/heads/")
-                .unwrap()
-                .to_string();
-            (commit_id, default_branch)
-        };
-
-        let url = format!("file://{}", bare_path.display());
-        let config = test_config(assert_fs::TempDir::new().unwrap().to_path_buf());
-
-        assert_eq!(
-            resolve_remote_ref(&url, Some(&default_branch), &config).unwrap(),
-            commit_id
-        );
-        assert_eq!(
-            resolve_remote_ref(&url, Some(&commit_id.to_string()), &config).unwrap(),
-            commit_id
-        );
-        assert_eq!(resolve_remote_ref(&url, None, &config).unwrap(), commit_id);
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn copy_dir_recursive_preserves_contents() {
-        let src = assert_fs::TempDir::new().unwrap();
-        src.child("sub").create_dir_all().unwrap();
-        src.child("file.txt").write_str("hello").unwrap();
-        src.child("sub/nested.txt").write_str("world").unwrap();
-        let dest = assert_fs::TempDir::new().unwrap();
-        let dest_path = dest.path().join("copy");
-        recursive_copy_dir_no_ignore(src.path(), &dest_path)
-            .await
-            .unwrap();
-        assert_eq!(
-            fs::sync::read_to_string(dest_path.join("file.txt")).unwrap(),
-            "hello"
-        );
-        assert_eq!(
-            fs::sync::read_to_string(dest_path.join("sub/nested.txt")).unwrap(),
-            "world"
-        );
-    }
 }
