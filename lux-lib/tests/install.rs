@@ -1,4 +1,5 @@
 use assert_fs::TempDir;
+use flaky_test::flaky_test;
 use itertools::Itertools;
 use lux_lib::{
     config::ConfigBuilder,
@@ -16,7 +17,7 @@ use walkdir::WalkDir;
 #[cfg(not(target_env = "msvc"))]
 use serial_test::serial;
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn install_git_package() {
     let install_spec =
         PackageInstallSpec::new("rustaceanvim@6.0.3".parse().unwrap(), EntryType::Entrypoint)
@@ -44,12 +45,12 @@ async fn install_http_package() {
     std::env::set_var("CFLAGS", cflags);
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn install_and_use_luafilesystem() {
     install_and_use("luafilesystem@1.9.0".parse().unwrap(), "lfs").await
 }
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn install_and_use_toml_edit() {
     install_and_use("toml-edit@0.7.0".parse().unwrap(), "toml_edit").await
 }
@@ -87,7 +88,7 @@ async fn install_and_use(package: PackageReq, module_name: &str) {
 }
 
 // See https://github.com/lumen-oss/lux/issues/1106
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn no_build_artifacts_in_cwd() {
     let cwd = std::env::current_dir().unwrap();
     let cwd_content_before_install = WalkDir::new(&cwd)

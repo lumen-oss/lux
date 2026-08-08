@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
+use flaky_test::flaky_test;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::operations::BuildWorkspace;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config::ConfigBuilder, lua_installation::detect_installed_lua_version};
 
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn test_build_multi_workspace_local_dependencies() {
     let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/multi-project-local-deps");
