@@ -1,12 +1,15 @@
+use build::BuildConfig;
 use directories::ProjectDirs;
 use external_deps::ExternalDependencySearchConfig;
 use itertools::Itertools;
 
 use miette::Diagnostic;
 use serde::{Deserialize, Serialize, Serializer};
+use std::ffi::OsStr;
 use std::path::Path;
 use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 use thiserror::Error;
+use tokio::process::Command;
 use tree::RockLayoutConfig;
 use url::Url;
 
@@ -18,6 +21,7 @@ use crate::tree::{Tree, TreeError};
 use crate::variables::GetVariableError;
 use crate::{build::utils, variables::HasVariables};
 
+pub mod build;
 pub mod external_deps;
 pub mod tree;
 
@@ -54,6 +58,7 @@ pub struct Config {
     max_jobs: usize,
     variables: HashMap<String, String>,
     external_deps: ExternalDependencySearchConfig,
+    build: BuildConfig,
     entrypoint_layout: RockLayoutConfig,
 
     cache_dir: PathBuf,
@@ -215,6 +220,29 @@ impl Config {
         }
     }
 
+    /// Construct a [`Command`] for the given program and arguments,
+    /// wrapped in the configured [`BuildConfig::runner`], if any.
+    ///
+    /// If no runner is configured, this is equivalent to
+    /// `Command::new(program).args(args)`.
+    pub(crate) fn wrapped_command<P, A>(&self, program: P, args: A) -> Command
+    where
+        P: AsRef<OsStr>,
+        A: IntoIterator,
+        A::Item: AsRef<OsStr>,
+    {
+        if self.build.runner.is_empty() {
+            let mut cmd = Command::new(program);
+            cmd.args(args);
+            cmd
+        } else {
+            let runner = &self.build.runner;
+            let mut cmd = Command::new(&runner[0]);
+            cmd.args(&runner[1..]).arg(program).args(args);
+            cmd
+        }
+    }
+
     /// Variable names, mapped to their values.
     /// Lux populates variables in the `lux.toml` and in RockSpecs
     /// with these before building.
@@ -347,6 +375,8 @@ pub struct ConfigBuilder {
     variables: Option<HashMap<String, String>>,
     #[serde(default)]
     external_deps: ExternalDependencySearchConfig,
+    #[serde(default)]
+    build: BuildConfig,
     #[serde(default)]
     entrypoint_layout: RockLayoutConfig,
     user_agent: Option<String>,
@@ -595,6 +625,64 @@ impl ConfigBuilder {
         }
     }
 
+    /// The command prefix with which to wrap all build commands.
+    ///
+    /// If set, every command spawned by the build backends (`make`, `cmake`,
+    /// `rust-mlua`, `command`, and `luarocks`) is invoked as
+    /// `runner + [command, arguments...]`.
+    ///
+    /// If unset, no wrapping is performed.
+    ///
+    /// # Examples
+    ///
+    /// Use [`bubblewrap`](https://github.com/containers/bubblewrap) to run
+    /// builds in a sandbox with read-only access to the rest of the
+    /// filesystem (Linux):
+    ///
+    /// ```toml
+    /// [build]
+    /// runner = [
+    ///     "bwrap",
+    ///     "--ro-bind", "/", "/",
+    ///     "--dev-bind", "/dev", "/dev",
+    ///     "--proc", "/proc",
+    ///     "--bind", "/tmp", "/tmp",
+    ///     "--bind", "/home/user/.cache/lux", "/home/user/.cache/lux",
+    ///     "--bind", "/home/user/.local/share/lux", "/home/user/.local/share/lux",
+    ///     "--unshare-net",
+    ///     "--new-session",
+    /// ]
+    /// ```
+    ///
+    /// Or use `sandbox-exec` with a seatbelt profile (macOS):
+    ///
+    /// ```text
+    /// (version 1)
+    /// (deny default)
+    /// (allow file-read*)
+    /// (allow process*)
+    /// (allow sysctl-read)
+    /// (allow file-write* (subpath "/tmp") (subpath "/Users/user/Library/Caches/lux") (subpath "/Users/user/.local/share/lux"))
+    /// ```
+    ///
+    /// ```toml
+    /// [build]
+    /// runner = ["sandbox-exec", "-f", "/Users/user/sandbox.sb"]
+    /// ```
+    ///
+    /// The writable directories must cover the places lux writes to during a
+    /// build: the temporary build directory (a tempfile, usually under
+    /// `/tmp`), the install tree (under the data directory), and cache
+    /// directories used by the various build backends.
+    pub fn build_runner(self, runner: Option<Vec<String>>) -> Self {
+        Self {
+            build: BuildConfig {
+                runner: runner.unwrap_or(self.build.runner),
+            },
+            ..self
+        }
+    }
+
     /// Merge with another [`ConfigBuilder`]. The other one takes precedence.
     pub fn merge(self, other: Self) -> Self {
         Self {
@@ -618,6 +706,7 @@ impl ConfigBuilder {
             max_jobs: other.max_jobs.or(self.max_jobs),
             variables: other.variables.or(self.variables),
             external_deps: other.external_deps,
+            build: other.build,
             entrypoint_layout: other.entrypoint_layout,
             user_agent: other.user_agent.or(self.user_agent),
             generate_luarc: other.generate_luarc.or(self.generate_luarc),
@@ -661,6 +750,7 @@ impl ConfigBuilder {
                 .chain(self.variables.unwrap_or_default())
                 .collect(),
             external_deps: self.external_deps,
+            build: self.build,
             entrypoint_layout: self.entrypoint_layout,
             cache_dir,
             data_dir,
@@ -703,6 +793,7 @@ impl From<Config> for ConfigBuilder {
             data_dir: Some(value.data_dir),
             vendor_dir: value.vendor_dir,
             external_deps: value.external_deps,
+            build: value.build,
             entrypoint_layout: value.entrypoint_layout,
             user_agent: Some(value.user_agent),
             generate_luarc: Some(value.generate_luarc),
@@ -771,5 +862,45 @@ where
             serializer.serialize_some(&url_strings)
         }
         None => serializer.serialize_none(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn wrapped_command_without_runner() {
+        let echo = which::which("echo").unwrap();
+        let config = ConfigBuilder::default().build().unwrap();
+        let output = config
+            .wrapped_command(&echo, ["hello", "world"])
+            .output()
+            .await
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "hello world"
+        );
+    }
+
+    #[tokio::test]
+    async fn wrapped_command_prepends_runner_argv() {
+        let echo = which::which("echo").unwrap();
+        let config = ConfigBuilder::default()
+            .build_runner(Some(vec![echo.to_string_lossy().into(), "--prefix".into()]))
+            .build()
+            .unwrap();
+        let output = config
+            .wrapped_command("world", Vec::<String>::new())
+            .output()
+            .await
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "--prefix world"
+        );
     }
 }
