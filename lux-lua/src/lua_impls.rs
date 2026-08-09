@@ -3275,7 +3275,9 @@ mod definitions_registry {
     }
 }
 
-fn map_dependency_type(deps: DependencyType<PackageReqLua>) -> DependencyType<PackageReq> {
+pub(crate) fn map_dependency_type(
+    deps: DependencyType<PackageReqLua>,
+) -> DependencyType<PackageReq> {
     match deps {
         DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
         DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
@@ -3284,7 +3286,9 @@ fn map_dependency_type(deps: DependencyType<PackageReqLua>) -> DependencyType<Pa
     }
 }
 
-fn map_dependency_type_names(deps: DependencyType<PackageNameLua>) -> DependencyType<PackageName> {
+pub(crate) fn map_dependency_type_names(
+    deps: DependencyType<PackageNameLua>,
+) -> DependencyType<PackageName> {
     match deps {
         DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
         DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),

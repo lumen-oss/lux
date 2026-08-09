@@ -4,21 +4,27 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use itertools::Itertools;
+use lux_lib::tree::InstallTree;
 use lux_lib::{
+    lockfile::LocalPackageId,
     lua::lua_runtime,
     operations::{
-        set_pinned_state, BuildWorkspace, DistProjectBin, Download, Install, Sync, Uninstall,
-        Update,
+        set_pinned_state, BuildWorkspace, DistProjectBin, Download, Install, PackageInstallSpec,
+        Sync, Uninstall, Update,
     },
+    package::{PackageName, PackageReq},
     remote_package_db::RemotePackageDB,
+    rockspec::lua_dependency::DependencyType,
+    tree::{EntryType, RockMatches, Tree},
 };
 use mlua::prelude::*;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use path_slash::PathBufExt;
 
 use crate::lua_impls::{
-    ConfigLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua, PackageInstallSpecLua,
-    PackageNameLua, PinnedStateLua, ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
+    self, ConfigLua, DependencyTypeLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua,
+    PackageInstallSpecLua, PackageNameLua, PackageReqLua, PinnedStateLua, ProjectLua,
+    SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone)]
@@ -84,16 +90,125 @@ impl TypedUserData for OperationsModule {
             },
         );
 
-        methods.document("Update installed packages");
+        methods.document("Update installed packages in a workspace");
+        methods.param("workspace", "Workspace to update packages in");
+        methods.param(
+            "packages",
+            "Optional list of packages to update (e.g. {'foo', 'bar >= 1.0'})",
+        );
         methods.param("config", "Lux config");
-        methods.add_async_function("update", |_, config: ConfigLua| async move {
-            let _runtime = lua_runtime().enter();
-            Update::new(&config.0)
-                .update()
-                .await
-                .into_lua_err()
-                .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
-        });
+        methods.add_async_function(
+            "update",
+            |_, (workspace, packages, config): (WorkspaceLua, Option<Vec<String>>, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                let package_reqs = packages
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|s| s.parse())
+                    .collect::<Result<Vec<PackageReq>, _>>()
+                    .into_lua_err()?;
+
+                Update::new(&config.0)
+                    .workspace(workspace.0)
+                    .packages(Some(package_reqs))
+                    .update()
+                    .await
+                    .into_lua_err()
+                    .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
+            },
+        );
+
+        // TODO(vhyrro): Add the ability to specify a project
+        methods.document("Add dependencies to a workspace project and install them immediately");
+        methods.param("workspace", "Workspace containing the project to modify");
+        methods.param(
+            "deps",
+            "Dependencies to add, e.g. { regular = {'foo', 'bar >= 1.0'} }",
+        );
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "add",
+            |_,
+             (mut workspace, deps, config): (
+                WorkspaceLua,
+                DependencyTypeLua<PackageReqLua>,
+                ConfigLua,
+            )| async move {
+                let _runtime = lua_runtime().enter();
+                let deps = lua_impls::map_dependency_type(deps.0);
+                let package_db = RemotePackageDB::from_config(&config.0)
+                    .await
+                    .into_lua_err()?;
+
+                let install_specs = deps_to_specs(&deps);
+
+                if install_specs.is_empty() {
+                    return Ok(());
+                }
+
+                workspace
+                    .0
+                    .single_member_or_select_mut(&None)
+                    .into_lua_err()?
+                    .add(deps.as_ref(), &package_db)
+                    .await
+                    .into_lua_err()?;
+
+                Install::new(&config.0)
+                    .packages(install_specs)
+                    .tree(workspace.0.tree(&config.0).into_lua_err()?)
+                    .install()
+                    .await
+                    .into_lua_err()?;
+
+                Ok(())
+            },
+        );
+
+        methods.document(
+            "Remove dependencies from a workspace project and uninstall them immediately",
+        );
+        methods.param("workspace", "Workspace containing the project to modify");
+        methods.param(
+            "deps",
+            "Dependencies to remove, e.g. { regular = {'foo', 'bar'} }",
+        );
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "remove",
+            |_,
+             (mut workspace, deps, config): (
+                WorkspaceLua,
+                DependencyTypeLua<PackageNameLua>,
+                ConfigLua,
+            )| async move {
+                let _runtime = lua_runtime().enter();
+                let deps = lua_impls::map_dependency_type_names(deps.0);
+                let ids_to_remove: Vec<LocalPackageId> =
+                    deps_to_ids(&deps, &workspace.0.tree(&config.0).into_lua_err()?);
+
+                if ids_to_remove.is_empty() {
+                    return Ok(());
+                }
+
+                workspace
+                    .0
+                    .single_member_or_select_mut(&None)
+                    .into_lua_err()?
+                    .remove(deps.as_ref())
+                    .await
+                    .into_lua_err()?;
+
+                Uninstall::new()
+                    .config(&config.0)
+                    .packages(ids_to_remove)
+                    .remove()
+                    .await
+                    .into_lua_err()?;
+
+                Ok(())
+            },
+        );
 
         methods.document("Sync all workspace dependencies");
         methods.param("workspace", "Workspace to sync");
@@ -286,6 +401,37 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
             )
         })
         .collect())
+}
+
+fn deps_to_specs(deps: &DependencyType<PackageReq>) -> Vec<PackageInstallSpec> {
+    let reqs = match deps {
+        DependencyType::Regular(d) | DependencyType::Build(d) | DependencyType::Test(d) => d,
+        DependencyType::External(_) => &Vec::default(),
+    };
+
+    reqs.iter()
+        .map(|r| PackageInstallSpec::new(r.clone(), EntryType::Entrypoint).build())
+        .collect()
+}
+
+fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LocalPackageId> {
+    let names = match deps {
+        DependencyType::Regular(d) | DependencyType::Build(d) | DependencyType::Test(d) => d,
+        DependencyType::External(_) => &Vec::default(),
+    };
+
+    names
+        .iter()
+        .filter_map(|name| {
+            let req = PackageReq::parse(name.to_string().as_str()).ok()?;
+            tree.match_rocks(&req).ok()
+        })
+        .flat_map(|matches| match matches {
+            RockMatches::Single(id) => vec![id],
+            RockMatches::Many(ids) => ids.into(),
+            _ => vec![],
+        })
+        .collect()
 }
 
 #[cfg(test)]

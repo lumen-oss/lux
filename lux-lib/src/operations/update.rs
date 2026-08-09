@@ -74,6 +74,10 @@ pub struct Update<'a> {
     #[builder(field)]
     build_dependencies: Option<Vec<PackageReq>>,
 
+    /// Workspace to use for resolving the dependency tree.
+    /// Uses the current workspace if None.
+    workspace: Option<Workspace>,
+
     /// Whether to validate the integrity when syncing the project lockfile.
     validate_integrity: Option<bool>,
 
@@ -121,7 +125,12 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
             }
         };
 
-        match Workspace::current()? {
+        let workspace = match args.workspace.clone() {
+            Some(ws) => Some(ws),
+            None => Workspace::current()?,
+        };
+
+        match workspace {
             Some(workspace) => update_workspace(workspace, args, package_db).await,
             None => update_install_tree(args, package_db).await,
         }
