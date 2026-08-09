@@ -62,6 +62,9 @@ async fn test_dist_bin_from_lua_source_compiles_and_runs() {
 
     assert!(binary.is_file(), "binary not produced");
 
+    // Make sure the .so lib is no longer present on the filesystem
+    drop(staging);
+
     let out = tokio::process::Command::new(&binary)
         .output()
         .await
