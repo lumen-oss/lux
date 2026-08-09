@@ -24,6 +24,10 @@ use crate::{
 /// Compile a Lux project and all its dependencies into a single
 /// static binary that does not require a Lua installation.
 ///
+/// Projects with native Lua modules additionally ship those modules as
+/// shared libraries copied next to the binary, which resolves them via its
+/// rpath at runtime.
+///
 /// Based on [luastatic](https://github.com/ers35/luastatic)
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
@@ -130,13 +134,21 @@ where
 
     let lua = LuaInstallation::new_from_config(args.config).await?;
 
-    let output = args.output.unwrap_or_else(|| {
-        let mut p = PathBuf::from(&pkg_name);
-        if cfg!(target_env = "msvc") {
-            p.set_extension("exe");
+    let output = match args.output {
+        Some(output) => output,
+        None => {
+            let mut p = PathBuf::from(&pkg_name);
+            if cfg!(target_env = "msvc") {
+                p.set_extension("exe");
+            }
+            p
         }
-        p
-    });
+    };
+    let output = if output.is_absolute() {
+        output
+    } else {
+        std::env::current_dir()?.join(output)
+    };
 
     let lib_root = layout.lib.clone();
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
@@ -345,7 +357,28 @@ async fn compile_binary(
     for include in lua.includes() {
         cmd.arg(format!("-I{}", include.display()));
     }
-    cmd.args(native_modules);
+
+    // Native modules have to be linked dynamically.
+    // We copy them next to the output binary and link them by basename,
+    // so the binary can find them via its rpath at runtime.
+    let output_dir = output.parent().unwrap_or_else(|| Path::new("."));
+    if !native_modules.is_empty() {
+        fs::tokio::create_dir_all(output_dir).await?;
+        cmd.arg(format!("-L{}", output_dir.display()));
+        for module in native_modules {
+            let file_name = module
+                .file_name()
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("native module path '{}' has no file name", module.display()),
+                    )
+                })?
+                .to_string_lossy();
+            fs::tokio::copy(module, output_dir.join(&*file_name)).await?;
+            cmd.arg(format!("-l:{file_name}"));
+        }
+    }
     cmd.arg("-o").arg(output);
     cmd.args(lua.lib_link_args(&compiler));
 
@@ -357,6 +390,15 @@ async fn compile_binary(
         // shared objects and the operating system depends on it.
         #[cfg(target_family = "unix")]
         cmd.arg("-ldl");
+    }
+
+    #[cfg(target_family = "unix")]
+    if !native_modules.is_empty() {
+        cmd.arg(if cfg!(target_os = "macos") {
+            "-Wl,-rpath,@loader_path"
+        } else {
+            "-Wl,-rpath,$ORIGIN"
+        });
     }
 
     let out = cmd
@@ -686,6 +728,8 @@ mod tests {
             .unwrap();
 
         assert!(binary.is_file(), "binary not produced");
+
+        drop(staging);
 
         let out = tokio::process::Command::new(&binary)
             .output()
