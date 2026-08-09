@@ -24,7 +24,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 
 [dependencies.lux-lib]
-version = "0.56.3"
+version = "0.56.4"
 path = "../lux-lib"
 
 [dev-dependencies]
