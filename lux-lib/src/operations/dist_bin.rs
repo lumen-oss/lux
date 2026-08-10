@@ -337,7 +337,7 @@ async fn compile_binary(
         .warnings(config.verbose())
         .host(&host)
         .target(&host)
-        .opt_level(3)
+        .opt_level(config.build_profile().opt_level())
         .out_dir(&intermediate_dir);
 
     let compiler = build.try_get_compiler()?;

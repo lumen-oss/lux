@@ -1,6 +1,7 @@
 use super::utils::c_dylib_extension;
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::build::utils;
+use crate::config::build;
 use crate::fs;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::tree::InstallTree;
@@ -61,7 +62,11 @@ impl BuildBackend for RustMluaBuildSpec {
             .chain(std::iter::once(lua_feature.into()))
             .join(",");
         let target_dir_arg = format!("--target-dir={}", self.target_path.display());
-        let mut build_args = vec!["build", "--release", &target_dir_arg];
+        let mut build_args = vec!["build"];
+        if config.build_profile() == build::Profile::Release {
+            build_args.push("--release");
+        }
+        build_args.push(&target_dir_arg);
         if !self.default_features {
             build_args.push("--no-default-features");
         }
@@ -69,7 +74,10 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
         {
-            let span = info_span!("Compiling rust-mlua module");
+            let span = info_span!(
+                "Compiling rust-mlua module",
+                profile = config.build_profile().to_string()
+            );
             match config
                 .wrapped_command("cargo", build_args)
                 .current_dir(build_dir)
@@ -89,8 +97,18 @@ impl BuildBackend for RustMluaBuildSpec {
             }
         }
         fs::tokio::create_dir_all(&output_paths.lib).await?;
-        if let Err(err) =
-            install_rust_libs(self.modules, &self.target_path, build_dir, output_paths).await
+        let profile_dir = match config.build_profile() {
+            build::Profile::Release => "release",
+            build::Profile::Dev => "debug",
+        };
+        if let Err(err) = install_rust_libs(
+            self.modules,
+            &self.target_path,
+            build_dir,
+            output_paths,
+            profile_dir,
+        )
+        .await
         {
             cleanup(output_paths).await;
             return Err(err.into());
@@ -110,9 +128,10 @@ async fn install_rust_libs(
     target_path: &Path,
     build_dir: &Path,
     output_paths: &RockLayout,
+    profile_dir: &str,
 ) -> Result<(), fs::FsError> {
     for (module, rust_lib) in modules {
-        let src = build_dir.join(target_path).join("release").join(rust_lib);
+        let src = build_dir.join(target_path).join(profile_dir).join(rust_lib);
         let mut dst: PathBuf = output_paths.lib.join(module);
         dst.set_extension(c_dylib_extension());
         fs::tokio::copy(&src, &dst).await?;
