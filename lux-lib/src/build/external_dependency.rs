@@ -75,6 +75,8 @@ impl ExternalDependencyInfo {
         dependency: &ExternalDependencySpec,
         config: &ExternalDependencySearchConfig,
     ) -> Result<Self, ExternalDependencyError> {
+        let _stdout_gag = gag::Gag::stdout();
+
         let lib_info = pkg_config_probe(name)
             .or(pkg_config_probe(&format!("lib{}", name.to_lowercase())))
             .or(dependency.library.as_ref().and_then(|lib_name| {
