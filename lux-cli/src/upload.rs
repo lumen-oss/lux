@@ -96,9 +96,15 @@ fn tfa_code_from_args_or_secret(data: &Upload, config: &Config) -> Result<Option
                 let secret = base32::decode(base32::Alphabet::Crockford, &secret)
                     .ok_or(totp_rs::SecretParseError::ParseBase32)
                     .into_diagnostic()?;
-                let totp = totp_rs::TOTP::new(totp_rs::Algorithm::SHA1, 6, 1, 30, secret)
+                let totp = totp_rs::Builder::new()
+                    .with_algorithm(totp_rs::Algorithm::SHA1)
+                    .with_digits(6)
+                    .with_skew(1)
+                    .with_step_duration(30)
+                    .with_secret(secret)
+                    .build()
                     .into_diagnostic()?;
-                Ok(Some(totp.generate_current().into_diagnostic()?))
+                Ok(Some(totp.generate_current().to_string()))
             }
             Err(_) => {
                 if config.no_prompt() || config.no_tfa() {
