@@ -34,7 +34,7 @@ shlex = "2.0"
 termcolor = "1.4"
 termtree = "1.0"
 text_trees = "0.1"
-totp-rs = "5.7"
+totp-rs = "6.0"
 url = "2.5"
 whoami = "2.1"
 
