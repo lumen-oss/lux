@@ -165,11 +165,14 @@ pub enum SyncError {
 }
 
 #[tracing::instrument(name = "Syncing dependencies", skip_all)]
-
 async fn do_sync(
     args: Sync<'_>,
     lock_type: &LocalPackageLockType,
 ) -> Result<SyncReport, SyncError> {
+    // NOTE(vhyrro): tools like cc and pkg-config leak cargo:rerun-if-env-changed
+    // stdout calls, therefore gag all standard output during sync.
+    let _stdout_gag = gag::Gag::stdout();
+
     let tree = match lock_type {
         LocalPackageLockType::Regular => args.workspace.tree(args.config)?,
         LocalPackageLockType::Test => args.workspace.test_tree(args.config)?,
