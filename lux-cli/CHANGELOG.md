@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.6](https://github.com/lumen-oss/lux/compare/v0.40.5...v0.40.6) `lux-cli` - 2026-08-10
+
+### Added
+- disable prompting if not in a terminal/tty ([#1822](https://github.com/lumen-oss/lux/pull/1822))
+- *(build)* `release` and `dev` profiles ([#1803](https://github.com/lumen-oss/lux/pull/1803))
+- *(build)* `runner` config to wrap build commands in a sandbox ([#1801](https://github.com/lumen-oss/lux/pull/1801))
+
+### Dependencies
+- *(deps)* bump totp-rs from 5.7.2 to 6.0.0 ([#1813](https://github.com/lumen-oss/lux/pull/1813))
+
+### Fixed
+- *(tracing)* properly instrument async code ([#1819](https://github.com/lumen-oss/lux/pull/1819))
+- *(dist/bin)* resolve native modules via rpath ([#1811](https://github.com/lumen-oss/lux/pull/1811))
+
 ## [0.40.4](https://github.com/lumen-oss/lux/compare/v0.40.3...v0.40.4) `lux-cli` - 2026-08-08
 
 ### Other
