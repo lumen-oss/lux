@@ -186,8 +186,8 @@ impl TypedUserData for OperationsModule {
             )| async move {
                 let _runtime = lua_runtime().enter();
                 let deps = lua_impls::map_dependency_type_names(deps.0);
-                let ids_to_remove: Vec<LocalPackageId> =
-                    deps_to_ids(&deps, &workspace.0.tree(&config.0).into_lua_err()?);
+                let tree = workspace.0.tree(&config.0).into_lua_err()?;
+                let ids_to_remove: Vec<LocalPackageId> = deps_to_ids(&deps, &tree);
 
                 if ids_to_remove.is_empty() {
                     return Ok(Vec::new());
@@ -202,6 +202,7 @@ impl TypedUserData for OperationsModule {
 
                 Uninstall::new()
                     .config(&config.0)
+                    .tree(tree)
                     .packages(ids_to_remove)
                     .remove()
                     .await
