@@ -114,11 +114,14 @@ impl BuildBackend for CMakeBuildSpec {
 
         let span = info_span!("CMake");
         spawn_cmake_cmd(
-            Command::new(config.cmake_cmd())
+            config
+                .wrapped_command(
+                    config.cmake_cmd(),
+                    ["-H.".into(), format!("-B{CMAKE_BUILD_FILE}")]
+                        .into_iter()
+                        .chain(args),
+                )
                 .current_dir(build_dir)
-                .arg("-H.")
-                .arg(format!("-B{CMAKE_BUILD_FILE}"))
-                .args(args)
                 .env("PATH", &bin_path)
                 .env("LUA_PATH", &lua_path)
                 .env("LUA_CPATH", &lua_cpath),
@@ -130,12 +133,12 @@ impl BuildBackend for CMakeBuildSpec {
         if self.build_pass {
             let span = info_span!("CMake build pass");
             spawn_cmake_cmd(
-                Command::new(config.cmake_cmd())
+                config
+                    .wrapped_command(
+                        config.cmake_cmd(),
+                        ["--build", CMAKE_BUILD_FILE, "--config", "Release"],
+                    )
                     .current_dir(build_dir)
-                    .arg("--build")
-                    .arg(CMAKE_BUILD_FILE)
-                    .arg("--config")
-                    .arg("Release")
                     .env("PATH", &bin_path)
                     .env("LUA_PATH", &lua_path)
                     .env("LUA_CPATH", &lua_cpath),
@@ -148,14 +151,19 @@ impl BuildBackend for CMakeBuildSpec {
         if self.install_pass && !no_install {
             let span = info_span!("CMake install pass");
             spawn_cmake_cmd(
-                Command::new(config.cmake_cmd())
+                config
+                    .wrapped_command(
+                        config.cmake_cmd(),
+                        [
+                            "--build",
+                            CMAKE_BUILD_FILE,
+                            "--target",
+                            "install",
+                            "--config",
+                            "Release",
+                        ],
+                    )
                     .current_dir(build_dir)
-                    .arg("--build")
-                    .arg(CMAKE_BUILD_FILE)
-                    .arg("--target")
-                    .arg("install")
-                    .arg("--config")
-                    .arg("Release")
                     .env("PATH", &bin_path)
                     .env("LUA_PATH", &lua_path)
                     .env("LUA_CPATH", &lua_cpath),
