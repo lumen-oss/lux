@@ -135,7 +135,6 @@ async fn run_command(
     #[cfg(not(target_env = "msvc"))]
     let (shell, shell_arg) = (which("sh")?, "-c");
 
-    let span = info_span!("Running build command", command = substituted_cmd);
     match config
         .wrapped_command(shell, [shell_arg, &substituted_cmd])
         .current_dir(build_dir)
@@ -152,7 +151,14 @@ async fn run_command(
                 command: substituted_cmd,
             })
         }
-        Ok(child) => match child.wait_with_output().instrument(span).await {
+        Ok(child) => match child
+            .wait_with_output()
+            .instrument(info_span!(
+                "Running build command",
+                command = substituted_cmd
+            ))
+            .await
+        {
             Ok(output) if output.status.success() => utils::trace_command_output(&output),
             Ok(output) => {
                 return Err(CommandError::CommandFailure {

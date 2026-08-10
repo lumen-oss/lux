@@ -105,9 +105,12 @@ impl BuildBackend for MakeBuildSpec {
                 .env("PATH", &bin_path)
                 .env("LUA_PATH", &lua_path)
                 .env("LUA_CPATH", &lua_cpath);
-            let span = info_span!("Make build pass");
             match cmd.spawn() {
-                Ok(child) => match child.wait_with_output().instrument(span).await {
+                Ok(child) => match child
+                    .wait_with_output()
+                    .instrument(info_span!("Make build pass"))
+                    .await
+                {
                     Ok(output) if output.status.success() => utils::trace_command_output(&output),
                     Ok(output) => {
                         return Err(MakeError::CommandFailure {
@@ -147,7 +150,6 @@ impl BuildBackend for MakeBuildSpec {
                     Ok(format!("{key}={substituted_value}").trim().to_string())
                 })
                 .try_collect::<_, Vec<_>, Self::Err>()?;
-            let span = info_span!("Make install pass");
             let mut install_cmd_args: Vec<String> = Vec::with_capacity(install_args.len() + 3);
             install_cmd_args.push(self.install_target.clone());
             install_cmd_args.push("-f".into());
@@ -160,7 +162,7 @@ impl BuildBackend for MakeBuildSpec {
                 .env("LUA_PATH", &lua_path)
                 .env("LUA_CPATH", &lua_cpath)
                 .output()
-                .instrument(span)
+                .instrument(info_span!("Make install pass"))
                 .await
             {
                 Ok(output) if output.status.success() => utils::trace_command_output(&output),

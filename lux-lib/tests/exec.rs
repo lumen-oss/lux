@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 #[cfg(not(target_env = "msvc"))]
 use flaky_test::flaky_test;
 #[cfg(not(target_env = "msvc"))]

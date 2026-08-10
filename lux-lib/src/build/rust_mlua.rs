@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use thiserror::Error;
 
-use tracing::{info_span, Instrument};
+use tracing::Instrument;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -74,15 +74,14 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
         {
-            let span = info_span!(
-                "Compiling rust-mlua module",
-                profile = config.build_profile().to_string()
-            );
             match config
                 .wrapped_command("cargo", build_args)
                 .current_dir(build_dir)
                 .output()
-                .instrument(span)
+                .instrument(tracing::info_span!(
+                    "Compiling rust-mlua module",
+                    profile = config.build_profile().to_string()
+                ))
                 .await
             {
                 Ok(output) if output.status.success() => utils::trace_command_output(&output),

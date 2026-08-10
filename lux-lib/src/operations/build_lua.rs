@@ -21,7 +21,7 @@ use ssri::Integrity;
 use target_lexicon::Triple;
 use thiserror::Error;
 use tokio::process::Command;
-use tracing::span;
+use tracing::{span, Instrument};
 use url::Url;
 
 const LUA51_VERSION: &str = "5.1.5";
@@ -105,14 +105,13 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
     }
 }
 
+#[tracing::instrument(
+    name = "Building LuaJIT",
+    level = "info",
+    skip_all,
+    fields(version = LUAJIT_MM_VERSION),
+)]
 async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
-    let span = span!(
-        tracing::Level::INFO,
-        "Building LuaJIT",
-        version = LUAJIT_MM_VERSION,
-    );
-    let _enter = span.enter();
-
     let build_dir = fs::tempfile::tempdir()?;
     // XXX luajit.org responds with an invalid content-type, so we'll use the github mirror for now.
     // let luajit_url = "https://luajit.org/git/luajit.git";
@@ -124,7 +123,7 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             "Cloning LuaJIT sources",
             url = luajit_url,
         );
-        let _enter = span.enter();
+        let _enter = span.enter(); // OK because we're not in an async block
 
         // We create a new scope because we have to drop fetch_options before the await
         let mut fetch_options = FetchOptions::new();
@@ -335,15 +334,14 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     Ok(())
 }
 
+#[tracing::instrument(
+    name = "Building Lua",
+    level = "info",
+    skip_all,
+    fields(version = args.lua_version.to_string()),
+)]
 async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
-    let span = span!(
-        tracing::Level::INFO,
-        "Building Lua",
-        version = lua_version.to_string(),
-    );
-    let _enter = span.enter();
-
     let build_dir = fs::tempfile::tempdir()?;
 
     let (source_integrity, pkg_version): (Integrity, &str) = unsafe {
@@ -365,22 +363,15 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .unwrap_unchecked()
     };
 
-    let response = {
-        let span = span!(
-            tracing::Level::INFO,
-            "Downloading Lua",
-            url = source_url.to_string(),
-        );
-        let _enter = span.enter();
-
-        crate::reqwest::https_client(args.config)?
-            .get(source_url.clone())
-            .send()
-            .await?
-            .error_for_status()?
-            .bytes()
-            .await?
-    };
+    let response = crate::reqwest::https_client(args.config)?
+        .get(source_url.clone())
+        .send()
+        .instrument(tracing::info_span!("Downloading Lua"))
+        .await?
+        .error_for_status()?
+        .bytes()
+        .instrument(tracing::trace_span!("getting response body"))
+        .await?;
 
     let hash = response.hash().await?;
 

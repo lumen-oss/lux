@@ -4,7 +4,7 @@ use crate::git::url::RemoteGitUrlParseError;
 use crate::git::GitSource;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
-use crate::lua_rockspec::RockSourceSpec;
+use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
 use crate::package::PackageSpec;
 use crate::rockspec::Rockspec;
 use crate::{fs, operations};
@@ -20,7 +20,6 @@ use std::io::Cursor;
 use std::io::Read;
 use std::path::Path;
 use thiserror::Error;
-use tracing::span;
 
 use super::DownloadSrcRockError;
 use super::UnpackError;
@@ -60,7 +59,25 @@ where
     /// returning the source `Integrity`.
     pub(crate) async fn fetch_internal(self) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
         let fetch = self._build();
-        match do_fetch_src(&fetch).await {
+        let rockspec = fetch.rockspec;
+        let rock_source = rockspec.source().current_platform();
+        let dest_dir = fetch.dest_dir;
+        let config = fetch.config;
+        // prioritise lockfile source, if present
+        let source_spec = match &fetch.source_url {
+            Some(source_url) => match source_url {
+                RemotePackageSourceUrl::Git { url, checkout_ref } => {
+                    RockSourceSpec::Git(GitSource {
+                        url: url.parse()?,
+                        checkout_ref: Some(checkout_ref.clone()),
+                    })
+                }
+                RemotePackageSourceUrl::Url { url } => RockSourceSpec::Url(url.clone()),
+                RemotePackageSourceUrl::File { path } => RockSourceSpec::File(path.clone()),
+            },
+            None => rock_source.source_spec.clone(),
+        };
+        match fetch_src_impl(source_spec, rockspec, rock_source, dest_dir, config).await {
             Err(err)
                 if fetch
                     .source_url
@@ -166,32 +183,19 @@ impl Prompter for NullPrompter {
     }
 }
 
-async fn do_fetch_src<R: Rockspec>(
-    fetch: &FetchSrc<'_, R>,
+#[tracing::instrument(
+    name = "Fetching source",
+    level = "info",
+    skip_all,
+    fields(location = source_spec.to_string()),
+)]
+async fn fetch_src_impl<R: Rockspec>(
+    mut source_spec: RockSourceSpec,
+    rockspec: &R,
+    rock_source: &RemoteRockSource,
+    dest_dir: &Path,
+    config: &Config,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
-    let rockspec = fetch.rockspec;
-    let rock_source = rockspec.source().current_platform();
-    let dest_dir = fetch.dest_dir;
-    let config = fetch.config;
-    // prioritise lockfile source, if present
-    let mut source_spec = match &fetch.source_url {
-        Some(source_url) => match source_url {
-            RemotePackageSourceUrl::Git { url, checkout_ref } => RockSourceSpec::Git(GitSource {
-                url: url.parse()?,
-                checkout_ref: Some(checkout_ref.clone()),
-            }),
-            RemotePackageSourceUrl::Url { url } => RockSourceSpec::Url(url.clone()),
-            RemotePackageSourceUrl::File { path } => RockSourceSpec::File(path.clone()),
-        },
-        None => rock_source.source_spec.clone(),
-    };
-    let span = span!(
-        tracing::Level::INFO,
-        "Fetching source",
-        location = source_spec.to_string(),
-    );
-    let _enter = span.enter();
-
     if let Some(vendor_dir) = config.vendor_dir() {
         source_spec = match source_spec {
             // could be a project directory (not vendored) or a local source
@@ -246,7 +250,7 @@ async fn do_fetch_src<R: Rockspec>(
             };
             // The .git directory is not deterministic
             remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
-            let hash = fetch.dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
+            let hash = dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
                 source_url: RemotePackageSourceUrl::Git { url, checkout_ref },
@@ -330,17 +334,16 @@ async fn do_fetch_src<R: Rockspec>(
     Ok(metadata)
 }
 
+#[tracing::instrument(
+    name = "Fetching src.rock",
+    level = "info",
+    skip_all,
+    fields(package = fetch.package.to_string(),),
+)]
 async fn do_fetch_src_rock(
     fetch: FetchSrcRock<'_>,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
     let package = fetch.package;
-    let span = span!(
-        tracing::Level::INFO,
-        "Fetching src.rock",
-        package = package.to_string(),
-    );
-    let _enter = span.enter();
-
     let dest_dir = fetch.dest_dir;
     let config = fetch.config;
     let src_rock = operations::download_src_rock(package, config.server(), fetch.config).await?;

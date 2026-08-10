@@ -174,3 +174,10 @@ cargo hakari generate
 >
 > Dependencies that can have mutually exclusive features
 > (e.g. vendored vs. non-vendored) must be excluded via [the hakari config](./config/hakari.toml).
+
+### Tracing
+
+We instrument Lux with the [`tracing`](https://docs.rs/tracing/) crate.
+When adding traces, be sure to [instrument async code properly](https://docs.rs/tracing/latest/tracing/struct.Span.html#in-asynchronous-code).
+In general, prefer the [`#[instrument]` attribute macro](https://docs.rs/tracing/latest/tracing/attr.instrument.html),
+as it automatically generates correct code when used on an async function.
