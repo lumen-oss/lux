@@ -62,7 +62,7 @@ where
     State: uninstall_builder::State + uninstall_builder::IsComplete,
 {
     /// Remove the packages.
-    pub async fn remove(self) -> Result<(), RemoveError> {
+    pub async fn remove(self) -> Result<Vec<LocalPackageId>, RemoveError> {
         let args = self._build();
         let tree = args.tree.unwrap_or(
             args.config
@@ -77,7 +77,7 @@ async fn remove(
     package_ids: Vec<LocalPackageId>,
     tree: Tree,
     config: &Config,
-) -> Result<(), RemoveError> {
+) -> Result<Vec<LocalPackageId>, RemoveError> {
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids
@@ -104,7 +104,7 @@ async fn remove(
         Ok::<_, io::Error>(())
     })?;
 
-    Ok(())
+    Ok(package_ids)
 }
 
 async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveError> {

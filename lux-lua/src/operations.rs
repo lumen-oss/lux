@@ -87,6 +87,7 @@ impl TypedUserData for OperationsModule {
                     .remove()
                     .await
                     .into_lua_err()
+                    .map(|ids| ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>())
             },
         );
 
@@ -146,9 +147,8 @@ impl TypedUserData for OperationsModule {
                 let install_specs = deps_to_specs(&deps);
 
                 if install_specs.is_empty() {
-                    return Ok(());
+                    return Ok(Vec::new());
                 }
-
                 workspace
                     .0
                     .single_member_or_select_mut(&None)
@@ -162,9 +162,8 @@ impl TypedUserData for OperationsModule {
                     .tree(workspace.0.tree(&config.0).into_lua_err()?)
                     .install()
                     .await
-                    .into_lua_err()?;
-
-                Ok(())
+                    .into_lua_err()
+                    .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
             },
         );
 
@@ -191,9 +190,8 @@ impl TypedUserData for OperationsModule {
                     deps_to_ids(&deps, &workspace.0.tree(&config.0).into_lua_err()?);
 
                 if ids_to_remove.is_empty() {
-                    return Ok(());
+                    return Ok(Vec::new());
                 }
-
                 workspace
                     .0
                     .single_member_or_select_mut(&None)
@@ -207,9 +205,8 @@ impl TypedUserData for OperationsModule {
                     .packages(ids_to_remove)
                     .remove()
                     .await
-                    .into_lua_err()?;
-
-                Ok(())
+                    .into_lua_err()
+                    .map(|ids| ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>())
             },
         );
 
