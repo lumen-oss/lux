@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.5](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.4...lux-lib-v0.56.5) `lux-lib` - 2026-08-10
+
+### Added
+- add install/uninstall reports to lux-lua
+- *(build)* `release` and `dev` profiles ([#1803](https://github.com/lumen-oss/lux/pull/1803))
+- *(build)* `runner` config to wrap build commands in a sandbox ([#1801](https://github.com/lumen-oss/lux/pull/1801))
+
+### Fixed
+- *(tracing)* properly instrument async code ([#1819](https://github.com/lumen-oss/lux/pull/1819))
+- gag stdout during sync to prevent `cargo:` rerun output
+- *(dist/bin)* resolve native modules via rpath ([#1811](https://github.com/lumen-oss/lux/pull/1811))
+
 ## [0.56.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.3...lux-lib-v0.56.4) `lux-lib` - 2026-08-09
 
 ### Added
