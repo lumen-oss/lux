@@ -102,15 +102,18 @@ impl TypedUserData for OperationsModule {
             |_, (workspace, packages, config): (WorkspaceLua, Option<Vec<String>>, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let package_reqs = packages
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|s| s.parse())
-                    .collect::<Result<Vec<PackageReq>, _>>()
+                    .map(|packages| {
+                        packages
+                            .into_iter()
+                            .map(|s| s.parse())
+                            .collect::<Result<Vec<PackageReq>, _>>()
+                    })
+                    .transpose()
                     .into_lua_err()?;
 
                 Update::new(&config.0)
                     .workspace(workspace.0)
-                    .packages(Some(package_reqs))
+                    .packages(package_reqs)
                     .update()
                     .await
                     .into_lua_err()
