@@ -10,7 +10,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
-use tracing::{span, Instrument};
+use tracing::Instrument;
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum RemoveError {
@@ -107,15 +107,16 @@ async fn remove(
     Ok(package_ids)
 }
 
-async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveError> {
-    let span = span!(
-        tracing::Level::INFO,
-        "Removing",
+#[tracing::instrument(
+    name = "Removing",
+    level = "info",
+    skip_all,
+    fields(
         package = package.name().to_string(),
         version = package.version().to_string(),
-    );
-    let _enter = span.enter();
-
+    ),
+)]
+async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveError> {
     let rock_layout = tree.installed_rock_layout(&package)?;
     fs::tokio::remove_dir_all(&rock_layout.etc).await?;
     fs::tokio::remove_dir_all(&rock_layout.rock_path).await?;

@@ -22,7 +22,6 @@ use std::{
 use target_lexicon::Triple;
 use thiserror::Error;
 use tokio::process::Command;
-use tracing::{info_span, span};
 use which::which;
 
 #[cfg(unix)]
@@ -50,19 +49,21 @@ impl CCExt for cc::Build {
 
 /// Copies a lua source file to a specific destination. The destination is described by a
 /// `module.path` syntax (equivalent to the syntax provided to Lua's `require()` function).
+#[tracing::instrument(
+    name = "Copying Lua module",
+    level = "trace",
+    skip_all,
+    fields(
+        source = source.to_slash_lossy().to_string(),
+        target = target_module.to_string(),
+        target_dir = target_dir.to_slash_lossy().to_string(),
+    ),
+)]
 pub(crate) fn copy_lua_to_module_path(
     source: &PathBuf,
     target_module: &LuaModule,
     target_dir: &Path,
 ) -> Result<(), fs::FsError> {
-    let span = span!(
-        tracing::Level::TRACE,
-        "Copying Lua module",
-        source = source.to_slash_lossy().to_string(),
-        target = target_module.to_string(),
-        target_dir = target_dir.to_slash_lossy().to_string(),
-    );
-    let _enter = span.enter();
     // Some rockspecs abuse `install.lua` to install non-lua files, such as teal (`.tl`) files.
     let target_module_path = source
         .extension()
@@ -149,6 +150,12 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 /// Compiles a set of C files into a single dynamic library and places them under `{target_dir}/{target_file}`.
 /// # Panics
 /// Panics if no parent or no filename can be determined for the target path.
+#[tracing::instrument(
+    name = "Compiling C files",
+    level = "info",
+    skip_all,
+    fields(profile = config.build_profile().to_string()),
+)]
 pub(crate) async fn compile_c_files(
     files: &Vec<PathBuf>,
     target_module: &LuaModule,
@@ -157,11 +164,6 @@ pub(crate) async fn compile_c_files(
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<(), CompileCFilesError> {
-    let span = info_span!(
-        "Compiling C files",
-        profile = config.build_profile().to_string()
-    );
-    let _enter = span.enter();
     let target = target_dir.join(target_module.to_lib_path());
     let target_parent_dir = target.parent().unwrap_or_else(|| {
         unreachable!(
@@ -351,6 +353,12 @@ pub enum LinkCModulesError {
 /// Compiles a set of C files (with extra metadata) to a given destination.
 /// # Panics
 /// Panics if no filename for the target path can be determined.
+#[tracing::instrument(
+    name = "Compiling C modules",
+    level = "info",
+    skip_all,
+    fields(profile = config.build_profile().to_string()),
+)]
 pub(crate) async fn compile_c_modules(
     data: &ModulePaths,
     source_dir: &Path,
@@ -360,11 +368,6 @@ pub(crate) async fn compile_c_modules(
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<(), CompileCModulesError> {
-    let span = info_span!(
-        "Compiling C modules",
-        profile = config.build_profile().to_string()
-    );
-    let _enter = span.enter();
     let target = target_dir.join(target_module.to_lib_path());
 
     let target_parent_dir = target.parent().unwrap_or_else(|| {
@@ -633,6 +636,15 @@ pub enum WrapBinaryError {
 }
 
 /// Returns the file path of the installed binary
+#[tracing::instrument(
+    name = "Installing binary",
+    level = "trace",
+    skip_all,
+    fields(
+        source = source.to_slash_lossy().to_string(),
+        target,
+    ),
+)]
 pub(crate) async fn install_binary(
     source: &Path,
     target: &str,
@@ -642,13 +654,6 @@ pub(crate) async fn install_binary(
     config: &Config,
 ) -> Result<PathBuf, InstallBinaryError> where
 {
-    let span = span!(
-        tracing::Level::TRACE,
-        "Installing binary...",
-        source = source.to_slash_lossy().to_string(),
-        target,
-    );
-    let _enter = span.enter();
     fs::tokio::create_dir_all(&tree.bin()).await?;
     let paths = Paths::new(tree)?;
     let script = if config.wrap_bin_scripts()

@@ -19,9 +19,11 @@ pub async fn purge(config: Config) -> Result<()> {
     {
         let root_dir = tree.root();
 
-        let span = tracing::info_span!("🗑️ Purging", tree = root_dir.to_slash_lossy().to_string());
         tokio::fs::remove_dir_all(tree.root())
-            .instrument(span)
+            .instrument(tracing::info_span!(
+                "Purging",
+                tree = root_dir.to_slash_lossy().to_string()
+            ))
             .await
             .into_diagnostic()?;
     }

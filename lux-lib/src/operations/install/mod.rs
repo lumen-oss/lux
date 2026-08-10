@@ -41,7 +41,7 @@ use thiserror::Error;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::{JoinError, JoinHandle};
 
-use tracing::{info_span, span, Instrument};
+use tracing::Instrument;
 pub mod spec;
 
 /// A rocks package installer, providing fine-grained control
@@ -119,39 +119,12 @@ where
         }
         let count = install_built.packages.len();
         let span = if count > 1 {
-            info_span!("Installing", count,)
+            tracing::info_span!("Installing", count)
         } else {
             let install_spec = &install_built.packages[0];
-            info_span!("Installing", package = install_spec.package.to_string(),)
+            tracing::info_span!("Installing", package = install_spec.package.to_string())
         };
-        let _enter = span.enter();
-        let package_db = match install_built.package_db {
-            Some(db) => db,
-            None => RemotePackageDB::from_config(install_built.config).await?,
-        };
-
-        let duplicate_entrypoints = install_built
-            .packages
-            .iter()
-            .filter(|pkg| pkg.entry_type == tree::EntryType::Entrypoint)
-            .map(|pkg| pkg.package.name())
-            .duplicates()
-            .cloned()
-            .collect_vec();
-
-        if !duplicate_entrypoints.is_empty() {
-            return Err(InstallError::DuplicateEntrypoints(PackageNameList::new(
-                duplicate_entrypoints,
-            )));
-        }
-
-        install_impl(
-            install_built.packages,
-            Arc::new(package_db),
-            install_built.config,
-            &install_built.tree,
-        )
-        .await
+        install_impl(install_built).instrument(span).await
     }
 }
 
@@ -208,15 +181,35 @@ retrying with fewer parallel jobs (`--max-jobs`) may avoid the panic in the mean
     Join(#[from] tokio::task::JoinError),
 }
 
-async fn install_impl<T>(
-    packages: Vec<PackageInstallSpec>,
-    package_db: Arc<RemotePackageDB>,
-    config: &Config,
-    tree: &T,
-) -> Result<Vec<LocalPackage>, InstallError>
+async fn install_impl<T>(install: Install<'_, T>) -> Result<Vec<LocalPackage>, InstallError>
 where
     T: InstallTree + Clone + Send + Sync + 'static,
 {
+    let package_db = match install.package_db {
+        Some(db) => db,
+        None => RemotePackageDB::from_config(install.config).await?,
+    };
+
+    let duplicate_entrypoints = install
+        .packages
+        .iter()
+        .filter(|pkg| pkg.entry_type == tree::EntryType::Entrypoint)
+        .map(|pkg| pkg.package.name())
+        .duplicates()
+        .cloned()
+        .collect_vec();
+
+    if !duplicate_entrypoints.is_empty() {
+        return Err(InstallError::DuplicateEntrypoints(PackageNameList::new(
+            duplicate_entrypoints,
+        )));
+    }
+
+    let packages = install.packages;
+    let package_db = Arc::new(package_db);
+    let config = install.config;
+    let tree = &install.tree;
+
     let (dep_tx, mut dep_rx) = tokio::sync::mpsc::unbounded_channel();
     let (build_dep_tx, build_dep_rx) = tokio::sync::mpsc::unbounded_channel();
     let (build_dep_install_done_tx, mut build_dep_install_done_rx) =
@@ -399,7 +392,7 @@ where
             while let Some(build_dep_spec) = build_dep_rx.recv().await {
                 let rockspec = build_dep_spec.downloaded_rock.rockspec();
                 let package = rockspec.package().clone();
-                let span = info_span!(
+                let span = tracing::info_span!(
                     "Installing build dependency",
                     package = package.to_string(),
                     version = rockspec.version().to_string()
@@ -653,6 +646,15 @@ fn build_dependencies_ready(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    name = "Installing",
+    level = "info",
+    skip_all,
+    fields(
+        package = rockspec_download.rockspec.package().to_string(),
+        version = rockspec_download.rockspec.version().to_string(),
+    ),
+)]
 async fn install_rockspec<T>(
     rockspec_download: DownloadedRockspec,
     src_rock_source: Option<SrcRockSource>,
@@ -670,12 +672,6 @@ where
 {
     let package = rockspec_download.rockspec.package().clone();
     let rockspec = rockspec_download.rockspec;
-    let span = info_span!(
-        "Installing",
-        package = package.to_string(),
-        version = rockspec.version().to_string(),
-    );
-    let _enter = span.enter();
     let source = rockspec_download.source;
 
     if let Some(BuildBackendSpec::LuaRock(_)) = &rockspec.build().current_platform().build_backend {
@@ -708,6 +704,15 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    name = "Installing (pre-built)",
+    level = "info",
+    skip_all,
+    fields(
+        package = rockspec_download.rockspec.package().to_string(),
+        version = rockspec_download.rockspec.version().to_string(),
+    ),
+)]
 async fn install_binary_rock(
     rockspec_download: DownloadedRockspec,
     packed_rock: Bytes,
@@ -721,13 +726,6 @@ async fn install_binary_rock(
 ) -> Result<LocalPackage, InstallError> {
     let rockspec = rockspec_download.rockspec;
     let package = rockspec.package().clone();
-    let span = span!(
-        tracing::Level::INFO,
-        "Installing (pre-built)",
-        package = package.to_string(),
-        version = rockspec.version().to_string(),
-    );
-    let _enter = span.enter();
     let pkg = BinaryRockInstall::new(
         &rockspec,
         rockspec_download.source,

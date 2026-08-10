@@ -8,7 +8,6 @@ use bon::Builder;
 use bytes::Bytes;
 use miette::Diagnostic;
 use thiserror::Error;
-use tracing::span;
 use url::{ParseError, Url};
 
 use crate::{
@@ -233,17 +232,17 @@ async fn download_rockspec(
     Ok(rockspec)
 }
 
+#[tracing::instrument(
+    name = "Downloading rock",
+    level = "info",
+    skip_all,
+    fields(package = package_req.to_string(),),
+)]
 async fn download_remote_rock(
     package_req: &PackageReq,
     package_db: &RemotePackageDB,
     config: &Config,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
-    let span = span!(
-        tracing::Level::INFO,
-        "Downloading rock",
-        package = package_req.to_string(),
-    );
-    let _enter = span.enter();
     let remote_package = package_db.find(package_req, None)?;
     match &remote_package.source {
         RemotePackageSource::LuarocksRockspec(url) => {
@@ -511,55 +510,59 @@ where
 {
     async fn download(self) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
         let args = self._build();
-        let package = args.package;
-
-        let span = span!(
-            tracing::Level::INFO,
-            "Downloading",
-            package = package.name().to_string(),
-            version = package.version().to_string(),
-            server = args.server_url.to_string(),
-        );
-
-        let _enter = span.enter();
-        let ext = args.ext;
-        let server_url = args.server_url;
-        let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
-        tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
-        let url = server_url.join(&full_rock_name)?;
-        let response = crate::reqwest::https_client(args.config)?
-            .get(url.clone())
-            .send()
-            .await?;
-        let bytes = if response.status().is_success() {
-            response.bytes().await
-        } else {
-            match args.fallback_ext {
-                Some(ext) => {
-                    let full_rock_name =
-                        mk_packed_rock_name(package.name(), package.version(), ext);
-                    let url = server_url.join(&full_rock_name)?;
-                    crate::reqwest::https_client(args.config)?
-                        .get(url.clone())
-                        .send()
-                        .await?
-                        .error_for_status()?
-                        .bytes()
-                        .await
-                }
-                None => response.error_for_status()?.bytes().await,
-            }
-        }?;
-        Ok(DownloadedPackedRockBytes {
-            name: package.name().clone(),
-            version: package.version().clone(),
-            bytes,
-            file_name: full_rock_name,
-            url,
-        })
+        download_impl(args).await
     }
 }
 
+#[tracing::instrument(
+    name = "Downloading",
+    level = "info",
+    skip_all,
+    fields(
+        package = args.package.name().to_string(),
+        version = args.package.version().to_string(),
+        server = args.server_url.to_string(),
+    ),
+)]
+async fn download_impl(
+    args: ArchiveDownload<'_>,
+) -> Result<DownloadedPackedRockBytes, DownloadSrcRockError> {
+    let package = args.package;
+    let ext = args.ext;
+    let server_url = args.server_url;
+    let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
+    tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
+    let url = server_url.join(&full_rock_name)?;
+    let response = crate::reqwest::https_client(args.config)?
+        .get(url.clone())
+        .send()
+        .await?;
+    let bytes = if response.status().is_success() {
+        response.bytes().await
+    } else {
+        match args.fallback_ext {
+            Some(ext) => {
+                let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
+                let url = server_url.join(&full_rock_name)?;
+                crate::reqwest::https_client(args.config)?
+                    .get(url.clone())
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .bytes()
+                    .await
+            }
+            None => response.error_for_status()?.bytes().await,
+        }
+    }?;
+    Ok(DownloadedPackedRockBytes {
+        name: package.name().clone(),
+        version: package.version().clone(),
+        bytes,
+        file_name: full_rock_name,
+        url,
+    })
+}
 fn mk_packed_rock_name(name: &PackageName, version: &PackageVersion, ext: &str) -> String {
     format!("{name}-{version}.{ext}")
 }

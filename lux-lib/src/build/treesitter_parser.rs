@@ -141,14 +141,17 @@ async fn install_queries(
     }
 }
 
-#[tracing::instrument(level = "trace")]
+#[tracing::instrument(
+    name = "Compiling tree-sitter parser",
+    level = "info",
+    skip_all,
+    fields(language = lang),
+)]
 async fn build_parser(
     build_dir: &Path,
     parser_dir: &Path,
     lang: &str,
 ) -> Result<(), TreesitterBuildError> {
-    let span = info_span!("Compiling tree-sitter parser", language = lang);
-    let _enter = span.enter();
     fs::tokio::create_dir_all(parser_dir).await?;
     let loader = tree_sitter_loader::Loader::with_parser_lib_path(build_dir.to_path_buf());
     let output_path = parser_dir.join(format!("{}.{}", lang, std::env::consts::DLL_EXTENSION));

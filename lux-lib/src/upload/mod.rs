@@ -16,7 +16,6 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_enum_str::Serialize_enum_str;
 use thiserror::Error;
-use tracing::span;
 use url::Url;
 
 #[cfg(feature = "gpgme")]
@@ -311,7 +310,12 @@ impl From<SignatureProtocol> for gpgme::Protocol {
     }
 }
 
-#[tracing::instrument(level = "trace", skip_all)]
+#[tracing::instrument(
+    name = "Uploading",
+    level = "info",
+    skip_all,
+    fields(project = args.project.toml().package().to_string()),
+)]
 async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError> {
     let project = args.project;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
@@ -319,12 +323,6 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     let protocol = args.sign_protocol;
     let config = args.config;
     let package_db = args.package_db;
-    let span = span!(
-        tracing::Level::INFO,
-        "Uploading",
-        package = project.toml().package().to_string(),
-    );
-    let _enter = span.enter();
 
     let client = crate::reqwest::https_client(args.config)?;
 

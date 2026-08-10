@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
-use tracing::{span, Instrument};
+use tracing::Instrument;
 
 use crate::{
     build::{RemotePackageSourceSpec, SrcRockSource},
@@ -262,6 +262,15 @@ async fn vendor_sources(
     .try_collect()
 }
 
+#[tracing::instrument(
+    name = "Vendoring source",
+    level = "info",
+    skip_all,
+    fields(
+        package = rockspec_download.rockspec.package().to_string(),
+        version = rockspec_download.rockspec.version().to_string(),
+    ),
+)]
 async fn vendor_rockspec_sources(
     vendor_dir: &Path,
     rockspec_download: DownloadedRockspec,
@@ -272,14 +281,6 @@ async fn vendor_rockspec_sources(
     let package = rockspec.package();
     let version = rockspec.version();
     let package_version_str = format!("{}@{}", package, version);
-
-    let span = span!(
-        tracing::Level::INFO,
-        "💼 Vendoring source",
-        package = package.to_string(),
-        version = version.to_string(),
-    );
-    let _enter = span.enter();
 
     let source_spec = match src_rock_source {
         Some(src_rock_source) => RemotePackageSourceSpec::SrcRock(src_rock_source),
@@ -317,6 +318,15 @@ async fn vendor_rockspec_sources(
     Ok(())
 }
 
+#[tracing::instrument(
+    name = "Vendoring pre-built binary",
+    level = "info",
+    skip_all,
+    fields(
+        package = rockspec_download.rockspec.package().to_string(),
+        version = rockspec_download.rockspec.version().to_string(),
+    ),
+)]
 async fn vendor_binary_rock(
     vendor_dir: &Path,
     rockspec_download: DownloadedRockspec,
@@ -325,14 +335,6 @@ async fn vendor_binary_rock(
     let rockspec = rockspec_download.rockspec;
     let package = rockspec.package();
     let version = rockspec.version();
-
-    let span = span!(
-        tracing::Level::INFO,
-        "💼 Vendoring pre-built binary",
-        package = package.to_string(),
-        version = version.to_string(),
-    );
-    let _enter = span.enter();
 
     let file_name = format!("{}@{}.rock", package, version);
 

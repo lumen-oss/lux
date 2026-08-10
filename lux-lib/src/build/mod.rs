@@ -7,13 +7,12 @@ use crate::operations::{RemotePackageSourceMetadata, UnpackError};
 use crate::rockspec::{LuaVersionCompatibility, Rockspec};
 use crate::tree::{self, EntryType, InstallTree, TreeError};
 use bytes::Bytes;
-use path_slash::PathBufExt;
 use std::collections::HashMap;
 use std::fs::DirEntry;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::{io, path::Path};
-use tracing::{span, Instrument};
+use tracing::Instrument;
 
 use crate::{
     config::Config,
@@ -108,8 +107,7 @@ where
 {
     pub async fn build(self) -> Result<LocalPackage, BuildError> {
         let build = self._build();
-        let span = span!(
-            tracing::Level::INFO,
+        let span = tracing::info_span!(
             "Building",
             package = build.rockspec.package().to_string(),
             version = build.rockspec.version().to_string(),
@@ -245,7 +243,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
 ) -> Result<(), BuildError> {
     let install_spec = &rockspec.build().current_platform().install;
     {
-        let span = span!(tracing::Level::INFO, "Copying Lua modules");
+        let span = tracing::info_span!("Copying Lua modules");
         let _enter = span.enter();
         for (target, source) in &install_spec.lua {
             let _enter = span.enter();
@@ -254,16 +252,18 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         }
     }
     {
-        let span = span!(tracing::Level::INFO, "Compiling C libraries");
+        let span = tracing::info_span!("Compiling C libraries");
         let _enter = span.enter();
         for (target, source) in &install_spec.lib {
             let absolute_source = build_dir.join(source);
             let resolved_target = output_paths.lib.join(target);
-            fs::tokio::copy(absolute_source, resolved_target).await?;
+            fs::tokio::copy(absolute_source, resolved_target)
+                .instrument(tracing::trace_span!("copying target"))
+                .await?;
         }
     }
     if entry_type.is_entrypoint() {
-        let span = span!(tracing::Level::INFO, "Installing binaries");
+        let span = tracing::info_span!("Installing binaries");
         let _enter = span.enter();
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
@@ -275,6 +275,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                 deploy_spec,
                 config,
             )
+            .instrument(tracing::trace_span!("installing binary"))
             .await
             .map_err(|err| BuildError::InstallBinary {
                 file_name: target.clone(),
@@ -283,22 +284,19 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         }
     }
     if !install_spec.conf.is_empty() {
-        let span = span!(tracing::Level::INFO, "Copying configuration files");
+        let span = tracing::info_span!("Copying configuration files");
         let _enter = span.enter();
         for (target, source) in &install_spec.conf {
-            let span = span!(
-                tracing::Level::TRACE,
-                "Copying configuration file",
-                source = source.to_slash_lossy().to_string(),
-                target,
-            );
-            let _enter = span.enter();
             let absolute_source = build_dir.join(source);
             let target = output_paths.conf.join(target);
             if let Some(parent_dir) = target.parent() {
-                fs::tokio::create_dir_all(parent_dir).await?;
+                fs::tokio::create_dir_all(parent_dir)
+                    .instrument(tracing::trace_span!("creating configuration directory"))
+                    .await?;
             }
-            fs::tokio::copy(absolute_source, target).await?;
+            fs::tokio::copy(absolute_source, target)
+                .instrument(tracing::trace_span!("copying configuration file"))
+                .await?;
         }
     }
     Ok(())
