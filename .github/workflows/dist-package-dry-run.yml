@@ -21,10 +21,19 @@ env:
 
 jobs:
   dist-package-dry-run:
-    name: dist-package dry-run
+    name: ${{ matrix.target }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+          - target: aarch64-apple-darwin
+            os: macos-15
     continue-on-error: true
     timeout-minutes: 120
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -32,17 +41,46 @@ jobs:
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Install build dependencies
+      - name: "Setup environment for MSVC"
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
+        if: endsWith(matrix.target, 'windows-msvc')
+
+      - name: "Setup environment for aarch64-darwin"
+        # lux-lua needs this to build on darwin
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -C link-arg=-undefined -C link-arg=dynamic_lookup" >> "${GITHUB_ENV}"
+        if: startsWith(matrix.target, 'aarch64-apple-darwin')
+
+      - name: Install MSVC Compiler Toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+        if: "startsWith(matrix.os, 'windows')"
+
+      - name: Install build dependencies (Linux)
+        if: "startsWith(matrix.os, 'ubuntu')"
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgpgme11-dev \
             libgpg-error-dev \
 
-      - name: Build binary distributions
+      - name: Install build dependencies (macOS)
+        if: "startsWith(matrix.os, 'macos')"
+        run: brew install gpgme
+
+      - name: Build binary distributions (*nix)
+        if: "!startsWith(matrix.os, 'windows')"
         run: |
           cargo xtask dist-package-dry-run
         env:
           SYSTEM_DEPS_LINK: static
           LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
           LUX_SIGN_PRIVATE_KEY_PASS: ${{ secrets.LUX_SIGN_PRIVATE_KEY_PASS }}
+
+      - name: Build binary distributions (Windows)
+        if: "startsWith(matrix.os, 'windows')"
+        run: |
+          cargo xtask dist-package-dry-run
+        env:
+          SYSTEM_DEPS_LINK: static
+          LUX_SIGN_PRIVATE_KEY: ${{ secrets.LUX_SIGN_PRIVATE_KEY }}
+          LUX_SIGN_PRIVATE_KEY_PASS: ${{ secrets.LUX_SIGN_PRIVATE_KEY_PASS }}
+

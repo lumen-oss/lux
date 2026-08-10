@@ -30,8 +30,14 @@ fn try_main() -> Result<(), DynError> {
         // Assume that the user wants to build the release version
         // when trying to build the distributed version.
         Some("dist") => dist(true)?,
-        Some("dist-man") => dist_man()?,
-        Some("dist-completions") => dist_completions()?,
+        Some("dist-man") => dist_man(&BuildOpts {
+            release: false,
+            vendored: true,
+        })?,
+        Some("dist-completions") => dist_completions(&BuildOpts {
+            release: false,
+            vendored: true,
+        })?,
         Some("dist-package") => dist_package(BuildOpts {
             release: true,
             vendored: true,
@@ -40,11 +46,11 @@ fn try_main() -> Result<(), DynError> {
             release: false,
             vendored: true,
         })?,
-        Some("build") => build(BuildOpts {
+        Some("build") => build(&BuildOpts {
             release: false,
             vendored: false,
         })?,
-        Some("build-release") => build(BuildOpts {
+        Some("build-release") => build(&BuildOpts {
             release: true,
             vendored: false,
         })?,
@@ -72,12 +78,13 @@ LUA_LIB_DIR         when set, overrides the path to the directory containing the
 }
 
 fn dist(release: bool) -> Result<(), DynError> {
-    build(BuildOpts {
+    let opts = BuildOpts {
         release,
         vendored: false,
-    })?;
-    dist_man()?;
-    dist_completions()
+    };
+    build(&opts)?;
+    dist_man(&opts)?;
+    dist_completions(&opts)
 }
 
 #[derive(Clone)]
@@ -86,7 +93,7 @@ struct BuildOpts {
     vendored: bool,
 }
 
-fn build(opts: BuildOpts) -> Result<(), DynError> {
+fn build(opts: &BuildOpts) -> Result<(), DynError> {
     let profile = if opts.release { "release" } else { "debug" };
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
@@ -170,18 +177,24 @@ fn build(opts: BuildOpts) -> Result<(), DynError> {
     Ok(())
 }
 
-fn lx(args: Vec<String>) -> Result<(), DynError> {
+fn lx(lx_args: Vec<String>, opts: &BuildOpts) -> Result<(), DynError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let args = vec![
+    let mut args = vec![
         "--locked".into(),
         "run".into(),
-        "--bin".into(),
-        "lx".into(),
-        "--".into(),
-    ]
-    .into_iter()
-    .chain(args)
-    .collect::<Vec<_>>();
+        "--no-default-features".into(),
+    ];
+
+    if opts.vendored {
+        args.push("--features".into());
+        args.push("vendored".into());
+    }
+
+    args.push("--bin".into());
+    args.push("lx".into());
+    args.push("--".into());
+
+    args = args.into_iter().chain(lx_args).collect::<Vec<_>>();
 
     let status = Command::new(cargo)
         .current_dir(project_root())
@@ -195,22 +208,28 @@ fn lx(args: Vec<String>) -> Result<(), DynError> {
     Ok(())
 }
 
-fn dist_man() -> Result<(), DynError> {
-    lx(vec![
-        "util".into(),
-        "man".into(),
-        "--target-dir".into(),
-        dist_dir().to_string_lossy().to_string(),
-    ])
+fn dist_man(opts: &BuildOpts) -> Result<(), DynError> {
+    lx(
+        vec![
+            "util".into(),
+            "man".into(),
+            "--target-dir".into(),
+            dist_dir().to_string_lossy().to_string(),
+        ],
+        opts,
+    )
 }
 
-fn dist_completions() -> Result<(), DynError> {
-    lx(vec![
-        "util".into(),
-        "completion".into(),
-        "--target-dir".into(),
-        dist_dir().to_string_lossy().to_string(),
-    ])
+fn dist_completions(opts: &BuildOpts) -> Result<(), DynError> {
+    lx(
+        vec![
+            "util".into(),
+            "completion".into(),
+            "--target-dir".into(),
+            dist_dir().to_string_lossy().to_string(),
+        ],
+        opts,
+    )
 }
 
 #[derive(Deserialize)]
@@ -253,11 +272,11 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
         )?;
     }
     println!("building lux-cli...");
-    build(opts.clone())?;
+    build(&opts)?;
     println!("building man pages...");
-    dist_man()?;
+    dist_man(&opts)?;
     println!("building shell completions...");
-    dist_completions()?;
+    dist_completions(&opts)?;
     let project_root = project_root();
     let manifest_path = project_root.join("Cargo.toml");
     if !manifest_path.is_file() {
