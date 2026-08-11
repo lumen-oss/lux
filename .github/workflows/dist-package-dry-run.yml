@@ -42,7 +42,8 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: "Setup environment for MSVC"
-        run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
+        # mirrors .cargo/config.toml [target.x86_64-pc-windows-msvc] rustflags
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static -C link-arg=/STACK:8388608" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
 
       - name: "Setup environment for aarch64-darwin"
