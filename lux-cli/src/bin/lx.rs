@@ -32,8 +32,7 @@ use tracing_subscriber::{
 use lux_cli::utils::error::clap_to_miette;
 
 const DEFAULT_USER_AGENT: &str = concat!("lux/", env!("CARGO_PKG_VERSION"));
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         Box::new(
             MietteHandlerOpts::new()
@@ -162,59 +161,76 @@ async fn main() -> Result<()> {
             .init();
     }
 
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .into_diagnostic()?;
+
     match cli.command {
-        Commands::Check(check_args) => check::check(check_args, config).await?,
-        Commands::Search(search_data) => search::search(search_data, config).await?,
-        Commands::Download(download_data) => download::download(download_data, config).await?,
+        Commands::Check(check_args) => rt.block_on(check::check(check_args, config))?,
+        Commands::Search(search_data) => rt.block_on(search::search(search_data, config))?,
+        Commands::Download(download_data) => {
+            rt.block_on(download::download(download_data, config))?
+        }
         Commands::Debug(debug) => match debug {
-            Debug::FetchRemote(unpack_data) => fetch::fetch_remote(unpack_data, config).await?,
-            Debug::Unpack(unpack_data) => unpack::unpack(unpack_data, config).await?,
-            Debug::UnpackRemote(unpack_data) => unpack::unpack_remote(unpack_data, config).await?,
+            Debug::FetchRemote(unpack_data) => {
+                rt.block_on(fetch::fetch_remote(unpack_data, config))?
+            }
+            Debug::Unpack(unpack_data) => rt.block_on(unpack::unpack(unpack_data, config))?,
+            Debug::UnpackRemote(unpack_data) => {
+                rt.block_on(unpack::unpack_remote(unpack_data, config))?
+            }
             Debug::Project(debug_project) => project::debug_project(debug_project)?,
             Debug::Toolchains(tool_args) => debug::toolchains::check_toolchains(tool_args)?,
         },
         Commands::Dist(dist_data) => match dist_data {
-            Dist::FlatArchive(archive) => dist::dist_archive(archive, config).await?,
-            Dist::Bin(bin) => dist::bin(bin, config).await?,
+            Dist::FlatArchive(archive) => rt.block_on(dist::dist_archive(archive, config))?,
+            Dist::Bin(bin) => rt.block_on(dist::bin(bin, config))?,
         },
         Commands::New(project_data) => {
-            project::write_project_rockspec(project_data, config).await?
+            rt.block_on(project::write_project_rockspec(project_data, config))?
         }
         Commands::Build(build_data) => {
-            build::build(build_data, config).await?;
+            rt.block_on(build::build(build_data, config))?;
         }
         Commands::List(list_data) => list::list_installed(list_data, config)?,
-        Commands::Lua(run_lua) => run_lua::run_lua(run_lua, config).await?,
-        Commands::Install(install_data) => install::install(install_data, config).await?,
+        Commands::Lua(run_lua) => rt.block_on(run_lua::run_lua(run_lua, config))?,
+        Commands::Install(install_data) => rt.block_on(install::install(install_data, config))?,
         Commands::InstallRockspec(install_data) => {
-            install_rockspec::install_rockspec(install_data, config).await?
+            rt.block_on(install_rockspec::install_rockspec(install_data, config))?
         }
-        Commands::Outdated(outdated) => outdated::outdated(outdated, config).await?,
-        Commands::InstallLua => install_lua::install_lua(config).await?,
+        Commands::Outdated(outdated) => rt.block_on(outdated::outdated(outdated, config))?,
+        Commands::InstallLua => rt.block_on(install_lua::install_lua(config))?,
         Commands::Fmt(fmt_args) => format::format(fmt_args, config)?,
-        Commands::Purge => purge::purge(config).await?,
-        Commands::Remove(remove_args) => remove::remove(remove_args, config).await?,
-        Commands::Exec(run_args) => exec::exec(run_args, config).await?,
-        Commands::Test(test) => test::test(test, config).await?,
-        Commands::Update(update_args) => update::update(update_args, config).await?,
-        Commands::Info(info_data) => info::info(info_data, config).await?,
-        Commands::Lint(lint_args) => lint::lint(lint_args, config).await?,
-        Commands::Path(path_data) => path::path(path_data, config).await?,
-        Commands::Pin(pin_data) => pin::set_pinned_state(pin_data, config, Pinned).await?,
-        Commands::Unpin(pin_data) => pin::set_pinned_state(pin_data, config, Unpinned).await?,
-        Commands::Upload(upload_data) => upload::upload(upload_data, config).await?,
-        Commands::Add(add_data) => add::add(add_data, config).await?,
+        Commands::Purge => rt.block_on(purge::purge(config))?,
+        Commands::Remove(remove_args) => rt.block_on(remove::remove(remove_args, config))?,
+        Commands::Exec(run_args) => rt.block_on(exec::exec(run_args, config))?,
+        Commands::Test(test) => rt.block_on(test::test(test, config))?,
+        Commands::Update(update_args) => rt.block_on(update::update(update_args, config))?,
+        Commands::Info(info_data) => rt.block_on(info::info(info_data, config))?,
+        Commands::Lint(lint_args) => rt.block_on(lint::lint(lint_args, config))?,
+        Commands::Path(path_data) => rt.block_on(path::path(path_data, config))?,
+        Commands::Pin(pin_data) => rt.block_on(pin::set_pinned_state(pin_data, config, Pinned))?,
+        Commands::Unpin(pin_data) => {
+            rt.block_on(pin::set_pinned_state(pin_data, config, Unpinned))?
+        }
+        Commands::Upload(upload_data) => rt.block_on(upload::upload(upload_data, config))?,
+        Commands::Add(add_data) => rt.block_on(add::add(add_data, config))?,
         Commands::Config(config_cmd) => config::config(config_cmd, config)?,
-        Commands::Doc(doc_args) => doc::doc(doc_args, config).await?,
-        Commands::Pack(pack_args) => pack::pack(pack_args, config).await?,
-        Commands::Uninstall(uninstall_data) => uninstall::uninstall(uninstall_data, config).await?,
-        Commands::Util(util) => util::util(util, config).await?,
-        Commands::Vendor(vendor_args) => vendor::vendor(vendor_args, config).await?,
+        Commands::Doc(doc_args) => rt.block_on(doc::doc(doc_args, config))?,
+        Commands::Pack(pack_args) => rt.block_on(pack::pack(pack_args, config))?,
+        Commands::Uninstall(uninstall_data) => {
+            rt.block_on(uninstall::uninstall(uninstall_data, config))?
+        }
+        Commands::Util(util) => rt.block_on(util::util(util, config))?,
+        Commands::Vendor(vendor_args) => rt.block_on(vendor::vendor(vendor_args, config))?,
         Commands::Which(which_args) => which::which(which_args, config)?,
-        Commands::Run(run_args) => run::run(run_args, config).await?,
-        Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data).await?,
-        Commands::Shell(data) => shell::shell(data, config).await?,
-        Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
+        Commands::Run(run_args) => rt.block_on(run::run(run_args, config))?,
+        Commands::GenerateRockspec(data) => {
+            rt.block_on(generate_rockspec::generate_rockspec(data))?
+        }
+        Commands::Shell(data) => rt.block_on(shell::shell(data, config))?,
+        Commands::Sync(sync_args) => rt.block_on(sync::sync(sync_args, config))?,
     }
     Ok(())
 }
