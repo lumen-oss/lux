@@ -22,7 +22,7 @@ base32 = "0.5"
 clap = { version = "4.6", features = ["derive"] }
 edit = { version = "0.1", features = ["quoted-env"] }
 emmylua_check = { version = "0.23", features = [] }
-emmylua_formatter = { version = "0.24", features = [] }
+emmylua_formatter = { version = "0.25", features = [] }
 emmylua_codestyle = "0.6.0"
 inquire = "0.9"
 miette = { workspace = true, features = ["fancy"] }
