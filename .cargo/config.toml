@@ -17,6 +17,8 @@ build-all = "--locked run --package xtask -- build"
 build-all-release = "--locked run --package xtask -- build-release"
 dist = "--locked run --package xtask -- dist"
 
+# IMPORTANT: When setting rustflags for a platform, make sure to also set them in CI/CD workflows.
+
 # lux-lua needs this to build in module mode
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
