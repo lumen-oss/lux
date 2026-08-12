@@ -35,8 +35,8 @@ pub enum ResolveDependenciesError {
     CyclicDependency(DependencyCycle),
     #[error("error processing resolved dependency:\n{0}")]
     ChannelSend(String),
-    #[error("error fetching vendored dependency {0}:\n{1}")]
-    FetchVendored(PackageReq, FetchVendoredError),
+    #[error("error fetching vendored dependency '{0}'")]
+    FetchVendored(PackageReq, #[source] FetchVendoredError),
 }
 
 #[derive(Debug)]

@@ -25,10 +25,10 @@ pub enum LuarocksBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
-    #[error("error instantiating luarocks compatibility layer:\n{0}")]
+    #[error("error instantiating luarocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocksError(#[from] LuaRocksError),
-    #[error("error running 'luarocks make':\n{0}")]
+    #[error("error running 'luarocks make'")]
     #[diagnostic(forward(0))]
     ExecLuaRocksError(#[from] ExecLuaRocksError),
     #[error(transparent)]
@@ -36,7 +36,7 @@ pub enum LuarocksBuildError {
     Tree(#[from] TreeError),
     #[error("{0}")] // We don't know the concrete error type
     Rockspec(String),
-    #[error("error installing luarocks compatibility layer:\n{0}")]
+    #[error("error installing luarocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaVersion(#[from] LuaVersionError),
 }

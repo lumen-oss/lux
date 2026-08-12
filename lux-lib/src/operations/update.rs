@@ -25,16 +25,16 @@ pub enum UpdateError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
-    #[error("failed to update rock: {0}")]
+    #[error("failed to update rock")]
     #[diagnostic(forward(0))]
     Install(#[from] InstallError),
-    #[error("failed to remove old rock: {0}")]
+    #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
-    #[error("error initialising remote package DB:\n{0}")]
+    #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
-    #[error("error loading the workspace:\n{0}")]
+    #[error("error loading the workspace")]
     #[diagnostic(forward(0))]
     Workspace(#[from] WorkspaceError),
     #[error(transparent)]
@@ -45,10 +45,10 @@ pub enum UpdateError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
-    #[error("error initialising the workspace install tree:\n{0}")]
+    #[error("error initialising the workspace install tree")]
     #[diagnostic(forward(0))]
     WorkspaceTree(#[from] WorkspaceTreeError),
-    #[error("error syncing the workspace install tree:\n{0}")]
+    #[error("error syncing the workspace install tree")]
     #[diagnostic(forward(0))]
     Sync(#[from] SyncError),
 }

@@ -18,12 +18,12 @@ pub enum TreesitterBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
-    #[error("invalid TREE_SITTER_LANGUAGE_VERSION: {0}")]
+    #[error("invalid TREE_SITTER_LANGUAGE_VERSION")]
     #[diagnostic(help(
         "check the value of the TREE_SITTER_LANGUAGE_VERSION environment variable."
     ))]
     ParseAbiVersion(#[from] ParseIntError),
-    #[error("error generating tree-sitter grammar: {0}")]
+    #[error("error generating tree-sitter grammar")]
     #[diagnostic(help("check the grammar source files for errors."))]
     Generate(#[from] GenerateError),
     #[error("error compiling the tree-sitter grammar: {0}")]

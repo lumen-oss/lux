@@ -132,7 +132,7 @@ type InstallWorkerOutput = Result<(LocalPackageId, (LocalPackage, tree::EntryTyp
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum InstallError {
-    #[error("unable to resolve dependencies:\n{0}")]
+    #[error("unable to resolve dependencies")]
     #[diagnostic(forward(0))]
     ResolveDependencies(#[from] ResolveDependenciesError),
     #[error(transparent)]
@@ -150,21 +150,21 @@ pub enum InstallError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
-    #[error("error instantiating LuaRocks compatibility layer:\n{0}")]
+    #[error("error instantiating LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocks(#[from] LuaRocksError),
-    #[error("error installing LuaRocks compatibility layer:\n{0}")]
+    #[error("error installing LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocksInstall(#[from] LuaRocksInstallError),
     #[error("failed to build {0}: {1}")]
     Build(PackageName, BuildError),
-    #[error("failed to install build depencency {0}:\n{1}")]
-    BuildDependency(PackageName, BuildError),
-    #[error("error initialising remote package DB:\n{0}")]
+    #[error("failed to install build depencency {0}")]
+    BuildDependency(PackageName, #[source] BuildError),
+    #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
-    #[error("failed to install pre-built rock {0}:\n{1}")]
-    InstallBinaryRock(PackageName, InstallBinaryRockError),
+    #[error("failed to install pre-built rock {0}")]
+    InstallBinaryRock(PackageName, #[source] InstallBinaryRockError),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
     #[error("install worker panicked")]

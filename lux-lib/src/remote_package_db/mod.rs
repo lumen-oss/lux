@@ -39,7 +39,7 @@ pub enum SearchError {
     RockNotFound(PackageReq),
     #[error("no rock that matches '{0}' found in the lockfile.")]
     RockNotFoundInLockfile(PackageReq),
-    #[error("error when pulling manifest:\n{0}")]
+    #[error("error when pulling manifest")]
     #[diagnostic(forward(0))]
     Manifest(#[from] ManifestError),
 }

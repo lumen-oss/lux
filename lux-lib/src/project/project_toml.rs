@@ -139,10 +139,10 @@ where
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ProjectTomlError {
-    #[error("error generating rockspec source:\n{0}")]
+    #[error("error generating rockspec source")]
     #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
-    #[error("error generating rockspec version:\n{0}")]
+    #[error("error generating rockspec version")]
     #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
     #[error("generated rockspec exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
@@ -169,10 +169,10 @@ pub enum LocalProjectTomlValidationError {
   lua = ">=5.1""#
     ))]
     NoLuaVersion,
-    #[error("could not decode the test spec:\n:{0}")]
+    #[error("could not decode the test spec")]
     #[diagnostic(forward(0))]
     TestSpecError(#[from] TestSpecDecodeError),
-    #[error("could not decode the build spec:\n:{0}")]
+    #[error("could not decode the build spec")]
     #[diagnostic(forward(0))]
     BuildSpecInternal(#[from] BuildSpecInternalError),
     #[error(transparent)]
@@ -180,7 +180,7 @@ pub enum LocalProjectTomlValidationError {
     PlatformValidation(#[from] PlatformValidationError),
     #[error("{}copy_directories cannot contain a rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error("could not decode the source spec:\n:{0}")]
+    #[error("could not decode the source spec")]
     #[diagnostic(forward(0))]
     RockSource(#[from] RockSourceError),
     #[error("duplicate dependencies: {0}")]
@@ -208,20 +208,20 @@ pub enum LocalProjectTomlValidationError {
         "#
     )]
     DependenciesContainLua,
-    #[error("error generating rockspec source:\n{0}")]
+    #[error("error generating rockspec source")]
     #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
-    #[error("error generating rockspec version:\n{0}")]
+    #[error("error generating rockspec version")]
     #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum RemoteProjectTomlValidationError {
-    #[error("error generating rockspec source:\n{0}")]
+    #[error("error generating rockspec source")]
     #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
-    #[error("error generating rockspec version:\n{0}")]
+    #[error("error generating rockspec version")]
     #[diagnostic(forward(0))]
     GenerateVersion(#[from] GenerateVersionError),
     #[error(transparent)]

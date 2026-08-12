@@ -55,13 +55,13 @@ pub enum GenerateSourceError {
     MissingReleaseUrl(String),
     #[error("need a `source.dev` (dev/scm URL) in lux.toml for dev versions.")]
     MissingDevUrl(String),
-    #[error("error substituting project source variables:\n{0}")]
+    #[error("error substituting project source variables")]
     #[diagnostic(forward(0))]
     VariableSubstitution(#[from] VariableSubstitutionError),
-    #[error("error parsing source URL from template:\n{0}")]
+    #[error("error parsing source URL from template")]
     #[diagnostic(forward(0))]
     SourceUrl(#[from] SourceUrlError),
-    #[error("error generating git source URL:\n{0}")]
+    #[error("error generating git source URL")]
     Git(#[from] git2::Error),
     #[error("refusing to generate nondeterministic rockspec with git source.\nSupply a `source.tag` parameter.")]
     NonDeterministicGitSource,
@@ -186,9 +186,9 @@ pub(crate) struct PackageVersionTemplate(Option<PackageVersion>);
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum GenerateVersionError {
-    #[error("error generating version from git repository metadata:\n{0}")]
+    #[error("error generating version from git repository metadata")]
     Git(#[from] git2::Error),
-    #[error("error parsing version from git ref:\n{0}")]
+    #[error("error parsing version from git ref")]
     #[diagnostic(forward(0))]
     PackageVersionParse(#[from] PackageVersionParseError),
 }

@@ -119,31 +119,31 @@ where
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum BuildError {
-    #[error("builtin build failed: {0}")]
+    #[error("builtin build failed")]
     #[diagnostic(forward(0))]
     Builtin(#[from] BuiltinBuildError),
-    #[error("cmake build failed: {0}")]
+    #[error("cmake build failed")]
     #[diagnostic(forward(0))]
     CMake(#[from] CMakeError),
-    #[error("make build failed: {0}")]
+    #[error("make build failed")]
     #[diagnostic(forward(0))]
     Make(#[from] MakeError),
-    #[error("command build failed: {0}")]
+    #[error("command build failed")]
     #[diagnostic(forward(0))]
     Command(#[from] CommandError),
-    #[error("rust-mlua build failed: {0}")]
+    #[error("rust-mlua build failed")]
     #[diagnostic(forward(0))]
     Rust(#[from] RustError),
-    #[error("treesitter-parser build failed: {0}")]
+    #[error("treesitter-parser build failed")]
     #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
-    #[error("luarocks build failed: {0}")]
+    #[error("luarocks build failed")]
     #[diagnostic(forward(0))]
     LuarocksBuild(#[from] LuarocksBuildError),
-    #[error("building from rock source failed: {0}")]
+    #[error("building from rock source failed")]
     #[diagnostic(forward(0))]
     SourceBuild(#[from] SourceBuildError),
-    #[error("IO operation failed: {0}")]
+    #[error("IO operation failed")]
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -182,10 +182,10 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
         expected: Integrity,
         actual: Integrity,
     },
-    #[error("failed to unpack src.rock:\n{0}")]
+    #[error("failed to unpack src.rock")]
     #[diagnostic(forward(0))]
     UnpackSrcRock(UnpackError),
-    #[error("failed to fetch rock source:\n{0}")]
+    #[error("failed to fetch rock source")]
     #[diagnostic(forward(0))]
     FetchSrcError(#[from] FetchSrcError),
     #[error("failed to install binary '{file_name}'")]

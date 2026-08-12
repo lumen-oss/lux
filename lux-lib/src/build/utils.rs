@@ -142,7 +142,7 @@ ensure the C compiler has access to the required include paths."#
 if no C compiler was found, run `lx debug toolchains` to verify your build tools."#
     ))]
     Compilation(#[from] cc::Error),
-    #[error("error compiling C files (linking failed):\n{0}")]
+    #[error("error compiling C files (linking failed)")]
     #[diagnostic(forward(0))]
     Link(#[from] LinkCModulesError),
 }
@@ -310,19 +310,19 @@ pub enum CompileCModulesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
-    #[error("failed to compile intermediates from C modules: {0}")]
+    #[error("failed to compile intermediates from C modules")]
     #[diagnostic(help(
         r#"check the compiler output above for missing headers or syntax errors.
 ensure the C compiler has access to the required include paths."#
     ))]
-    CompileIntermediates(cc::Error),
-    #[error("error compiling C modules (compilation failed):\n{0}")]
+    CompileIntermediates(#[source] cc::Error),
+    #[error("error compiling C modules (compilation failed)")]
     #[diagnostic(help(
         r#"check the compiler output above for details.
 if no C compiler was found, run `lx debug toolchains` to verify your build tools."#
     ))]
     Compilation(#[from] cc::Error),
-    #[error("error compiling C modules (linking failed):\n{0}")]
+    #[error("error compiling C modules (linking failed)")]
     #[diagnostic(forward(0))]
     Link(#[from] LinkCModulesError),
     #[error(transparent)]
@@ -333,14 +333,14 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum LinkCModulesError {
-    #[error("IO operation failed while linking C modules:\n{0}")]
+    #[error("IO operation failed while linking C modules")]
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
     #[error(transparent)]
     CC(#[from] cc::Error),
-    #[error("error compiling C modules (output validation failed): {0}")]
+    #[error("error compiling C modules (output validation failed)")]
     #[diagnostic(forward(0))]
     OutputValidation(#[from] OutputValidationError),
     #[error("compiling C modules succeeded, but the expected library {0} was not created")]

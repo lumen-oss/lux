@@ -91,7 +91,7 @@ pub enum DetectLuaVersionError {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum LuaInstallationError {
-    #[error("could not find a Lua installation and failed to build Lua from source:\n{0}")]
+    #[error("could not find a Lua installation and failed to build Lua from source")]
     #[diagnostic(forward(0))]
     Build(#[from] BuildLuaError),
     #[error(transparent)]

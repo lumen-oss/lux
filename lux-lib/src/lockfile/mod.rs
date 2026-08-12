@@ -551,7 +551,7 @@ impl From<PackageVersionReq> for LockConstraint {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum LockConstraintParseError {
-    #[error("Invalid constraint in LuaPackage: {0}")]
+    #[error("Invalid constraint in LuaPackage")]
     #[diagnostic(forward(0))]
     LockConstraintParseError(#[from] PackageVersionReqError),
 }
@@ -785,10 +785,10 @@ pub enum LockfileError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
-    #[error("error parsing lockfile from JSON: {0}")]
-    ParseJson(serde_json::Error),
-    #[error("error writing lockfile to JSON: {0}")]
-    WriteJson(serde_json::Error),
+    #[error("error parsing lockfile from JSON")]
+    ParseJson(#[source] serde_json::Error),
+    #[error("error writing lockfile to JSON")]
+    WriteJson(#[source] serde_json::Error),
     #[error("attempt load to a lockfile that does not match the expected rock layout.")]
     MismatchedRockLayout,
 }

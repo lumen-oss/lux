@@ -36,25 +36,25 @@ pub enum SourceBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaRockspec(#[from] LuaRockspecError),
-    #[error("builtin build failed: {0}")]
+    #[error("builtin build failed")]
     #[diagnostic(forward(0))]
     Builtin(#[from] BuiltinBuildError),
-    #[error("cmake build failed: {0}")]
+    #[error("cmake build failed")]
     #[diagnostic(forward(0))]
     CMake(#[from] CMakeError),
-    #[error("make build failed: {0}")]
+    #[error("make build failed")]
     #[diagnostic(forward(0))]
     Make(#[from] MakeError),
-    #[error("command build failed: {0}")]
+    #[error("command build failed")]
     #[diagnostic(forward(0))]
     Command(#[from] CommandError),
-    #[error("rust-mlua build failed: {0}")]
+    #[error("rust-mlua build failed")]
     #[diagnostic(forward(0))]
     Rust(#[from] RustError),
-    #[error("treesitter-parser build failed: {0}")]
+    #[error("treesitter-parser build failed")]
     #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
-    #[error("cannot build from a project source that requires a luarocks build backend: {0}")]
+    #[error("cannot build from a project source that requires a luarocks build backend: '{0}'")]
     #[diagnostic(help(
         r#"lux does not support building from source with a luarocks build backend.
 Use a pre-built rock or a different build backend."#

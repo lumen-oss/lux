@@ -37,8 +37,8 @@ pub enum MakeError {
         stdout: String,
         stderr: String,
     },
-    #[error("failed to run `make` step: {0}")]
-    Io(io::Error),
+    #[error("failed to run `make` step")]
+    Io(#[source] io::Error),
     #[error("failed to run `make` step: '{0}' command not found!")]
     #[diagnostic(help("run `lx debug toolchains` to check available build tools."))]
     CommandNotFound(String),

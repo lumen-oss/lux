@@ -190,19 +190,19 @@ impl RemoteRockDownload {
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum DownloadRockspecError {
-    #[error("failed to download rockspec: {0}")]
+    #[error("failed to download rockspec")]
     #[diagnostic(help(
         "check your network connection and verify the package exists on the server."
     ))]
     Request(#[from] reqwest::Error),
-    #[error("failed to convert rockspec response: {0}")]
+    #[error("failed to convert rockspec response")]
     #[diagnostic(help(
         r#"the server returned a response that is not valid UTF-8.
 check your network connection and server configuration.
 if the issue persists, the server may be temporarily unavailable."#
     ))]
     ResponseConversion(#[from] FromUtf8Error),
-    #[error("error initialising remote package DB:\n{0}")]
+    #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error(transparent)]
@@ -339,7 +339,7 @@ pub enum SearchAndDownloadError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
-    #[error("UTF-8 conversion failed: {0}")]
+    #[error("UTF-8 conversion failed")]
     #[diagnostic(help(
         r#"the server returned a response that is not valid UTF-8.
 check your network connection and server configuration.
@@ -349,7 +349,7 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error(transparent)]
     #[diagnostic(transparent)]
     Rockspec(Box<LuaRockspecError>),
-    #[error("error initialising remote package DB:\n{0}")]
+    #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to read packed rock {0}:\n{1}")]
@@ -398,7 +398,7 @@ for local dependencies, use `path` in your lux.toml."#
         url("https://lux.lumen-labs.org/reference/lux-toml#local-dependencies")
     )]
     NonURLSource,
-    #[error("client error:\n{0}")]
+    #[error("client error")]
     #[diagnostic(help(
         "check your network connection and verify the package exists on the server."
     ))]
@@ -425,12 +425,12 @@ async fn search_and_download_src_rock(
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum DownloadSrcRockError {
-    #[error("failed to download source rock: {0}")]
+    #[error("failed to download source rock")]
     #[diagnostic(help(
         "check your network connection and verify the package exists on the server."
     ))]
     Request(#[from] reqwest::Error),
-    #[error("failed to parse source rock URL: {0}")]
+    #[error("failed to parse source rock URL")]
     Parse(#[from] ParseError),
 }
 

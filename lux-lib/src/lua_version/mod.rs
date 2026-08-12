@@ -37,7 +37,7 @@ pub enum LuaVersion {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum LuaVersionError {
-    #[error("unsupported Lua version: {0}")]
+    #[error("unsupported Lua version: '{0}'")]
     UnsupportedLuaVersion(PackageVersion),
 }
 

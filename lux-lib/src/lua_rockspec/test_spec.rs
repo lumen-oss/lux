@@ -38,7 +38,7 @@ pub enum TestSpecDecodeError {
 pub enum TestSpecError {
     #[error("could not auto-detect the test spec. Please add one to your lux.toml")]
     NoTestSpecDetected,
-    #[error("project validation failed:\n{0}")]
+    #[error("project validation failed")]
     #[diagnostic(forward(0))]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
 }

@@ -26,9 +26,9 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum ManifestLuaError {
-    #[error("failed to parse Lua manifest:\n{0}")]
+    #[error("failed to parse Lua manifest")]
     ExecutionError(#[from] ottavino::ExternError),
-    #[error("failed to deserialize Lua manifest:\n{0}")]
+    #[error("failed to deserialize Lua manifest")]
     DeserializationError(#[from] ottavino_util::serde::de::Error),
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     #[diagnostic(help(
