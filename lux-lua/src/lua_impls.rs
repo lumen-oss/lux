@@ -2911,19 +2911,6 @@ impl Typed for LockfileReadWriteLua {
     }
 }
 
-impl FromLua for WorkspaceLua {
-    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
-        match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<WorkspaceLua>()?.clone()),
-            v => Err(LuaError::FromLuaConversionError {
-                from: v.type_name(),
-                to: "WorkspaceLua".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-
 impl TypedUserData for LockfileReadWriteLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.add_method("version", |_, this, ()| Ok(this.0.version().to_owned()));
@@ -2970,6 +2957,19 @@ impl mlua::UserData for LockfileReadWriteLua {
 #[derive(Debug, Clone)]
 pub struct WorkspaceLua(pub Workspace);
 
+impl FromLua for WorkspaceLua {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value {
+            LuaValue::UserData(ud) => Ok(ud.borrow::<WorkspaceLua>()?.clone()),
+            v => Err(LuaError::FromLuaConversionError {
+                from: v.type_name(),
+                to: "WorkspaceLua".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+
 impl Typed for WorkspaceLua {
     fn ty() -> Type {
         Type::named("Workspace")
@@ -3015,6 +3015,7 @@ impl TypedUserData for WorkspaceLua {
             this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
         });
 
+        methods.param("config", "Lux config");
         methods.add_method("luarc_path", |_, this, config: ConfigLua| {
             Ok(this.0.luarc_path(&config.0).to_slash_lossy().into_owned())
         });
@@ -3207,7 +3208,7 @@ mod definitions_registry {
         PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
         PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
         RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutConfigLua,
-        RockLayoutLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua,
+        RockLayoutLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua, WorkspaceLua,
     };
     use crate::definitions::LuxDefinition;
 
@@ -3261,6 +3262,7 @@ mod definitions_registry {
         "LockfileGuard" => LockfileGuardLua,
         "LockfileReadWrite" => LockfileReadWriteLua,
         "Project" => ProjectLua,
+        "Workspace" => WorkspaceLua,
         "DownloadedRockspec" => DownloadedRockspecLua,
     }
 }
