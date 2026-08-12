@@ -159,7 +159,7 @@ pub enum SyncError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
-    #[error("failed to generate `.luarc.json`:\n{0}")]
+    #[error("failed to generate `.luarc.json`")]
     #[diagnostic(forward(0))]
     GenLuaRc(#[from] GenLuaRcError),
 }

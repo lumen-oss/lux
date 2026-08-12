@@ -24,13 +24,13 @@ pub enum ManifestFromServerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
-    #[error("failed to pull manifest:\n{0}")]
+    #[error("failed to pull manifest")]
     #[diagnostic(help(
         r#"check your network connection and server configuration.
 if the issue persists, the server may be temporarily unavailable."#
     ))]
     Request(#[from] reqwest::Error),
-    #[error("failed to parse manifest:\n{0}")]
+    #[error("failed to parse manifest")]
     #[diagnostic(help(
         r#"the server returned a manifest that is not valid UTF-8.
 check your network connection and server configuration.
@@ -38,16 +38,16 @@ if you are using a custom server, make sure it returns correctly formatted manif
 "#
     ))]
     FromUtf8(#[from] FromUtf8Error),
-    #[error("invalidate date received from server:\n{0}")]
+    #[error("invalidate date received from server")]
     InvalidDate(#[from] httpdate::Error),
-    #[error("non-ASCII characters returned in response header:\n{0}")]
+    #[error("non-ASCII characters returned in response header")]
     InvalidHeader(#[from] ToStrError),
-    #[error("error parsing manifest URL:\n{0}")]
+    #[error("error parsing manifest URL")]
     Url(#[from] url::ParseError),
-    #[error("failed to read manifest archive {0}:\n{1}")]
-    ZipRead(Url, zip::result::ZipError),
-    #[error("failed to unzip manifest file {0}:\n{1}")]
-    ZipExtract(Url, zip::result::ZipError),
+    #[error("failed to read manifest archive '{0}'")]
+    ZipRead(Url, #[source] zip::result::ZipError),
+    #[error("failed to unzip manifest file '{0}'")]
+    ZipExtract(Url, #[source] zip::result::ZipError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionUnset),

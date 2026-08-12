@@ -29,7 +29,7 @@ use crate::{
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum RunLuaError {
-    #[error("error running lua: {0}")]
+    #[error("error running lua")]
     #[diagnostic(forward(0))]
     LuaBinary(#[from] LuaBinaryError),
     #[error("failed to run {lua_cmd}: {source}")]

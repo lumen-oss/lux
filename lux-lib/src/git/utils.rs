@@ -9,15 +9,15 @@ pub enum GitError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
-    #[error("error initializing temporary bare git repository to fetch metadata: {0}")]
-    BareRepoInit(git2::Error),
-    #[error("error initializing remote repository '{0}' to fetch metadata: {1}")]
-    RemoteInit(String, git2::Error),
-    #[error("error fetching from remote repository '{0}': {1}")]
-    RemoteFetch(String, git2::Error),
-    #[error("error listing remote refs for '{0}': {1}")]
-    RemoteList(String, git2::Error),
-    #[error("could not determine latest tag or commit sha for {0}")]
+    #[error("error initializing temporary bare git repository to fetch metadata")]
+    BareRepoInit(#[source] git2::Error),
+    #[error("error initializing remote repository '{0}' to fetch metadata")]
+    RemoteInit(String, #[source] git2::Error),
+    #[error("error fetching from remote repository '{0}'")]
+    RemoteFetch(String, #[source] git2::Error),
+    #[error("error listing remote refs for '{0}'")]
+    RemoteList(String, #[source] git2::Error),
+    #[error("could not determine latest tag or commit sha for '{0}'")]
     NoTagOrCommitSha(String),
 }
 

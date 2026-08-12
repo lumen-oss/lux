@@ -58,7 +58,7 @@ pub struct VersionCheckResponse {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum ToolCheckError {
-    #[error("error parsing tool check URL:\n{0}")]
+    #[error("error parsing tool check URL")]
     #[diagnostic(help("check your server configuration"))]
     ParseError(#[from] url::ParseError),
     #[error("error sending HTTP request")]

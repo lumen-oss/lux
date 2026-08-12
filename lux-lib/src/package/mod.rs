@@ -305,7 +305,7 @@ impl DisplayAsLuaKV for BuildDependencies<'_> {
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PackageReqParseError {
-    #[error("could not parse dependency name from {0}")]
+    #[error("could not parse dependency name from '{0}'")]
     InvalidDependencyName(String),
     #[error("could not parse version requirement in '{str}': {error}")]
     InvalidPackageVersionReq {

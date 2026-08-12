@@ -35,13 +35,13 @@ pub enum InstallProjectError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaRocksInstall(#[from] LuaRocksInstallError),
-    #[error("error installind dependencies:\n{0}")]
+    #[error("error installind dependencies")]
     #[diagnostic(forward(0))]
     InstallDependencies(InstallError),
-    #[error("error installind build dependencies:\n{0}")]
+    #[error("error installind build dependencies")]
     #[diagnostic(forward(0))]
     InstallBuildDependencies(InstallError),
-    #[error("error building project:\n{0}")]
+    #[error("error building project")]
     #[diagnostic(forward(0))]
     Build(#[from] BuildError),
 }

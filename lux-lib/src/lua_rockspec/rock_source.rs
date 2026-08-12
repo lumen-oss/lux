@@ -259,7 +259,7 @@ const LUAROCKS_BUILD_RULES_URL: &str =
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-#[error("failed to parse source url: {0}")]
+#[error("failed to parse source url")]
 pub enum SourceUrlError {
     Io(#[from] io::Error),
     Git(#[from] RemoteGitUrlParseError),

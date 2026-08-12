@@ -40,7 +40,7 @@ pub enum PartialRockspecError {
     FuelLimitExceeded,
     #[error("field '{0}' should not be declared in extra.rockspec")]
     ExtraneousField(String),
-    #[error("error while parsing rockspec: {0}")]
+    #[error("error while parsing rockspec")]
     Lua(#[from] ottavino::ExternError),
     #[error(transparent)]
     Io(#[from] std::io::Error),

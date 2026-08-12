@@ -247,7 +247,7 @@ async fn run_project_tests(
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("error installing test dependencies: {0}")]
+#[error("error installing test dependencies")]
 #[diagnostic(forward(0))]
 pub enum InstallTestDependenciesError {
     WorkspaceTree(#[from] WorkspaceTreeError),

@@ -107,10 +107,10 @@ where
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum FetchSrcError {
-    #[error("failed to clone rock source:\n{0}")]
+    #[error("failed to clone rock source")]
     #[diagnostic(help("check your network connection and verify the git URL is correct."))]
     GitClone(#[from] git2::Error),
-    #[error("failed to parse git URL:\n{0}")]
+    #[error("failed to parse git URL")]
     #[diagnostic(forward(0))]
     GitUrlParse(#[from] RemoteGitUrlParseError),
     #[error(transparent)]
@@ -122,13 +122,13 @@ pub enum FetchSrcError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     FetchSrcRock(#[from] FetchSrcRockError),
-    #[error("unable to remove the '.git' directory:\n{0}")]
+    #[error("unable to remove the '.git' directory")]
     #[diagnostic(help(
         "check that no process is using the directory and you have write permissions."
     ))]
-    CleanGitDir(io::Error),
-    #[error("unable to compute hash:\n{0}")]
-    Hash(io::Error),
+    CleanGitDir(#[source] io::Error),
+    #[error("unable to compute hash")]
+    Hash(#[source] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),

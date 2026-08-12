@@ -25,9 +25,9 @@ pub(crate) struct RockManifest {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum RockManifestError {
-    #[error("could not parse rock_manifest: {0}")]
+    #[error("could not parse rock_manifest")]
     Piccolo(#[from] ottavino::ExternError),
-    #[error("could not deserialize rock_manifest: {0}")]
+    #[error("could not deserialize rock_manifest")]
     Serde(#[from] ottavino_util::serde::de::Error),
     #[error("rock_manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     #[diagnostic(help(

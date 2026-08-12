@@ -32,7 +32,7 @@ use super::rock_manifest::RockManifestError;
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum InstallBinaryRockError {
-    #[error("IO operation failed: {0}")]
+    #[error("IO operation failed")]
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -49,7 +49,7 @@ pub enum InstallBinaryRockError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
-    #[error("failed to unpack packed rock: {0}")]
+    #[error("failed to unpack packed rock")]
     Zip(#[from] zip::result::ZipError),
     #[error("rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1")]
     RockManifestNotFound,

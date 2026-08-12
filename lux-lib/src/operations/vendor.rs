@@ -68,13 +68,13 @@ pub enum VendorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
-    #[error("project validation failed:\n{0}")]
+    #[error("project validation failed")]
     #[diagnostic(forward(0))]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
-    #[error("error initialising remote package DB:\n{0}")]
+    #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
-    #[error("failed to resolve dependencies:\n{0}")]
+    #[error("failed to resolve dependencies")]
     #[diagnostic(forward(0))]
     ResolveDependencies(#[from] ResolveDependenciesError),
     #[error(transparent)]
@@ -82,10 +82,10 @@ pub enum VendorError {
     Fs(#[from] fs::FsError),
     #[error("failed to vendor Lua RockSpec:\n{0}")]
     LuaRockSpec(String),
-    #[error("failed to unpack src.rock:\n{0}")]
+    #[error("failed to unpack src.rock")]
     #[diagnostic(forward(0))]
     Unpack(#[from] UnpackError),
-    #[error("failed to fetch rock source:\n{0}")]
+    #[error("failed to fetch rock source")]
     #[diagnostic(forward(0))]
     FetchSrc(#[from] FetchSrcError),
 }

@@ -46,7 +46,7 @@ pub enum CommandError {
         err: shell_words::ParseError,
         command: String,
     },
-    #[error("cannot find a shell to execute the command:\n{0}")]
+    #[error("cannot find a shell to execute the command")]
     ShellNotFoundError(#[from] which::Error),
     #[error("error executing command:\n{command}\n\nerror: {err}")]
     Io { err: io::Error, command: String },

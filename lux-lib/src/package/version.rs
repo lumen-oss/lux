@@ -142,7 +142,7 @@ pub enum PackageVersionParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Specrev(#[from] SpecrevParseError),
-    #[error("failed to parse version: {0}")]
+    #[error("failed to parse version")]
     Version(#[from] Error),
 }
 

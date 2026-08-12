@@ -74,19 +74,19 @@ try reducing the number of dependencies or simplifying build instructions.
     },
     #[error("{}copy_directories cannot contain the rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
-    #[error("cannot create Lua rockspec with off-spec dependency: {0}")]
+    #[error("cannot create Lua rockspec with off-spec dependency")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::off_spec_dependency),
         url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
     )]
     OffSpecDependency(PackageName),
-    #[error("cannot create Lua rockspec with off-spec build dependency: {0}")]
+    #[error("cannot create Lua rockspec with off-spec build dependency")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::off_spec_build_dependency),
         url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
     )]
     OffSpecBuildDependency(PackageName),
-    #[error("cannot create Lua rockspec with off-spec test dependency: {0}")]
+    #[error("cannot create Lua rockspec with off-spec test dependency")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::off_spec_test_dependency),
         url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
@@ -680,7 +680,7 @@ where
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-#[error("invalid rockspec format: {0}")]
+#[error("invalid rockspec format")]
 pub struct InvalidRockspecFormat(String);
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

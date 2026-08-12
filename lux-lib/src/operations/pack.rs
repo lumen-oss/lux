@@ -56,7 +56,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
-#[error("failed to pack rock: {0}")]
+#[error("failed to pack rock")]
 pub enum PackError {
     Zip(#[from] zip::result::ZipError),
     Io(#[from] io::Error),
