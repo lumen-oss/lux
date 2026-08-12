@@ -145,7 +145,7 @@ pub enum SyncError {
     Integrity {
         package: PackageName,
         #[diagnostic_source]
-        err: LockfileIntegrityError,
+        source: LockfileIntegrityError,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -283,9 +283,9 @@ async fn do_sync(
         for (_, package) in &to_add {
             install_tree_lockfile
                 .validate_integrity(package)
-                .map_err(|err| SyncError::Integrity {
+                .map_err(|source| SyncError::Integrity {
                     package: package.name().clone(),
-                    err,
+                    source,
                 })?;
         }
     }

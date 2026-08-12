@@ -805,7 +805,7 @@ pub enum LockfileIntegrityError {
     )]
     #[diagnostic(help(
         r#"the maintainer may have force-uploaded a different rockspec.
-check the rockspec source, then rerun the command with `lx --no-lock` to update the hash.
+check the rockspec source, then rerun the command with `--no-lock` to update the hash.
 "#
     ))]
     RockspecIntegrityMismatch {
