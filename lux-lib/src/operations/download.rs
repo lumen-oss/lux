@@ -23,6 +23,7 @@ use crate::{
     },
     remote_package_db::{RemotePackageDB, RemotePackageDBError, SearchError},
     remote_package_source::RemotePackageSource,
+    reqwest::ClientExt,
     rockspec::Rockspec,
 };
 
@@ -430,6 +431,11 @@ pub enum DownloadSrcRockError {
         "check your network connection and verify the package exists on the server."
     ))]
     Request(#[from] reqwest::Error),
+    #[error("failed to download source rock")]
+    #[diagnostic(help(
+        "check your network connection and verify the package exists on the server."
+    ))]
+    RequestMiddleware(#[from] reqwest_middleware::Error),
     #[error("failed to parse source rock URL")]
     Parse(#[from] ParseError),
 }
@@ -531,9 +537,10 @@ async fn download_impl(
     let ext = args.ext;
     let server_url = args.server_url;
     let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
-    tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
+    tracing::debug!(message = format!("Downloading {full_rock_name}").as_str());
     let url = server_url.join(&full_rock_name)?;
     let response = crate::reqwest::https_client(args.config)?
+        .retrying(3)
         .get(url.clone())
         .send()
         .await?;
@@ -545,6 +552,7 @@ async fn download_impl(
                 let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
                 let url = server_url.join(&full_rock_name)?;
                 crate::reqwest::https_client(args.config)?
+                    .retrying(3)
                     .get(url.clone())
                     .send()
                     .await?

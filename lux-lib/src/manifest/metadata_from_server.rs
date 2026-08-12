@@ -10,6 +10,7 @@ use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 use crate::fs;
+use crate::reqwest::ClientExt;
 use url::Url;
 use zip::ZipArchive;
 
@@ -30,6 +31,12 @@ pub enum ManifestFromServerError {
 if the issue persists, the server may be temporarily unavailable."#
     ))]
     Request(#[from] reqwest::Error),
+    #[error("failed to pull manifest")]
+    #[diagnostic(help(
+        r#"check your network connection and server configuration.
+if the issue persists, the server may be temporarily unavailable."#
+    ))]
+    RequestMiddleware(#[from] reqwest_middleware::Error),
     #[error("failed to parse manifest")]
     #[diagnostic(help(
         r#"the server returned a manifest that is not valid UTF-8.
@@ -60,10 +67,11 @@ pub(super) async fn get_manifest(
     target: &Path,
     client: &Client,
 ) -> Result<String, ManifestFromServerError> {
-    let response = client.get(url.clone()).send().await?;
+    let response = client.retrying(10).get(url.clone()).send().await?;
     if response.status().is_client_error() {
         let fallback_url = fallback_unzipped_url(&url)?;
         let manifest_bytes = client
+            .retrying(10)
             .get(fallback_url)
             .send()
             .await?

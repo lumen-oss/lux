@@ -6,6 +6,7 @@ use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
 use crate::package::PackageSpec;
+use crate::reqwest::ClientExt;
 use crate::rockspec::Rockspec;
 use crate::{fs, operations};
 use auth_git2::{GitAuthenticator, Prompter};
@@ -88,6 +89,7 @@ where
             }
             Err(err) => match &fetch.rockspec.source().current_platform().source_spec {
                 RockSourceSpec::Git(_) | RockSourceSpec::Url(_) => {
+                    tracing::warn!("falling back to .src.rock download ({err})");
                     let package = PackageSpec::new(
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
@@ -122,6 +124,9 @@ pub enum FetchSrcError {
     #[error(transparent)]
     #[diagnostic(help("check your network connection."))]
     Request(#[from] reqwest::Error),
+    #[error(transparent)]
+    #[diagnostic(help("check your network connection."))]
+    RequestMiddleware(#[from] reqwest_middleware::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Unpack(#[from] UnpackError),
@@ -263,11 +268,12 @@ async fn fetch_src_impl<R: Rockspec>(
             }
         }
         RockSourceSpec::Url(url) => {
-            tracing::debug!(message = format!("📥 Downloading {url}").as_str());
+            tracing::debug!(message = format!("Downloading {url}").as_str());
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
             let response = crate::reqwest::http_client(config)?
+                .retrying(10)
                 .get(url.clone())
                 .send()
                 .await?
@@ -302,7 +308,7 @@ async fn fetch_src_impl<R: Rockspec>(
             }
         }
         RockSourceSpec::File(path) => {
-            tracing::debug!(message = format!("📋 Copying {}", path.display()).as_str());
+            tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {
                 recursive_copy_dir(&path.to_path_buf(), dest_dir).await?;
