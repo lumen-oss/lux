@@ -156,8 +156,8 @@ pub enum InstallError {
     #[error("error installing LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocksInstall(#[from] LuaRocksInstallError),
-    #[error("failed to build {0}: {1}")]
-    Build(PackageName, BuildError),
+    #[error("failed to build {0}")]
+    Build(PackageName, #[source] BuildError),
     #[error("failed to install build depencency {0}")]
     BuildDependency(PackageName, #[source] BuildError),
     #[error("error initialising remote package DB")]
