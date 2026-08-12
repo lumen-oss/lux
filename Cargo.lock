@@ -3478,7 +3478,7 @@ dependencies = [
 
 [[package]]
 name = "lux-cli"
-version = "0.40.6"
+version = "0.40.7"
 dependencies = [
  "assert_fs",
  "base32",
@@ -3621,7 +3621,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lsp"
-version = "0.40.6"
+version = "0.40.7"
 dependencies = [
  "eyre",
  "lux-lib",
@@ -3636,7 +3636,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lua"
-version = "0.40.6"
+version = "0.40.7"
 dependencies = [
  "assert_fs",
  "inventory",
