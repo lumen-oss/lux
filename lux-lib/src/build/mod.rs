@@ -223,7 +223,9 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
             Some(BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
                 treesitter_parser_spec.run(args).await?
             }
-            Some(BuildBackendSpec::LuaRock(_)) => luarocks::build(rockspec, args).await?,
+            Some(BuildBackendSpec::LuaRock(build_backend_name)) => {
+                luarocks::build(&build_backend_name, rockspec, args).await?
+            }
             Some(BuildBackendSpec::Source) => source::build(args).await?,
             None => BuildInfo::default(),
         },
