@@ -1,8 +1,8 @@
-use lux_lib::config::ConfigBuilder;
+use lux_lib::config::{tree::RockLayoutConfig, ConfigBuilder};
 use mlua::ExternalResult;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
-use crate::lua_impls::{ConfigBuilderLua, ConfigLua};
+use crate::lua_impls::{ConfigBuilderLua, ConfigLua, RockLayoutConfigLua};
 
 const DEFAULT_USER_AGENT: &str = concat!("lux-lua/", env!("CARGO_PKG_VERSION"));
 
@@ -37,6 +37,14 @@ if present, or otherwise by instantiating the default config"#,
         );
         methods.add_function("new", |_, ()| {
             ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
+        });
+        methods.document("Instantiate the default rock layout config");
+        methods.add_function("default_rock_layout", |_, ()| {
+            Ok(RockLayoutConfigLua(RockLayoutConfig::default()))
+        });
+        methods.document("Instantiate the a rock layout for Neovim plugins");
+        methods.add_function("nvim_rock_layout", |_, ()| {
+            Ok(RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()))
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
