@@ -92,10 +92,16 @@ where
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
                     );
-                    let metadata = FetchSrcRock::new(&package, fetch.dest_dir, fetch.config)
+                    match FetchSrcRock::new(&package, fetch.dest_dir, fetch.config)
                         .fetch()
-                        .await?;
-                    Ok(metadata)
+                        .await
+                    {
+                        Ok(metadata) => Ok(metadata),
+                        Err(fallback_err) => {
+                            tracing::error!("fallback .src.rock download failed: {fallback_err:?}");
+                            Err(err)
+                        }
+                    }
                 }
                 RockSourceSpec::File(_) => Err(err),
             },
