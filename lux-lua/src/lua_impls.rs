@@ -1112,16 +1112,6 @@ impl FromLua for RockLayoutConfigLua {
 }
 
 impl TypedUserData for RockLayoutConfigLua {
-    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
-        methods.document("Instantiate the default rock layout");
-        methods.add_function("new", |_, ()| {
-            Ok(RockLayoutConfigLua(RockLayoutConfig::default()))
-        });
-        methods.document("Instantiate the a rock layout for Neovim plugins");
-        methods.add_function("new_nvim_layout", |_, ()| {
-            Ok(RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()))
-        });
-    }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Template configuration for a rock's tree layout");
     }
