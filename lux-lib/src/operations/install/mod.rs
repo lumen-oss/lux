@@ -22,7 +22,7 @@ use crate::{
         build_dependencies_to_install, PackageInstallData, Resolve, ResolveDependenciesError,
     },
     package::{PackageName, PackageNameList, PackageReq},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError, RemotePackageDbIntegrityError},
+    remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::{self, InstallTree, Tree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
@@ -165,12 +165,6 @@ pub enum InstallError {
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to install pre-built rock {0}:\n{1}")]
     InstallBinaryRock(PackageName, InstallBinaryRockError),
-    #[error("integrity error for package '{package}'")]
-    Integrity {
-        package: PackageName,
-        #[diagnostic_source]
-        err: RemotePackageDbIntegrityError,
-    },
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
     #[error("install worker panicked")]
