@@ -1,4 +1,5 @@
 use git2::Repository;
+use lux_lib::config::Config;
 use lux_lib::git::url::RemoteGitUrl;
 use miette::{IntoDiagnostic, Result};
 use path_absolutize::Absolutize as _;
@@ -35,7 +36,10 @@ impl RepoMetadata {
 }
 
 /// Retrieves metadata for a given directory
-pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<RepoMetadata>> {
+pub async fn get_metadata_for(
+    directory: Option<&PathBuf>,
+    config: &Config,
+) -> Result<Option<RepoMetadata>> {
     let repo = match directory {
         Some(path) => Repository::open(path).into_diagnostic()?,
         None => Repository::open_from_env().into_diagnostic()?,
@@ -52,7 +56,14 @@ pub async fn get_metadata_for(directory: Option<&PathBuf>) -> Result<Option<Repo
 
         let repo = parsed_url.repo().to_string();
 
-        let octocrab = octocrab::instance();
+        let octocrab = match config.access_token("github.com") {
+            Some(token) => octocrab::OctocrabBuilder::new()
+                .personal_token(unsafe { token.password() })
+                .build()
+                .into_diagnostic()
+                .map(std::sync::Arc::new)?,
+            None => octocrab::instance(),
+        };
         let repo_handler = octocrab.repos(owner, repo);
 
         let contributors = repo_handler

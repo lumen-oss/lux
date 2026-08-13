@@ -23,6 +23,7 @@ use crate::{
     },
     remote_package_db::{RemotePackageDB, RemotePackageDBError, SearchError},
     remote_package_source::RemotePackageSource,
+    reqwest::{RequestBuilderExt, RequestError},
     rockspec::Rockspec,
 };
 
@@ -191,10 +192,8 @@ impl RemoteRockDownload {
 #[derive(Error, Debug, Diagnostic)]
 pub enum DownloadRockspecError {
     #[error("failed to download rockspec")]
-    #[diagnostic(help(
-        "check your network connection and verify the package exists on the server."
-    ))]
-    Request(#[from] reqwest::Error),
+    #[diagnostic(transparent)]
+    Request(#[from] RequestError),
     #[error("failed to convert rockspec response")]
     #[diagnostic(help(
         r#"the server returned a response that is not valid UTF-8.
@@ -208,6 +207,12 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error(transparent)]
     #[diagnostic(transparent)]
     DownloadSrcRock(#[from] DownloadSrcRockError),
+}
+
+impl From<reqwest::Error> for DownloadRockspecError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
 }
 
 /// Find and download a rockspec for a given package requirement
@@ -248,16 +253,20 @@ async fn download_remote_rock(
         RemotePackageSource::LuarocksRockspec(url) => {
             let package = &remote_package.package;
             let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
+            let url = url
+                .join(&rockspec_name)
+                .map_err(|source| SearchAndDownloadError::Parse {
+                    source,
+                    url: format!("{}/{}", url, rockspec_name),
+                })?;
             let bytes = crate::reqwest::https_client(config)?
-                .get(format!("{}/{}", url, rockspec_name))
+                .get(url.clone())
+                .apply_access_token(config, &url)
                 .send()
-                .await
-                .map_err(DownloadRockspecError::Request)?
-                .error_for_status()
-                .map_err(DownloadRockspecError::Request)?
+                .await?
+                .error_for_status()?
                 .bytes()
-                .await
-                .map_err(DownloadRockspecError::Request)?;
+                .await?;
             let content = String::from_utf8(bytes.into())?;
             let rockspec = DownloadedRockspec {
                 rockspec: RemoteLuaRockspec::new(&content)
@@ -327,6 +336,11 @@ async fn download_remote_rock(
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum SearchAndDownloadError {
+    #[error("failed to parse rock URL '{url}'")]
+    Parse {
+        source: url::ParseError,
+        url: String,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Search(#[from] SearchError),
@@ -399,10 +413,14 @@ for local dependencies, use `path` in your lux.toml."#
     )]
     NonURLSource,
     #[error("client error")]
-    #[diagnostic(help(
-        "check your network connection and verify the package exists on the server."
-    ))]
-    Request(#[from] reqwest::Error),
+    #[diagnostic(transparent)]
+    Request(#[from] RequestError),
+}
+
+impl From<reqwest::Error> for SearchAndDownloadError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
 }
 
 async fn search_and_download_src_rock(
@@ -426,12 +444,16 @@ async fn search_and_download_src_rock(
 #[derive(Error, Debug, Diagnostic)]
 pub enum DownloadSrcRockError {
     #[error("failed to download source rock")]
-    #[diagnostic(help(
-        "check your network connection and verify the package exists on the server."
-    ))]
-    Request(#[from] reqwest::Error),
+    #[diagnostic(transparent)]
+    Request(#[from] RequestError),
     #[error("failed to parse source rock URL")]
     Parse(#[from] ParseError),
+}
+
+impl From<reqwest::Error> for DownloadSrcRockError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
 }
 
 #[tracing::instrument(name = "Downloading src.rock", skip_all)]
@@ -535,6 +557,7 @@ async fn download_impl(
     let url = server_url.join(&full_rock_name)?;
     let response = crate::reqwest::https_client(args.config)?
         .get(url.clone())
+        .apply_access_token(args.config, &url)
         .send()
         .await?;
     let bytes = if response.status().is_success() {
@@ -546,6 +569,7 @@ async fn download_impl(
                 let url = server_url.join(&full_rock_name)?;
                 crate::reqwest::https_client(args.config)?
                     .get(url.clone())
+                    .apply_access_token(args.config, &url)
                     .send()
                     .await?
                     .error_for_status()?

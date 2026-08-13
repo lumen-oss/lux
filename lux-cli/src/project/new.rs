@@ -188,17 +188,18 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             target,
         } => {
             eprintln!("Fetching remote repository metadata...");
-            let repo_metadata = match github_metadata::get_metadata_for(Some(&target)).await {
-                Ok(value) => value.map_or_else(|| RepoMetadata::default(&target), Ok),
-                Err(_) => {
-                    tracing::info!(
-                        "Could not fetch remote repo metadata, defaulting to empty values."
-                    );
+            let repo_metadata =
+                match github_metadata::get_metadata_for(Some(&target), &config).await {
+                    Ok(value) => value.map_or_else(|| RepoMetadata::default(&target), Ok),
+                    Err(_) => {
+                        tracing::info!(
+                            "Could not fetch remote repo metadata, defaulting to empty values."
+                        );
 
-                    RepoMetadata::default(&target)
+                        RepoMetadata::default(&target)
+                    }
                 }
-            }
-            .into_diagnostic()?;
+                .into_diagnostic()?;
 
             eprintln!("✔ Fetched remote repository metadata.");
 
