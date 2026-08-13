@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.0](https://github.com/lumen-oss/lux/compare/v0.40.9...v0.41.0) `lux-cli` - 2026-08-13
+
+### Added
+- [**breaking**] `[access-tokens]` config option ([#1843](https://github.com/lumen-oss/lux/pull/1843))
+
 ## [0.40.9](https://github.com/lumen-oss/lux/compare/v0.40.8...v0.40.9) `lux-cli` - 2026-08-13
 
 ### Other
