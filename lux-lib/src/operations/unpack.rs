@@ -79,6 +79,7 @@ where
         // If the source is an archive, luarocks will pack the source archive and the rockspec.
         // So we need to unpack the source archive.
         if let Some((nested_archive_path, mime_type)) = get_single_archive_entry(&dest_dir)? {
+            tracing::debug!("nested archive path: {}", nested_archive_path.display());
             let file_name = nested_archive_path
                 .file_name()
                 .map(|os_str| os_str.to_string_lossy())
@@ -107,14 +108,17 @@ fn extract_archive<R: Read + Seek + Send>(
 ) -> Result<(), UnpackError> {
     match mime_type {
         Some("application/zip") => {
+            tracing::debug!("extracting zip archive");
             let mut archive = zip::ZipArchive::new(reader)?;
             archive.extract(dest_dir)?;
         }
         Some("application/x-tar") => {
+            tracing::debug!("extracting tar archive");
             let mut archive = tar::Archive::new(reader);
             archive.unpack(dest_dir)?;
         }
         Some("application/gzip") => {
+            tracing::debug!("extracting gzip archive");
             let mut bufreader = BufReader::new(reader);
 
             let extract_subdirectory =
@@ -195,13 +199,9 @@ fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)
         .filter_map(Result::ok)
         .filter_map(|f| {
             let f = f.path();
-            if f.extension()
-                .is_some_and(|ext| ext.to_string_lossy() != "rockspec")
-            {
-                Some(f)
-            } else {
-                None
-            }
+            f.extension()
+                .is_none_or(|ext| ext != "rockspec")
+                .then_some(f)
         })
         .collect_vec();
     if entries.len() != 1 {
@@ -228,9 +228,23 @@ fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)
 #[cfg(test)]
 mod tests {
     use assert_fs::TempDir;
-    use std::fs::File;
+    use std::{fs, fs::File, io::Write};
 
     use super::*;
+
+    fn make_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(Cursor::new(&mut buf));
+            let options = zip::write::SimpleFileOptions::default();
+            for (name, content) in entries {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(content).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        buf
+    }
 
     #[tokio::test]
     pub async fn test_unpack_src_rock() {
@@ -241,5 +255,36 @@ mod tests {
         let file = File::open(&test_rock_path).unwrap();
         let dest = TempDir::new().unwrap();
         unpack_src_rock(file, dest.to_path_buf()).await.unwrap();
+    }
+
+    #[test]
+    fn test_get_single_archive_entry_extracted_dir_without_dots() {
+        let dest = TempDir::new().unwrap();
+
+        fs::write(dest.path().join("foo-1.0-1.rockspec"), b"").unwrap();
+        fs::write(
+            dest.path().join("foo-1.0.zip"),
+            make_zip(&[("dummy.lua", b"println('hello')")]),
+        )
+        .unwrap();
+        fs::create_dir(dest.path().join("test_dir")).unwrap();
+
+        assert!(get_single_archive_entry(dest.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_get_single_archive_entry_nested_archive() {
+        let dest = TempDir::new().unwrap();
+
+        fs::write(dest.path().join("foo-1.0-1.rockspec"), b"").unwrap();
+        fs::write(
+            dest.path().join("foo-1.0.zip"),
+            make_zip(&[("dummy.lua", b"println('hello')")]),
+        )
+        .unwrap();
+
+        let result = get_single_archive_entry(dest.path()).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().0, dest.path().join("foo-1.0.zip"));
     }
 }
