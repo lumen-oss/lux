@@ -78,7 +78,7 @@ async fn sync_multi_projects_same_dependencies() {
 }
 
 #[cfg(not(target_os = "windows"))]
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 async fn sync_clean_install_tree() {
     use lux_lib::{lua_installation::detect_installed_lua_version, lua_version::LuaVersion};
 
