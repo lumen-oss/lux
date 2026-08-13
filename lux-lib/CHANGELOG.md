@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.57.0...lux-lib-v0.58.0) `lux-lib` - 2026-08-13
+
+### Added
+- [**breaking**] `[access-tokens]` config option ([#1843](https://github.com/lumen-oss/lux/pull/1843))
+
 ## [0.57.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.5...lux-lib-v0.57.0) `lux-lib` - 2026-08-13
 
 ### Added
