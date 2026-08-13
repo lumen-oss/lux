@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.57.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.5...lux-lib-v0.57.0) `lux-lib` - 2026-08-13
+
+### Added
+- *(tracing)* include build backend name in luarocks span ([#1827](https://github.com/lumen-oss/lux/pull/1827))
+
+### Fixed
+- *(unpack)* don't recurse infinitely on archive with dotless directory ([#1838](https://github.com/lumen-oss/lux/pull/1838))
+- *(install)* better error diagnostics ([#1836](https://github.com/lumen-oss/lux/pull/1836))
+- *(install)* propagate build error diagnostics ([#1835](https://github.com/lumen-oss/lux/pull/1835))
+- *(error-reporting)* don't embed error source in error messages ([#1831](https://github.com/lumen-oss/lux/pull/1831))
+- *(error-reporting)* [**breaking**] propagate integrity error diagnostics ([#1832](https://github.com/lumen-oss/lux/pull/1832))
+
 ## [0.56.5](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.4...lux-lib-v0.56.5) `lux-lib` - 2026-08-10
 
 ### Added
