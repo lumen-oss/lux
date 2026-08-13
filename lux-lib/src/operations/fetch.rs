@@ -6,6 +6,7 @@ use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
 use crate::package::PackageSpec;
+use crate::reqwest::{RequestBuilderExt, RequestError};
 use crate::rockspec::Rockspec;
 use crate::{fs, operations};
 use auth_git2::{GitAuthenticator, Prompter};
@@ -120,8 +121,8 @@ pub enum FetchSrcError {
     #[diagnostic(forward(0))]
     GitUrlParse(#[from] RemoteGitUrlParseError),
     #[error(transparent)]
-    #[diagnostic(help("check your network connection."))]
-    Request(#[from] reqwest::Error),
+    #[diagnostic(transparent)]
+    Request(#[from] RequestError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Unpack(#[from] UnpackError),
@@ -138,6 +139,12 @@ pub enum FetchSrcError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
+}
+
+impl From<reqwest::Error> for FetchSrcError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
 }
 
 /// A rocks package source fetcher, providing fine-grained control
@@ -220,7 +227,7 @@ async fn fetch_src_impl<R: Rockspec>(
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
             let checkout_ref = {
-                let auth = if config.no_prompt() {
+                let mut auth = if config.no_prompt() {
                     GitAuthenticator::default()
                         .try_password_prompt(0)
                         .prompt_ssh_key_password(false)
@@ -228,6 +235,13 @@ async fn fetch_src_impl<R: Rockspec>(
                 } else {
                     GitAuthenticator::default()
                 };
+                if let Some(access_token) = config.access_token(git.url.host()) {
+                    auth = auth.add_plaintext_credentials(
+                        git.url.host(),
+                        access_token.username(),
+                        unsafe { access_token.password() },
+                    );
+                }
                 let git_config = git2::Config::open_default()?;
                 let mut callbacks = RemoteCallbacks::new();
                 callbacks.credentials(auth.credentials(&git_config));
@@ -269,6 +283,7 @@ async fn fetch_src_impl<R: Rockspec>(
             // have HTTP URLs in `source.url`.
             let response = crate::reqwest::http_client(config)?
                 .get(url.clone())
+                .apply_access_token(config, url)
                 .send()
                 .await?
                 .error_for_status()?

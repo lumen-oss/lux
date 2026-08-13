@@ -13,6 +13,7 @@ use tokio::process::Command;
 use tree::RockLayoutConfig;
 use url::Url;
 
+use crate::config::access_tokens::AccessToken;
 use crate::fs;
 use crate::lua_version::LuaVersion;
 use crate::package::RemotePackageTypeFilterSpec;
@@ -21,6 +22,7 @@ use crate::tree::{Tree, TreeError};
 use crate::variables::GetVariableError;
 use crate::{build::utils, variables::HasVariables};
 
+pub mod access_tokens;
 pub mod build;
 pub mod external_deps;
 pub mod tree;
@@ -57,6 +59,7 @@ pub struct Config {
     timeout: Duration,
     max_jobs: usize,
     variables: HashMap<String, String>,
+    access_tokens: HashMap<String, AccessToken>,
     external_deps: ExternalDependencySearchConfig,
 
     build: BuildConfig,
@@ -260,6 +263,23 @@ impl Config {
         &self.variables
     }
 
+    /// The access token configured for the given host, if any.
+    /// Precedence: the `LUX_ACCESS_TOKENS` environment variable, then the
+    /// `[access_tokens]` section of the config file, then the `GITHUB_TOKEN`
+    /// environment variable for `github.com`.
+    pub fn access_token(&self, host: &str) -> Option<AccessToken> {
+        access_tokens::env_access_tokens()
+            .get(host)
+            .cloned()
+            .or_else(|| self.access_tokens.get(host).cloned())
+            .or_else(|| {
+                (host == "github.com")
+                    .then(|| env::var("GITHUB_TOKEN").ok())
+                    .flatten()
+                    .map(|raw| AccessToken::from(raw.as_str()))
+            })
+    }
+
     pub fn external_deps(&self) -> &ExternalDependencySearchConfig {
         &self.external_deps
     }
@@ -383,6 +403,10 @@ pub struct ConfigBuilder {
     timeout: Option<Duration>,
     max_jobs: Option<usize>,
     variables: Option<HashMap<String, String>>,
+    /// Access tokens for fetching sources from private hosts, mapped by host.
+    /// These can also be set via the `LUX_ACCESS_TOKENS` environment variable.
+    #[serde(default, skip_serializing)]
+    access_tokens: Option<HashMap<String, AccessToken>>,
     #[serde(default)]
     external_deps: ExternalDependencySearchConfig,
     #[serde(default)]
@@ -740,6 +764,7 @@ impl ConfigBuilder {
             timeout: other.timeout.or(self.timeout),
             max_jobs: other.max_jobs.or(self.max_jobs),
             variables: other.variables.or(self.variables),
+            access_tokens: other.access_tokens.or(self.access_tokens),
             external_deps: other.external_deps,
             build: BuildConfig {
                 profile: other.build.profile.or(self.build.profile),
@@ -787,6 +812,7 @@ impl ConfigBuilder {
             variables: default_variables()
                 .chain(self.variables.unwrap_or_default())
                 .collect(),
+            access_tokens: self.access_tokens.unwrap_or_default(),
             external_deps: self.external_deps,
             build: self.build,
             entrypoint_layout: self.entrypoint_layout,
@@ -827,6 +853,7 @@ impl From<Config> for ConfigBuilder {
                 Some(value.max_jobs)
             },
             variables: Some(value.variables),
+            access_tokens: Some(value.access_tokens),
             cache_dir: Some(value.cache_dir),
             data_dir: Some(value.data_dir),
             vendor_dir: value.vendor_dir,
@@ -940,5 +967,17 @@ mod tests {
             String::from_utf8_lossy(&output.stdout).trim(),
             "--prefix world"
         );
+    }
+
+    #[test]
+    fn debug_redacts_access_tokens() {
+        let config: Config =
+            toml::from_str::<ConfigBuilder>("[access_tokens]\n\"github.com\" = \"supersecret\"\n")
+                .unwrap()
+                .build()
+                .unwrap();
+        let debug = format!("{config:?}");
+        assert!(!debug.contains("supersecret"));
+        assert!(debug.contains("access_tokens"));
     }
 }

@@ -364,6 +364,7 @@ impl Project {
     pub async fn add_git(
         &mut self,
         dependencies: LuaDependencyType<&RemoteGitUrlShorthand>,
+        config: &Config,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
@@ -382,7 +383,7 @@ impl Project {
                 for url in urls {
                     let git_url: RemoteGitUrl = url.clone().into();
                     let mut dep_entry = toml_edit::table();
-                    match git::utils::latest_semver_tag_or_commit_sha(&git_url)? {
+                    match git::utils::latest_semver_tag_or_commit_sha(&git_url, config)? {
                         SemVerTagOrSha::SemVerTag(tag) => {
                             dep_entry["git"] = Item::Value(url.to_string().into());
                             dep_entry["version"] = Item::Value(tag.clone().into());
@@ -462,6 +463,7 @@ impl Project {
         &mut self,
         dependencies: LuaDependencyType<&PackageName>,
         package_db: &RemotePackageDB,
+        config: &Config,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
@@ -506,6 +508,7 @@ impl Project {
                                     let shorthand: RemoteGitUrlShorthand = git_url_str.parse()?;
                                     match git::utils::latest_semver_tag_or_commit_sha(
                                         &shorthand.into(),
+                                        config,
                                     )? {
                                         SemVerTagOrSha::SemVerTag(latest_tag) => {
                                             table[dep.to_string()]["version"] =
@@ -551,6 +554,7 @@ impl Project {
     pub async fn upgrade_all(
         &mut self,
         package_db: &RemotePackageDB,
+        config: &Config,
     ) -> Result<(), ProjectEditError> {
         if let Some(dependencies) = &self.toml().dependencies {
             let packages = dependencies
@@ -561,6 +565,7 @@ impl Project {
             self.upgrade(
                 LuaDependencyType::Regular(packages.iter().collect()),
                 package_db,
+                config,
             )
             .await?;
         }
@@ -573,6 +578,7 @@ impl Project {
             self.upgrade(
                 LuaDependencyType::Build(packages.iter().collect()),
                 package_db,
+                config,
             )
             .await?;
         }
@@ -585,6 +591,7 @@ impl Project {
             self.upgrade(
                 LuaDependencyType::Test(packages.iter().collect()),
                 package_db,
+                config,
             )
             .await?;
         }

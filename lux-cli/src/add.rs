@@ -64,9 +64,10 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
             )
             .await?;
         project
-            .add_git(lua_dependency::LuaDependencyType::Regular(
-                git_dependencies.iter().collect(),
-            ))
+            .add_git(
+                lua_dependency::LuaDependencyType::Regular(git_dependencies.iter().collect()),
+                &config,
+            )
             .await?;
     }
 
@@ -84,9 +85,10 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
             )
             .await?;
         project
-            .add_git(lua_dependency::LuaDependencyType::Build(
-                git_dependencies.iter().collect(),
-            ))
+            .add_git(
+                lua_dependency::LuaDependencyType::Build(git_dependencies.iter().collect()),
+                &config,
+            )
             .await?;
     }
 
@@ -104,9 +106,10 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
             )
             .await?;
         project
-            .add_git(lua_dependency::LuaDependencyType::Test(
-                git_dependencies.iter().collect(),
-            ))
+            .add_git(
+                lua_dependency::LuaDependencyType::Test(git_dependencies.iter().collect()),
+                &config,
+            )
             .await?;
     }
 

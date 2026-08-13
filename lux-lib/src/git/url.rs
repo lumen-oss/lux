@@ -40,6 +40,10 @@ impl RemoteGitUrl {
     pub fn owner(&self) -> Option<&str> {
         self.url.path_segments().into_iter().flatten().rev().nth(1)
     }
+    /// Get the host name
+    pub fn host(&self) -> &str {
+        &self.host_str
+    }
 }
 
 impl FromStr for RemoteGitUrl {

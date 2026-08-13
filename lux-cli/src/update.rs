@@ -50,12 +50,20 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
             if let Some(package) = &args.package {
                 let project = workspace.select_member_mut(package)?;
                 project
-                    .upgrade(LuaDependencyType::Regular(packages.iter().collect()), &db)
+                    .upgrade(
+                        LuaDependencyType::Regular(packages.iter().collect()),
+                        &db,
+                        &config,
+                    )
                     .await?;
             } else {
                 for project in workspace.members_mut().iter_mut() {
                     project
-                        .upgrade(LuaDependencyType::Regular(packages.iter().collect()), &db)
+                        .upgrade(
+                            LuaDependencyType::Regular(packages.iter().collect()),
+                            &db,
+                            &config,
+                        )
                         .await?;
                 }
             }
@@ -66,12 +74,20 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
             if let Some(package) = &args.package {
                 let project = workspace.select_member_mut(package)?;
                 project
-                    .upgrade(LuaDependencyType::Build(packages.iter().collect()), &db)
+                    .upgrade(
+                        LuaDependencyType::Build(packages.iter().collect()),
+                        &db,
+                        &config,
+                    )
                     .await?;
             } else {
                 for project in workspace.members_mut().iter_mut() {
                     project
-                        .upgrade(LuaDependencyType::Build(packages.iter().collect()), &db)
+                        .upgrade(
+                            LuaDependencyType::Build(packages.iter().collect()),
+                            &db,
+                            &config,
+                        )
                         .await?;
                 }
             }
@@ -82,12 +98,20 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
             if let Some(package) = &args.package {
                 let project = workspace.select_member_mut(package)?;
                 project
-                    .upgrade(LuaDependencyType::Test(packages.iter().collect()), &db)
+                    .upgrade(
+                        LuaDependencyType::Test(packages.iter().collect()),
+                        &db,
+                        &config,
+                    )
                     .await?;
             } else {
                 for project in workspace.members_mut().iter_mut() {
                     project
-                        .upgrade(LuaDependencyType::Test(packages.iter().collect()), &db)
+                        .upgrade(
+                            LuaDependencyType::Test(packages.iter().collect()),
+                            &db,
+                            &config,
+                        )
                         .await?;
                 }
             }
@@ -95,10 +119,10 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
         if upgrade_all {
             if let Some(package) = &args.package {
                 let project = workspace.select_member_mut(package)?;
-                project.upgrade_all(&db).await?;
+                project.upgrade_all(&db, &config).await?;
             } else {
                 for project in workspace.members_mut().iter_mut() {
-                    project.upgrade_all(&db).await?;
+                    project.upgrade_all(&db, &config).await?;
                 }
             }
         }

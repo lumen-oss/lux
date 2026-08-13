@@ -1,4 +1,4 @@
-use crate::{fs, git::url::RemoteGitUrl};
+use crate::{config::Config, fs, git::url::RemoteGitUrl};
 use git2::{AutotagOption, Cred, FetchOptions, RemoteCallbacks, Repository};
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -29,18 +29,20 @@ pub(crate) enum SemVerTagOrSha {
 #[tracing::instrument(level = "trace")]
 pub(crate) fn latest_semver_tag_or_commit_sha(
     url: &RemoteGitUrl,
+    config: &Config,
 ) -> Result<SemVerTagOrSha, GitError> {
-    match latest_semver_tag(url)? {
+    match latest_semver_tag(url, config)? {
         Some(tag) => Ok(SemVerTagOrSha::SemVerTag(tag)),
         None => {
-            let sha = latest_commit_sha(url)?.ok_or(GitError::NoTagOrCommitSha(url.to_string()))?;
+            let sha = latest_commit_sha(url, config)?
+                .ok_or(GitError::NoTagOrCommitSha(url.to_string()))?;
             Ok(SemVerTagOrSha::CommitSha(sha))
         }
     }
 }
 
 #[tracing::instrument(level = "trace")]
-fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
+fn latest_semver_tag(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, GitError> {
     let temp_dir = fs::tempfile::tempdir()?;
 
     let url_str = url.to_string();
@@ -49,9 +51,7 @@ fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
         .remote_anonymous(&url_str)
         .map_err(|err| GitError::RemoteInit(url_str.clone(), err))?;
     let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username_from_url, _allowed_types| {
-        Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-    });
+    callbacks.credentials(mk_credentials_callback(url, config));
     let mut fetch_opts = FetchOptions::new();
     fetch_opts.download_tags(AutotagOption::All);
     fetch_opts.remote_callbacks(callbacks);
@@ -79,7 +79,26 @@ fn latest_semver_tag(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
         .cloned())
 }
 
-fn latest_commit_sha(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
+fn mk_credentials_callback(
+    url: &RemoteGitUrl,
+    config: &Config,
+) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<Cred, git2::Error> {
+    let access_token = config.access_token(url.host()).map(|token| {
+        (
+            token.username().to_string(),
+            unsafe { token.password() }.to_string(),
+        )
+    });
+    move |_url, username_from_url, _allowed_types| {
+        if let Some((username, password)) = &access_token {
+            Cred::userpass_plaintext(username, password)
+        } else {
+            Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+        }
+    }
+}
+
+fn latest_commit_sha(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, GitError> {
     let temp_dir = fs::tempfile::tempdir()?;
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
@@ -87,9 +106,7 @@ fn latest_commit_sha(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
         .remote_anonymous(&url_str)
         .map_err(|err| GitError::RemoteInit(url_str.clone(), err))?;
     let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username_from_url, _allowed_types| {
-        Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
-    });
+    callbacks.credentials(mk_credentials_callback(url, config));
     let mut fetch_opts = FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks);
     remote
@@ -110,6 +127,11 @@ fn latest_commit_sha(url: &RemoteGitUrl) -> Result<Option<String>, GitError> {
 mod tests {
 
     use super::*;
+    use crate::config::ConfigBuilder;
+
+    fn test_config() -> Config {
+        ConfigBuilder::new().unwrap().build().unwrap()
+    }
 
     #[tokio::test]
     async fn test_latest_semver_tag_http() {
@@ -118,21 +140,21 @@ mod tests {
             return;
         }
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
-        assert!(latest_semver_tag(&url).unwrap().is_some());
+        assert!(latest_semver_tag(&url, &test_config()).unwrap().is_some());
     }
 
     #[tokio::test]
     #[cfg(feature = "ssh-tests")]
     async fn test_latest_semver_tag_ssh_user() {
         let url = "git@github.com:lumen-oss/lux.git".parse().unwrap();
-        assert!(latest_semver_tag(&url).unwrap().is_some());
+        assert!(latest_semver_tag(&url, &test_config()).unwrap().is_some());
     }
 
     #[tokio::test]
     #[cfg(feature = "ssh-tests")]
     async fn test_latest_semver_tag_ssh_schema() {
         let url = "ssh://github.com/lumen-oss/lux.git".parse().unwrap();
-        assert!(latest_semver_tag(&url).unwrap().is_some());
+        assert!(latest_semver_tag(&url, &test_config()).unwrap().is_some());
     }
 
     #[tokio::test]
@@ -142,20 +164,20 @@ mod tests {
             return;
         }
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
-        assert!(latest_commit_sha(&url).unwrap().is_some());
+        assert!(latest_commit_sha(&url, &test_config()).unwrap().is_some());
     }
 
     #[tokio::test]
     #[cfg(feature = "ssh-tests")]
     async fn test_latest_commit_sha_ssh_user() {
         let url = "git@github.com:lumen-oss/lux.git".parse().unwrap();
-        assert!(latest_commit_sha(&url).unwrap().is_some());
+        assert!(latest_commit_sha(&url, &test_config()).unwrap().is_some());
     }
 
     #[tokio::test]
     #[cfg(feature = "ssh-tests")]
     async fn test_latest_commit_sha_ssh_schema() {
         let url = "ssh://github.com/lumen-oss/lux.git".parse().unwrap();
-        assert!(latest_commit_sha(&url).unwrap().is_some());
+        assert!(latest_commit_sha(&url, &test_config()).unwrap().is_some());
     }
 }

@@ -15,6 +15,7 @@ use zip::ZipArchive;
 
 use crate::config::Config;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
+use crate::reqwest::{RequestBuilderExt, RequestError};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -25,11 +26,8 @@ pub enum ManifestFromServerError {
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
     #[error("failed to pull manifest")]
-    #[diagnostic(help(
-        r#"check your network connection and server configuration.
-if the issue persists, the server may be temporarily unavailable."#
-    ))]
-    Request(#[from] reqwest::Error),
+    #[diagnostic(transparent)]
+    Request(#[from] RequestError),
     #[error("failed to parse manifest")]
     #[diagnostic(help(
         r#"the server returned a manifest that is not valid UTF-8.
@@ -53,18 +51,30 @@ if you are using a custom server, make sure it returns correctly formatted manif
     LuaVersion(#[from] LuaVersionUnset),
 }
 
-#[tracing::instrument(level = "trace", skip(client))]
+impl From<reqwest::Error> for ManifestFromServerError {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
+}
+
+#[tracing::instrument(level = "trace", skip(client, config))]
 pub(super) async fn get_manifest(
     url: Url,
     manifest_version: &str,
     target: &Path,
     client: &Client,
+    config: &Config,
 ) -> Result<String, ManifestFromServerError> {
-    let response = client.get(url.clone()).send().await?;
+    let response = client
+        .get(url.clone())
+        .apply_access_token(config, &url)
+        .send()
+        .await?;
     if response.status().is_client_error() {
         let fallback_url = fallback_unzipped_url(&url)?;
         let manifest_bytes = client
-            .get(fallback_url)
+            .get(fallback_url.clone())
+            .apply_access_token(config, &fallback_url)
             .send()
             .await?
             .error_for_status()?
@@ -147,10 +157,20 @@ async fn manifest_from_cache_or_server_impl(
     if let Ok(metadata) = fs::tokio::metadata(&cache).await {
         let last_modified_local: SystemTime = metadata.modified()?;
 
-        let response = match client.head(url.clone()).send().await? {
+        let response = match client
+            .head(url.clone())
+            .apply_access_token(config, &url)
+            .send()
+            .await?
+        {
             response if response.status().is_client_error() => {
                 let url = fallback_unzipped_url(&url)?;
-                client.head(url).send().await?.error_for_status()?
+                client
+                    .head(url.clone())
+                    .apply_access_token(config, &url)
+                    .send()
+                    .await?
+                    .error_for_status()?
             }
             response => response.error_for_status()?,
         };
@@ -159,14 +179,14 @@ async fn manifest_from_cache_or_server_impl(
             let server_last_modified = httpdate::parse_http_date(last_modified_header.to_str()?)?;
 
             if server_last_modified > last_modified_local {
-                return get_manifest(url, manifest_version, &cache, client).await;
+                return get_manifest(url, manifest_version, &cache, client, config).await;
             }
 
             return Ok(fs::tokio::read_to_string(&cache).await?);
         }
     }
 
-    get_manifest(url, manifest_version, &cache, client).await
+    get_manifest(url, manifest_version, &cache, client, config).await
 }
 
 #[tracing::instrument(level = "trace", skip(config))]
@@ -192,7 +212,7 @@ async fn manifest_from_server_only_impl(
 ) -> Result<String, ManifestFromServerError> {
     let cache = mk_manifest_cache(&url, config).await?;
     let client = crate::reqwest::https_client(config)?;
-    get_manifest(url, manifest_version, &cache, client).await
+    get_manifest(url, manifest_version, &cache, client, config).await
 }
 
 fn mk_manifest_url(
