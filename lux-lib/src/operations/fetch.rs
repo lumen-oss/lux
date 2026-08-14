@@ -1,4 +1,3 @@
-use crate::build::utils::recursive_copy_dir;
 use crate::config::Config;
 use crate::git::url::RemoteGitUrlParseError;
 use crate::git::GitSource;
@@ -359,7 +358,7 @@ async fn fetch_src_impl<R: Rockspec>(
             tracing::debug!(message = format!("📋 Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {
-                recursive_copy_dir(&path.to_path_buf(), dest_dir).await?;
+                fs::tokio::copy_dir_contents(path, dest_dir).await?;
                 dest_dir.hash().await.map_err(FetchSrcError::Hash)?
             } else {
                 let mut file = fs::sync::open(path)?;
