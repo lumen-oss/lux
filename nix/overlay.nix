@@ -5,6 +5,95 @@
   lib = final.lib;
   craneLib = crane.mkLib prev;
 
+  # Override `lua.withPackages` to register the lux loader and expose lux trees
+  # on LUA_PATH when a package in the environment was built with `buildLuxPackage`.
+  override-lua = lua: lux-lua: let
+    luaWithLuxLua = lua.override {
+      packageOverrides = _final: _prev: {inherit lux-lua;};
+    };
+    withPackages = f: let
+      packages = f luaWithLuxLua.pkgs;
+      luxPackages = lib.filter (p: p ? luxPackage && p.luxPackage) packages;
+      # The lux.loader searches the package.path for Lux trees.
+      luxPathArgs =
+        lib.concatMap (p: [
+          "--suffix"
+          "LUA_PATH"
+          "';'"
+          "'${p}/share/lux/${lua.luaversion}/?.lua'"
+          "--suffix"
+          "LUA_PATH"
+          "';'"
+          "'${p}/share/lux/${lua.luaversion}/?/init.lua'"
+        ])
+        luxPackages;
+    in
+      luaWithLuxLua.buildEnv.override {
+        extraLibs = packages;
+        makeWrapperArgs =
+          lib.optionals (luxPackages != []) [
+            "--set"
+            "LUA_INIT"
+            "\"require('lux').loader()\""
+          ]
+          ++ luxPathArgs;
+      };
+  in
+    luaWithLuxLua.overrideAttrs (old: {
+      passthru = (old.passthru or {}) // {inherit withPackages;};
+    });
+
+  # Convert a lux package (built with `--nvim`) into a Neovim plugin, exposing
+  # the runtime files under site/pack/lux/start/<name> at the plugin root.
+  toLuxNeovimPlugin = pkg: let
+    nvimPkg = pkg.override {nvim = true;};
+    luaVersionDir =
+      if pkg.luaModule.pkgs.isLuaJIT
+      then "jit"
+      else pkg.luaModule.luaversion;
+  in
+    (final.symlinkJoin {
+      name = "vimplugin-${pkg.pname}";
+      paths = [nvimPkg];
+      postBuild = ''
+        for f in ${nvimPkg}/share/lux/${luaVersionDir}/site/pack/lux/start/*/*; do
+          ln -sfn "$f" "$out/$(basename "$f")"
+        done
+      '';
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          vimPlugin = true;
+          luxPackage = true;
+          luxLuaVersion = luaVersionDir;
+        };
+    });
+
+  # Override neovim to activate the lux loader and expose lux trees on
+  # package.path when a plugin in the environment was built with lux.
+  override-neovim = neovim-unwrapped: lux-lua:
+    lib.makeOverridable (
+      args: let
+        luxPlugins = lib.filter (p: p ? luxPackage && p.luxPackage) (args.plugins or []);
+        luxLuaPath =
+          lib.concatMapStringsSep ";" (p: "${p}/share/lux/${p.luxLuaVersion}/?.lua;${p}/share/lux/${p.luxLuaVersion}/?/init.lua")
+          luxPlugins;
+      in
+        final.wrapNeovimUnstable neovim-unwrapped (
+          args
+          // {
+            extraLuaPackages = ps: ((args.extraLuaPackages or (_: [])) ps) ++ lib.optional (luxPlugins != []) lux-lua;
+            luaRcContent =
+              (args.luaRcContent or "")
+              + lib.optionalString (luxPlugins != []) ''
+                package.path = "${luxLuaPath};" .. package.path
+                require('lux').loader()
+              '';
+          }
+        )
+    )
+    {};
   cleanCargoSrc = craneLib.cleanCargoSource self;
 
   luxCargo = craneLib.crateNameFromCargoToml {
@@ -111,9 +200,13 @@
     isLuaJIT,
   }: let
     luaMajorMinor = lib.take 2 (lib.splitVersion luaPkg.version);
-    luaVersionDir =
+    luxLuaVersionDir =
       if isLuaJIT
       then "jit"
+      else lib.concatStringsSep "." luaMajorMinor;
+    luaVersionDir =
+      if isLuaJIT
+      then "5.1"
       else lib.concatStringsSep "." luaMajorMinor;
     luaFeature =
       if isLuaJIT
@@ -125,39 +218,43 @@
       else "dist-debug";
     crateArgs = individualCrateArgs {inherit release;};
   in
-    craneLib.mkCargoDerivation (crateArgs
-      // {
-        pname = "lux-lua";
-        inherit (luxCargo) version;
+    luaPkg.pkgs.toLuaModule (
+      craneLib.mkCargoDerivation (crateArgs
+        // {
+          pname = "lux-lua";
+          inherit (luxCargo) version;
 
-        # FIXME: This fails with permission denied on darwin
-        buildPhaseCargoCommand = "xtask-lua ${dist-cmd}";
-        nativeBuildInputs =
-          crateArgs.nativeBuildInputs
-          ++ [
-            (mk-xtask-lua luaFeature)
-          ];
+          # FIXME: This fails with permission denied on darwin
+          buildPhaseCargoCommand = "xtask-lua ${dist-cmd}";
+          nativeBuildInputs =
+            crateArgs.nativeBuildInputs
+            ++ [
+              (mk-xtask-lua luaFeature)
+            ];
 
-        buildInputs = crateArgs.buildInputs ++ [luaPkg];
+          buildInputs = crateArgs.buildInputs ++ [luaPkg];
 
-        # HACK: For some reason, linking via pkg-config fails on darwin
-        env =
-          (crateArgs.env or {})
-          // final.lib.optionalAttrs final.stdenv.isDarwin {
-            LUA_LIB = "${luaPkg}/lib";
-            LUA_INCLUDE_DIR = "${luaPkg}/include";
-            RUSTFLAGS = "-L ${luaPkg}/lib -llua";
-          };
+          # HACK: For some reason, linking via pkg-config fails on darwin
+          env =
+            (crateArgs.env or {})
+            // final.lib.optionalAttrs final.stdenv.isDarwin {
+              LUA_LIB = "${luaPkg}/lib";
+              LUA_INCLUDE_DIR = "${luaPkg}/include";
+              RUSTFLAGS = "-L ${luaPkg}/lib -llua";
+            };
 
-        installPhase = ''
-          runHook preInstall
-          install -D -v target/dist/share/lux-lua/${luaVersionDir}/* -t $out/share/lux-lua/${luaVersionDir}
-          install -D -v target/dist/lib/pkgconfig/* -t $out/lib/pkgconfig
-          runHook postInstall
-        '';
-      });
+          installPhase = ''
+            runHook preInstall
+            install -D -v target/dist/share/lux-lua/${luxLuaVersionDir}/* -t $out/share/lux-lua/${luxLuaVersionDir}
+            install -D -v target/dist/lib/pkgconfig/* -t $out/lib/pkgconfig
+            mkdir -p $out/lib/lua
+            ln -s $out/share/lux-lua/${luxLuaVersionDir} $out/lib/lua/${luaVersionDir}
+            runHook postInstall
+          '';
+        })
+    );
 
-  mk-lux-cli = args @ {release ? true}: let
+  mk-lux-cli = args: let
     crateArgs = individualCrateArgs args;
     cargoExtraArgs = "-p lux-cli --locked";
   in
@@ -182,7 +279,7 @@
 
         meta.mainProgram = "lx";
       });
-  mk-lux-lsp = args @ {release ? true}: let
+  mk-lux-lsp = args: let
     crateArgs = individualCrateArgs args;
   in
     craneLib.buildPackage (crateArgs
@@ -195,6 +292,63 @@
         meta.mainProgram = "lx-lsp";
       });
 in {
+  inherit toLuxNeovimPlugin;
+
+  fetchLuxDeps = final.callPackage ./fetch-lux-deps.nix {};
+
+  importLuxLock = final.callPackage ./import-lux-lock.nix {};
+
+  luxLoaderSetupHook = luaversion:
+    final.makeSetupHook {
+      name = "lux-loader-setup-hook";
+      substitutions = {inherit luaversion;};
+    }
+    ./lux-loader-setup-hook.sh;
+
+  lua5_1_lux = override-lua prev.lua5_1 final.lux-lua51;
+  lua5_2_lux = override-lua prev.lua5_2 final.lux-lua52;
+  lua5_3_lux = override-lua prev.lua5_3 final.lux-lua53;
+  lua5_4_lux = override-lua prev.lua5_4 final.lux-lua54;
+  lua5_5_lux = override-lua prev.lua5_5 final.lux-lua55;
+  luajit_lux = override-lua prev.luajit final.lux-luajit;
+  neovim-lux = lux-lua: override-neovim prev.neovim-unwrapped lux-lua;
+
+  buildLuxPackage = {
+    lua,
+    lux-cli ? final.lux-cli,
+  }:
+    lib.makeOverridable (
+      final.callPackage ./build-lux-package.nix {
+        fetchLuxDeps = final.fetchLuxDeps;
+        importLuxLock = final.importLuxLock;
+        lux-cli = lux-cli;
+        luxLoaderSetupHook = final.luxLoaderSetupHook lua.luaversion;
+        inherit lua;
+      }
+    );
+
+  buildLuxRockspec = {
+    lua,
+    lux-cli ? final.lux-cli,
+  }:
+    lib.makeOverridable (
+      lua.pkgs.callPackage ./build-lux-rockspec.nix {
+        inherit lua lux-cli;
+        luxLoaderSetupHook = final.luxLoaderSetupHook lua.luaversion;
+      }
+    );
+
+  buildLuxApplication = {
+    lua,
+    lux-cli ? final.lux-cli,
+  }:
+    lib.makeOverridable (
+      final.callPackage ./build-lux-application.nix {
+        inherit lua;
+        buildLuxPackage = final.buildLuxPackage {inherit lua lux-cli;};
+      }
+    );
+
   lux-cli = (mk-lux-cli {}).overrideAttrs {
     passthru.debug = mk-lux-cli {release = false;};
   };
@@ -203,71 +357,94 @@ in {
   };
   lux-lua51 =
     (mk-lux-lua {
-      luaPkg = final.lua5_1;
+      luaPkg = prev.lua5_1;
       isLuaJIT = false;
-    }).overrideAttrs {
-      passthru.debug = mk-lux-lua {
-        luaPkg = final.lua5_1;
-        isLuaJIT = false;
-        release = false;
-      };
-    };
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          debug = mk-lux-lua {
+            luaPkg = prev.lua5_1;
+            isLuaJIT = false;
+            release = false;
+          };
+        };
+    });
   lux-lua52 =
     (mk-lux-lua {
-      luaPkg = final.lua5_2;
+      luaPkg = prev.lua5_2;
       isLuaJIT = false;
-    }).overrideAttrs {
-      passthru.debug = mk-lux-lua {
-        luaPkg = final.lua5_2;
-        isLuaJIT = false;
-        release = false;
-      };
-    };
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          debug = mk-lux-lua {
+            luaPkg = prev.lua5_2;
+            isLuaJIT = false;
+            release = false;
+          };
+        };
+    });
   lux-lua53 =
     (mk-lux-lua {
-      luaPkg = final.lua5_3;
+      luaPkg = prev.lua5_3;
       isLuaJIT = false;
-    }).overrideAttrs {
-      passthru.debug = mk-lux-lua {
-        luaPkg = final.lua5_3;
-        isLuaJIT = false;
-        release = false;
-      };
-    };
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          debug = mk-lux-lua {
+            luaPkg = prev.lua5_3;
+            isLuaJIT = false;
+            release = false;
+          };
+        };
+    });
   lux-lua54 =
     (mk-lux-lua {
-      luaPkg = final.lua5_4;
+      luaPkg = prev.lua5_4;
       isLuaJIT = false;
-    }).overrideAttrs {
-      passthru.debug = mk-lux-lua {
-        luaPkg = final.lua5_4;
-        isLuaJIT = false;
-        release = false;
-      };
-    };
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          debug = mk-lux-lua {
+            luaPkg = prev.lua5_4;
+            isLuaJIT = false;
+            release = false;
+          };
+        };
+    });
   lux-lua55 =
     (mk-lux-lua {
-      luaPkg = final.lua5_5;
+      luaPkg = prev.lua5_5;
       isLuaJIT = false;
-    }).overrideAttrs {
-      passthru.debug = mk-lux-lua {
-        luaPkg = final.lua5_5;
-        isLuaJIT = false;
-        release = false;
-      };
-    };
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          debug = mk-lux-lua {
+            luaPkg = prev.lua5_5;
+            isLuaJIT = false;
+            release = false;
+          };
+        };
+    });
   lux-luajit =
     (mk-lux-lua {
-      luaPkg = final.luajit;
+      luaPkg = prev.luajit;
       isLuaJIT = true;
-    }).overrideAttrs {
-      passthru.debug = mk-lux-lua {
-        luaPkg = final.luajit;
-        isLuaJIT = true;
-        release = false;
-      };
-    };
-
+    }).overrideAttrs (old: {
+      passthru =
+        (old.passthru or {})
+        // {
+          debug = mk-lux-lua {
+            luaPkg = prev.luajit;
+            isLuaJIT = true;
+            release = false;
+          };
+        };
+    });
   lux-workspace-hack = craneLib.mkCargoDerivation {
     src = cleanCargoSrc;
     pname = "lux-workspace-hack";
