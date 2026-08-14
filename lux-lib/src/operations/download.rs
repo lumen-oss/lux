@@ -172,6 +172,7 @@ impl RemoteRockDownload {
                 checkout_ref: checkout_ref
                     .clone()
                     .ok_or(SearchAndDownloadError::MissingCheckoutRef(url.to_string()))?,
+                submodules: false, // unknown until the source is fetched
             },
             RockSourceSpec::File(path) => RemotePackageSourceUrl::File { path: path.clone() },
             RockSourceSpec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
