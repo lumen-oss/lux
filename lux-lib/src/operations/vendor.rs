@@ -1,5 +1,4 @@
 use std::{
-    io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -18,7 +17,7 @@ use crate::{
     build::{RemotePackageSourceSpec, SrcRockSource},
     config::Config,
     fs,
-    lockfile::{LocalPackageLockType, ReadOnly},
+    lockfile::{LocalPackageLockType, ReadOnly, RemotePackageSourceUrl},
     lua_rockspec::RemoteLuaRockspec,
     operations::{
         self,
@@ -28,6 +27,7 @@ use crate::{
     package::PackageReq,
     project::project_toml::LocalProjectTomlValidationError,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
+    reqwest::RequestError,
     rockspec::Rockspec,
     tree::EntryType,
     workspace::{Workspace, WorkspaceError},
@@ -88,6 +88,9 @@ pub enum VendorError {
     #[error("failed to fetch rock source")]
     #[diagnostic(forward(0))]
     FetchSrc(#[from] FetchSrcError),
+    #[error("failed to download rock source")]
+    #[diagnostic(forward(0))]
+    Request(#[from] RequestError),
 }
 
 impl<State> VendorBuilder<'_, State>
@@ -287,9 +290,9 @@ async fn vendor_rockspec_sources(
         None => RemotePackageSourceSpec::RockSpec(rockspec_download.source_url),
     };
 
-    let package_vendor_dir = vendor_dir.join(&package_version_str);
+    let source_path = vendor_dir.join(&package_version_str);
 
-    fs::tokio::create_dir_all(&package_vendor_dir).await?;
+    fs::tokio::create_dir_all(vendor_dir).await?;
 
     let rockspec_lua_content = rockspec
         .to_lua_remote_rockspec_string()
@@ -304,15 +307,21 @@ async fn vendor_rockspec_sources(
             bytes,
             source_url: _,
         }) => {
-            let cursor = Cursor::new(bytes);
-            operations::unpack_src_rock(cursor, package_vendor_dir).await?;
+            fs::tokio::write(&source_path, &bytes).await?;
         }
-        RemotePackageSourceSpec::RockSpec(source_url) => {
-            operations::FetchSrc::new(&package_vendor_dir, &rockspec, config)
-                .maybe_source_url(source_url)
-                .fetch_internal()
-                .await?;
-        }
+        RemotePackageSourceSpec::RockSpec(source_url) => match source_url {
+            Some(RemotePackageSourceUrl::Url { url }) => {
+                let bytes = crate::reqwest::download_bytes(config, &url).await?;
+                fs::tokio::write(&source_path, &bytes).await?;
+            }
+            _ => {
+                fs::tokio::create_dir_all(&source_path).await?;
+                operations::FetchSrc::new(&source_path, &rockspec, config)
+                    .maybe_source_url(source_url)
+                    .fetch_internal()
+                    .await?;
+            }
+        },
     }
 
     Ok(())
