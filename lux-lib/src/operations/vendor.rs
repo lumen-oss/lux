@@ -129,6 +129,13 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
         }
     }
 
+    // The lockfile may contain the same package (name@version) multiple times,
+    // with different constraints.
+    let all_packages = all_packages
+        .into_iter()
+        .unique_by(|pkg| (pkg.spec.name().clone(), pkg.spec.version().clone()))
+        .collect_vec();
+
     if !no_delete && vendor_dir.exists() {
         fs::tokio::remove_dir_all(&vendor_dir).await?;
     }
