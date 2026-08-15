@@ -16,8 +16,19 @@ jobs:
         with:
           fetch-depth: 0
           ref: main
-      - run: python3 .github/merge_changelogs.py
-      - uses: stefanzweifel/git-auto-commit-action@v7
+      - name: Merge changelogs
+        run: python3 .github/merge_changelogs.py
+      - name: Commit Changes
+        run: |
+          git config --local user.email "marc@jakobi.dev"
+          git config --local user.name "Marc Jakobi"
+          if [[ ! -z $(git status -s) ]]; then
+            git add .
+            git commit -m "chore: merge per-package changelogs into root"
+          fi
+      - name: Push to Github
+        uses: ad-m/github-push-action@master
         with:
-          commit_message: "chore: merge per-package changelogs into root"
-          file_pattern: CHANGELOG.md
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repository: "lumen-oss/lux"
+          branch: main
