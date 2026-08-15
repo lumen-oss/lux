@@ -3,7 +3,6 @@ use std::{ops::Deref, path::PathBuf};
 use bon::Builder;
 use itertools::Itertools;
 use miette::Diagnostic;
-use nonempty::NonEmpty;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::process::Command;
@@ -114,7 +113,7 @@ where
             .current_platform()
             .clone();
 
-        let mut args = run_spec.args.unwrap_or_default();
+        let mut args: Vec<String> = run_spec.args.map(|args| args.into()).unwrap_or_default();
 
         if !extra_args.is_empty() {
             args.extend(extra_args.iter().cloned());
@@ -133,13 +132,12 @@ async fn run_with_local_lua(
     workspace: &Workspace,
     root_dir: Option<PathBuf>,
     disable_loader: bool,
-    args: &NonEmpty<String>,
+    args: &Vec<String>,
     config: &Config,
 ) -> Result<(), RunError> {
     let version = workspace.lua_version(config)?;
 
     let tree = workspace.tree(config)?;
-    let args = &args.into_iter().cloned().collect();
 
     RunLua::new()
         .root(&root_dir.unwrap_or(workspace.root().to_path_buf()))
@@ -159,7 +157,7 @@ async fn run_with_command(
     command: &RunCommand,
     root_dir: Option<PathBuf>,
     disable_loader: bool,
-    args: &NonEmpty<String>,
+    args: &[String],
     config: &Config,
 ) -> Result<(), RunError> {
     let tree = workspace.tree(config)?;
@@ -181,7 +179,7 @@ async fn run_with_command(
         cmd.current_dir(workspace.root());
     }
     match cmd
-        .args(args.into_iter().cloned().collect_vec())
+        .args(args.iter().cloned().collect_vec())
         .env("PATH", paths.path_prepended().joined())
         .env("LUA_INIT", lua_init.unwrap_or_default())
         .env("LUA_PATH", paths.package_path().joined())
