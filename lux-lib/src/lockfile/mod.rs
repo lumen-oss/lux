@@ -295,6 +295,10 @@ pub(crate) enum RemotePackageSourceUrl {
         url: String,
         #[serde(rename = "ref")]
         checkout_ref: String,
+        /// Whether the source repository contains git submodules that must be
+        /// fetched for the package to build.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        submodules: bool,
     }, // GitUrl doesn't have all the trait instances we need
     Url {
         #[serde(deserialize_with = "deserialize_url", serialize_with = "serialize_url")]
@@ -308,9 +312,9 @@ pub(crate) enum RemotePackageSourceUrl {
 impl Display for RemotePackageSourceUrl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RemotePackageSourceUrl::Git { url, checkout_ref } => {
-                format!("{url}@{checkout_ref}").fmt(f)
-            }
+            RemotePackageSourceUrl::Git {
+                url, checkout_ref, ..
+            } => format!("{url}@{checkout_ref}").fmt(f),
             RemotePackageSourceUrl::Url { url } => url.fmt(f),
             RemotePackageSourceUrl::File { path } => format!("{}", path.display()).fmt(f),
         }

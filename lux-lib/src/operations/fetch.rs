@@ -19,7 +19,7 @@ use ssri::Integrity;
 use std::io;
 use std::io::Cursor;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use super::DownloadSrcRockError;
@@ -67,12 +67,12 @@ where
         // prioritise lockfile source, if present
         let source_spec = match &fetch.source_url {
             Some(source_url) => match source_url {
-                RemotePackageSourceUrl::Git { url, checkout_ref } => {
-                    RockSourceSpec::Git(GitSource {
-                        url: url.parse()?,
-                        checkout_ref: Some(checkout_ref.clone()),
-                    })
-                }
+                RemotePackageSourceUrl::Git {
+                    url, checkout_ref, ..
+                } => RockSourceSpec::Git(GitSource {
+                    url: url.parse()?,
+                    checkout_ref: Some(checkout_ref.clone()),
+                }),
                 RemotePackageSourceUrl::Url { url } => RockSourceSpec::Url(url.clone()),
                 RemotePackageSourceUrl::File { path } => RockSourceSpec::File(path.clone()),
             },
@@ -196,6 +196,37 @@ impl Prompter for NullPrompter {
     }
 }
 
+/// Initialises and checks out git submodules,
+/// returning the relative paths of any submodules that were checked out.
+fn init_submodules(
+    repo: &git2::Repository,
+    auth: &GitAuthenticator,
+    git_config: &git2::Config,
+) -> Result<Vec<PathBuf>, FetchSrcError> {
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| git2::Error::from_str("cloned repository has no working directory"))?;
+    let mut submodule_paths = Vec::new();
+    for mut submodule in repo.submodules()? {
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(auth.credentials(git_config));
+        let mut fetch_options = FetchOptions::new();
+        fetch_options.remote_callbacks(callbacks);
+        let mut options = git2::SubmoduleUpdateOptions::new();
+        options.fetch(fetch_options);
+        submodule.update(true, Some(&mut options))?;
+        // The .git file/directory is not deterministic
+        let git_file = workdir.join(submodule.path()).join(".git");
+        if git_file.is_dir() {
+            fs::sync::remove_dir_all(&git_file)?;
+        } else {
+            fs::sync::remove_file(&git_file)?;
+        }
+        submodule_paths.push(submodule.path().to_path_buf());
+    }
+    Ok(submodule_paths)
+}
+
 #[tracing::instrument(
     name = "Fetching source",
     level = "info",
@@ -226,7 +257,7 @@ async fn fetch_src_impl<R: Rockspec>(
             let url = git.url.to_string();
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
-            let checkout_ref = {
+            let (checkout_ref, has_submodules) = {
                 let mut auth = if config.no_prompt() {
                     GitAuthenticator::default()
                         .try_password_prompt(0)
@@ -255,7 +286,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 repo_builder.fetch_options(fetch_options);
                 let repo = repo_builder.clone(&url, dest_dir)?;
 
-                match &git.checkout_ref {
+                let checkout_ref = match &git.checkout_ref {
                     Some(checkout_ref) => {
                         let (object, _) = repo.revparse_ext(checkout_ref)?;
                         repo.checkout_tree(&object, None)?;
@@ -266,14 +297,22 @@ async fn fetch_src_impl<R: Rockspec>(
                         let commit = head.peel_to_commit()?;
                         commit.id().to_string()
                     }
-                }
+                };
+
+                let submodule_paths = init_submodules(&repo, &auth, &git_config)?;
+
+                (checkout_ref, !submodule_paths.is_empty())
             };
             // The .git directory is not deterministic
             remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
             let hash = dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
-                source_url: RemotePackageSourceUrl::Git { url, checkout_ref },
+                source_url: RemotePackageSourceUrl::Git {
+                    url,
+                    checkout_ref,
+                    submodules: has_submodules,
+                },
             }
         }
         RockSourceSpec::Url(url) => {
