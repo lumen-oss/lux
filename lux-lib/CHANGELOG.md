@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.0...lux-lib-v0.58.1) `lux-lib` - 2026-08-15
+
+### Fixed
+- *(run)* don't treat omitted `args` in `lux.toml` as single arg ([#1847](https://github.com/lumen-oss/lux/pull/1847))
+- *(fetch)* checkout submodules ([#1848](https://github.com/lumen-oss/lux/pull/1848))
+
 ## [0.58.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.57.0...lux-lib-v0.58.0) `lux-lib` - 2026-08-13
 
 ### Added
