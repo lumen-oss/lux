@@ -66,7 +66,16 @@ fn load_file(lua: &Lua, module: &str, path: &Path) -> mlua::Result<Option<mlua::
     }
 }
 
+const LOADER_LOADED_KEY: &str = "lux.loader.loaded";
+
 pub fn load_loader(lua: &Lua) -> mlua::Result<()> {
+    if lua
+        .named_registry_value::<Option<bool>>(LOADER_LOADED_KEY)?
+        .is_some()
+    {
+        return Ok(());
+    }
+
     let globals = lua.globals();
     let package: LuaTable = globals.get("package")?;
     #[cfg(feature = "lua51")]
@@ -74,6 +83,8 @@ pub fn load_loader(lua: &Lua) -> mlua::Result<()> {
     #[cfg(not(feature = "lua51"))]
     let loaders: LuaTable = package.get("searchers")?;
     loaders.raw_insert(1, lua.create_function(loader)?)?;
+
+    lua.set_named_registry_value(LOADER_LOADED_KEY, true)?;
 
     Ok(())
 }
@@ -511,5 +522,23 @@ mod tests {
             .unwrap();
         let foo_loaded: String = lua.globals().get("foo_loaded").unwrap();
         assert_eq!(foo_loaded, "yes");
+    }
+
+    #[test]
+    fn test_load_loader_is_idempotent() {
+        let lua = Lua::new();
+        let loaders = || {
+            lua.globals()
+                .get::<mlua::Table>("package")
+                .unwrap()
+                .get::<mlua::Table>("loaders")
+                .unwrap()
+        };
+        let initial_len = loaders().raw_len();
+
+        load_loader(&lua).unwrap();
+        load_loader(&lua).unwrap();
+
+        assert_eq!(loaders().raw_len(), initial_len + 1);
     }
 }
