@@ -16,7 +16,7 @@ use lux_cli::{
 use lux_lib::{
     config::tree::RockLayoutConfig,
     lockfile::PinnedState::{Pinned, Unpinned},
-    lua_version::LuaVersion,
+    lua_installation::nvim_lua_version,
 };
 
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
@@ -66,13 +66,7 @@ async fn main() -> Result<()> {
 
     let lua_version = cli
         .lua_version
-        .or({
-            if cli.nvim {
-                Some(LuaVersion::Lua51)
-            } else {
-                None
-            }
-        })
+        .or(if cli.nvim { nvim_lua_version() } else { None })
         .or_else(|| cli.command.lua_version());
 
     let mut config_builder = cli
