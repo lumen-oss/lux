@@ -101,7 +101,7 @@ lua = ">=5.1"
 url = "https://github.com/lumen-oss/luarocks-stub"
 
 [dependencies]
-fallo = "2.3.0"
+fallo = "2.2.0"
 "#,
     )
     .await
