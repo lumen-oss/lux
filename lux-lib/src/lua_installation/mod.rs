@@ -405,6 +405,18 @@ pub fn detect_installed_lua_version() -> Option<LuaVersion> {
         })
 }
 
+/// Determine the Lua version to use with the `--nvim` flag.
+/// Prefers LuaJIT if installed, falling back to Lua 5.1.
+pub fn nvim_lua_version() -> Option<LuaVersion> {
+    if LuaInstallation::probe(&LuaVersion::LuaJIT, &Default::default()).is_some() {
+        Some(LuaVersion::LuaJIT)
+    } else if LuaInstallation::probe(&LuaVersion::Lua51, &Default::default()).is_some() {
+        Some(LuaVersion::Lua51)
+    } else {
+        None
+    }
+}
+
 fn find_lua_executable(bin_path: &Path, version: &LuaVersion) -> Option<PathBuf> {
     fs::sync::read_dir(bin_path).ok().and_then(|entries| {
         let bin_files = entries
