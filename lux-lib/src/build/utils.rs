@@ -531,7 +531,8 @@ async fn link_c_artifacts(
     objects: Vec<PathBuf>,
     config: &Config,
 ) -> Result<(), LinkCModulesError> {
-    let output_path = target_parent_dir.join(target_file_name);
+    let output_path = std::path::absolute(target_parent_dir.join(target_file_name))
+        .map_err(LinkCModulesError::Io)?;
     let compiler = build.try_get_compiler()?;
     // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
     // the current working directory.
