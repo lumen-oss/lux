@@ -78,9 +78,9 @@ pub fn load_loader(lua: &Lua) -> mlua::Result<()> {
 
     let globals = lua.globals();
     let package: LuaTable = globals.get("package")?;
-    #[cfg(feature = "lua51")]
+    #[cfg(any(feature = "lua51", feature = "luajit"))]
     let loaders: LuaTable = package.get("loaders")?;
-    #[cfg(not(feature = "lua51"))]
+    #[cfg(not(any(feature = "lua51", feature = "luajit")))]
     let loaders: LuaTable = package.get("searchers")?;
     loaders.raw_insert(1, lua.create_function(loader)?)?;
 
