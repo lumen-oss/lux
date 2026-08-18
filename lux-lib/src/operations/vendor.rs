@@ -1,5 +1,7 @@
 use std::{
+    io::{self, Cursor},
     path::{Path, PathBuf},
+    process::ExitStatus,
     sync::Arc,
 };
 
@@ -8,6 +10,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use itertools::Itertools;
 use miette::Diagnostic;
+use path_slash::PathExt;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -18,13 +21,13 @@ use crate::{
     config::Config,
     fs,
     lockfile::{LocalPackageLockType, ReadOnly, RemotePackageSourceUrl},
-    lua_rockspec::RemoteLuaRockspec,
+    lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{
         self,
         resolve::{PackageInstallData, Resolve, ResolveDependenciesError},
         DownloadedRockspec, FetchSrcError, PackageInstallSpec, UnpackError,
     },
-    package::PackageReq,
+    package::{PackageReq, PackageSpec},
     project::project_toml::LocalProjectTomlValidationError,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     reqwest::RequestError,
@@ -91,6 +94,16 @@ pub enum VendorError {
     #[error("failed to download rock source")]
     #[diagnostic(forward(0))]
     Request(#[from] RequestError),
+    #[error("failed to run `cargo vendor`")]
+    #[diagnostic(help("ensure cargo is installed"))]
+    CargoVendor { source: io::Error },
+    #[error("cargo vendor failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
+    #[diagnostic(help("check the output for details."))]
+    CargoVendorFailure {
+        status: ExitStatus,
+        stdout: String,
+        stderr: String,
+    },
 }
 
 impl<State> VendorBuilder<'_, State>
@@ -101,6 +114,8 @@ where
         do_vendor_dependencies(self._build()).await
     }
 }
+
+const CARGO_VENDOR_SUBDIR: &str = "cargo";
 
 async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     let vendor_dir = args.vendor_dir;
@@ -136,11 +151,41 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
         .unique_by(|pkg| (pkg.spec.name().clone(), pkg.spec.version().clone()))
         .collect_vec();
 
+    let rust_mlua_deps: Vec<(PackageSpec, Option<PathBuf>)> = all_packages
+        .iter()
+        .filter_map(|pkg| {
+            match pkg
+                .downloaded_rock
+                .rockspec()
+                .build()
+                .current_platform()
+                .build_backend
+            {
+                Some(BuildBackendSpec::RustMlua(_)) => Some((
+                    pkg.spec.to_package(),
+                    pkg.downloaded_rock
+                        .rockspec()
+                        .source()
+                        .current_platform()
+                        .unpack_dir
+                        .clone(),
+                )),
+                _ => None,
+            }
+        })
+        .collect();
+
     if !no_delete && vendor_dir.exists() {
         fs::tokio::remove_dir_all(&vendor_dir).await?;
     }
 
-    vendor_sources(Arc::new(vendor_dir), config.clone(), all_packages).await
+    let vendor_dir = Arc::new(vendor_dir);
+    vendor_sources(vendor_dir.clone(), config.clone(), all_packages).await?;
+    vendor_target_cargo_deps(&vendor_dir, &target, config).await?;
+    for (dep, unpack_dir) in rust_mlua_deps {
+        vendor_package_cargo_deps(&vendor_dir, &dep, &unpack_dir, config).await?;
+    }
+    Ok(())
 }
 
 async fn mk_resolve_args(
@@ -151,11 +196,13 @@ async fn mk_resolve_args(
 ) -> Result<(RemotePackageDB, Vec<PackageInstallSpec>), VendorError> {
     match &target {
         VendorTarget::Workspace(workspace) => {
-            let lockfile = workspace.lockfile()?;
-            let package_db = if !no_lock {
-                lockfile.local_pkg_lock(&lock_type).clone().into()
-            } else {
-                RemotePackageDB::from_config(config).await?
+            // Resolve against the project's lockfile if present, otherwise fall
+            // back to the remote package DB (e.g. for a project that has not
+            // yet generated a lockfile).
+            let lockfile = workspace.try_lockfile()?;
+            let package_db = match lockfile {
+                Some(lockfile) if !no_lock => lockfile.local_pkg_lock(&lock_type).clone().into(),
+                _ => RemotePackageDB::from_config(config).await?,
             };
             let mut install_specs = Vec::new();
             for project in workspace.members() {
@@ -374,4 +421,148 @@ async fn vendor_binary_rock(
     fs::tokio::write(&rockspec_path, rockspec_lua_content).await?;
 
     Ok(())
+}
+
+#[tracing::instrument(name = "Vendoring cargo dependencies", level = "info", skip_all)]
+async fn vendor_target_cargo_deps(
+    vendor_dir: &Path,
+    target: &VendorTarget,
+    config: &Config,
+) -> Result<(), VendorError> {
+    if is_rust_mlua_build_backend(target) {
+        match target {
+            VendorTarget::Workspace(workspace) => {
+                cargo_vendor(vendor_dir, workspace.root().as_path(), config).await
+            }
+            VendorTarget::Rockspec(rockspec) => {
+                let temp_dir = fs::tempfile::tempdir()?;
+                operations::FetchSrc::new(temp_dir.path(), rockspec, config)
+                    .fetch_internal()
+                    .await?;
+                cargo_vendor(
+                    vendor_dir,
+                    &cargo_manifest_dir(
+                        temp_dir.path(),
+                        rockspec.source().current_platform().unpack_dir.as_deref(),
+                    ),
+                    config,
+                )
+                .await
+            }
+        }
+    } else {
+        Ok(())
+    }
+}
+
+#[tracing::instrument(
+    name = "Vendoring cargo dependencies",
+    level = "info",
+    skip_all,
+    fields(
+        package = package.name().to_string(),
+        version = package.version().to_string(),
+    ),
+)]
+async fn vendor_package_cargo_deps(
+    vendor_dir: &Path,
+    package: &PackageSpec,
+    unpack_dir: &Option<PathBuf>,
+    config: &Config,
+) -> Result<(), VendorError> {
+    let source_dir = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
+    let source_root = if source_dir.is_dir() {
+        Some(source_dir)
+    } else if source_dir.is_file() {
+        let temp_dir = fs::tempfile::tempdir()?;
+        extract_source_archive(&source_dir, unpack_dir.as_deref(), temp_dir.path()).await?;
+        Some(temp_dir.path().to_path_buf())
+    } else {
+        None
+    };
+    if let Some(source_root) = source_root {
+        cargo_vendor(
+            vendor_dir,
+            &cargo_manifest_dir(&source_root, unpack_dir.as_deref()),
+            config,
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+fn is_rust_mlua_build_backend(target: &VendorTarget) -> bool {
+    match target {
+        VendorTarget::Workspace(workspace) => workspace.members().iter().any(|project| {
+            project.toml().into_local().is_ok_and(|toml| {
+                matches!(
+                    toml.build().current_platform().build_backend.to_owned(),
+                    Some(BuildBackendSpec::RustMlua(_))
+                )
+            })
+        }),
+        VendorTarget::Rockspec(rockspec) => matches!(
+            rockspec.build().current_platform().build_backend.to_owned(),
+            Some(BuildBackendSpec::RustMlua(_))
+        ),
+    }
+}
+
+/// The directory containing the crate's `Cargo.toml`.
+fn cargo_manifest_dir(source_root: &Path, unpack_dir: Option<&Path>) -> PathBuf {
+    match unpack_dir {
+        Some(dir) => source_root.join(dir),
+        None => source_root.to_path_buf(),
+    }
+}
+
+async fn extract_source_archive(
+    source_file: &Path,
+    unpack_dir: Option<&Path>,
+    dest_dir: &Path,
+) -> Result<(), VendorError> {
+    let bytes = fs::tokio::read(source_file).await?;
+    let mime_type = infer::get(&bytes).map(|file_type| file_type.mime_type());
+    let file_name = source_file
+        .file_name()
+        .map(|file_name| file_name.to_string_lossy())
+        .unwrap_or(source_file.to_slash_lossy())
+        .to_string();
+    operations::unpack::unpack(
+        mime_type,
+        Cursor::new(bytes),
+        unpack_dir.is_none(),
+        file_name,
+        dest_dir,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn cargo_vendor(
+    vendor_dir: &Path,
+    source_dir: &Path,
+    config: &Config,
+) -> Result<(), VendorError> {
+    let cargo_vendor_dir = fs::sync::absolute(vendor_dir.join(CARGO_VENDOR_SUBDIR))?;
+    fs::tokio::create_dir_all(&cargo_vendor_dir).await?;
+
+    let output = config
+        .wrapped_command("cargo", ["vendor", "--locked", "--versioned-dirs"])
+        .arg(&cargo_vendor_dir)
+        .current_dir(source_dir)
+        .output()
+        .await
+        .map_err(|source| VendorError::CargoVendor { source })?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(VendorError::CargoVendorFailure {
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).into(),
+            stderr: String::from_utf8_lossy(&output.stderr).into(),
+        })
+    }
 }
