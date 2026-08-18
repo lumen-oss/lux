@@ -9,7 +9,8 @@ use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
 use itertools::Itertools;
 use miette::Diagnostic;
 use std::collections::HashMap;
-use std::io;
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use thiserror::Error;
@@ -73,6 +74,40 @@ impl BuildBackend for RustMluaBuildSpec {
         build_args.push("--features");
         build_args.push(&features);
         build_args.extend(self.cargo_extra_args.iter().map(|arg| arg.as_str()));
+
+        match config
+            .vendor_dir()
+            .map(|vendor_dir| vendor_dir.join("cargo"))
+        {
+            Some(cargo_vendor_dir) if cargo_vendor_dir.is_dir() => {
+                let cargo_config_dir = build_dir.join(".cargo");
+                fs::tokio::create_dir_all(&cargo_config_dir).await?;
+                let cargo_config_path = cargo_config_dir.join("config.toml");
+                if cargo_config_path.exists() {
+                    // NOTE: The source may already ship a `.cargo/config.toml` that is
+                    // read-only (e.g. vendored from a read-only Nix store)
+                    utils::make_writable(&cargo_config_path).await?;
+                }
+                let mut target_file = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&cargo_config_path)
+                    .map_err(|source| fs::FsError::FileOpen {
+                        path: cargo_config_path.to_path_buf(),
+                        source,
+                    })?;
+                write!(&mut target_file,
+                    "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"{}\"\n",
+                    cargo_vendor_dir.display()
+                ).map_err(|source| fs::FsError::Write {
+                    path: cargo_config_path.to_path_buf(),
+                    source,
+                })?;
+                build_args.push("--offline");
+            }
+            _ => (),
+        }
+
         {
             match config
                 .wrapped_command("cargo", build_args)

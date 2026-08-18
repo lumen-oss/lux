@@ -1,4 +1,7 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use super::FsError;
 
@@ -80,6 +83,15 @@ pub(crate) fn open(path: impl AsRef<Path>) -> Result<fs::File, FsError> {
 pub(crate) fn create(path: impl AsRef<Path>) -> Result<fs::File, FsError> {
     let path = path.as_ref();
     fs::File::create(path).map_err(|source| FsError::FileCreate {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+/// Wrapped [`std::path::absolute`].
+pub(crate) fn absolute(path: impl AsRef<Path>) -> Result<PathBuf, FsError> {
+    let path = path.as_ref();
+    std::path::absolute(path).map_err(|source| FsError::GetAbsolutePath {
         path: path.to_path_buf(),
         source,
     })
