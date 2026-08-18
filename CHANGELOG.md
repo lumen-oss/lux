@@ -5,6 +5,371 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.41.1](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.41.0...lux-lsp-v0.41.1) `lux-lsp` - 2026-08-15
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.58.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.0...lux-lib-v0.58.1) `lux-lib` - 2026-08-15
+
+### Fixed
+- *(run)* don't treat omitted `args` in `lux.toml` as single arg ([#1847](https://github.com/lumen-oss/lux/pull/1847))
+- *(fetch)* checkout submodules ([#1848](https://github.com/lumen-oss/lux/pull/1848))
+
+## [0.41.1](https://github.com/lumen-oss/lux/compare/v0.41.0...v0.41.1) `lux-cli` - 2026-08-15
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.40.9](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.40.8...lux-lsp-v0.40.9) `lux-lsp` - 2026-08-13
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.58.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.57.0...lux-lib-v0.58.0) `lux-lib` - 2026-08-13
+
+### Added
+- [**breaking**] `[access-tokens]` config option ([#1843](https://github.com/lumen-oss/lux/pull/1843))
+
+## [0.57.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.5...lux-lib-v0.57.0) `lux-lib` - 2026-08-13
+
+### Added
+- *(tracing)* include build backend name in luarocks span ([#1827](https://github.com/lumen-oss/lux/pull/1827))
+
+### Fixed
+- *(unpack)* don't recurse infinitely on archive with dotless directory ([#1838](https://github.com/lumen-oss/lux/pull/1838))
+- *(install)* better error diagnostics ([#1836](https://github.com/lumen-oss/lux/pull/1836))
+- *(install)* propagate build error diagnostics ([#1835](https://github.com/lumen-oss/lux/pull/1835))
+- *(error-reporting)* don't embed error source in error messages ([#1831](https://github.com/lumen-oss/lux/pull/1831))
+- *(error-reporting)* [**breaking**] propagate integrity error diagnostics ([#1832](https://github.com/lumen-oss/lux/pull/1832))
+
+## [0.41.0](https://github.com/lumen-oss/lux/compare/v0.40.9...v0.41.0) `lux-cli` - 2026-08-13
+
+### Added
+- [**breaking**] `[access-tokens]` config option ([#1843](https://github.com/lumen-oss/lux/pull/1843))
+
+## [0.40.9](https://github.com/lumen-oss/lux/compare/v0.40.8...v0.40.9) `lux-cli` - 2026-08-13
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.40.8](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.40.7...lux-lsp-v0.40.8) `lux-lsp` - 2026-08-12
+
+### Other
+- update Cargo.lock dependencies
+
+## [0.40.8](https://github.com/lumen-oss/lux/compare/v0.40.6...v0.40.8) `lux-cli` - 2026-08-12
+
+### Dependencies
+- *(deps)* bump emmylua_formatter from 0.24.0 to 0.25.0 ([#1825](https://github.com/lumen-oss/lux/pull/1825))
+
+## [0.40.7](https://github.com/lumen-oss/lux/compare/v0.40.6...v0.40.7) `lux-cli` - 2026-08-12
+
+### Dependencies
+- *(deps)* bump emmylua_formatter from 0.24.0 to 0.25.0 ([#1825](https://github.com/lumen-oss/lux/pull/1825))
+
+## [0.56.5](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.4...lux-lib-v0.56.5) `lux-lib` - 2026-08-10
+
+### Added
+- add install/uninstall reports to lux-lua
+- *(build)* `release` and `dev` profiles ([#1803](https://github.com/lumen-oss/lux/pull/1803))
+- *(build)* `runner` config to wrap build commands in a sandbox ([#1801](https://github.com/lumen-oss/lux/pull/1801))
+
+### Fixed
+- *(tracing)* properly instrument async code ([#1819](https://github.com/lumen-oss/lux/pull/1819))
+- gag stdout during sync to prevent `cargo:` rerun output
+- *(dist/bin)* resolve native modules via rpath ([#1811](https://github.com/lumen-oss/lux/pull/1811))
+
+## [0.40.6](https://github.com/lumen-oss/lux/compare/v0.40.5...v0.40.6) `lux-cli` - 2026-08-10
+
+### Added
+- disable prompting if not in a terminal/tty ([#1822](https://github.com/lumen-oss/lux/pull/1822))
+- *(build)* `release` and `dev` profiles ([#1803](https://github.com/lumen-oss/lux/pull/1803))
+- *(build)* `runner` config to wrap build commands in a sandbox ([#1801](https://github.com/lumen-oss/lux/pull/1801))
+
+### Dependencies
+- *(deps)* bump totp-rs from 5.7.2 to 6.0.0 ([#1813](https://github.com/lumen-oss/lux/pull/1813))
+
+### Fixed
+- *(tracing)* properly instrument async code ([#1819](https://github.com/lumen-oss/lux/pull/1819))
+- *(dist/bin)* resolve native modules via rpath ([#1811](https://github.com/lumen-oss/lux/pull/1811))
+
+## [0.56.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.3...lux-lib-v0.56.4) `lux-lib` - 2026-08-09
+
+### Added
+- *(lux-lua)* expand API surface
+
+## [0.40.4](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.40.3...lux-lsp-v0.40.4) `lux-lsp` - 2026-08-08
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.40.3](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.40.2...lux-lsp-v0.40.3) `lux-lsp` - 2026-08-08
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.56.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.1...lux-lib-v0.56.2) `lux-lib` - 2026-08-08
+
+### Fixed
+- *(lockfile)* idempotent entry addition ([#1799](https://github.com/lumen-oss/lux/pull/1799))
+
+## [0.56.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.56.0...lux-lib-v0.56.1) `lux-lib` - 2026-08-08
+
+### Reverted
+- *(fetch)* cache sources ([#1795](https://github.com/lumen-oss/lux/pull/1795))
+
+## [0.40.4](https://github.com/lumen-oss/lux/compare/v0.40.3...v0.40.4) `lux-cli` - 2026-08-08
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.40.3](https://github.com/lumen-oss/lux/compare/v0.40.2...v0.40.3) `lux-cli` - 2026-08-08
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.40.2](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.40.1...lux-lsp-v0.40.2) `lux-lsp` - 2026-08-06
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.56.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.55.1...lux-lib-v0.56.0) `lux-lib` - 2026-08-06
+
+### Fixed
+- *(debug/toolchains)* compiler detection ([#1789](https://github.com/lumen-oss/lux/pull/1789))
+
+### Performance
+- *(fetch)* cache sources
+- *(install)* [**breaking**] parallelise install and dependency resolution
+- offload hashing & archive unpack from async runtime
+- [**breaking**] reuse HTTP(S) clients
+
+## [0.40.2](https://github.com/lumen-oss/lux/compare/v0.40.1...v0.40.2) `lux-cli` - 2026-08-06
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.55.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.55.0...lux-lib-v0.55.1) `lux-lib` - 2026-08-04
+
+### Added
+- workspace-local configs
+
+## [0.40.1](https://github.com/lumen-oss/lux/compare/v0.40.0...v0.40.1) `lux-cli` - 2026-08-04
+
+### Added
+- workspace-local configs
+- *(error-reporting)* improved diagnostics
+
+## [0.55.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.6...lux-lib-v0.55.0) `lux-lib` - 2026-08-03
+
+### Added
+- *(lsp)* [**breaking**] allow setting port file via `LUX_LSP_PORT_FILE`
+- support detached workspace trees
+
+## [0.40.0](https://github.com/lumen-oss/lux/compare/v0.39.9...v0.40.0) `lux-cli` - 2026-08-03
+
+### Added
+- support detached workspace trees
+- [**breaking**] `lx util` subcommand for manpages & completions
+- man subcommand for generating manpages
+- *(completion)* support specifying output directory
+
+## [0.39.9](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.39.8...lux-lsp-v0.39.9) `lux-lsp` - 2026-08-01
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.54.6](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.5...lux-lib-v0.54.6) `lux-lib` - 2026-08-01
+
+### Fixed
+- also ignore new trace/debug events produced by the lux-lib progress layers
+
+## [0.39.9](https://github.com/lumen-oss/lux/compare/v0.39.8...v0.39.9) `lux-cli` - 2026-08-01
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.39.8](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.39.7...lux-lsp-v0.39.8) `lux-lsp` - 2026-07-31
+
+### Fixed
+- *(lux-lsp)* create port file immediately and clean up code ([#1756](https://github.com/lumen-oss/lux/pull/1756))
+
+## [0.54.5](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.4...lux-lib-v0.54.5) `lux-lib` - 2026-07-31
+
+### Fixed
+- *(lux-lsp)* create port file immediately and clean up code ([#1756](https://github.com/lumen-oss/lux/pull/1756))
+- Lua installations on non-nixos distros ([#1755](https://github.com/lumen-oss/lux/pull/1755))
+
+## [0.39.7](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.39.6...lux-lsp-v0.39.7) `lux-lsp` - 2026-07-29
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.39.6](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.39.5...lux-lsp-v0.39.6) `lux-lsp` - 2026-07-29
+
+### Added
+- lux-lsp for progress reports
+
+### Fixed
+- *(lux-lsp)* broken `Cargo.toml` for publishing and missing changelog
+- altered error messages
+
+
+## [0.54.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.3...lux-lib-v0.54.4) `lux-lib` - 2026-07-29
+
+### Fixed
+- *(workspace)* properly detect nested single-project workspaces ([#1750](https://github.com/lumen-oss/lux/pull/1750))
+
+## [0.54.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.2...lux-lib-v0.54.3) `lux-lib` - 2026-07-29
+
+### Added
+- lux-lsp for progress reports
+- add 2FA prompt ([#1745](https://github.com/lumen-oss/lux/pull/1745))
+
+### Fixed
+- altered error messages
+
+## [0.39.7](https://github.com/lumen-oss/lux/compare/v0.39.6...v0.39.7) `lux-cli` - 2026-07-29
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.39.6](https://github.com/lumen-oss/lux/compare/v0.39.5...v0.39.6) `lux-cli` - 2026-07-29
+
+### Added
+- lux-lsp for progress reports
+- add 2FA prompt ([#1745](https://github.com/lumen-oss/lux/pull/1745))
+
+## [0.54.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.1...lux-lib-v0.54.2) `lux-lib` - 2026-07-28
+
+### Added
+- add config option to filter rock types when searching ([#1742](https://github.com/lumen-oss/lux/pull/1742))
+
+## [0.39.5](https://github.com/lumen-oss/lux/compare/v0.39.4...v0.39.5) `lux-cli` - 2026-07-28
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.54.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.54.0...lux-lib-v0.54.1) `lux-lib` - 2026-07-27
+
+### Added
+- expose `PartialProjectToml::lua`
+
+### Dependencies
+- *(deps)* bump serial_test from 3.5.0 to 4.0.1 ([#1739](https://github.com/lumen-oss/lux/pull/1739))
+
+## [0.39.4](https://github.com/lumen-oss/lux/compare/v0.39.3...v0.39.4) `lux-cli` - 2026-07-27
+
+### Added
+- default `--lua-version` to project's exact Lua constraint ([#1737](https://github.com/lumen-oss/lux/pull/1737))
+
+### Dependencies
+- *(deps)* bump serial_test from 3.5.0 to 4.0.1 ([#1739](https://github.com/lumen-oss/lux/pull/1739))
+
+## [0.54.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.53.0...lux-lib-v0.54.0) `lux-lib` - 2026-07-25
+
+### Added
+- *(error-reporting)* [**breaking**] `*::fs` wrappers with `miette` diagnostics ([#1733](https://github.com/lumen-oss/lux/pull/1733))
+
+## [0.39.3](https://github.com/lumen-oss/lux/compare/v0.39.2...v0.39.3) `lux-cli` - 2026-07-25
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.53.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.52.0...lux-lib-v0.53.0) `lux-lib` - 2026-07-22
+
+### Added
+- *(error-reporting)* [**breaking**] luarocks compatibility layer diagnostics ([#1732](https://github.com/lumen-oss/lux/pull/1732))
+- *(error-reporting)* [**breaking**] pin/unpin diagnostics ([#1730](https://github.com/lumen-oss/lux/pull/1730))
+- *(error-reporting)* [**breaking**] workspace & project diagnostics ([#1728](https://github.com/lumen-oss/lux/pull/1728))
+- *(error-reporting)* rockspec source diagnostics ([#1726](https://github.com/lumen-oss/lux/pull/1726))
+
+## [0.39.2](https://github.com/lumen-oss/lux/compare/v0.39.1...v0.39.2) `lux-cli` - 2026-07-22
+
+### Added
+- *(ui)* slow down moon spinner animation ([#1731](https://github.com/lumen-oss/lux/pull/1731))
+
+## [0.52.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.51.0...lux-lib-v0.52.0) `lux-lib` - 2026-07-21
+
+### Added
+- [**breaking**] mark error enums as non-exhaustive ([#1724](https://github.com/lumen-oss/lux/pull/1724))
+- *(error-reporting)* [**breaking**] upload diagnostics ([#1723](https://github.com/lumen-oss/lux/pull/1723))
+- *(tracing)* more trace spans ([#1718](https://github.com/lumen-oss/lux/pull/1718))
+
+## [0.39.1](https://github.com/lumen-oss/lux/compare/v0.39.0...v0.39.1) `lux-cli` - 2026-07-21
+
+### Added
+- *(tracing)* more trace spans ([#1718](https://github.com/lumen-oss/lux/pull/1718))
+
+## [0.2.1](https://github.com/lumen-oss/lux/compare/lux-macros-v0.2.0...lux-macros-v0.2.1) `lux-macros` - 2026-07-20
+
+### Dependencies
+- *(deps)* bump syn from 2.0.118 to 3.0.2 ([#1714](https://github.com/lumen-oss/lux/pull/1714))
+
+## [0.51.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.50.0...lux-lib-v0.51.0) `lux-lib` - 2026-07-20
+
+### Added
+- *(error-reporting)* [**breaking**] include fields in lua_rockspec diagnostic source code
+- *(error-reporting)* [**breaking**] less lua_rockspec error repetition
+- *(error-reporting)* [**breaking**] lua rockspec diagnostics
+- *(error-reporting)* [**breaking**] exec operation diagnostics
+- *(error-reporting)* [**breaking**] config module diagnostics
+- *(error-reporting)* [**breaking**] download and fetch operation diagnostics
+- *(error-reporting)* [**breaking**] more config diagnostics
+
+## [0.50.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.2...lux-lib-v0.50.0) `lux-lib` - 2026-07-20
+
+### Added
+- reduce emojis in progress spinners
+- *(tracing)* add trace spans for tokio jobs
+- more output on `--verbose`
+- instrument build backends + async tasks
+- *(tracing)* add fields to spans
+- [**breaking**] replace progress bars with `tracing` calls [WIP]
+
+### Fixed
+- prevent intermediates compilation from emitting to stderr
+
+### Other
+- *(tracing)* make CI happy
+- make clippy happy
+
+## [0.39.0](https://github.com/lumen-oss/lux/compare/v0.38.1...v0.39.0) `lux-cli` - 2026-07-20
+
+### Added
+- *(tracing)* add cli tracing output
+- reduce emojis in progress spinners
+- more output on `--verbose`
+- instrument build backends + async tasks
+- format span fields in progress spinners if present
+- output with debug level if `--verbose` is set
+- *(tracing)* add fields to spans
+- [**breaking**] replace progress bars with `tracing` calls [WIP]
+
+### Fixed
+- don't display spinners if not in a terminal/tty
+
+### Other
+- *(tracing)* make CI happy
+- re-add `lx unpack` implementation with tracing info messages
+
+## [0.49.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.1...lux-lib-v0.49.2) `lux-lib` - 2026-07-17
+
+### Dependencies
+- *(deps)* bump infer from 0.19.0 to 0.22.0 ([#1696](https://github.com/lumen-oss/lux/pull/1696))
+
+## [0.49.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.49.0...lux-lib-v0.49.1) `lux-lib` - 2026-07-16
+
+### Fixed
+- *(logging)* also route MultiProgress output through the sink
+
+## [0.49.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.48.0...lux-lib-v0.49.0) `lux-lib` - 2026-07-16
+
+### Added
+- *(error-reporting)* [**breaking**] manifest and project config diagnostics
+- *(error-reporting)* [**breaking**] more build module diagnostics
+
 ## [0.48.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.47.0...lux-lib-v0.48.0) `lux-lib` - 2026-07-16
 
 ### Added
@@ -12,6 +377,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(error-reporting)* [**breaking**] builtin build diagnostics
 - *(error-reporting)* [**breaking**] test operations diagnostics
 - *(error-reporting)* [**breaking**] lockfile integrity diagnostics
+
+## [0.38.1](https://github.com/lumen-oss/lux/compare/v0.38.0...v0.38.1) `lux-cli` - 2026-07-16
+
+### Other
+- updated the following local packages: lux-lib
 
 ## [0.37.1](https://github.com/lumen-oss/lux/compare/v0.37.0...v0.37.1) `lux-cli` - 2026-07-15
 
