@@ -51,6 +51,36 @@
     '';
   };
 
+  plugin-src-noDeps = pkgs.stdenv.mkDerivation {
+    name = "foo-nvim-src";
+    dontUnpack = true;
+    installPhase = ''
+      mkdir -p $out/lua $out/plugin
+      cat > $out/lux.toml <<'EOF'
+      package = "foo-nvim"
+      version = "1.0.0"
+      lua = ">=5.1"
+
+      [description]
+      summary = "test plugin"
+      license = "MIT"
+
+      [build]
+      type = "builtin"
+      copy_directories = ["plugin"]
+
+      [build.modules]
+      foo = "lua/foo.lua"
+      EOF
+      cat > $out/lua/foo.lua <<'EOF'
+      return { hello = function() return "hello world" end }
+      EOF
+      cat > $out/plugin/foo.vim <<'EOF'
+      lua _G.foo_from_plugin = require("foo").hello()
+      EOF
+    '';
+  };
+
   foo-nvim =
     (pkgs.buildLuxPackage {
       inherit lua;
@@ -62,12 +92,31 @@
       luxVendorDir = vendored-dep;
     };
 
+  foo-nvim-luxHash =
+    (pkgs.buildLuxPackage {
+      inherit lua;
+      lux-cli = pkgs.lux-cli.debug;
+    }) {
+      pname = "foo-nvim";
+      version = "1.0.0";
+      src = plugin-src-noDeps;
+      luxHash = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
+    };
+
   foo-vimplugin = pkgs.toLuxNeovimPlugin foo-nvim;
 
+  foo-vimplugin-luxHash = pkgs.toLuxNeovimPlugin foo-nvim-luxHash;
+
   nvim = (pkgs.neovim-lux pkgs.lux-luajit.debug).override {plugins = [foo-vimplugin];};
+  nvim-luxHash = (pkgs.neovim-lux pkgs.lux-luajit.debug).override {plugins = [foo-vimplugin-luxHash];};
 in {
   test = pkgs.runCommandLocal "lux-nvim-plugin-test" {} ''
     output=$(${nvim}/bin/nvim --headless -c 'lua print(_G.foo_from_plugin)' -c 'qa!' 2>&1)
+    echo "$output" | grep -q "hello world"
+    touch "$out"
+  '';
+  test-luxHash = pkgs.runCommandLocal "lux-nvim-plugin-test" {} ''
+    output=$(${nvim-luxHash}/bin/nvim --headless -c 'lua print(_G.foo_from_plugin)' -c 'qa!' 2>&1)
     echo "$output" | grep -q "hello world"
     touch "$out"
   '';

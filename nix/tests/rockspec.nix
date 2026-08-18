@@ -39,6 +39,21 @@
     propagatedBuildInputs = [pkgs.lua5_1.pkgs.say];
   };
 
+  toml-edit = buildLuxRockspec {
+    pname = "toml-edit";
+    version = "0.7.0-1";
+    src = pkgs.fetchzip {
+      url = "https://github.com/lumen-oss/toml-edit.lua/archive/v0.7.0.zip";
+      hash = "sha256-8Es+J4xUuIcMKJJ/CRO/VKfGP/h0OrJjUQIgWXk1jw8=";
+    };
+    knownRockspec = pkgs.fetchurl {
+      url = "mirror://luarocks/toml-edit-0.7.0-1.rockspec";
+      hash = "sha256-z6lRyBNlATo8Y5YQVY8uW0NSKU8ikdE6LzhcIweXk5w=";
+    };
+    luxHash = "sha256-Gt8dXFvJoPvACR2BLVaEKRydHsVpbiHLvq8ZkDemcQs=";
+    rustSupport = true;
+  };
+
   mkRequireTest = name: rock: mod:
     pkgs.runCommandLocal name {} ''
       set -euo pipefail
@@ -48,4 +63,5 @@
 in {
   cjson = mkRequireTest "rockspec-lua-cjson-test" lua-cjson "cjson";
   luassert = mkRequireTest "rockspec-luassert-test" luassert "luassert";
+  toml-edit = mkRequireTest "rockspec-toml-edit-test" toml-edit "toml_edit";
 }

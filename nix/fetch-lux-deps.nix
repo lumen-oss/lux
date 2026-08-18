@@ -4,6 +4,9 @@
   lux-cli,
   git,
   cacert,
+  lua,
+  cargo,
+  writableTmpDirAsHomeHook,
 }:
 lib.extendMkDerivation {
   constructDrv = stdenvNoCC.mkDerivation;
@@ -12,6 +15,11 @@ lib.extendMkDerivation {
     "hash"
     "luxLock"
     "luxRoot"
+    "rockspecFilename"
+    "knownRockspec"
+    "luaVersion"
+    "nvim"
+    "rustSupport"
   ];
 
   extendDrvArgs = finalAttrs: {
@@ -21,9 +29,33 @@ lib.extendMkDerivation {
     src,
     luxLock ? null,
     luxRoot ? null,
+    rockspecFilename ? null,
+    knownRockspec ? null,
+    luaVersion ? null,
+    nvim ? false,
+    rustSupport ? false,
     nativeBuildInputs ? [],
     ...
-  }: {
+  }: let
+    luaVersionFlag =
+      if nvim
+      then "--nvim"
+      else lib.optionalString (luaVersion != null) "--lua-version '${luaVersion}'";
+    vendorCmd =
+      if rockspecFilename != null || knownRockspec != null
+      then ''
+        ${
+          if knownRockspec != null
+          then "cp ${knownRockspec} ./pkg.rockspec"
+          else "cp \"$src/${rockspecFilename}\" ./pkg.rockspec"
+        }
+
+        lx ${luaVersionFlag} vendor "$out" --rockspec ./pkg.rockspec --no-delete
+      ''
+      else ''
+        lx ${luaVersionFlag} vendor "$out" --no-delete
+      '';
+  in {
     name = "${pname}-${version}-vendor-deps";
 
     inherit src;
@@ -31,9 +63,12 @@ lib.extendMkDerivation {
     nativeBuildInputs =
       [
         lux-cli
+        lua
         git
         cacert
+        writableTmpDirAsHomeHook
       ]
+      ++ lib.optional rustSupport cargo
       ++ nativeBuildInputs;
 
     impureEnvVars = lib.fetchers.proxyImpureEnvVars;
@@ -46,11 +81,13 @@ lib.extendMkDerivation {
     buildPhase = ''
       runHook preBuild
 
+      mkdir -p $out
+
       ${lib.optionalString (luxRoot != null) "cd ${luxRoot}"}
 
       ${lib.optionalString (luxLock != null) "cp ${luxLock} lux.lock"}
 
-      lx vendor "$out" --no-delete
+      ${vendorCmd}
 
       runHook postBuild
     '';

@@ -5,8 +5,12 @@
   luaLib,
   lux-cli,
   luxLoaderSetupHook,
+  fetchLuxDeps,
   pkg-config,
+  cargo,
+  rustc,
   writeTextFile,
+  writableTmpDirAsHomeHook,
 }:
 lib.extendMkDerivation {
   constructDrv = stdenv.mkDerivation;
@@ -15,6 +19,10 @@ lib.extendMkDerivation {
     "knownRockspec"
     "rockspecVersion"
     "nvim"
+    "luxHash"
+    "luxDeps"
+    "luxVendorDir"
+    "rustSupport"
   ];
 
   transformDrv = drv:
@@ -27,6 +35,10 @@ lib.extendMkDerivation {
     knownRockspec ? null,
     rockspecVersion ? finalAttrs.version,
     nvim ? false,
+    luxHash ? null,
+    luxDeps ? null,
+    luxVendorDir ? null,
+    rustSupport ? false,
     nativeBuildInputs ? [],
     propagatedBuildInputs ? [],
     ...
@@ -52,10 +64,26 @@ lib.extendMkDerivation {
       text = lib.generators.toLua {asBindings = true;} luarocksConfig;
     };
 
-    rockspecArg =
+    rockspecFilename =
       if knownRockspec != null
-      then "cp ${knownRockspec} ./pkg.rockspec"
-      else "cp \"$src/${pname}-${rockspecVersion}.rockspec\" ./pkg.rockspec";
+      then knownRockspec
+      else "${pname}-${rockspecVersion}.rockspec";
+
+    vendoredDeps =
+      if luxVendorDir != null
+      then luxVendorDir
+      else if luxDeps != null
+      then luxDeps
+      else if luxHash != null
+      then
+        fetchLuxDeps
+        {
+          inherit src pname rustSupport knownRockspec rockspecFilename nvim;
+          version = rockspecVersion;
+          luaVersion = luaVersionDir;
+          hash = luxHash;
+        }
+      else null;
   in {
     name = "lua${luaVersionDir}-${pname}-${version}";
     inherit src;
@@ -72,6 +100,12 @@ lib.extendMkDerivation {
         pkg-config
         (lua.withPackages (ps: lib.optional (luarocksDeps != []) ps.luarocks))
       ]
+      ++ lib.optionals rustSupport
+      [
+        cargo
+        rustc
+        writableTmpDirAsHomeHook
+      ]
       ++ nativeBuildInputs;
 
     propagatedBuildInputs =
@@ -80,7 +114,7 @@ lib.extendMkDerivation {
     buildPhase = ''
       runHook preBuild
 
-      ${rockspecArg}
+      cp ${rockspecFilename} ./pkg.rockspec
 
       # Provide the package's own source through a vendor dir, so lux fetches
       # it locally instead of from the rockspec's remote URL.
@@ -95,8 +129,10 @@ lib.extendMkDerivation {
         '')
         luarocksDeps)}
 
+      ${lib.optionalString (vendoredDeps != null) "cp -r ${vendoredDeps}/. ./vendor/"}
+
       cp -r "$src" "./vendor/${pname}@${rockspecVersion}"
-      chmod -R u+w "./vendor/${pname}@${rockspecVersion}"
+      chmod -R u+w ./vendor
 
       lx --profile release \
          ${luaVersionFlag} \
