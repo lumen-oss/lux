@@ -294,7 +294,13 @@
 in {
   inherit toLuxNeovimPlugin;
 
-  fetchLuxDeps = final.callPackage ./fetch-lux-deps.nix {};
+  fetchLuxDeps = {
+    lua,
+    lux-cli ? final.lux-cli,
+  }:
+    final.callPackage ./fetch-lux-deps.nix {
+      inherit lua lux-cli;
+    };
 
   importLuxLock = final.callPackage ./import-lux-lock.nix {};
 
@@ -319,11 +325,10 @@ in {
   }:
     lib.makeOverridable (
       final.callPackage ./build-lux-package.nix {
-        fetchLuxDeps = final.fetchLuxDeps;
+        inherit lua lux-cli;
+        fetchLuxDeps = final.fetchLuxDeps {inherit lua lux-cli;};
         importLuxLock = final.importLuxLock;
-        lux-cli = lux-cli;
         luxLoaderSetupHook = final.luxLoaderSetupHook lua.luaversion;
-        inherit lua;
       }
     );
 
@@ -334,6 +339,7 @@ in {
     lib.makeOverridable (
       lua.pkgs.callPackage ./build-lux-rockspec.nix {
         inherit lua lux-cli;
+        fetchLuxDeps = final.fetchLuxDeps {inherit lua lux-cli;};
         luxLoaderSetupHook = final.luxLoaderSetupHook lua.luaversion;
       }
     );
