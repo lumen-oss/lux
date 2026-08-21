@@ -349,5 +349,13 @@ async fn vendor_binary_rock(
             source,
         })?;
 
+    let rockspec_lua_content = rockspec
+        .to_lua_remote_rockspec_string()
+        .map_err(|err| VendorError::LuaRockSpec(err.to_string()))?;
+
+    let rockspec_file_name = format!("{}-{}.rockspec", package, version);
+    let rockspec_path = vendor_dir.join(rockspec_file_name);
+    fs::tokio::write(&rockspec_path, rockspec_lua_content).await?;
+
     Ok(())
 }
