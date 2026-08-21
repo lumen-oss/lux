@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.1...lux-lib-v0.58.2) `lux-lib` - 2026-08-21
+
+### Fixed
+- *(vendor)* vendor rockspec with binary rock ([#1865](https://github.com/lumen-oss/lux/pull/1865))
+
 ## [0.58.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.0...lux-lib-v0.58.1) `lux-lib` - 2026-08-15
 
 ### Fixed
