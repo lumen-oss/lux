@@ -136,9 +136,9 @@ fn load_vendored_package(
     vendor_dir: &Path,
     package: &PackageSpec,
 ) -> Result<VendoredPackage, FetchVendoredError> {
-    let source_dir = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
-    if source_dir.is_dir() {
-        Ok(VendoredPackage::Source(source_dir.clone()))
+    let source_path = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
+    if source_path.is_dir() || source_path.is_file() {
+        Ok(VendoredPackage::Source(source_path.clone()))
     } else {
         let rock_path = vendor_dir.join(format!("{}@{}.rock", package.name(), package.version()));
         if rock_path.is_file() {

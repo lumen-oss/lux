@@ -15,16 +15,19 @@ pub(crate) fn manifest_from_vendor_dir(vendor_dir: &Path) -> ManifestMetadata {
         .into_iter()
         .filter_map(|file| file.ok())
         .filter_map(|file| {
-            let mut file = file.path().to_path_buf();
-            let package_type = match file.extension() {
-                Some(ext) if ext == "rock" => RemotePackageType::Binary,
-                _ => RemotePackageType::Rockspec,
+            let file = file.path();
+            let is_binary = file.extension().is_some_and(|ext| ext == "rock");
+            let package_type = if is_binary {
+                RemotePackageType::Binary
+            } else {
+                RemotePackageType::Rockspec
             };
-            if file.is_file() {
-                // So we can find .rock archives
-                file.set_extension("");
-            }
-            let file_name = file.file_name().unwrap_or_default();
+            let file_name = if file.is_file() && is_binary {
+                file.with_extension("")
+            } else {
+                file.to_path_buf()
+            };
+            let file_name = file_name.file_name().unwrap_or_default();
             // NOTE: We silently ignore entries if we can't parse a `PackageSpec` from them.
             let package = PackageSpec::from_str(file_name.to_string_lossy().as_ref()).ok()?;
             Some((package, package_type))

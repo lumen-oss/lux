@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use bytes::Bytes;
 use miette::Diagnostic;
 use reqwest::{header::AUTHORIZATION, Client, RequestBuilder};
 use thiserror::Error;
@@ -107,6 +108,18 @@ pub(crate) fn https_client(config: &Config) -> Result<&Client, reqwest::Error> {
 /// Used in tests and to fetch sources, which may be HTTP URLs.
 pub(crate) fn http_client(config: &Config) -> Result<&Client, reqwest::Error> {
     client(false, config)
+}
+
+pub(crate) async fn download_bytes(config: &Config, url: &Url) -> Result<Bytes, RequestError> {
+    let bytes = http_client(config)?
+        .get(url.clone())
+        .apply_access_token(config, url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
+    Ok(bytes)
 }
 
 mod private {
