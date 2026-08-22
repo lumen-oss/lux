@@ -142,4 +142,10 @@ pub enum FsError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to get the absolute path for '{}'", path.display())]
+    #[diagnostic(code(lux_lib::fs::get_absolute_path))]
+    GetAbsolutePath {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
 }
