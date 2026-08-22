@@ -7,6 +7,9 @@
   luxLoaderSetupHook,
   pkg-config,
   lua,
+  cargo,
+  rustc,
+  writableTmpDirAsHomeHook,
 }:
 lib.extendMkDerivation {
   constructDrv = stdenv.mkDerivation;
@@ -17,6 +20,7 @@ lib.extendMkDerivation {
     "luxLock"
     "luxRoot"
     "luxVendorDir"
+    "rustSupport"
   ];
 
   transformDrv = drv:
@@ -31,6 +35,7 @@ lib.extendMkDerivation {
     luxDeps ? null,
     luxVendorDir ? null,
     luxRoot ? null,
+    rustSupport ? false,
     buildAndTestSubdir ? null,
     nvim ? false,
     nativeBuildInputs ? [],
@@ -38,6 +43,11 @@ lib.extendMkDerivation {
     postUnpack ? "",
     ...
   }: let
+    luaVersionFlag =
+      if nvim
+      then "--nvim"
+      else "--lua-version \"${lua.luaversion}\"";
+
     deps =
       if luxVendorDir != null
       then luxVendorDir
@@ -48,9 +58,10 @@ lib.extendMkDerivation {
       else if luxHash != null
       then
         fetchLuxDeps {
-          inherit src luxRoot;
+          inherit src luxRoot rustSupport nvim;
           pname = finalAttrs.pname;
           version = finalAttrs.version;
+          luaVersion = lua.luaversion;
           hash = luxHash;
         }
       else throw "buildLuxPackage requires either (sorted by precedence) `luxVendorDir`, `luxDeps`, `luxLock` or `luxHash`";
@@ -58,11 +69,6 @@ lib.extendMkDerivation {
     rootSubdir = lib.optionalString (luxRoot != null) "${luxRoot}/";
 
     buildSubdir = lib.optionalString (buildAndTestSubdir != null) "${buildAndTestSubdir}/";
-
-    luaVersionFlag =
-      if nvim
-      then "--nvim"
-      else "--lua-version \"${lua.luaversion}\"";
 
     lockFile =
       if luxLock != null
@@ -98,7 +104,9 @@ lib.extendMkDerivation {
         lux-cli
         pkg-config
         lua
+        writableTmpDirAsHomeHook
       ]
+      ++ lib.optionals rustSupport [cargo rustc]
       ++ nativeBuildInputs;
 
     propagatedBuildInputs =
