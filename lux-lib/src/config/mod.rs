@@ -81,19 +81,39 @@ pub struct Config {
 impl Config {
     /// Lux application directories
     pub(crate) fn project_dirs() -> Result<ProjectDirs, NoValidHomeDirectory> {
-        directories::ProjectDirs::from("org", "lumenlabs", "lux").ok_or(NoValidHomeDirectory)
+        directories::ProjectDirs::from("org", "lumenlabs", "lux")
+            .filter(|_| Self::home_dir_exists())
+            .ok_or(NoValidHomeDirectory)
+    }
+
+    fn home_dir_exists() -> bool {
+        directories::BaseDirs::new().is_some_and(|base| base.home_dir().is_dir())
     }
 
     /// Lux cache directory
-    fn default_cache_path() -> Result<PathBuf, NoValidHomeDirectory> {
-        let project_dirs = Config::project_dirs()?;
-        Ok(project_dirs.cache_dir().to_path_buf())
+    fn default_cache_path() -> PathBuf {
+        match Config::project_dirs() {
+            Ok(project_dirs) => project_dirs.cache_dir().to_path_buf(),
+            Err(_) => Self::fallback_data_dir("cache"),
+        }
     }
 
     /// Lux data directory
-    fn default_data_path() -> Result<PathBuf, NoValidHomeDirectory> {
-        let project_dirs = Config::project_dirs()?;
-        Ok(project_dirs.data_local_dir().to_path_buf())
+    fn default_data_path() -> PathBuf {
+        match Config::project_dirs() {
+            Ok(project_dirs) => project_dirs.data_local_dir().to_path_buf(),
+            Err(_) => Self::fallback_data_dir("data"),
+        }
+    }
+
+    /// Fallback data directory used when no valid home directory can be determined.
+    fn fallback_data_dir(subdir: &str) -> PathBuf {
+        let path = std::env::temp_dir().join("lux").join(subdir);
+        tracing::warn!(
+            "no valid home directory found; falling back to `{}`",
+            path.display()
+        );
+        path
     }
 
     /// Create a copy of this config for the specified Lua version
@@ -782,8 +802,8 @@ impl ConfigBuilder {
 
     #[tracing::instrument(level = "trace")]
     pub fn build(self) -> Result<Config, ConfigError> {
-        let data_dir = self.data_dir.unwrap_or(Config::default_data_path()?);
-        let cache_dir = self.cache_dir.unwrap_or(Config::default_cache_path()?);
+        let data_dir = self.data_dir.unwrap_or(Config::default_data_path());
+        let cache_dir = self.cache_dir.unwrap_or(Config::default_cache_path());
         let user_tree = self.user_tree.unwrap_or(data_dir.join("tree"));
 
         let lua_version = self
