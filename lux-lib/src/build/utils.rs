@@ -76,7 +76,46 @@ pub(crate) fn copy_lua_to_module_path(
     }
 
     fs::sync::copy(source, &target)?;
+    make_writable_sync(&target)?;
 
+    Ok(())
+}
+
+/// Ensures the file at `path` is writable by its owner, so that it can be
+/// overwritten on a later install, even when the source is read-only
+/// (e.g. a vendored rock in a read-only Nix store).
+#[cfg(unix)]
+pub(crate) async fn make_writable(path: &Path) -> Result<(), fs::FsError> {
+    let mut perms = fs::tokio::metadata(path).await?.permissions();
+    perms.set_mode(perms.mode() | 0o200);
+    fs::tokio::set_permissions(path, perms).await?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) async fn make_writable(_path: &Path) -> Result<(), fs::FsError> {
+    Ok(())
+}
+
+/// See [`make_writable`].
+#[cfg(unix)]
+pub(crate) fn make_writable_sync(path: &Path) -> Result<(), fs::FsError> {
+    let mut perms = std::fs::metadata(path)
+        .map_err(|source| fs::FsError::Metadata {
+            path: path.to_path_buf(),
+            source,
+        })?
+        .permissions();
+    perms.set_mode(perms.mode() | 0o200);
+    std::fs::set_permissions(path, perms).map_err(|source| fs::FsError::SetPermissions {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn make_writable_sync(_path: &Path) -> Result<(), fs::FsError> {
     Ok(())
 }
 
@@ -92,7 +131,8 @@ pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(),
             if let Some(parent) = target.parent() {
                 fs::tokio::create_dir_all(parent).await?;
             }
-            fs::tokio::copy(&file, target).await?;
+            fs::tokio::copy(&file, &target).await?;
+            make_writable(&target).await?;
         }
     }
     Ok(())
@@ -700,6 +740,7 @@ async fn install_wrapped_binary(
     fs::tokio::create_dir_all(&unwrapped_bin_dir).await?;
     let unwrapped_bin = unwrapped_bin_dir.join(target);
     fs::tokio::copy(source, &unwrapped_bin).await?;
+    make_writable(&unwrapped_bin).await?;
 
     #[cfg(target_family = "unix")]
     let target = tree.bin().join(target);
