@@ -44,6 +44,12 @@ pub struct LuaInstallation {
 pub enum LuaBinaryError {
     #[error("neither `lua` nor `luajit` found on the PATH")]
     LuaBinaryNotFound,
+    #[error("neither `luau` nor `lune` found on the PATH.")]
+    #[diagnostic(
+        help("ensure luau is installed or run `lx install-lua --lua-version luau`"),
+        url("https://github.com/luau-lang/luau/releases")
+    )]
+    LuauBinaryNotFound,
     #[error(transparent)]
     #[diagnostic(transparent)]
     DetectLuaVersion(#[from] DetectLuaVersionError),
@@ -97,6 +103,9 @@ pub enum LuaInstallationError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
+    #[error("`luau` binary not found after building Luau from source")]
+    #[diagnostic(help("this is probably a bug"))]
+    LuauBinaryNotFound,
 }
 
 impl LuaInstallation {
@@ -107,9 +116,20 @@ impl LuaInstallation {
 
     #[tracing::instrument(level = "trace", skip(config))]
     pub async fn new(version: &LuaVersion, config: &Config) -> Result<Self, LuaInstallationError> {
+        if version.is_luau() {
+            if let Ok(bin) = PathBuf::try_from(LuaBinary::new(version.clone(), config)) {
+                return Ok(Self::from_bin_path(version.clone(), bin));
+            }
+        }
         let _lock = NEW_MUTEX.lock().await;
         if let Some(lua_intallation) = Self::probe(version, config.external_deps()) {
             return Ok(lua_intallation);
+        }
+        if version.is_luau() {
+            return match Self::luau_from_root_dir(&Self::root_dir(version, config)) {
+                Some(lua_installation) => Ok(lua_installation),
+                None => Self::install(version, config).await,
+            };
         }
         let output = Self::root_dir(version, config);
         let include_dir = output.join("include");
@@ -151,6 +171,8 @@ impl LuaInstallation {
             LuaVersion::Lua54 => vec!["lua5.4", "lua-5.4"],
             LuaVersion::Lua55 => vec!["lua5.5", "lua-5.5"],
             LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => vec!["luajit"],
+            // NOTE: lune is a standalone binary with no pkg-config metadata or C API
+            LuaVersion::Luau => vec!["luau"],
         };
 
         let mut dependency_info = pkg_name_probes
@@ -206,6 +228,11 @@ impl LuaInstallation {
             .build()
             .await?;
 
+        if version.is_luau() {
+            return Self::luau_from_root_dir(&target)
+                .ok_or(LuaInstallationError::LuauBinaryNotFound);
+        }
+
         let include_dir = target.join("include");
         let lib_dir = target.join("lib");
         let bin_dir = Some(target.join("bin")).filter(|bin_path| bin_path.is_dir());
@@ -232,6 +259,39 @@ impl LuaInstallation {
 
     pub fn bin(&self) -> &Option<PathBuf> {
         &self.bin
+    }
+
+    fn luau_from_root_dir(root: &Path) -> Option<Self> {
+        let bin_dir = root.join("bin");
+        let bin = find_lua_executable(&bin_dir, &LuaVersion::Luau)?;
+        Some(Self {
+            version: LuaVersion::Luau,
+            dependency_info: ExternalDependencyInfo {
+                include_dir: None,
+                lib_dir: None,
+                bin_dir: bin.parent().map(Path::to_path_buf),
+                lib_info: None,
+                lib_name: None,
+            },
+            bin: Some(bin),
+        })
+    }
+
+    /// A Lua installation referencing a binary found on the PATH,
+    /// without probing for headers/libraries or building from source.
+    /// Used for installations that don't link against the Lua C API.
+    fn from_bin_path(version: LuaVersion, bin: PathBuf) -> Self {
+        Self {
+            version,
+            dependency_info: ExternalDependencyInfo {
+                include_dir: None,
+                lib_dir: None,
+                bin_dir: bin.parent().map(Path::to_path_buf),
+                lib_info: None,
+                lib_name: None,
+            },
+            bin: Some(bin),
+        }
     }
 
     fn root_dir(version: &LuaVersion, config: &Config) -> PathBuf {
@@ -267,7 +327,12 @@ impl LuaInstallation {
     /// Get the Lua binary (if present), prioritising
     /// a potentially overridden value in the config.
     pub(crate) fn lua_binary_or_config_override(&self, config: &Config) -> Option<String> {
-        config.variables().get("LUA").cloned().or(self
+        let variable = if self.version.is_luau() {
+            "LUAU"
+        } else {
+            "LUA"
+        };
+        config.variables().get(variable).cloned().or(self
             .bin
             .clone()
             .or(LuaBinary::new(self.version.clone(), config).try_into().ok())
@@ -302,6 +367,7 @@ impl HasVariables for LuaInstallation {
                 .try_into()
                 .ok())
                 .map(|lua| format_path(&lua)),
+            "LUAU" if self.version.is_luau() => self.bin.as_ref().map(|bin| format_path(bin)),
             "LUALIB" => self.lua_lib().or(Some("".into())),
             _ => None,
         })
@@ -329,8 +395,9 @@ impl LuaBinary {
     /// Construct a new `LuaBinary` for the given `LuaVersion`,
     /// potentially prioritising an overridden value in the config.
     pub fn new(lua_version: LuaVersion, config: &Config) -> Self {
-        match config.variables().get("LUA").cloned() {
-            Some(lua) => Self::Custom(lua),
+        let variable = if lua_version.is_luau() { "LUAU" } else { "LUA" };
+        match config.variables().get(variable).cloned() {
+            Some(bin) => Self::Custom(bin),
             None => Self::Lua { lua_version },
         }
     }
@@ -348,6 +415,11 @@ impl TryFrom<LuaBinary> for PathBuf {
     fn try_from(value: LuaBinary) -> Result<Self, Self::Error> {
         match value {
             LuaBinary::Lua { lua_version } => {
+                if lua_version.is_luau() {
+                    return which("luau")
+                        .or_else(|_| which("lune"))
+                        .map_err(|_| LuaBinaryError::LuauBinaryNotFound);
+                }
                 if let Some(lua_binary) =
                     LuaInstallation::probe(&lua_version, &ExternalDependencySearchConfig::default())
                         .and_then(|lua_installation| lua_installation.bin)
@@ -429,6 +501,21 @@ fn find_lua_executable(bin_path: &Path, version: &LuaVersion) -> Option<PathBuf>
 
         #[cfg(not(windows))]
         let ext = "";
+
+        if version.is_luau() {
+            let luau_bin = format!("luau{ext}");
+            return bin_files
+                .into_iter()
+                .filter(|file| {
+                    file.is_executable()
+                        && file
+                            .file_name()
+                            .is_some_and(|name| name.to_string_lossy() == luau_bin)
+                })
+                .collect_vec()
+                .first()
+                .cloned();
+        }
 
         // Prioritise Lua binaries with version suffix
         // (see https://github.com/lumen-oss/lux/issues/1215)

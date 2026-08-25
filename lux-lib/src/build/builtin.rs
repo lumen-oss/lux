@@ -15,6 +15,7 @@ use crate::{
     },
     fs,
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
+    lua_version::LuaVersion,
     tree::{InstallTree, TreeError},
 };
 
@@ -44,6 +45,19 @@ pub enum BuiltinBuildError {
     #[error("module auto-detection failed")]
     #[diagnostic(transparent)]
     AutoDetectModules(#[from] AutoDetectModulesError),
+    #[error("luau does not support native dependencies")]
+    #[diagnostic(help(
+        "the luau runtime cannot load native libraries. use pure-Luau packages or Lua"
+    ))]
+    LuauNativeDepsUnsupported,
+    #[error("cannot install Luau modules [{modules}] on {lua_version}")]
+    #[diagnostic(help(
+        "running Luau modules on a Lua runtime requires transpilation, which is not supported yet"
+    ))]
+    LuauModulesOnLuaRuntime {
+        modules: String,
+        lua_version: LuaVersion,
+    },
 }
 
 impl BuildBackend for BuiltinBuildSpec {
@@ -67,6 +81,33 @@ impl BuildBackend for BuiltinBuildSpec {
             .into_iter()
             .chain(self.modules)
             .collect::<HashMap<_, _>>();
+
+        let luau_modules = modules
+            .iter()
+            .filter_map(|(module, spec)| match spec {
+                ModuleSpec::SourcePath(source)
+                    if source.extension().is_some_and(|ext| ext == "luau") =>
+                {
+                    Some(module.to_string())
+                }
+                _ => None,
+            })
+            .collect_vec();
+
+        if lua.version.is_luau() {
+            let has_native_modules = modules.values().any(|spec| match spec {
+                ModuleSpec::SourcePath(source) => source.extension().is_some_and(|ext| ext == "c"),
+                ModuleSpec::SourcePaths(_) | ModuleSpec::ModulePaths(_) => true,
+            });
+            if has_native_modules {
+                return Err(BuiltinBuildError::LuauNativeDepsUnsupported);
+            }
+        } else if !luau_modules.is_empty() {
+            return Err(BuiltinBuildError::LuauModulesOnLuaRuntime {
+                modules: luau_modules.join(", "),
+                lua_version: lua.version.clone(),
+            });
+        }
 
         for (destination_path, module_type) in modules.iter() {
             match module_type {
@@ -161,7 +202,7 @@ pub enum AutoDetectModulesError {
 }
 
 #[tracing::instrument(level = "trace")]
-fn autodetect_modules(
+pub(crate) fn autodetect_modules(
     build_dir: &Path,
     exclude: HashSet<PathBuf>,
 ) -> Result<HashMap<LuaModule, ModuleSpec>, AutoDetectModulesError> {
@@ -173,8 +214,7 @@ fn autodetect_modules(
             file.ok().and_then(|file| {
                 let is_lua_file = PathBuf::from(file.file_name())
                     .extension()
-                    .map(|ext| ext == "lua")
-                    .unwrap_or(false);
+                    .is_some_and(|ext| ext == "lua" || ext == "luau");
                 if is_lua_file && !exclude.contains(&file.clone().into_path()) {
                     Some(file)
                 } else {
@@ -205,7 +245,10 @@ fn autodetect_modules(
                 let mut lua_module = LuaModule::from_pathbuf(pathbuf)?;
                 // NOTE(mrcjkb): `LuaModule` does not parse as "<module>.init" from files named "init.lua"
                 // To make sure we don't change the file structure when installing, we append it here.
-                if file.file_name().to_string_lossy().as_bytes() == b"init.lua" {
+                if matches!(
+                    file.file_name().to_string_lossy().as_bytes(),
+                    b"init.lua" | b"init.luau"
+                ) {
                     unsafe {
                         lua_module =
                             lua_module.join(&LuaModule::from_str("init").unwrap_unchecked())
@@ -216,4 +259,40 @@ fn autodetect_modules(
             lua_module.map(|lua_module| (lua_module, ModuleSpec::SourcePath(diff)))
         })
         .try_collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_file(path: &Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"return {}").unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_auto_detect_modules() {
+        let build_dir = tempfile::tempdir().unwrap();
+        let root = build_dir.path();
+        write_file(&root.join("src").join("foo.luau"));
+        write_file(&root.join("src").join("bar").join("baz.luau"));
+        write_file(&root.join("src").join("baz").join("init.luau"));
+        write_file(&root.join("lua").join("legacy.lua"));
+
+        let modules = autodetect_modules(root, Default::default()).unwrap();
+
+        let names = modules.keys().map(|m| m.to_string()).collect_vec();
+        assert!(names.contains(&"foo".to_string()), "{names:?}");
+        assert!(names.contains(&"bar.baz".to_string()), "{names:?}");
+        assert!(names.contains(&"baz.init".to_string()), "{names:?}");
+        assert!(names.contains(&"legacy".to_string()), "{names:?}");
+
+        let foo_spec = &modules[&"foo".parse().unwrap()];
+        match foo_spec {
+            ModuleSpec::SourcePath(path) => {
+                assert_eq!(path.extension().unwrap(), "luau");
+            }
+            _ => panic!("expected SourcePath for foo.luau"),
+        }
+    }
 }

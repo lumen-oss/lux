@@ -20,16 +20,18 @@ use crate::project::TomlDeError;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::ROCKSPEC_FUEL_LIMIT;
 use std::io;
+use std::path::Path;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
+    build::autodetect_modules,
     config::Config,
     lua_rockspec::{
-        BuildSpec, BuildSpecInternal, BuildSpecInternalError, DisplayAsLuaKV, ExternalDependencies,
-        ExternalDependencySpec, LuaVersionError, PartialLuaRockspec, PerPlatform,
-        PlatformIdentifier, PlatformSupport, PlatformValidationError, RemoteRockSource,
-        RockDescription, RockSourceError, RockspecFormat, TestSpec, TestSpecDecodeError,
-        TestSpecInternal,
+        BuildSpec, BuildSpecInternal, BuildSpecInternalError, BuildType, DisplayAsLuaKV,
+        ExternalDependencies, ExternalDependencySpec, LuaTableKey, LuaVersionError, ModuleSpec,
+        ModuleSpecInternal, PartialLuaRockspec, PerPlatform, PlatformIdentifier, PlatformSupport,
+        PlatformValidationError, RemoteRockSource, RockDescription, RockSourceError,
+        RockspecFormat, TestSpec, TestSpecDecodeError, TestSpecInternal,
     },
     package::{
         BuildDependencies, Dependencies, PackageName, PackageReq, PackageVersion, PackageVersionReq,
@@ -581,12 +583,18 @@ impl LuaVersionCompatibility for PartialProjectToml {
     }
 
     fn supports_lua_version(&self, lua_version: &LuaVersion) -> bool {
-        self.lua
-            .as_ref()
-            .is_none_or(|lua| lua.matches(&lua_version.as_version()))
+        self.lua.as_ref().is_none_or(|lua| {
+            if lua.is_luau() {
+                return matches!(lua_version, LuaVersion::Luau);
+            }
+            lua.matches(&lua_version.as_version())
+        })
     }
 
     fn lua_version(&self) -> Option<LuaVersion> {
+        if self.lua.as_ref().is_some_and(|lua| lua.is_luau()) {
+            return Some(LuaVersion::Luau);
+        }
         for (possibility, version) in [
             ("5.5.0", LuaVersion::Lua55),
             ("5.4.0", LuaVersion::Lua54),
@@ -816,14 +824,16 @@ version = "{}""#,
 
         {
             let mut dependencies = self.internal.dependencies.clone().unwrap_or_default();
-            dependencies.insert(
-                0,
-                PackageReq {
-                    name: "lua".into(),
-                    version_req: self.lua.clone(),
-                }
-                .into(),
-            );
+            if !self.lua.is_luau() {
+                dependencies.insert(
+                    0,
+                    PackageReq {
+                        name: "lua".into(),
+                        version_req: self.lua.clone(),
+                    }
+                    .into(),
+                );
+            }
             template.push(Dependencies(&dependencies).display_lua());
         }
 
@@ -862,7 +872,9 @@ version = "{}""#,
                 .try_generate(lux_toml_dir, &self.package, &version)?;
         template.push(source.display_lua());
 
-        template.push(self.internal.build.display_lua());
+        template.push(
+            build_spec_with_autodetected_modules(&self.internal.build, lux_toml_dir).display_lua(),
+        );
 
         let unformatted_code = std::iter::once(starter)
             .chain(template.into_iter().map(|kv| kv.to_string()))
@@ -878,6 +890,47 @@ version = "{}""#,
         };
         validate_generated_lua(&result)?;
         Ok(result)
+    }
+}
+
+/// Creates a [`BuildSpecInternal`] with auto-detected modules (e.g. *.luau sources)
+/// that LuaRocks does not auto-detect, so that LuaRocks can install them.
+fn build_spec_with_autodetected_modules(
+    spec: &BuildSpecInternal,
+    project_root: &Path,
+) -> BuildSpecInternal {
+    let builtin_capable = spec
+        .build_type
+        .as_ref()
+        .is_none_or(|build_type| matches!(build_type, BuildType::Builtin | BuildType::None));
+    if !builtin_capable {
+        return spec.clone();
+    }
+    let detected = match autodetect_modules(project_root, Default::default()) {
+        Ok(modules) => modules
+            .into_iter()
+            .filter_map(|(module, spec)| match spec {
+                ModuleSpec::SourcePath(path)
+                    if path.extension().is_some_and(|ext| ext == "luau") =>
+                {
+                    Some((module, path))
+                }
+                _ => None,
+            })
+            .collect_vec(),
+        Err(_) => return spec.clone(),
+    };
+    if detected.is_empty() {
+        spec.clone()
+    } else {
+        let mut new_spec = spec.clone();
+        let modules = new_spec.builtin_spec.get_or_insert_with(Default::default);
+        for (module, path) in detected {
+            modules
+                .entry(LuaTableKey::StringKey(module.to_string()))
+                .or_insert(ModuleSpecInternal::SourcePath(path));
+        }
+        new_spec
     }
 }
 
@@ -1029,14 +1082,16 @@ version = "{}""#,
 
         {
             let mut dependencies = self.local.internal.dependencies.clone().unwrap_or_default();
-            dependencies.insert(
-                0,
-                PackageReq {
-                    name: "lua".into(),
-                    version_req: self.local.lua.clone(),
-                }
-                .into(),
-            );
+            if !self.local.lua.is_luau() {
+                dependencies.insert(
+                    0,
+                    PackageReq {
+                        name: "lua".into(),
+                        version_req: self.local.lua.clone(),
+                    }
+                    .into(),
+                );
+            }
             template.push(Dependencies(&dependencies).display_lua());
         }
 
@@ -1082,7 +1137,10 @@ version = "{}""#,
             template.push(deploy.display_lua());
         }
 
-        template.push(self.local.internal.build.display_lua());
+        template.push(
+            build_spec_with_autodetected_modules(&self.local.internal.build, lux_toml_dir)
+                .display_lua(),
+        );
 
         let unformatted_code = std::iter::once(starter)
             .chain(template.into_iter().map(|kv| kv.to_string()))

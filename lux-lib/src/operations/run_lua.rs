@@ -6,6 +6,8 @@ use bon::Builder;
 
 use crate::{
     config::Config,
+    lua_installation::{LuaInstallation, LuaInstallationError},
+    lua_version::LuaVersion,
     path::{BinPath, PackagePath},
     tree::InstallTree,
 };
@@ -32,6 +34,9 @@ pub enum RunLuaError {
     #[error("error running lua")]
     #[diagnostic(forward(0))]
     LuaBinary(#[from] LuaBinaryError),
+    #[error("failed to detect or install the lua runtime")]
+    #[diagnostic(forward(0))]
+    LuaInstallation(#[from] LuaInstallationError),
     #[error("failed to run {lua_cmd}: {source}")]
     LuaCommandFailed {
         lua_cmd: String,
@@ -93,15 +98,18 @@ where
 
         let lua_cmd: PathBuf = args.lua_cmd.try_into()?;
 
-        let is_lux_lua_available = detect_lux_lua(&lua_cmd, &paths).await;
-
-        let loader_init = if args.disable_loader.unwrap_or(false) {
-            "".to_string()
-        } else if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
-            tracing::warn!("lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.");
+        let loader_init = if args.tree.version().is_luau() {
             "".to_string()
         } else {
-            paths.init()
+            let is_lux_lua_available = detect_lux_lua(&lua_cmd, &paths).await;
+            if args.disable_loader.unwrap_or(false) {
+                "".to_string()
+            } else if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
+                tracing::warn!("lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.");
+                "".to_string()
+            } else {
+                paths.init()
+            }
         };
         let lua_init = format!(
             r#"print([==[{}]==])
@@ -177,6 +185,26 @@ async fn detect_lua_module(
         .status()
         .await
         .is_ok_and(|status| status.success())
+}
+
+/// Resolves the interpreter binary for the given Lua version.
+///
+/// Falls back to probing, reusing or building a toolchain via
+/// `LuaInstallation` when no suitable binary is found on the PATH.
+pub(crate) async fn resolve_lua_runtime(
+    version: &LuaVersion,
+    config: &Config,
+) -> Result<PathBuf, RunLuaError> {
+    match <LuaBinary as TryInto<PathBuf>>::try_into(LuaBinary::new(version.clone(), config)) {
+        Ok(lua_cmd) => Ok(lua_cmd),
+        Err(err) => {
+            let lua_installation = LuaInstallation::new(version, config).await?;
+            lua_installation
+                .bin()
+                .clone()
+                .ok_or(RunLuaError::LuaBinary(err))
+        }
+    }
 }
 
 #[cfg(test)]

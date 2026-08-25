@@ -13,7 +13,9 @@ pub use rust_binary::*;
 pub use rust_mlua::*;
 pub use tree_sitter::*;
 
-use builtin::{ModulePathsMissingSources, ModuleSpecAmbiguousPlatformOverride, ModuleSpecInternal};
+pub(crate) use builtin::ModuleSpecInternal;
+
+use builtin::{ModulePathsMissingSources, ModuleSpecAmbiguousPlatformOverride};
 
 use itertools::Itertools;
 
