@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.42.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.41.1...lux-lsp-v0.42.0) `lux-lsp` - 2026-08-25
+
+### Other
+- update Cargo.lock dependencies
+
+## [0.59.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.1...lux-lib-v0.59.0) `lux-lib` - 2026-08-25
+
+### Added
+- *(vendor)* support rust-mlua/cargo dependencies ([#1863](https://github.com/lumen-oss/lux/pull/1863))
+- *(nix)* lux packaging helpers ([#1862](https://github.com/lumen-oss/lux/pull/1862))
+- [**breaking**] probe lua versions when specifying --nvim flag ([#1861](https://github.com/lumen-oss/lux/pull/1861))
+- *(config)* fall back to temp directory if $HOME not set ([#1857](https://github.com/lumen-oss/lux/pull/1857))
+
+### Fixed
+- *(build)* allow overwriting installed files from read-only vendor dirs ([#1858](https://github.com/lumen-oss/lux/pull/1858))
+- *(vendor)* deduplicate packages by name/version ([#1856](https://github.com/lumen-oss/lux/pull/1856))
+- *(vendor)* store source archives instead of unpacking them ([#1855](https://github.com/lumen-oss/lux/pull/1855))
+- *(build)* specify absolute output path when linking ([#1853](https://github.com/lumen-oss/lux/pull/1853))
+- *(fetch)* include ignore files when copying file sources ([#1852](https://github.com/lumen-oss/lux/pull/1852))
+- *(install-rockspec)* update install tree lockfile ([#1867](https://github.com/lumen-oss/lux/pull/1867))
+- *(vendor)* vendor rockspec with binary rock ([#1865](https://github.com/lumen-oss/lux/pull/1865))
+
+## [0.42.0](https://github.com/lumen-oss/lux/compare/v0.41.1...v0.42.0) `lux-cli` - 2026-08-25
+
+### Added
+- *(nix)* lux packaging helpers ([#1862](https://github.com/lumen-oss/lux/pull/1862))
+- [**breaking**] probe lua versions when specifying --nvim flag ([#1861](https://github.com/lumen-oss/lux/pull/1861))
+
+### Fixed
+- *(install-rockspec)* update install tree lockfile ([#1867](https://github.com/lumen-oss/lux/pull/1867))
+
 ## [0.41.1](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.41.0...lux-lsp-v0.41.1) `lux-lsp` - 2026-08-15
 
 ### Other
