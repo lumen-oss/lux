@@ -30,8 +30,8 @@ jobs:
         with:
           version: 0.26.2
 
-      - name: Upload
+      - name: Upload lux-lua
         run: |
-          lx --lua-version 5.1 upload
+          lx --lua-version 5.1 --package lux-lua upload
         env:
           LUX_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
