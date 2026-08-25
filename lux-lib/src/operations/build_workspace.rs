@@ -19,6 +19,7 @@ use tracing::{info_span, Instrument};
 use super::{InstallError, Sync, SyncError};
 
 #[derive(Debug, Error, Diagnostic)]
+#[non_exhaustive]
 pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
