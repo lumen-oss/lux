@@ -34,6 +34,7 @@
         lib = pkgs.lib;
         rockspecTests = pkgs.callPackage ./nix/tests/rockspec.nix {};
         nvimPluginTests = pkgs.callPackage ./nix/tests/nvim-plugin.nix {};
+        luxProjectTests = pkgs.callPackage ./nix/tests/lux-project.nix {};
         buildLuxHelpersTests = pkgs.callPackage ./nix/tests/build-lux-helpers.nix {};
         git-hooks-check = git-hooks.lib.${system}.run {
           src = self;
@@ -141,7 +142,10 @@
           workspace-hack = pkgs.lux-workspace-hack;
           rockspec-cjson = rockspecTests.cjson;
           rockspec-luassert = rockspecTests.luassert;
+          rockspec-toml-edit = rockspecTests.toml-edit;
           nvim-plugin = nvimPluginTests.test;
+          nvim-plugin-luxHash = nvimPluginTests.test-luxHash;
+          lux-project-toml-edit = luxProjectTests.test;
           build-lux-helpers = buildLuxHelpersTests.fetchLuxDeps;
           build-lux-helpers-import-lock = buildLuxHelpersTests.importLuxLock;
           build-lux-helpers-lux-lock = buildLuxHelpersTests.luxLock;

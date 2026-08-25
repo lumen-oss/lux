@@ -204,6 +204,7 @@ It fetches each dependency as a separate fixed-output derivation and does not re
 - `luxRoot`: a subdirectory of `src` that contains `lux.toml`.
 - `buildAndTestSubdir`: a subdirectory of `src` in which to build and run tests.
 - `nvim`: build the package with the Neovim layout. Equivalent to `lx --nvim`.
+- `rustSupport`: enable support for rust dependencies (the `rust-mlua` build backend). Disabled by default.
 
 It also accepts the standard `stdenv.mkDerivation` attributes, such as `nativeBuildInputs`, `propagatedBuildInputs`, and `doCheck`.
 
@@ -212,10 +213,18 @@ It also accepts the standard `stdenv.mkDerivation` attributes, such as `nativeBu
 `buildLuxRockspec` accepts the following arguments:
 
 - `pname`, `version`, `src`: the package name, version, and source.
+- `luxHash`, `luxDeps`, `luxVendorDir`: one of the dependency sources described in [Vendoring dependencies](#vendoring-dependencies).
 - `knownRockspec`: a RockSpec file to use instead of `<pname>-<version>.rockspec` from `src`.
 - `rockspecVersion`: the version used in the RockSpec filename, defaults to `version`.
 - `propagatedBuildInputs`: the package's Lua dependencies, marked with `toLuaModule`.
 - `nvim`: build the package with a Neovim plugin layout.
+- `rustSupport`: enable support for rust dependencies (the `rust-mlua` build backend). Disabled by default.
+
+:::note
+Unlike `buildLuxPackage`, `buildLuxRockspec` does not accept a `luxLock`,
+because LuaRocks projects do not use lockfiles.
+:::
+
 
 ### `toLuxNeovimPlugin` function {#toluxneovimplugin-function}
 
