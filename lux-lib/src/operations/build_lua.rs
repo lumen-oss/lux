@@ -21,7 +21,7 @@ use ssri::Integrity;
 use target_lexicon::Triple;
 use thiserror::Error;
 use tokio::process::Command;
-use tracing::{span, Instrument};
+use tracing::{info_span, span, Instrument};
 use url::Url;
 
 const LUA51_VERSION: &str = "5.1.5";
@@ -37,6 +37,7 @@ const LUA55_HASH: &str = "sha256-V8zDK7vQBcq3W8xSREBSU1r2kXiduiuQFtXFBkDWiz0=";
 // XXX: there's no tag with lua 5.2 compatibility, so we have to use the v2.1 branch for now
 // this is unstable and might break the build.
 const LUAJIT_MM_VERSION: &str = "2.1";
+const LUAU_VERSION: &str = "0.739";
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
@@ -64,6 +65,11 @@ pub enum BuildLuaError {
     CC(#[from] cc::Error),
     #[error("failed to find cl.exe")]
     ClNotFound,
+    #[error("expected `{name}` in the Luau build output")]
+    #[diagnostic(help("this usually indicates a broken or incomplete Luau source build"))]
+    LuauBinaryNotFound { name: String },
+    #[error("failed to run `{cmd}`")]
+    CmakeSpawn { cmd: String, source: io::Error },
     #[error("failed to find LINK.exe")]
     LinkNotFound,
     #[error(
@@ -101,6 +107,7 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
             | LuaVersion::Lua54
             | LuaVersion::Lua55 => do_build_lua(args).await,
             LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => do_build_luajit(args).await,
+            LuaVersion::Luau => do_build_luau(args).await,
         }
     }
 }
@@ -334,6 +341,128 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     Ok(())
 }
 
+// HACK: Luau's CMakeLists.txt references the Luau.UnitTest target in the
+// `if(MSVC AND LUAU_BUILD_CLI)` block, but the target only exists when LUAU_BUILD_TESTS is ON.
+// Fix: https://github.com/luau-lang/luau/pull/2980
+#[cfg(target_env = "msvc")]
+async fn patch_luau_cmakelists(build_dir: &Path) -> Result<(), BuildLuaError> {
+    let path = build_dir.join("CMakeLists.txt");
+    let content = fs::tokio::read_to_string(&path).await?;
+    let patched = content.replace(
+        "    set_target_properties(Luau.UnitTest PROPERTIES LINK_FLAGS_DEBUG /STACK:2097152)",
+        "    if(LUAU_BUILD_TESTS)\n        set_target_properties(Luau.UnitTest PROPERTIES LINK_FLAGS_DEBUG /STACK:2097152)\n    endif()",
+    );
+    if patched != content {
+        fs::tokio::write(&path, patched).await?;
+    }
+    Ok(())
+}
+
+async fn do_build_luau(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
+    let install_dir = args.install_dir;
+    let build_dir = fs::tempfile::tempdir()?;
+
+    let luau_url = "https://github.com/luau-lang/luau.git";
+    {
+        let span = info_span!("Cloning Luau sources", url = luau_url);
+        let _enter = span.enter(); // OK because we're not in an async block
+
+        let mut fetch_options = FetchOptions::new();
+        fetch_options.update_fetchhead(false);
+        let mut repo_builder = RepoBuilder::new();
+        repo_builder.fetch_options(fetch_options);
+        let repo = repo_builder.clone(luau_url, build_dir.path())?;
+        let (object, _) = repo.revparse_ext(LUAU_VERSION)?;
+        repo.checkout_tree(&object, None)?;
+    }
+
+    #[cfg(target_env = "msvc")]
+    {
+        patch_luau_cmakelists(build_dir.path()).await?;
+    }
+
+    let cmake_build_dir = build_dir.path().join("build");
+    fs::tokio::create_dir_all(&cmake_build_dir).await?;
+
+    let src_dir_arg = build_dir.path().to_slash_lossy().to_string();
+    let build_dir_arg = cmake_build_dir.to_slash_lossy().to_string();
+    run_cmake(
+        build_dir.path(),
+        &[
+            "-S".into(),
+            src_dir_arg,
+            "-B".into(),
+            build_dir_arg.clone(),
+            "-DCMAKE_BUILD_TYPE=Release".into(),
+            "-DLUAU_BUILD_TESTS=OFF".into(),
+            "-DLUAU_BUILD_WEB=OFF".into(),
+        ],
+        args.config,
+    )
+    .await?;
+    run_cmake(
+        build_dir.path(),
+        &[
+            "--build".into(),
+            build_dir_arg,
+            "--config".into(),
+            "Release".into(),
+            "--target".into(),
+            "Luau.Repl.CLI".into(),
+            "Luau.Analyze.CLI".into(),
+        ],
+        args.config,
+    )
+    .await?;
+
+    // Single-config generators emit binaries into the build root, while
+    // multi-config generators (MSVC) put them in a per-config subdirectory.
+    let bin_candidates = [cmake_build_dir.join("Release"), cmake_build_dir];
+    let bin_dir = install_dir.join("bin");
+    fs::tokio::create_dir_all(&bin_dir).await?;
+
+    #[cfg(windows)]
+    const CLI_BINARIES: [&str; 2] = ["luau.exe", "luau-analyze.exe"];
+    #[cfg(not(windows))]
+    const CLI_BINARIES: [&str; 2] = ["luau", "luau-analyze"];
+
+    for name in CLI_BINARIES {
+        let src = bin_candidates
+            .iter()
+            .map(|dir| dir.join(name))
+            .find(|path| path.is_file())
+            .ok_or(BuildLuaError::LuauBinaryNotFound {
+                name: name.to_string(),
+            })?;
+        fs::tokio::copy(&src, bin_dir.join(name)).await?;
+    }
+    Ok(())
+}
+
+async fn run_cmake(cwd: &Path, args: &[String], config: &Config) -> Result<(), BuildLuaError> {
+    let mut cmd = Command::new(config.cmake_cmd());
+    cmd.current_dir(cwd);
+    cmd.args(args);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    match cmd.output().await {
+        Ok(output) if output.status.success() => {
+            utils::trace_command_output(&output);
+            Ok(())
+        }
+        Ok(output) => Err(BuildLuaError::CommandFailure {
+            name: config.cmake_cmd(),
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).into(),
+            stderr: String::from_utf8_lossy(&output.stderr).into(),
+        }),
+        Err(err) => Err(BuildLuaError::CmakeSpawn {
+            cmd: config.cmake_cmd(),
+            source: err,
+        }),
+    }
+}
+
 #[tracing::instrument(
     name = "Building Lua",
     level = "info",
@@ -351,7 +480,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             LuaVersion::Lua53 => (LUA53_HASH.parse().unwrap_unchecked(), LUA53_VERSION),
             LuaVersion::Lua54 => (LUA54_HASH.parse().unwrap_unchecked(), LUA54_VERSION),
             LuaVersion::Lua55 => (LUA55_HASH.parse().unwrap_unchecked(), LUA55_VERSION),
-            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
         }
     };
 
@@ -508,7 +637,7 @@ async fn do_build_lua_msvc(
         LuaVersion::Lua53 => "lua53",
         LuaVersion::Lua54 => "lua54",
         LuaVersion::Lua55 => "lua55",
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
     };
 
     let lib_name = match lua_version {
@@ -517,7 +646,7 @@ async fn do_build_lua_msvc(
         LuaVersion::Lua53 => "lua5.3",
         LuaVersion::Lua54 => "lua5.4",
         LuaVersion::Lua55 => "lua5.5",
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => unreachable!(),
+        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
     };
 
     let host = Triple::host();

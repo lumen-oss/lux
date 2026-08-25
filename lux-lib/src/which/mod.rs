@@ -99,6 +99,14 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
             if lua_path.is_file() {
                 return Some(lua_path);
             }
+            let luau_path = layout.src.join(which.module.to_luau_path());
+            if luau_path.is_file() {
+                return Some(luau_path);
+            }
+            let luau_init_path = layout.src.join(which.module.to_luau_init_path());
+            if luau_init_path.is_file() {
+                return Some(luau_init_path);
+            }
             None
         })
         .next()
@@ -152,6 +160,14 @@ mod tests {
                 .to_string_lossy(),
             "bat"
         );
+        let result = Which::new(LuaModule::from_str("hello").unwrap(), &config)
+            .search()
+            .unwrap();
+        assert_eq!(result.file_name().unwrap().to_string_lossy(), "hello.luau");
+        let result = Which::new(LuaModule::from_str("extra").unwrap(), &config)
+            .search()
+            .unwrap();
+        assert_eq!(result.file_name().unwrap().to_string_lossy(), "init.luau");
         let result = Which::new(LuaModule::from_str("foo.bar").unwrap(), &config)
             .package("lua-cjson".parse().unwrap())
             .search();

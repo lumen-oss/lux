@@ -3,13 +3,16 @@ use std::path::{Path, PathBuf};
 use clap::Args;
 use emmylua_check::OutputDestination;
 use itertools::Itertools;
-use lux_lib::{config::Config, workspace::Workspace};
+use lux_lib::{config::Config, lua_version::LuaVersion, workspace::Workspace};
 
 use miette::{miette, Result};
 
 use crate::{
     args::OutputFormat,
-    utils::path::{classify_path, PathTarget},
+    utils::{
+        self,
+        path::{classify_path, PathTarget},
+    },
     workspace::sync_dependencies_if_locked,
 };
 
@@ -106,20 +109,40 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
         return Ok(());
     }
 
-    let emmylua_check_args = emmylua_check::CmdArgs {
-        config: rc_files,
-        workspace: workspace_dirs,
-        ignore: args.ignore,
-        output_format: args.output_format.into(),
-        output: args.output,
-        warnings_as_errors: args.warnings_as_errors,
-        verbose: config.verbose(),
-    };
-
-    emmylua_check::run_check(emmylua_check_args)
+    if config.lua_version().is_some_and(|v| v == &LuaVersion::Luau) {
+        if args.ignore.is_some()
+            || args.output_format == OutputFormat::Json
+            || args.warnings_as_errors
+        {
+            tracing::warn!(
+                "--ignore, --output-format and --warnings-as-errors are not supported by luau-analyze"
+            );
+        }
+        utils::luau_analyze::run(
+            &config,
+            workspace_dirs
+                .iter()
+                .map(|dir| dir.to_string_lossy().to_string())
+                .collect_vec(),
+            Vec::new(),
+        )
         .await
-        .map_err(|err| miette!("{err}"))?;
-    Ok(())
+    } else {
+        let emmylua_check_args = emmylua_check::CmdArgs {
+            config: rc_files,
+            workspace: workspace_dirs,
+            ignore: args.ignore,
+            output_format: args.output_format.into(),
+            output: args.output,
+            warnings_as_errors: args.warnings_as_errors,
+            verbose: config.verbose(),
+        };
+
+        emmylua_check::run_check(emmylua_check_args)
+            .await
+            .map_err(|err| miette!("{err}"))?;
+        Ok(())
+    }
 }
 
 fn resolve_rc_files(root: &Path, config: &Config) -> Result<Option<Vec<PathBuf>>> {
