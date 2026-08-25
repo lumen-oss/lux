@@ -14,8 +14,6 @@ use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
 
-use super::ProjectRoot;
-
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone, Default)]
 /// Template for generating a remote rockspec source
 ///
@@ -72,7 +70,7 @@ pub enum GenerateSourceError {
 
 /// Helper for substituting git variables from a git project
 #[derive(Debug)]
-struct GitProject<'a>(&'a ProjectRoot);
+struct GitProject<'a>(&'a Path);
 
 impl HasVariables for GitProject<'_> {
     #[tracing::instrument(level = "trace")]
@@ -104,7 +102,7 @@ fn find_git_repo(path: impl AsRef<Path>) -> Result<Repository, git2::Error> {
 impl RockSourceTemplate {
     pub(crate) fn try_generate(
         &self,
-        project_root: &ProjectRoot,
+        project_root: &Path,
         package: &PackageName,
         version: &PackageVersion,
     ) -> Result<RockSourceInternal, GenerateSourceError> {
@@ -206,7 +204,7 @@ pub enum GenerateVersionError {
 impl PackageVersionTemplate {
     pub(crate) fn try_generate(
         &self,
-        project_root: &ProjectRoot,
+        project_root: &Path,
         specrev: Option<SpecRev>,
     ) -> Result<PackageVersion, GenerateVersionError> {
         let specrev = specrev.unwrap_or_default();

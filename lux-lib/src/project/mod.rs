@@ -217,6 +217,9 @@ impl Deref for ProjectRoot {
 #[derive(Clone, Debug)]
 pub struct Project {
     /// The path where the `lux.toml` resides.
+    lux_toml_dir: ProjectRoot,
+    /// The project root. This is the same as [`Project::lux_toml_dir`],
+    /// unless overridden by the `[project] root_dir` field.
     root: ProjectRoot,
     /// The parsed lux.toml.
     toml: PartialProjectToml,
@@ -235,13 +238,15 @@ impl Project {
             let toml_content = fs::sync::read_to_string(&project_toml_path)?;
             let root = start.as_ref();
 
+            let toml = PartialProjectToml::new(
+                &project_toml_path.to_string_lossy(),
+                &toml_content,
+                ProjectRoot(root.to_path_buf()),
+            )?;
             let mut project = Project {
-                root: ProjectRoot(root.to_path_buf()),
-                toml: PartialProjectToml::new(
-                    &project_toml_path.to_string_lossy(),
-                    &toml_content,
-                    ProjectRoot(root.to_path_buf()),
-                )?,
+                lux_toml_dir: ProjectRoot(root.to_path_buf()),
+                root: toml.project.root.clone(),
+                toml,
             };
 
             if let Some(extra_rockspec) = project.extra_rockspec()? {
@@ -256,12 +261,12 @@ impl Project {
 
     /// Get the `lux.toml` path.
     pub fn toml_path(&self) -> PathBuf {
-        self.root.join(PROJECT_TOML)
+        self.lux_toml_dir.join(PROJECT_TOML)
     }
 
     /// Get the `extra.rockspec` path.
     pub fn extra_rockspec_path(&self) -> PathBuf {
-        self.root.join(EXTRA_ROCKSPEC)
+        self.lux_toml_dir.join(EXTRA_ROCKSPEC)
     }
 
     pub fn root(&self) -> &ProjectRoot {
@@ -355,7 +360,7 @@ impl Project {
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
-            self.root.clone(),
+            self.lux_toml_dir.clone(),
         )?;
 
         Ok(())
@@ -407,7 +412,7 @@ impl Project {
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
-            self.root.clone(),
+            self.lux_toml_dir.clone(),
         )?;
 
         Ok(())
@@ -453,7 +458,7 @@ impl Project {
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
-            self.root.clone(),
+            self.lux_toml_dir.clone(),
         )?;
 
         Ok(())
@@ -545,7 +550,7 @@ impl Project {
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
-            self.root.clone(),
+            self.lux_toml_dir.clone(),
         )?;
 
         Ok(())
@@ -686,7 +691,7 @@ impl Project {
         self.toml = PartialProjectToml::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
-            self.root.clone(),
+            self.lux_toml_dir.clone(),
         )?;
 
         Ok(())
@@ -945,6 +950,36 @@ mod tests {
         fs::tokio::write(&cargo_config, "").await.unwrap();
         let project_files = project_files(&project_root);
         assert!(project_files.contains(&cargo_config.to_path_buf()));
+    }
+
+    #[tokio::test]
+    async fn project_root_dir_override() {
+        let root_dir = assert_fs::TempDir::new().unwrap();
+        let lux_toml_dir = root_dir.child("proj");
+        lux_toml_dir.create_dir_all().unwrap();
+        fs::tokio::write(
+            lux_toml_dir.join(PROJECT_TOML),
+            r#"
+            package = "my-package"
+            version = "1.0.0"
+            lua = "5.1"
+
+            [project]
+            root_dir = ".."
+
+            [build]
+            type = "builtin"
+            "#,
+        )
+        .await
+        .unwrap();
+        let project = Project::from_exact(lux_toml_dir.path()).unwrap().unwrap();
+        assert_eq!(
+            std::fs::canonicalize(project.root()).unwrap(),
+            std::fs::canonicalize(root_dir.path()).unwrap()
+        );
+        // The `lux.toml` path must still point to the directory containing the `lux.toml`.
+        assert_eq!(project.toml_path(), lux_toml_dir.join(PROJECT_TOML));
     }
 
     #[tokio::test]
