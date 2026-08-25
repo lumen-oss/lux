@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.1...lux-lib-v0.59.0) `lux-lib` - 2026-08-25
+
+### Added
+- *(vendor)* support rust-mlua/cargo dependencies ([#1863](https://github.com/lumen-oss/lux/pull/1863))
+- *(nix)* lux packaging helpers ([#1862](https://github.com/lumen-oss/lux/pull/1862))
+- [**breaking**] probe lua versions when specifying --nvim flag ([#1861](https://github.com/lumen-oss/lux/pull/1861))
+- *(config)* fall back to temp directory if $HOME not set ([#1857](https://github.com/lumen-oss/lux/pull/1857))
+
+### Fixed
+- *(build)* allow overwriting installed files from read-only vendor dirs ([#1858](https://github.com/lumen-oss/lux/pull/1858))
+- *(vendor)* deduplicate packages by name/version ([#1856](https://github.com/lumen-oss/lux/pull/1856))
+- *(vendor)* store source archives instead of unpacking them ([#1855](https://github.com/lumen-oss/lux/pull/1855))
+- *(build)* specify absolute output path when linking ([#1853](https://github.com/lumen-oss/lux/pull/1853))
+- *(fetch)* include ignore files when copying file sources ([#1852](https://github.com/lumen-oss/lux/pull/1852))
+- *(install-rockspec)* update install tree lockfile ([#1867](https://github.com/lumen-oss/lux/pull/1867))
+- *(vendor)* vendor rockspec with binary rock ([#1865](https://github.com/lumen-oss/lux/pull/1865))
+
 ## [0.58.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.0...lux-lib-v0.58.1) `lux-lib` - 2026-08-15
 
 ### Fixed

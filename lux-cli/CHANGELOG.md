@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.0](https://github.com/lumen-oss/lux/compare/v0.41.1...v0.42.0) `lux-cli` - 2026-08-25
+
+### Added
+- *(nix)* lux packaging helpers ([#1862](https://github.com/lumen-oss/lux/pull/1862))
+- [**breaking**] probe lua versions when specifying --nvim flag ([#1861](https://github.com/lumen-oss/lux/pull/1861))
+
+### Fixed
+- *(install-rockspec)* update install tree lockfile ([#1867](https://github.com/lumen-oss/lux/pull/1867))
+
 ## [0.41.1](https://github.com/lumen-oss/lux/compare/v0.41.0...v0.41.1) `lux-cli` - 2026-08-15
 
 ### Other
