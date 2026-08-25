@@ -13,7 +13,8 @@ use crate::{
     drivers::install_packages::{InstallPackages, InstallPackagesError},
     lockfile::LockedPackageLockType,
     operations::{
-        GenLuaRc, GenLuaRcError, InstallProject, InstallProjectError, PackageInstallSpec,
+        GenLuaRc, GenLuaRcError, GenLuauRc, GenLuauRcError, InstallProject, InstallProjectError,
+        PackageInstallSpec,
     },
     package::PackageName,
     package_db::{PackageDB, PackageDBError},
@@ -83,6 +84,9 @@ pub enum SyncError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     GenLuaRc(#[from] GenLuaRcError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GenLuauRc(#[from] GenLuauRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Frozen(Box<frozen::SyncError>),
@@ -247,6 +251,11 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
             .config(config)
             .workspace(workspace)
             .generate_luarc()
+            .await?;
+        GenLuauRc::new()
+            .config(config)
+            .workspace(workspace)
+            .generate_luau_rc()
             .await?;
     }
 

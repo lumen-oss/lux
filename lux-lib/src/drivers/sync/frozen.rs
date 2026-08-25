@@ -14,7 +14,7 @@ use crate::{
         PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
-    operations::{self, GenLuaRcError},
+    operations::{self, GenLuaRcError, GenLuauRcError},
     package::{PackageName, PackageReq},
     package_db::{PackageDB, PackageDBError},
     pipeline::resolve::luarocks_build_backend_name,
@@ -109,6 +109,11 @@ where
             .workspace(args.workspace)
             .generate_luarc()
             .await?;
+        operations::GenLuauRc::new()
+            .config(args.config)
+            .workspace(args.workspace)
+            .generate_luau_rc()
+            .await?;
 
         report.merge(build_report);
         if let Some(test_report) = test_report {
@@ -157,6 +162,9 @@ pub enum SyncError {
     #[error("failed to generate `.luarc.json`")]
     #[diagnostic(forward(0))]
     GenLuaRc(#[from] GenLuaRcError),
+    #[error("failed to generate `.luaurc`")]
+    #[diagnostic(forward(0))]
+    GenLuauRc(#[from] GenLuauRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageDB(Box<PackageDBError>),

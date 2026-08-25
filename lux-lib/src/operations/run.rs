@@ -9,9 +9,9 @@ use tokio::process::Command;
 
 use crate::{
     config::Config,
-    lua_installation::LuaBinary,
+    lua_installation::{LuaBinary, LuaInstallationError},
     lua_rockspec::LuaVersionError,
-    operations::run_lua::RunLua,
+    operations::run_lua::{self, RunLua},
     package::PackageName,
     path::{Paths, PathsError},
     project::project_toml::LocalProjectTomlValidationError,
@@ -64,6 +64,7 @@ impl Deref for RunCommand {
 
 #[derive(Debug, Error, Diagnostic)]
 #[error(transparent)]
+#[non_exhaustive]
 pub enum RunError {
     #[diagnostic(transparent)]
     Toml(#[from] LocalProjectTomlValidationError),
@@ -73,6 +74,9 @@ pub enum RunError {
     LuaVersion(#[from] LuaVersionError),
     #[diagnostic(transparent)]
     RunLua(#[from] RunLuaError),
+    #[error("failed to detect or install a luau runtime")]
+    #[diagnostic(forward(0))]
+    LuaInstallation(#[from] LuaInstallationError),
     #[diagnostic(transparent)]
     WorkspaceError(#[from] WorkspaceError),
     #[diagnostic(transparent)]
@@ -139,11 +143,13 @@ async fn run_with_local_lua(
 
     let tree = workspace.tree(config)?;
 
+    let lua_cmd = LuaBinary::from(run_lua::resolve_lua_runtime(&version, config).await?);
+
     RunLua::new()
         .root(&root_dir.unwrap_or(workspace.root().to_path_buf()))
         .tree(&tree)
         .config(config)
-        .lua_cmd(LuaBinary::new(version, config))
+        .lua_cmd(lua_cmd)
         .disable_loader(disable_loader)
         .args(args)
         .run_lua()
@@ -163,7 +169,7 @@ async fn run_with_command(
     let tree = workspace.tree(config)?;
     let paths = Paths::new(&tree)?;
 
-    let lua_init = if disable_loader {
+    let lua_init = if tree.version().is_luau() || disable_loader {
         None
     } else if tree.version().lux_lib_dir().is_none() {
         tracing::warn!("lux-lua library not found.\n    Cannot use the `lux.loader`.\n    To suppress this warning, set the `--no-loader` option.");
