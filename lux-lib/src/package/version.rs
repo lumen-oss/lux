@@ -696,6 +696,11 @@ impl PackageVersionReq {
     pub fn is_any(&self) -> bool {
         matches!(self, PackageVersionReq::Any)
     }
+
+    /// Returns true if this requirement pins the Luau dialect (`lua = "luau"`).
+    pub fn is_luau(&self) -> bool {
+        matches!(self, PackageVersionReq::StringVer(req) if req == "luau")
+    }
 }
 
 impl Display for PackageVersionReq {

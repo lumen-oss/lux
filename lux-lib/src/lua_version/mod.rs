@@ -31,8 +31,8 @@ pub enum LuaVersion {
     LuaJIT,
     #[serde(rename = "jit5.2")]
     LuaJIT52,
-    // TODO(vhyrro): Support luau?
-    // LuaU,
+    #[serde(rename = "luau")]
+    Luau,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -52,12 +52,13 @@ impl LuaVersion {
                 LuaVersion::Lua55 => "5.5.0".parse().unwrap_unchecked(),
                 LuaVersion::LuaJIT => "5.1.0".parse().unwrap_unchecked(),
                 LuaVersion::LuaJIT52 => "5.2.0".parse().unwrap_unchecked(),
+                LuaVersion::Luau => "5.1.0".parse().unwrap_unchecked(),
             }
         }
     }
     pub fn version_compatibility_str(&self) -> String {
         match self {
-            LuaVersion::Lua51 | LuaVersion::LuaJIT => "5.1".into(),
+            LuaVersion::Lua51 | LuaVersion::LuaJIT | LuaVersion::Luau => "5.1".into(),
             LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2".into(),
             LuaVersion::Lua53 => "5.3".into(),
             LuaVersion::Lua54 => "5.4".into(),
@@ -95,6 +96,10 @@ impl LuaVersion {
 
     pub(crate) fn is_luajit(&self) -> bool {
         matches!(self, Self::LuaJIT | Self::LuaJIT52)
+    }
+
+    pub(crate) fn is_luau(&self) -> bool {
+        matches!(self, Self::Luau)
     }
 
     /// Searches for the path to the lux-lua library for this version
@@ -160,6 +165,7 @@ impl FromStr for LuaVersion {
             "5.5" | "55" => Ok(LuaVersion::Lua55),
             "jit" | "luajit" => Ok(LuaVersion::LuaJIT),
             "jit52" | "luajit52" => Ok(LuaVersion::LuaJIT52),
+            "luau" => Ok(LuaVersion::Luau),
             _ => Err(format!(
                 r#"unrecognized Lua version.
 supported versions: {}
@@ -180,6 +186,7 @@ impl Display for LuaVersion {
             LuaVersion::Lua55 => "5.5",
             LuaVersion::LuaJIT => "jit",
             LuaVersion::LuaJIT52 => "jit52",
+            LuaVersion::Luau => "luau",
         })
     }
 }
