@@ -259,9 +259,10 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         for (target, source) in &install_spec.lib {
             let absolute_source = build_dir.join(source);
             let resolved_target = output_paths.lib.join(target);
-            fs::tokio::copy(absolute_source, resolved_target)
+            fs::tokio::copy(&absolute_source, &resolved_target)
                 .instrument(tracing::trace_span!("copying target"))
                 .await?;
+            utils::make_writable(&resolved_target).await?;
         }
     }
     if entry_type.is_entrypoint() {
@@ -296,9 +297,10 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                     .instrument(tracing::trace_span!("creating configuration directory"))
                     .await?;
             }
-            fs::tokio::copy(absolute_source, target)
+            fs::tokio::copy(&absolute_source, &target)
                 .instrument(tracing::trace_span!("copying configuration file"))
                 .await?;
+            utils::make_writable(&target).await?;
         }
     }
     Ok(())
