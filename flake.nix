@@ -32,6 +32,9 @@
       }: let
         pkgs = attrs.pkgs.extend self.overlays.default;
         lib = pkgs.lib;
+        rockspecTests = pkgs.callPackage ./nix/tests/rockspec.nix {};
+        nvimPluginTests = pkgs.callPackage ./nix/tests/nvim-plugin.nix {};
+        buildLuxHelpersTests = pkgs.callPackage ./nix/tests/build-lux-helpers.nix {};
         git-hooks-check = git-hooks.lib.${system}.run {
           src = self;
           hooks = {
@@ -136,6 +139,14 @@
           lua-tests = pkgs.lux-nextest-lua;
           clippy = pkgs.lux-clippy;
           workspace-hack = pkgs.lux-workspace-hack;
+          rockspec-cjson = rockspecTests.cjson;
+          rockspec-luassert = rockspecTests.luassert;
+          nvim-plugin = nvimPluginTests.test;
+          build-lux-helpers = buildLuxHelpersTests.fetchLuxDeps;
+          build-lux-helpers-import-lock = buildLuxHelpersTests.importLuxLock;
+          build-lux-helpers-lux-lock = buildLuxHelpersTests.luxLock;
+          build-lux-helpers-lux-vendor-dir = buildLuxHelpersTests.luxVendorDir;
+          build-lux-helpers-with-packages = buildLuxHelpersTests.withPackages;
         };
 
         formatter = let

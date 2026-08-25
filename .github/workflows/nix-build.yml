@@ -76,3 +76,16 @@ jobs:
       shell: bash
       # FIXME: This fails with permission denied on darwin
       if: ${{ matrix.job.target == 'x86_64-linux' }}
+    - name: Lux nix helper tests
+      run: |
+        nix build ".#checks.${{matrix.job.target}}.build-lux-helpers" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.build-lux-helpers-import-lock" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.build-lux-helpers-lux-vendor-dir" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.build-lux-helpers-with-packages" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.build-lux-helpers-lux-lock" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.rockspec-cjson" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.rockspec-luassert" -Lv --accept-flake-config --log-lines 500 --fallback
+        nix build ".#checks.${{matrix.job.target}}.nvim-plugin" -Lv --accept-flake-config --log-lines 500 --fallback
+      shell: bash
+      # FIXME: lux-lua build fails with permission denied on darwin
+      if: ${{ matrix.job.target == 'x86_64-linux' }}
