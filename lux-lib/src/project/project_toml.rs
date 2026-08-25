@@ -262,15 +262,17 @@ pub struct PartialProjectToml {
     pub(crate) test: Option<TestSpecInternal>,
     #[serde(default)]
     pub(crate) deploy: Option<DeploySpec>,
+    #[serde(default)]
+    pub(crate) project: ProjectSpec,
 
-    /// Used to bind the project TOML to a project root
-    #[serde(skip, default = "ProjectRoot::new")]
-    pub(crate) project_root: ProjectRoot,
+    /// Used to bind the TOML to the directory containing the `lux.toml`.
+    #[serde(skip, default = "PathBuf::new")]
+    lux_toml_dir: PathBuf,
 }
 
 impl HasIntegrity for PartialProjectToml {
     async fn hash(&self) -> io::Result<Integrity> {
-        let toml_file = self.project_root.join(PROJECT_TOML);
+        let toml_file = self.lux_toml_dir.join(PROJECT_TOML);
         let content = fs::sync::read_to_string(&toml_file).map_err(io::Error::other)?;
         Ok(Integrity::from(&content))
     }
@@ -280,12 +282,20 @@ impl PartialProjectToml {
     pub(crate) fn new(
         name: &str,
         str: &str,
-        project_root: ProjectRoot,
+        lux_toml_dir: ProjectRoot,
     ) -> Result<Self, TomlDeError> {
-        Ok(Self {
-            project_root,
-            ..super::parse_toml(name, str)?
-        })
+        let mut this: Self = super::parse_toml(name, str)?;
+        this.lux_toml_dir = lux_toml_dir.to_path_buf();
+        this.project.root = match this.project.root_dir {
+            Some(ref root_dir) => {
+                let relative_project_root = lux_toml_dir.join(root_dir);
+                let project_root =
+                    std::fs::canonicalize(&relative_project_root).unwrap_or(relative_project_root);
+                ProjectRoot(project_root)
+            }
+            None => lux_toml_dir,
+        };
+        Ok(this)
     }
 
     /// This project's Lua version requirement, if any
@@ -343,7 +353,7 @@ impl PartialProjectToml {
             package: project_toml.package,
             version: project_toml
                 .version_template
-                .try_generate(&self.project_root, None)
+                .try_generate(&self.lux_toml_dir, None)
                 .unwrap_or(PackageVersion::default_dev_version()),
             lua: project_toml
                 .lua
@@ -402,7 +412,7 @@ impl PartialProjectToml {
 
             source: PerPlatform::new(RemoteRockSource {
                 local: LocalRockSource::default(),
-                source_spec: RockSourceSpec::File(self.project_root.to_path_buf()),
+                source_spec: RockSourceSpec::File(self.project.root.to_path_buf()),
             }),
         };
 
@@ -442,10 +452,10 @@ impl PartialProjectToml {
     ) -> Result<RemoteProjectToml, RemoteProjectTomlValidationError> {
         let version = self
             .version_template
-            .try_generate(&self.project_root, specrev)?;
+            .try_generate(&self.lux_toml_dir, specrev)?;
         let source =
             self.source_template
-                .try_generate(&self.project_root, &self.package, &version)?;
+                .try_generate(&self.lux_toml_dir, &self.package, &version)?;
         let source = PerPlatform::new(RemoteRockSource::try_from(source).map_err(|err| {
             RemoteProjectTomlValidationError::LocalProjectTomlValidationError(
                 LocalProjectTomlValidationError::RockSource(err),
@@ -467,7 +477,7 @@ impl PartialProjectToml {
 
     /// Returns the current package version, which may be generated from a template
     pub fn version(&self) -> Result<PackageVersion, GenerateVersionError> {
-        self.version_template.try_generate(&self.project_root, None)
+        self.version_template.try_generate(&self.lux_toml_dir, None)
     }
 
     /// Merge the `ProjectToml` struct with an unvalidated `LuaRockspec`.
@@ -515,7 +525,8 @@ impl PartialProjectToml {
             rockspec_format: other.rockspec_format.or(self.rockspec_format),
 
             // Keep the project root the same, as it is not part of the lua rockspec
-            project_root: self.project_root,
+            project: self.project,
+            lux_toml_dir: self.lux_toml_dir.clone(),
         }
     }
 
@@ -523,7 +534,7 @@ impl PartialProjectToml {
         match &dep.source {
             Some(RockSourceSpec::File(path)) if path.is_dir() => dep,
             Some(RockSourceSpec::File(path)) => LuaDependencySpec {
-                source: Some(RockSourceSpec::File(self.project_root.join(path))),
+                source: Some(RockSourceSpec::File(self.lux_toml_dir.join(path))),
                 ..dep
             },
             _ => dep,
@@ -543,7 +554,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
                 version.clone(),
                 self.package().to_owned(),
                 self.version_template
-                    .try_generate(&self.project_root, None)
+                    .try_generate(&self.lux_toml_dir, None)
                     .unwrap_or(PackageVersion::default_dev_version()),
             ))
         }
@@ -563,7 +574,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
                 version,
                 self.package.clone(),
                 self.version_template
-                    .try_generate(&self.project_root, None)
+                    .try_generate(&self.lux_toml_dir, None)
                     .unwrap_or(PackageVersion::default_dev_version()),
             ))
         }
@@ -593,6 +604,29 @@ impl LuaVersionCompatibility for PartialProjectToml {
             }
         }
         None
+    }
+}
+
+/// Lux-specific project configuration.
+///
+/// This is not part of the rockspec format and is ignored when generating a rockspec.
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct ProjectSpec {
+    /// The project root directory, relative to the directory containing the `lux.toml`.
+    /// Useful for multi-project workspaces, where the build files
+    /// (e.g. the cargo workspace `Cargo.toml`) do not live next to the `lux.toml`.
+    root_dir: Option<PathBuf>,
+    /// The project root directory, resolved from `root_dir` when deserializing.
+    #[serde(skip, default = "ProjectRoot::new")]
+    pub(crate) root: ProjectRoot,
+}
+
+impl Default for ProjectSpec {
+    fn default() -> Self {
+        Self {
+            root_dir: None,
+            root: ProjectRoot::new(),
+        }
     }
 }
 
@@ -672,7 +706,7 @@ impl LocalProjectToml {
         }
         LocalLuaRockspec::new(
             &self.to_lua_remote_rockspec_string()?,
-            self.internal.project_root.clone(),
+            ProjectRoot(self.internal.lux_toml_dir.clone()),
         )
     }
 }
@@ -753,11 +787,11 @@ impl Rockspec for LocalProjectToml {
     }
 
     fn to_lua_remote_rockspec_string(&self) -> Result<String, Self::Error> {
-        let project_root = &self.internal.project_root;
+        let lux_toml_dir = &self.internal.lux_toml_dir;
         let version = self
             .internal
             .version_template
-            .try_generate(project_root, None)?;
+            .try_generate(lux_toml_dir, None)?;
         let starter = format!(
             r#"
 rockspec_format = "{}"
@@ -825,7 +859,7 @@ version = "{}""#,
         let source =
             self.internal
                 .source_template
-                .try_generate(project_root, &self.package, &version)?;
+                .try_generate(lux_toml_dir, &self.package, &version)?;
         template.push(source.display_lua());
 
         template.push(self.internal.build.display_lua());
@@ -969,7 +1003,7 @@ impl Rockspec for RemoteProjectToml {
     }
 
     fn to_lua_remote_rockspec_string(&self) -> Result<String, Self::Error> {
-        let project_root = &self.local.internal.project_root;
+        let lux_toml_dir = &self.local.internal.lux_toml_dir;
         let starter = format!(
             r#"
 rockspec_format = "{}"
@@ -1038,7 +1072,7 @@ version = "{}""#,
         }
 
         let source = self.local.internal.source_template.try_generate(
-            project_root,
+            lux_toml_dir,
             &self.local.internal.package,
             self.version(),
         )?;
@@ -1565,6 +1599,51 @@ mod tests {
             PartialProjectToml::new(PROJECT_TOML, &project_toml, ProjectRoot::default())
                 .unwrap_err();
         }
+    }
+
+    #[test]
+    fn project_root_dir_override_and_rockspec_generation() {
+        let project_toml = r#"
+        package = "my-package"
+        version = "1.0.0"
+        lua = "5.1"
+
+        [project]
+        root_dir = ".."
+
+        [source]
+        url = "https://example.com"
+
+        [build]
+        type = "builtin"
+        "#;
+
+        let workspace_root = assert_fs::TempDir::new().unwrap();
+        let lux_toml_dir = workspace_root.child("proj");
+        lux_toml_dir.create_dir_all().unwrap();
+        std::fs::write(lux_toml_dir.join(PROJECT_TOML), project_toml).unwrap();
+
+        let project = PartialProjectToml::new(
+            PROJECT_TOML,
+            project_toml,
+            ProjectRoot(lux_toml_dir.to_path_buf()),
+        )
+        .unwrap();
+        let local = project.into_local().unwrap();
+        let RockSourceSpec::File(root_dir) = &local.source().current_platform().source_spec else {
+            panic!("expected a file source");
+        };
+        assert_eq!(
+            root_dir,
+            &std::fs::canonicalize(workspace_root.path()).unwrap()
+        );
+
+        // The `[project]` table must be ignored when generating a rockspec.
+        let rockspec = local.to_lua_rockspec().unwrap();
+        assert!(!rockspec
+            .to_lua_remote_rockspec_string()
+            .unwrap()
+            .contains("root_dir"));
     }
 
     #[test]
