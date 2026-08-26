@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.59.0...lux-lib-v0.59.1) `lux-lib` - 2026-08-26
+
+### Fixed
+- *(rockspec)* propagate error diagnostics ([#1880](https://github.com/lumen-oss/lux/pull/1880))
+- *(error-reporting)* forward build-workspace-error causes ([#1878](https://github.com/lumen-oss/lux/pull/1878))
+
 ## [0.59.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.58.1...lux-lib-v0.59.0) `lux-lib` - 2026-08-25
 
 ### Added
