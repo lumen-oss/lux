@@ -1,16 +1,18 @@
-use std::{io, ops::Deref, path::PathBuf, process::Command};
+use std::{io, ops::Deref, process::Command};
 
 use super::{
     BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
 };
+pub(crate) mod tiniest;
 use crate::fs;
 use crate::tree::InstallTree;
 use crate::workspace::{WorkspaceError, WorkspaceTreeError};
 use crate::{
     build::BuildBehaviour,
     config::{Config, ConfigError},
-    lua_installation::{LuaBinary, LuaBinaryError},
+    lua_installation::LuaBinaryError,
     lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
+    lua_version::LuaVersion,
     package::{PackageName, PackageVersionReqError},
     path::{Paths, PathsError},
     project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
@@ -129,6 +131,12 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaBinary(#[from] LuaBinaryError),
+    #[error("failed to set up tiniest")]
+    #[diagnostic(forward(0))]
+    Tiniest(#[from] tiniest::TiniestError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RunLua(#[from] super::run_lua::RunLuaError),
 }
 
 impl From<InstallTestDependenciesError> for RunTestsError {
@@ -176,7 +184,16 @@ async fn run_project_tests(
     config: &Config,
 ) -> Result<(), RunTestsError> {
     let rocks = project.toml().into_local()?;
-    let test_spec = rocks.test().current_platform().to_validated(project)?;
+    let test_spec = match rocks.test().current_platform().to_validated(project) {
+        Ok(test_spec) => test_spec,
+        Err(TestSpecError::NoTestSpecDetected)
+            if project.lua_version(config)? == LuaVersion::Luau =>
+        {
+            // tiniest is the default test framework for Luau projects
+            ValidatedTestSpec::Tiniest
+        }
+        Err(err) => return Err(err.into()),
+    };
     let test_config = test_spec.test_config(config)?;
 
     if no_lock {
@@ -193,28 +210,43 @@ async fn run_project_tests(
         .build()
         .await?;
 
-    let lua_version = project.lua_version(&test_config)?;
-    let project_tree = workspace.lua_version_tree(lua_version, &test_config)?;
+    let lua_version = project.lua_version(&test_config)?.clone();
+    let project_tree = workspace.lua_version_tree(lua_version.clone(), &test_config)?;
     let test_tree = workspace.test_tree(&test_config)?;
     let mut paths = Paths::new(&project_tree)?;
     let test_tree_paths = Paths::new(&test_tree)?;
     paths.prepend(&test_tree_paths);
 
+    let collector_path = match &test_spec {
+        ValidatedTestSpec::Tiniest => {
+            let spec_files = tiniest::discover_spec_files(project.root());
+            if spec_files.is_empty() {
+                tracing::warn!("no *.spec.luau or *.spec.lua files found in test/ or tests/");
+            }
+            let tiniest_src = tiniest::ensure_installed(&test_tree, &test_config).await?;
+            Some(tiniest::write_collector(workspace.root(), &spec_files, &tiniest_src).await?)
+        }
+        _ => None,
+    };
+    let mut runner_args = test_spec.args();
+    if let Some(collector_path) = &collector_path {
+        runner_args.push(collector_path.to_slash_lossy().to_string());
+    }
+
     let test_executable = match &test_spec {
         ValidatedTestSpec::Busted { .. } => BUSTED_EXE.to_string(),
         ValidatedTestSpec::BustedNlua { .. } => BUSTED_EXE.to_string(),
         ValidatedTestSpec::Command(spec) => spec.command.to_string(),
-        ValidatedTestSpec::LuaScript(_) => {
-            let lua_version = project.lua_version(&test_config)?;
-            let lua_binary = LuaBinary::new(lua_version, &test_config);
-            let lua_bin_path: PathBuf = lua_binary.try_into()?;
-            lua_bin_path.to_slash_lossy().to_string()
+        ValidatedTestSpec::Tiniest | ValidatedTestSpec::LuaScript(_) => {
+            let runtime =
+                super::run_lua::resolve_lua_runtime(&lua_version.clone(), &test_config).await?;
+            runtime.to_string_lossy().to_string()
         }
     };
     let mut command = Command::new(&test_executable);
     let mut command = command
         .current_dir(project.root().deref())
-        .args(test_spec.args())
+        .args(runner_args)
         .args(test_args)
         .env("PATH", paths.path_prepended().joined())
         .env("LUA_PATH", paths.package_path().joined())
@@ -352,7 +384,7 @@ async fn ensure_test_dependencies(
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use crate::{
         config::ConfigBuilder, fs, lua_installation::detect_installed_lua_version,

@@ -618,6 +618,7 @@ impl IntoLua for TestSpecLua {
             TestSpec::BustedNlua(spec) => table.set("busted_nlua", BustedTestSpecLua(spec))?,
             TestSpec::Command(spec) => table.set("command", CommandTestSpecLua(spec))?,
             TestSpec::Script(spec) => table.set("script", LuaScriptTestSpecLua(spec))?,
+            TestSpec::Tiniest => table.set("tiniest", true)?,
         }
         Ok(LuaValue::Table(table))
     }
