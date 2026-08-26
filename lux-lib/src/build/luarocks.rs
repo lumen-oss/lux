@@ -34,8 +34,9 @@ pub enum LuarocksBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
-    #[error("{0}")] // We don't know the concrete error type
-    Rockspec(String),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Rockspec(Box<dyn Diagnostic + Send + Sync>),
     #[error("error installing luarocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaVersion(#[from] LuaVersionError),
@@ -67,7 +68,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
         &rockspec_file,
         rockspec
             .to_lua_remote_rockspec_string()
-            .map_err(|err| LuarocksBuildError::Rockspec(err.to_string()))?,
+            .map_err(|err| LuarocksBuildError::Rockspec(Box::new(err)))?,
     )
     .await?;
     let luarocks = LuaRocksInstallation::new(config, tree.build_tree(config)?)?;

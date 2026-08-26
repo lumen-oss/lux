@@ -2,7 +2,7 @@ use std::{env, io};
 
 use crate::operations::SearchAndDownloadError;
 use crate::package::SpecRevIterator;
-use crate::project::project_toml::RemoteProjectTomlValidationError;
+use crate::project::project_toml::{ProjectTomlError, RemoteProjectTomlValidationError};
 use crate::remote_package_db::RemotePackageDB;
 use crate::rockspec::Rockspec;
 use crate::TOOL_VERSION;
@@ -162,9 +162,9 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error("unsupported version: '{0}'")]
     #[diagnostic(help("Lux can upload packages with a SemVer version, 'dev' or 'scm'"))]
     UnsupportedVersion(String),
-    #[error("{0}")] // We don't know the concrete error type
-    #[diagnostic(help("check the rockspec or lux.toml for valid syntax and make sure it matches the specification."),)]
-    Rockspec(String),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Rockspec(#[from] ProjectTomlError),
     #[error("the maximum supported number of rockspec revisions per version has been exceeded")]
     #[diagnostic(help("bump the version to a version that has not yet been published"))]
     MaxSpecRevsExceeded,
@@ -509,9 +509,7 @@ mod helpers {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;
 
-            let rockspec_content = rockspec
-                .to_lua_remote_rockspec_string()
-                .map_err(|err| UploadError::Rockspec(err.to_string()))?;
+            let rockspec_content = rockspec.to_lua_remote_rockspec_string()?;
 
             if let PackageVersion::StringVer(ver) = rockspec.version() {
                 return Err(UploadError::UnsupportedVersion(ver.to_string()));
