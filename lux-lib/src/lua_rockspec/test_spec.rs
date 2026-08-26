@@ -49,6 +49,7 @@ pub enum TestSpec {
     AutoDetect,
     Busted(BustedTestSpec),
     BustedNlua(BustedTestSpec),
+    Tiniest,
     Command(CommandTestSpec),
     Script(LuaScriptTestSpec),
 }
@@ -63,6 +64,7 @@ pub(crate) enum ValidatedTestSpec {
         spec: BustedTestSpec,
         dependencies: Vec<PackageReq>,
     },
+    Tiniest,
     Command(CommandTestSpec),
     LuaScript(LuaScriptTestSpec),
 }
@@ -118,6 +120,7 @@ impl TestSpec {
                 spec: spec.clone(),
                 dependencies: vec![busted, nlua],
             }),
+            Self::Tiniest => Ok(ValidatedTestSpec::Tiniest),
             Self::Command(spec) => Ok(ValidatedTestSpec::Command(spec.clone())),
             Self::Script(spec) => Ok(ValidatedTestSpec::LuaScript(spec.clone())),
             Self::AutoDetect => Err(TestSpecError::NoTestSpecDetected),
@@ -143,6 +146,7 @@ impl ValidatedTestSpec {
                 flags.push("--ignore-lua".into());
                 flags
             }
+            Self::Tiniest => Vec::new(),
             Self::Command(spec) => spec.flags.clone(),
             Self::LuaScript(spec) => std::iter::once(spec.script.to_slash_lossy().to_string())
                 .chain(spec.flags.clone())
@@ -187,6 +191,7 @@ impl ValidatedTestSpec {
                 spec: _,
                 dependencies,
             } => dependencies.clone(),
+            Self::Tiniest => Vec::new(),
             Self::Command(_) => Vec::new(),
             Self::LuaScript(_) => Vec::new(),
         }
@@ -204,6 +209,7 @@ impl TryFrom<TestSpecInternal> for TestSpec {
             Some(TestType::BustedNlua) => Ok(Self::BustedNlua(BustedTestSpec {
                 flags: internal.flags.unwrap_or_default(),
             })),
+            Some(TestType::Tiniest) => Ok(Self::Tiniest),
             Some(TestType::Command) => match (internal.command, internal.lua_script) {
                 (None, None) => Err(TestSpecDecodeError::NoCommandOrScript),
                 (None, Some(script)) => Ok(Self::Script(LuaScriptTestSpec {
@@ -298,6 +304,7 @@ impl LuaScriptTestSpec {
 pub(crate) enum TestType {
     Busted,
     BustedNlua,
+    Tiniest,
     Command,
 }
 
