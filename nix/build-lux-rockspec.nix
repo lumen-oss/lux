@@ -46,10 +46,14 @@ lib.extendMkDerivation {
     inherit (finalAttrs) pname version;
 
     luaVersionDir = lua.luaversion;
+    luxLuaVersion =
+      if lua.pkgs.isLuaJIT
+      then "jit"
+      else lua.luaversion;
     luaVersionFlag =
       if nvim
       then "--nvim"
-      else "--lua-version '${luaVersionDir}'";
+      else "--lua-version '${luxLuaVersion}'";
 
     luaDeps = lib.filter (drv: drv ? luaModule) propagatedBuildInputs;
     luarocksDeps =
@@ -87,7 +91,7 @@ lib.extendMkDerivation {
         {
           inherit src pname rustSupport knownRockspec rockspecFilename nvim;
           version = rockspecVersion;
-          luaVersion = luaVersionDir;
+          luaVersion = luxLuaVersion;
           hash = luxHash;
         }
       else null;

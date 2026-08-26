@@ -5,6 +5,11 @@
   lib = final.lib;
   craneLib = crane.mkLib prev;
 
+  luxLuaVersion = lua:
+    if lua.pkgs.isLuaJIT
+    then "jit"
+    else lua.luaversion;
+
   # Override `lua.withPackages` to register the lux loader and expose lux trees
   # on LUA_PATH when a package in the environment was built with `buildLuxPackage`.
   override-lua = lua: lux-lua: let
@@ -20,11 +25,11 @@
           "--suffix"
           "LUA_PATH"
           "';'"
-          "'${p}/share/lux/${lua.luaversion}/?.lua'"
+          "'${p}/share/lux/${luxLuaVersion lua}/?.lua'"
           "--suffix"
           "LUA_PATH"
           "';'"
-          "'${p}/share/lux/${lua.luaversion}/?/init.lua'"
+          "'${p}/share/lux/${luxLuaVersion lua}/?/init.lua'"
         ])
         luxPackages;
     in
@@ -47,10 +52,7 @@
   # the runtime files under site/pack/lux/start/<name> at the plugin root.
   toLuxNeovimPlugin = pkg: let
     nvimPkg = pkg.override {nvim = true;};
-    luaVersionDir =
-      if pkg.luaModule.pkgs.isLuaJIT
-      then "jit"
-      else pkg.luaModule.luaversion;
+    luaVersionDir = luxLuaVersion pkg.luaModule;
   in
     (final.symlinkJoin {
       name = "vimplugin-${pkg.pname}";
@@ -328,7 +330,7 @@ in {
         inherit lua lux-cli;
         fetchLuxDeps = final.fetchLuxDeps {inherit lua lux-cli;};
         importLuxLock = final.importLuxLock;
-        luxLoaderSetupHook = final.luxLoaderSetupHook lua.luaversion;
+        luxLoaderSetupHook = final.luxLoaderSetupHook (luxLuaVersion lua);
       }
     );
 
@@ -340,7 +342,7 @@ in {
       lua.pkgs.callPackage ./build-lux-rockspec.nix {
         inherit lua lux-cli;
         fetchLuxDeps = final.fetchLuxDeps {inherit lua lux-cli;};
-        luxLoaderSetupHook = final.luxLoaderSetupHook lua.luaversion;
+        luxLoaderSetupHook = final.luxLoaderSetupHook (luxLuaVersion lua);
       }
     );
 

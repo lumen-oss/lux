@@ -1,4 +1,8 @@
 {pkgs}: let
+  luajit = pkgs.luajit_lux.override {
+    packageOverrides = _final: _prev: {lux-lua = pkgs.lux-luajit.debug;};
+  };
+
   lua = pkgs.lua5_1_lux.override {
     packageOverrides = _final: _prev: {lux-lua = pkgs.lux-lua51.debug;};
   };
@@ -8,7 +12,12 @@
     lux-cli = pkgs.lux-cli.debug;
   };
 
-  lua-cjson = buildLuxRockspec {
+  buildLuxRockspecLuajit = pkgs.buildLuxRockspec {
+    lua = luajit;
+    lux-cli = pkgs.lux-cli.debug;
+  };
+
+  lua-cjson = buildLuxRockspecLuajit {
     pname = "lua-cjson";
     version = "2.1.0.10-1";
     src = pkgs.fetchFromGitHub {
@@ -36,7 +45,7 @@
       url = "mirror://luarocks/luassert-1.9.0-1.rockspec";
       hash = "sha256-rTPvF/GK/jMnH/q4wbwTCGBFELWh+JcvHeOCFAbIf64=";
     };
-    propagatedBuildInputs = [pkgs.lua5_1.pkgs.say];
+    propagatedBuildInputs = [lua.pkgs.say];
   };
 
   toml-edit = buildLuxRockspec {
@@ -54,14 +63,14 @@
     rustSupport = true;
   };
 
-  mkRequireTest = name: rock: mod:
+  mkRequireTest = lua: name: rock: mod:
     pkgs.runCommandLocal name {} ''
       set -euo pipefail
       ${lua.withPackages (_: [rock])}/bin/lua -e "assert(require('${mod}'))"
       touch "$out"
     '';
 in {
-  cjson = mkRequireTest "rockspec-lua-cjson-test" lua-cjson "cjson";
-  luassert = mkRequireTest "rockspec-luassert-test" luassert "luassert";
-  toml-edit = mkRequireTest "rockspec-toml-edit-test" toml-edit "toml_edit";
+  cjson = mkRequireTest luajit "rockspec-lua-cjson-test" lua-cjson "cjson";
+  luassert = mkRequireTest lua "rockspec-luassert-test" luassert "luassert";
+  toml-edit = mkRequireTest lua "rockspec-toml-edit-test" toml-edit "toml_edit";
 }
