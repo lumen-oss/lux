@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    fmt::Display,
     ops::{Deref, DerefMut},
     path::PathBuf,
 };
@@ -21,7 +20,7 @@ use crate::{
 };
 
 pub trait Rockspec {
-    type Error: Display + std::fmt::Debug;
+    type Error: miette::Diagnostic + Send + Sync + 'static;
 
     fn package(&self) -> &PackageName;
     fn version(&self) -> &PackageVersion;
