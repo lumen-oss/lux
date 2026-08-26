@@ -43,10 +43,14 @@ lib.extendMkDerivation {
     postUnpack ? "",
     ...
   }: let
+    luxLuaVersion =
+      if lua.pkgs.isLuaJIT
+      then "jit"
+      else lua.luaversion;
     luaVersionFlag =
       if nvim
       then "--nvim"
-      else "--lua-version \"${lua.luaversion}\"";
+      else "--lua-version \"${luxLuaVersion}\"";
 
     deps =
       if luxVendorDir != null
