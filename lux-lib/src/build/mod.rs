@@ -184,7 +184,7 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
     },
     #[error("failed to unpack src.rock")]
     #[diagnostic(forward(0))]
-    UnpackSrcRock(UnpackError),
+    UnpackSrcRock(#[source] UnpackError),
     #[error("failed to fetch rock source")]
     #[diagnostic(forward(0))]
     FetchSrcError(#[from] FetchSrcError),
