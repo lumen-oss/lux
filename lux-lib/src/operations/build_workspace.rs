@@ -44,16 +44,16 @@ pub enum BuildWorkspaceError {
     LuaRocksInstall(#[from] LuaRocksInstallError),
     #[error("error installind dependencies")]
     #[diagnostic(forward(0))]
-    InstallDependencies(InstallError),
+    InstallDependencies(#[source] InstallError),
     #[error("error installind build dependencies")]
     #[diagnostic(forward(0))]
-    InstallBuildDependencies(InstallError),
+    InstallBuildDependencies(#[source] InstallError),
     #[error("syncing dependencies with the project lockfile failed")]
     #[diagnostic(forward(0))]
-    SyncDependencies(SyncError),
+    SyncDependencies(#[source] SyncError),
     #[error("syncing build dependencies with the project lockfile failed")]
     #[diagnostic(forward(0))]
-    SyncBuildDependencies(SyncError),
+    SyncBuildDependencies(#[source] SyncError),
     #[error("error building the workspace")]
     #[diagnostic(forward(0))]
     Build(#[from] BuildError),
