@@ -325,6 +325,17 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
 
     let rocks_path = validated.target.join(PROJECT_TOML);
 
+    let generated_url = format!(
+        "https://github.com/{}/{}/archive/refs/tags/$(REF).zip",
+        validated.maintainer, validated.name
+    );
+
+    let source = if !generated_url.contains(' ') && url::Url::parse(&generated_url).is_ok() {
+        format!("[source]\nurl = \"{generated_url}\"")
+    } else {
+        String::new()
+    };
+
     std::fs::write(
         &rocks_path,
         format!(
@@ -339,8 +350,7 @@ maintainer = "{maintainer}"
 labels = [ {labels} ]
 {license}
 
-[source]
-url = "https://github.com/<owner>/my-project/archive/refs/tags/$(REF).zip"
+{source}
 
 [dependencies]
 # Add your dependencies here
