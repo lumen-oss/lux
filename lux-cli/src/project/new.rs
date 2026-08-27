@@ -339,6 +339,9 @@ maintainer = "{maintainer}"
 labels = [ {labels} ]
 {license}
 
+[source]
+url = "https://github.com/{maintainer}/{package_name}/archive/refs/tags/$(REF).zip"
+
 [dependencies]
 # Add your dependencies here
 # `busted = ">=2.0"`
