@@ -340,7 +340,7 @@ labels = [ {labels} ]
 {license}
 
 [source]
-url = "https://github.com/{maintainer}/{package_name}/archive/refs/tags/$(REF).zip"
+url = "https://github.com/<owner>/my-project/archive/refs/tags/$(REF).zip"
 
 [dependencies]
 # Add your dependencies here
