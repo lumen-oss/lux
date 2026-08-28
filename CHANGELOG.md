@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.60.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.59.1...lux-lib-v0.60.0) `lux-lib` - 2026-08-28
+
+### Added
+- [**breaking**] compatibility with luarocks arbitrary versioning ([#1883](https://github.com/lumen-oss/lux/pull/1883))
+
+## [0.43.0](https://github.com/lumen-oss/lux/compare/v0.42.1...v0.43.0) `lux-cli` - 2026-08-28
+
+### Added
+- [**breaking**] compatibility with luarocks arbitrary versioning ([#1883](https://github.com/lumen-oss/lux/pull/1883))
+- *(lx-new)* generate source template ([#1884](https://github.com/lumen-oss/lux/pull/1884))
+
 ## [0.42.1](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.42.0...lux-lsp-v0.42.1) `lux-lsp` - 2026-08-26
 
 ### Other
