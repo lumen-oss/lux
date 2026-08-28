@@ -313,7 +313,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             )?;
 
             let mut source_block =
-                format!("# [source]\n# When publishing, configure the source URL here");
+                "# [source]\n# When publishing, configure the source URL here".to_string();
 
             if is_github_repo {
                 let generated_url = format!(
