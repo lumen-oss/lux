@@ -81,6 +81,7 @@ struct NewProjectValidated {
     lua_versions: PackageReq,
     main: SourceDirType,
     license: Option<LicenseId>,
+    is_github_repo: bool,
 }
 
 fn clap_parse_license(s: &str) -> std::result::Result<LicenseId, String> {
@@ -175,6 +176,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             maintainer,
             name,
             target,
+            is_github_repo: false,
         }),
 
         NewProject {
@@ -188,15 +190,16 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             target,
         } => {
             eprintln!("Fetching remote repository metadata...");
-            let repo_metadata =
+            let (repo_metadata, is_github_repo) =
                 match github_metadata::get_metadata_for(Some(&target), &config).await {
-                    Ok(value) => value.map_or_else(|| RepoMetadata::default(&target), Ok),
+                    Ok(Some(value)) => Ok((value, true)),
+                    Ok(None) => RepoMetadata::default(&target).map(|m| (m, false)),
                     Err(_) => {
                         tracing::info!(
                             "Could not fetch remote repo metadata, defaulting to empty values."
                         );
 
-                        RepoMetadata::default(&target)
+                        RepoMetadata::default(&target).map(|m| (m, false))
                     }
                 }
                 .into_diagnostic()?;
@@ -317,6 +320,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                 lua_versions,
                 maintainer,
                 main: main.unwrap_or(SourceDirType::Src),
+                is_github_repo,
             })
         }
     }?;
@@ -325,21 +329,18 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
 
     let rocks_path = validated.target.join(PROJECT_TOML);
 
-    let generated_url = format!(
-        "https://github.com/{}/{}/archive/refs/tags/$(REF).zip",
-        validated.maintainer, validated.name
-    );
+    let mut source = format!("# [source]\n# When publishing, configure the source URL here");
 
-    let source = if url::Url::parse(&generated_url)
-        .is_ok_and(|url| &url.to_string() == &generated_url)
-    {
-        format!("[source]\nurl = \"{generated_url}\"")
-    } else {
-        format!(
-                "# [source]\n# When publishing, configure the source URL below\n# url = \"https://github.com/your-username/{}/archive/refs/tags/$(REF).zip\"",
-                validated.name
-            )
-    };
+    if validated.is_github_repo {
+        let generated_url = format!(
+            "https://github.com/{}/{}/archive/refs/tags/$(REF).zip",
+            validated.maintainer, validated.name
+        );
+
+        if url::Url::parse(&generated_url).is_ok_and(|url| url.as_str() == generated_url) {
+            source = format!("[source]\nurl = \"{generated_url}\"");
+        }
+    }
 
     std::fs::write(
         &rocks_path,
