@@ -81,6 +81,7 @@ struct NewProjectValidated {
     lua_versions: PackageReq,
     main: SourceDirType,
     license: Option<LicenseId>,
+    source_block: String,
 }
 
 fn clap_parse_license(s: &str) -> std::result::Result<LicenseId, String> {
@@ -175,6 +176,8 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             maintainer,
             name,
             target,
+            source_block: "# [source]\n# When publishing, configure the source URL here"
+                .to_string(),
         }),
 
         NewProject {
@@ -188,15 +191,16 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             target,
         } => {
             eprintln!("Fetching remote repository metadata...");
-            let repo_metadata =
+            let (repo_metadata, is_github_repo) =
                 match github_metadata::get_metadata_for(Some(&target), &config).await {
-                    Ok(value) => value.map_or_else(|| RepoMetadata::default(&target), Ok),
+                    Ok(Some(value)) => Ok((value, true)),
+                    Ok(None) => RepoMetadata::default(&target).map(|m| (m, false)),
                     Err(_) => {
                         tracing::info!(
                             "Could not fetch remote repo metadata, defaulting to empty values."
                         );
 
-                        RepoMetadata::default(&target)
+                        RepoMetadata::default(&target).map(|m| (m, false))
                     }
                 }
                 .into_diagnostic()?;
@@ -308,6 +312,20 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                 Ok,
             )?;
 
+            let mut source_block =
+                "# [source]\n# When publishing, configure the source URL here".to_string();
+
+            if is_github_repo {
+                let generated_url = format!(
+                    "https://github.com/{}/{}/archive/refs/tags/$(REF).zip",
+                    maintainer, package_name
+                );
+
+                if url::Url::parse(&generated_url).is_ok_and(|url| url.as_str() == generated_url) {
+                    source_block = format!("[source]\nurl = \"{generated_url}\"");
+                }
+            }
+
             Ok(NewProjectValidated {
                 target,
                 name: package_name,
@@ -317,6 +335,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                 lua_versions,
                 maintainer,
                 main: main.unwrap_or(SourceDirType::Src),
+                source_block,
             })
         }
     }?;
@@ -338,6 +357,8 @@ summary = "{summary}"
 maintainer = "{maintainer}"
 labels = [ {labels} ]
 {license}
+
+{source}
 
 [dependencies]
 # Add your dependencies here
@@ -363,6 +384,7 @@ type = "builtin"
                 .join(", "),
             lua_version_req = validated.lua_versions.version_req(),
             main = validated.main,
+            source = validated.source_block,
         )
         .trim(),
     )
