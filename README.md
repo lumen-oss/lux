@@ -116,10 +116,11 @@ The following table provides a brief comparison:
 | Sandbox build execution                                                                 | :white_check_mark: [^4]      | :x:                |
 
 [^1]: Supported via a compatibility layer that uses LuaRocks as a backend.
-[^2]: Mostly compatible with the LuaRocks version parser,
+[^2]: Aims to be compatible with the LuaRocks version parser,
       which allows an arbitrary number of version components.
-      To comply with SemVer, we treat anything after the third version component
-      (except for the specrev) as a prerelease/build version.
+      We treat anything after the third version component
+      (except for the specrev) as a prerelease/build version,
+      but allow comparing versions with/without prerelease components.
 [^3]: [You Aren't Gonna Need It.](https://martinfowler.com/bliki/Yagni.html)
 [^4]: Opt-in via a `build.runner` config.
 

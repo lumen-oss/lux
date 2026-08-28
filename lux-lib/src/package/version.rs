@@ -9,7 +9,7 @@ use itertools::Itertools;
 
 use miette::Diagnostic;
 use nonempty::NonEmpty;
-use semver::{Comparator, Error, Op, Version, VersionReq};
+use semver::{Comparator, Error, Op, Prerelease, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 #[derive(Debug, Error, Diagnostic)]
@@ -331,12 +331,162 @@ impl Serialize for SemVer {
 
 impl Ord for SemVer {
     fn cmp(&self, other: &Self) -> Ordering {
-        let result = self.version.cmp(&other.version);
-        if result == Ordering::Equal {
-            return self.specrev.cmp(&other.specrev);
+        match cmp_versions(&self.version, &other.version) {
+            Ordering::Equal => self.specrev.cmp(&other.specrev),
+            ord => ord,
         }
-        result
     }
+}
+
+/// Compare two LuaRocks versions.
+/// ┻━┻ ︵╰(°□°╰) Luarocks allows for an arbitrary number of version digits (e.g. `2.1.0.10`),
+/// which Lux treats as a SemVer prerelease.
+fn cmp_versions(a: &Version, b: &Version) -> Ordering {
+    match (a.major, a.minor, a.patch).cmp(&(b.major, b.minor, b.patch)) {
+        Ordering::Equal => cmp_prerelease(&a.pre, &b.pre),
+        ord => ord,
+    }
+}
+
+fn cmp_prerelease(a: &Prerelease, b: &Prerelease) -> Ordering {
+    match (a.is_empty(), b.is_empty()) {
+        (true, true) => Ordering::Equal,
+        (false, true) => Ordering::Greater,
+        (true, false) => Ordering::Less,
+        (false, false) => a.cmp(b),
+    }
+}
+
+/// Based on `semver`'s matching, but with the prerelease compared as an extension
+/// for compatibility with LuaRocks.
+/// The "prereleases only match prerelease comparators" rule is not applied.
+fn comparator_matches(comparator: &Comparator, version: &Version) -> bool {
+    match comparator.op {
+        Op::Exact | Op::Wildcard => matches_exact(comparator, version),
+        Op::Greater => matches_greater(comparator, version),
+        Op::GreaterEq => matches_greater(comparator, version) || matches_exact(comparator, version),
+        Op::Less => matches_less(comparator, version),
+        Op::LessEq => matches_less(comparator, version) || matches_exact(comparator, version),
+        Op::Tilde => matches_tilde(comparator, version),
+        Op::Caret => matches_caret(comparator, version),
+        _ => false,
+    }
+}
+
+fn matches_exact(comparator: &Comparator, version: &Version) -> bool {
+    if version.major != comparator.major {
+        return false;
+    }
+    if let Some(minor) = comparator.minor {
+        if version.minor != minor {
+            return false;
+        }
+    }
+    if let Some(patch) = comparator.patch {
+        if version.patch != patch {
+            return false;
+        }
+    }
+    version.pre == comparator.pre
+}
+
+fn matches_greater(comparator: &Comparator, version: &Version) -> bool {
+    if version.major != comparator.major {
+        return version.major > comparator.major;
+    }
+    match comparator.minor {
+        None => return false,
+        Some(minor) => {
+            if version.minor != minor {
+                return version.minor > minor;
+            }
+        }
+    }
+    match comparator.patch {
+        None => return false,
+        Some(patch) => {
+            if version.patch != patch {
+                return version.patch > patch;
+            }
+        }
+    }
+    cmp_prerelease(&version.pre, &comparator.pre) == Ordering::Greater
+}
+
+fn matches_less(comparator: &Comparator, version: &Version) -> bool {
+    if version.major != comparator.major {
+        return version.major < comparator.major;
+    }
+    match comparator.minor {
+        None => return false,
+        Some(minor) => {
+            if version.minor != minor {
+                return version.minor < minor;
+            }
+        }
+    }
+    match comparator.patch {
+        None => return false,
+        Some(patch) => {
+            if version.patch != patch {
+                return version.patch < patch;
+            }
+        }
+    }
+    cmp_prerelease(&version.pre, &comparator.pre) == Ordering::Less
+}
+
+fn matches_tilde(comparator: &Comparator, version: &Version) -> bool {
+    if version.major != comparator.major {
+        return false;
+    }
+    if let Some(minor) = comparator.minor {
+        if version.minor != minor {
+            return false;
+        }
+    }
+    if let Some(patch) = comparator.patch {
+        if version.patch != patch {
+            return version.patch > patch;
+        }
+    }
+    cmp_prerelease(&version.pre, &comparator.pre) != Ordering::Less
+}
+
+fn matches_caret(comparator: &Comparator, version: &Version) -> bool {
+    if version.major != comparator.major {
+        return false;
+    }
+    let minor = match comparator.minor {
+        None => return true,
+        Some(minor) => minor,
+    };
+    let patch = match comparator.patch {
+        None => {
+            if comparator.major > 0 {
+                return version.minor >= minor;
+            } else {
+                return version.minor == minor;
+            }
+        }
+        Some(patch) => patch,
+    };
+    if comparator.major > 0 {
+        if version.minor != minor {
+            return version.minor > minor;
+        } else if version.patch != patch {
+            return version.patch > patch;
+        }
+    } else if minor > 0 {
+        if version.minor != minor {
+            return false;
+        } else if version.patch != patch {
+            return version.patch > patch;
+        }
+    } else if version.minor != minor || version.patch != patch {
+        return false;
+    }
+    cmp_prerelease(&version.pre, &comparator.pre) != Ordering::Less
 }
 
 impl PartialOrd for SemVer {
@@ -498,9 +648,10 @@ impl PackageVersionReq {
 
     pub fn matches(&self, version: &PackageVersion) -> bool {
         match (self, version) {
-            (PackageVersionReq::SemVer(req), PackageVersion::SemVer(ver)) => {
-                req.matches(&ver.version)
-            }
+            (PackageVersionReq::SemVer(req), PackageVersion::SemVer(ver)) => req
+                .comparators
+                .iter()
+                .all(|comparator| comparator_matches(comparator, &ver.version)),
             (PackageVersionReq::DevVer(req), PackageVersion::DevVer(ver)) => req == &ver.modrev,
             (PackageVersionReq::StringVer(req), PackageVersion::StringVer(ver)) => {
                 req == &ver.modrev
@@ -781,6 +932,26 @@ mod tests {
                 specrev: 1.into()
             })
         );
+    }
+
+    #[test]
+    fn four_component_versions_sort_after_base_version() {
+        let base = PackageVersion::parse("2.1.0-1").unwrap();
+        let extended = PackageVersion::parse("2.1.0.10-1").unwrap();
+        assert!(extended > base);
+        assert!(base < extended);
+        assert_eq!(
+            PackageVersion::parse("2.1.0.10-1").unwrap(),
+            PackageVersion::parse("2.1.0.10-1").unwrap()
+        );
+    }
+
+    #[test]
+    fn four_component_version_satisfies_greater_eq_req() {
+        let req = PackageVersionReq::parse(">= 2.1.0").unwrap();
+        assert!(req.matches(&PackageVersion::parse("2.1.0.10-1").unwrap()));
+        assert!(req.matches(&PackageVersion::parse("2.1.0-1").unwrap()));
+        assert!(!req.matches(&PackageVersion::parse("2.0.9-1").unwrap()));
     }
 
     #[tokio::test]

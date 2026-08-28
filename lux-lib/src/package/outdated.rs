@@ -93,7 +93,7 @@ mod tests {
 
         assert_eq!(
             test_package.has_update(&package_db).unwrap(),
-            Some("2.1.0-1".parse().unwrap())
+            Some("2.1.0.10-1".parse().unwrap())
         );
     }
 }
