@@ -330,10 +330,15 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
         validated.maintainer, validated.name
     );
 
-    let source = if !generated_url.contains(' ') && url::Url::parse(&generated_url).is_ok() {
+    let source = if url::Url::parse(&generated_url)
+        .is_ok_and(|url| &url.to_string() == &generated_url)
+    {
         format!("[source]\nurl = \"{generated_url}\"")
     } else {
-        String::new()
+        format!(
+                "# [source]\n# url = \"https://github.com/your-username/{}/archive/refs/tags/v0.1.0.zip\"",
+                validated.name
+            )
     };
 
     std::fs::write(
