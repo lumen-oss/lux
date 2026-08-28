@@ -336,7 +336,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
         format!("[source]\nurl = \"{generated_url}\"")
     } else {
         format!(
-                "# [source]\n# url = \"https://github.com/your-username/{}/archive/refs/tags/$(REF).zip\"",
+                "# [source]\n# When publishing, configure the source URL below\n# url = \"https://github.com/your-username/{}/archive/refs/tags/$(REF).zip\"",
                 validated.name
             )
     };
