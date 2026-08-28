@@ -81,7 +81,7 @@ struct NewProjectValidated {
     lua_versions: PackageReq,
     main: SourceDirType,
     license: Option<LicenseId>,
-    is_github_repo: bool,
+    source_block: String,
 }
 
 fn clap_parse_license(s: &str) -> std::result::Result<LicenseId, String> {
@@ -176,7 +176,8 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
             maintainer,
             name,
             target,
-            is_github_repo: false,
+            source_block: "# [source]\n# When publishing, configure the source URL here"
+                .to_string(),
         }),
 
         NewProject {
@@ -311,6 +312,20 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                 Ok,
             )?;
 
+            let mut source_block =
+                format!("# [source]\n# When publishing, configure the source URL here");
+
+            if is_github_repo {
+                let generated_url = format!(
+                    "https://github.com/{}/{}/archive/refs/tags/$(REF).zip",
+                    maintainer, package_name
+                );
+
+                if url::Url::parse(&generated_url).is_ok_and(|url| url.as_str() == generated_url) {
+                    source_block = format!("[source]\nurl = \"{generated_url}\"");
+                }
+            }
+
             Ok(NewProjectValidated {
                 target,
                 name: package_name,
@@ -320,7 +335,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
                 lua_versions,
                 maintainer,
                 main: main.unwrap_or(SourceDirType::Src),
-                is_github_repo,
+                source_block,
             })
         }
     }?;
@@ -328,19 +343,6 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
     let _ = std::fs::create_dir_all(&validated.target).into_diagnostic();
 
     let rocks_path = validated.target.join(PROJECT_TOML);
-
-    let mut source = format!("# [source]\n# When publishing, configure the source URL here");
-
-    if validated.is_github_repo {
-        let generated_url = format!(
-            "https://github.com/{}/{}/archive/refs/tags/$(REF).zip",
-            validated.maintainer, validated.name
-        );
-
-        if url::Url::parse(&generated_url).is_ok_and(|url| url.as_str() == generated_url) {
-            source = format!("[source]\nurl = \"{generated_url}\"");
-        }
-    }
 
     std::fs::write(
         &rocks_path,
@@ -382,6 +384,7 @@ type = "builtin"
                 .join(", "),
             lua_version_req = validated.lua_versions.version_req(),
             main = validated.main,
+            source = validated.source_block,
         )
         .trim(),
     )
