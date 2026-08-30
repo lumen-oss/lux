@@ -13,3 +13,4 @@ args = ["src/main.lua"]
 [build]
 type = "rust-binary"
 binary = "lux-lsp"
+features = ["vendored"]
