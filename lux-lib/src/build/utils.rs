@@ -14,7 +14,8 @@ use path_slash::PathExt;
 use shlex::try_quote;
 use std::{
     collections::HashMap,
-    io,
+    fs::OpenOptions,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::{ExitStatus, Output, Stdio},
     string::FromUtf8Error,
@@ -135,6 +136,42 @@ pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(),
             make_writable(&target).await?;
         }
     }
+    Ok(())
+}
+
+/// Points cargo at the vendored sources under [`Config::vendor_dir`]/cargo by
+/// writing a `.cargo/config.toml` in the build directory, if such a directory exists.
+#[tracing::instrument(level = "trace")]
+pub(crate) async fn prepare_cargo_vendor_config(
+    config: &Config,
+    build_dir: &Path,
+    cargo_vendor_dir: &Path,
+) -> Result<(), fs::FsError> {
+    let cargo_config_dir = build_dir.join(".cargo");
+    fs::tokio::create_dir_all(&cargo_config_dir).await?;
+    let cargo_config_path = cargo_config_dir.join("config.toml");
+    if cargo_config_path.exists() {
+        // The source may already ship a `.cargo/config.toml` that is
+        // read-only (e.g. vendored from a read-only Nix store)
+        make_writable(&cargo_config_path).await?;
+    }
+    let mut target_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&cargo_config_path)
+        .map_err(|source| fs::FsError::FileOpen {
+            path: cargo_config_path.to_path_buf(),
+            source,
+        })?;
+    write!(
+        &mut target_file,
+        "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"{}\"\n",
+        cargo_vendor_dir.display()
+    )
+    .map_err(|source| fs::FsError::Write {
+        path: cargo_config_path.to_path_buf(),
+        source,
+    })?;
     Ok(())
 }
 

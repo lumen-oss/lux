@@ -16,7 +16,8 @@ use thiserror::Error;
 
 use super::{
     builtin::BuiltinBuildError, cmake::CMakeError, command::CommandError, make::MakeError,
-    rust_mlua::RustError, treesitter_parser::TreesitterBuildError, utils::recursive_copy_dir,
+    rust_binary::RustBinaryError, rust_mlua::RustError, treesitter_parser::TreesitterBuildError,
+    utils::recursive_copy_dir,
 };
 
 #[derive(Error, Debug, Diagnostic)]
@@ -51,6 +52,9 @@ pub enum SourceBuildError {
     #[error("rust-mlua build failed")]
     #[diagnostic(forward(0))]
     Rust(#[from] RustError),
+    #[error("rust-binary build failed")]
+    #[diagnostic(forward(0))]
+    RustBinary(#[from] RustBinaryError),
     #[error("treesitter-parser build failed")]
     #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
@@ -115,6 +119,11 @@ where
         }
         Some(BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
             rust_mlua_spec
+                .run(args)
+                .await?
+        }
+        Some(BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+            rust_binary_spec
                 .run(args)
                 .await?
         }

@@ -98,7 +98,9 @@ pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<Pa
         .filter(|dep| {
             !matches!(
                 dep.name().to_string().as_str(),
-                "luarocks-build-rust-mlua" | "luarocks-build-treesitter-parser"
+                "luarocks-build-rust-mlua"
+                    | "luarocks-build-rust-binary"
+                    | "luarocks-build-treesitter-parser"
             )
         })
         .map(|dep| dep.name().clone())

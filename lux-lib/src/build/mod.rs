@@ -37,6 +37,7 @@ use make::MakeError;
 
 use miette::Diagnostic;
 use patch::{Patch, PatchError};
+use rust_binary::RustBinaryError;
 use rust_mlua::RustError;
 use source::SourceBuildError;
 use ssri::Integrity;
@@ -50,6 +51,7 @@ mod command;
 mod luarocks;
 mod make;
 mod patch;
+mod rust_binary;
 mod rust_mlua;
 mod source;
 mod treesitter_parser;
@@ -134,6 +136,9 @@ pub enum BuildError {
     #[error("rust-mlua build failed")]
     #[diagnostic(forward(0))]
     Rust(#[from] RustError),
+    #[error("rust-binary build failed")]
+    #[diagnostic(forward(0))]
+    RustBinary(#[from] RustBinaryError),
     #[error("treesitter-parser build failed")]
     #[diagnostic(forward(0))]
     TreesitterBuild(#[from] TreesitterBuildError),
@@ -220,6 +225,9 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
             Some(BuildBackendSpec::CMake(cmake_spec)) => cmake_spec.run(args).await?,
             Some(BuildBackendSpec::Command(command_spec)) => command_spec.run(args).await?,
             Some(BuildBackendSpec::RustMlua(rust_mlua_spec)) => rust_mlua_spec.run(args).await?,
+            Some(BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+                rust_binary_spec.run(args).await?
+            }
             Some(BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
                 treesitter_parser_spec.run(args).await?
             }

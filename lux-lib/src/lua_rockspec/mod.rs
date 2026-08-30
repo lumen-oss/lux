@@ -1672,6 +1672,31 @@ mod tests {
         }
     }
 
+    #[test]
+    pub fn rust_binary_rockspec() {
+        let rockspec_content = "
+    package = 'foo'\n
+    version = 'scm-1'\n
+    source = {\n
+        url = 'https://github.com/lumen-oss/rocks.nvim/archive/1.0.0/rocks.nvim.zip',\n
+    }\n
+    build = {\n
+        type = 'rust-binary',\n
+        binary = 'foo@1.0.0',\n
+        features = {'extra', 'features'},\n
+    }\n
+            ";
+        let rockspec = RemoteLuaRockspec::new(rockspec_content).unwrap();
+        let build_spec = rockspec.local.build.current_platform();
+        if let Some(BuildBackendSpec::RustBinary(build_spec)) = build_spec.build_backend.to_owned()
+        {
+            assert_eq!(build_spec.binary, "foo@1.0.0");
+            assert_eq!(build_spec.features, vec!["extra", "features"]);
+        } else {
+            panic!("Expected RustBinary build backend");
+        }
+    }
+
     #[tokio::test]
     pub async fn regression_ltui() {
         let content = String::from_utf8(

@@ -151,7 +151,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
         .unique_by(|pkg| (pkg.spec.name().clone(), pkg.spec.version().clone()))
         .collect_vec();
 
-    let rust_mlua_deps: Vec<(PackageSpec, Option<PathBuf>)> = all_packages
+    let cargo_deps: Vec<(PackageSpec, Option<PathBuf>)> = all_packages
         .iter()
         .filter_map(|pkg| {
             match pkg
@@ -161,7 +161,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
                 .current_platform()
                 .build_backend
             {
-                Some(BuildBackendSpec::RustMlua(_)) => Some((
+                Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => Some((
                     pkg.spec.to_package(),
                     pkg.downloaded_rock
                         .rockspec()
@@ -182,7 +182,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     let vendor_dir = Arc::new(vendor_dir);
     vendor_sources(vendor_dir.clone(), config.clone(), all_packages).await?;
     vendor_target_cargo_deps(&vendor_dir, &target, config).await?;
-    for (dep, unpack_dir) in rust_mlua_deps {
+    for (dep, unpack_dir) in cargo_deps {
         vendor_package_cargo_deps(&vendor_dir, &dep, &unpack_dir, config).await?;
     }
     Ok(())
@@ -429,7 +429,7 @@ async fn vendor_target_cargo_deps(
     target: &VendorTarget,
     config: &Config,
 ) -> Result<(), VendorError> {
-    if is_rust_mlua_build_backend(target) {
+    if is_cargo_build_backend(target) {
         match target {
             VendorTarget::Workspace(workspace) => {
                 cargo_vendor(vendor_dir, workspace.root().as_path(), config).await
@@ -492,19 +492,19 @@ async fn vendor_package_cargo_deps(
     Ok(())
 }
 
-fn is_rust_mlua_build_backend(target: &VendorTarget) -> bool {
+fn is_cargo_build_backend(target: &VendorTarget) -> bool {
     match target {
         VendorTarget::Workspace(workspace) => workspace.members().iter().any(|project| {
             project.toml().into_local().is_ok_and(|toml| {
                 matches!(
                     toml.build().current_platform().build_backend.to_owned(),
-                    Some(BuildBackendSpec::RustMlua(_))
+                    Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_))
                 )
             })
         }),
         VendorTarget::Rockspec(rockspec) => matches!(
             rockspec.build().current_platform().build_backend.to_owned(),
-            Some(BuildBackendSpec::RustMlua(_))
+            Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_))
         ),
     }
 }
