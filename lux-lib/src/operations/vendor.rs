@@ -24,7 +24,9 @@ use crate::{
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{
         self,
-        resolve::{PackageInstallData, Resolve, ResolveDependenciesError},
+        resolve::{
+            luarocks_build_backend_name, PackageInstallData, Resolve, ResolveDependenciesError,
+        },
         DownloadedRockspec, FetchSrcError, PackageInstallSpec, UnpackError,
     },
     package::{PackageReq, PackageSpec},
@@ -237,31 +239,35 @@ fn push_dependencies<R: Rockspec>(
     rockspec: &R,
     install_specs: &mut Vec<PackageInstallSpec>,
 ) -> Result<(), LocalProjectTomlValidationError> {
-    let dependencies: Vec<&PackageReq> = match lock_type {
+    let mut dependencies: Vec<PackageReq> = match lock_type {
         LocalPackageLockType::Regular => rockspec
             .dependencies()
             .current_platform()
             .iter()
-            .map(|dep| dep.package_req())
+            .map(|dep| dep.package_req().clone())
             .collect_vec(),
         LocalPackageLockType::Test => rockspec
             .test_dependencies()
             .current_platform()
             .iter()
-            .map(|dep| dep.package_req())
+            .map(|dep| dep.package_req().clone())
             .collect_vec(),
         LocalPackageLockType::Build => rockspec
             .build_dependencies()
             .current_platform()
             .iter()
-            .map(|dep| dep.package_req())
+            .map(|dep| dep.package_req().clone())
             .collect_vec(),
     };
+    if *lock_type == LocalPackageLockType::Build {
+        if let Some(backend) = luarocks_build_backend_name(rockspec) {
+            dependencies.insert(0, backend.into());
+        }
+    }
     install_specs.extend(
         dependencies
             .into_iter()
             .unique()
-            .cloned()
             .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
             .collect_vec(),
     );

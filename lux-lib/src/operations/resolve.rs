@@ -104,13 +104,20 @@ pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<Pa
         .map(|dep| dep.name().clone())
         .collect_vec();
 
-    if let Some(BuildBackendSpec::LuaRock(backend)) =
-        &rockspec.build().current_platform().build_backend
-    {
-        let full_backend_name = format!("luarocks-build-{backend}");
-        names.insert(0, PackageName::new(full_backend_name));
+    if let Some(backend) = luarocks_build_backend_name(rockspec) {
+        names.insert(0, backend);
     }
     names
+}
+
+/// The name of the luarocks build backend rock required to build this rockspec (if any).
+pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<PackageName> {
+    match &rockspec.build().current_platform().build_backend {
+        Some(BuildBackendSpec::LuaRock(backend)) => {
+            Some(PackageName::new(format!("luarocks-build-{backend}")))
+        }
+        _ => None,
+    }
 }
 
 #[tracing::instrument(name = "Resolving dependencies", skip_all)]
