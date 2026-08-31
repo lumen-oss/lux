@@ -17,7 +17,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::Instrument;
 
 use crate::{
-    build::{RemotePackageSourceSpec, SrcRockSource},
+    build::{resolve_source_dir, RemotePackageSourceSpec, SrcRockSource},
     config::Config,
     fs,
     lockfile::{LocalPackageLockType, ReadOnly, RemotePackageSourceUrl},
@@ -153,24 +153,15 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
         .unique_by(|pkg| (pkg.spec.name().clone(), pkg.spec.version().clone()))
         .collect_vec();
 
-    let cargo_deps: Vec<(PackageSpec, Option<PathBuf>)> = all_packages
+    let cargo_deps: Vec<(PackageSpec, Option<PathBuf>, Vec<PathBuf>)> = all_packages
         .iter()
         .filter_map(|pkg| {
-            match pkg
-                .downloaded_rock
-                .rockspec()
-                .build()
-                .current_platform()
-                .build_backend
-            {
+            let rockspec = pkg.downloaded_rock.rockspec();
+            match rockspec.build().current_platform().build_backend {
                 Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => Some((
                     pkg.spec.to_package(),
-                    pkg.downloaded_rock
-                        .rockspec()
-                        .source()
-                        .current_platform()
-                        .unpack_dir
-                        .clone(),
+                    rockspec.source().current_platform().unpack_dir.clone(),
+                    rockspec.build().current_platform().copy_directories.clone(),
                 )),
                 _ => None,
             }
@@ -184,8 +175,8 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     let vendor_dir = Arc::new(vendor_dir);
     vendor_sources(vendor_dir.clone(), config.clone(), all_packages).await?;
     vendor_target_cargo_deps(&vendor_dir, &target, config).await?;
-    for (dep, unpack_dir) in cargo_deps {
-        vendor_package_cargo_deps(&vendor_dir, &dep, &unpack_dir, config).await?;
+    for (dep, unpack_dir, copy_dirs) in cargo_deps {
+        vendor_package_cargo_deps(&vendor_dir, &dep, &unpack_dir, &copy_dirs, config).await?;
     }
     Ok(())
 }
@@ -447,10 +438,11 @@ async fn vendor_target_cargo_deps(
                     .await?;
                 cargo_vendor(
                     vendor_dir,
-                    &cargo_manifest_dir(
+                    &resolve_source_dir(
                         temp_dir.path(),
                         rockspec.source().current_platform().unpack_dir.as_deref(),
-                    ),
+                        &rockspec.build().current_platform().copy_directories,
+                    )?,
                     config,
                 )
                 .await
@@ -474,22 +466,25 @@ async fn vendor_package_cargo_deps(
     vendor_dir: &Path,
     package: &PackageSpec,
     unpack_dir: &Option<PathBuf>,
+    copy_dirs: &[PathBuf],
     config: &Config,
 ) -> Result<(), VendorError> {
     let source_dir = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
-    let source_root = if source_dir.is_dir() {
-        Some(source_dir)
-    } else if source_dir.is_file() {
-        let temp_dir = fs::tempfile::tempdir()?;
-        extract_source_archive(&source_dir, unpack_dir.as_deref(), temp_dir.path()).await?;
-        Some(temp_dir.path().to_path_buf())
-    } else {
-        None
-    };
-    if let Some(source_root) = source_root {
+    if source_dir.is_dir() {
         cargo_vendor(
             vendor_dir,
-            &cargo_manifest_dir(&source_root, unpack_dir.as_deref()),
+            &resolve_source_dir(&source_dir, unpack_dir.as_deref(), copy_dirs)?,
+            config,
+        )
+        .await?;
+    } else if source_dir.is_file() {
+        // The vendored source is an archive; extract it so `cargo vendor` can
+        // read its `Cargo.toml`. Keep the temp dir alive while cargo runs.
+        let temp_dir = fs::tempfile::tempdir()?;
+        extract_source_archive(&source_dir, unpack_dir.as_deref(), temp_dir.path()).await?;
+        cargo_vendor(
+            vendor_dir,
+            &resolve_source_dir(temp_dir.path(), unpack_dir.as_deref(), copy_dirs)?,
             config,
         )
         .await?;
@@ -512,14 +507,6 @@ fn is_cargo_build_backend(target: &VendorTarget) -> bool {
             rockspec.build().current_platform().build_backend.to_owned(),
             Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_))
         ),
-    }
-}
-
-/// The directory containing the crate's `Cargo.toml`.
-fn cargo_manifest_dir(source_root: &Path, unpack_dir: Option<&Path>) -> PathBuf {
-    match unpack_dir {
-        Some(dir) => source_root.join(dir),
-        None => source_root.to_path_buf(),
     }
 }
 

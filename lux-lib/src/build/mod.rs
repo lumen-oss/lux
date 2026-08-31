@@ -384,56 +384,11 @@ where
             };
 
             let rock_source = rockspec.source().current_platform();
-            let build_dir = match &rock_source.unpack_dir {
-                Some(unpack_dir) => temp_dir.path().join(unpack_dir),
-                None => {
-                    // Some older/off-spec rockspecs don't specify a `source.dir`.
-                    // After unpacking the archive, if
-                    //
-                    //   - there exist no Lua or C sources
-                    //   - there exists a single subdirectory that is not a source
-                    //     or etc directory
-                    //
-                    // we assume it's the `source.dir`.
-                    // Unlike the LuaRocks implementation - which filters when fetching sources -
-                    // we only infer `source.dir` if the directory name is not 'src', 'lua'
-                    // or one of the `build.copy_directories`.
-                    // This allows us to build local projects with only a `src` directory.
-                    //
-                    // LuaRocks implementation:
-                    // https://github.com/luarocks/luarocks/blob/4188fdb235aca66530d274c782374cf6afba09b8/src/luarocks/fetch.tl?plain=1#L526
-                    let has_lua_or_c_sources = fs::sync::read_dir(temp_dir.path())?
-                        .filter_map(Result::ok)
-                        .filter(|f| f.path().is_file())
-                        .any(|f| {
-                            f.path().extension().is_some_and(|ext| {
-                                matches!(ext.to_string_lossy().to_string().as_str(), "lua" | "c")
-                            })
-                        });
-                    if has_lua_or_c_sources {
-                        temp_dir.path().into()
-                    } else {
-                        let dir_entries = fs::sync::read_dir(temp_dir.path())?
-                            .filter_map(Result::ok)
-                            .filter(|f| f.path().is_dir())
-                            .collect_vec();
-                        if dir_entries.len() == 1
-                            && !is_source_or_etc_dir(
-                                unsafe { dir_entries.first().unwrap_unchecked() },
-                                rockspec,
-                            )
-                        {
-                            unsafe {
-                                temp_dir
-                                    .path()
-                                    .join(dir_entries.first().unwrap_unchecked().path())
-                            }
-                        } else {
-                            temp_dir.path().into()
-                        }
-                    }
-                }
-            };
+            let build_dir = resolve_source_dir(
+                temp_dir.path(),
+                rock_source.unpack_dir.as_deref(),
+                &rockspec.build().current_platform().copy_directories,
+            )?;
 
             Patch::new(&build_dir, &rockspec.build().current_platform().patches).apply()?;
 
@@ -503,16 +458,59 @@ where
     }
 }
 
-fn is_source_or_etc_dir<R>(dir: &DirEntry, rockspec: &R) -> bool
-where
-    R: Rockspec + HasIntegrity,
-{
-    let copy_dirs = &rockspec.build().current_platform().copy_directories;
+fn is_source_or_etc_dir(dir: &DirEntry, copy_dirs: &[PathBuf]) -> bool {
     let dir_name = dir.file_name().to_string_lossy().to_string();
     matches!(dir_name.as_str(), "lua" | "src")
         || copy_dirs
             .iter()
             .any(|copy_dir_name| copy_dir_name == &PathBuf::from(&dir_name))
+}
+
+/// Resolve the directory containing a rock's sources within an extracted source archive.
+/// When the rockspec has no `source.dir`, fall back to the archive's single top-level directory.
+pub(crate) fn resolve_source_dir(
+    source_root: &Path,
+    unpack_dir: Option<&Path>,
+    copy_dirs: &[PathBuf],
+) -> Result<PathBuf, fs::FsError> {
+    if let Some(unpack_dir) = unpack_dir {
+        return Ok(source_root.join(unpack_dir));
+    }
+    // Some older/off-spec rockspecs don't specify a `source.dir`.
+    // After unpacking the archive, if
+    //
+    //   - there exist no Lua or C sources
+    //   - there exists a single subdirectory that is not a source
+    //     or etc directory
+    //
+    // we assume it's the `source.dir`.
+    // Unlike the LuaRocks implementation - which filters when fetching sources -
+    // we only infer `source.dir` if the directory name is not 'src', 'lua'
+    // or one of the `build.copy_directories`.
+    // This allows us to build local projects with only a `src` directory.
+    //
+    // LuaRocks implementation:
+    // https://github.com/luarocks/luarocks/blob/4188fdb235aca66530d274c782374cf6afba09b8/src/luarocks/fetch.tl?plain=1#L526
+    let has_lua_or_c_sources = fs::sync::read_dir(source_root)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_file())
+        .any(|entry| {
+            entry.path().extension().is_some_and(|ext| {
+                matches!(ext.to_string_lossy().to_string().as_str(), "lua" | "c")
+            })
+        });
+    if has_lua_or_c_sources {
+        return Ok(source_root.to_path_buf());
+    }
+    let dir_entries = fs::sync::read_dir(source_root)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .collect_vec();
+    if dir_entries.len() == 1 && !is_source_or_etc_dir(&dir_entries[0], copy_dirs) {
+        Ok(dir_entries[0].path())
+    } else {
+        Ok(source_root.to_path_buf())
+    }
 }
 
 #[tracing::instrument(level = "trace")]
