@@ -292,7 +292,12 @@ async fn fetch_src_impl<R: Rockspec>(
 
                 let checkout_ref = match checkout_ref {
                     Some(checkout_ref) => {
-                        let (object, _) = repo.revparse_ext(checkout_ref)?;
+                        let ref_name = if let Some(GitRef::Branch(branch)) = &git.git_ref {
+                            format!("origin/{branch}")
+                        } else {
+                            checkout_ref.to_string()
+                        };
+                        let (object, _) = repo.revparse_ext(&ref_name)?;
                         repo.checkout_tree(&object, None)?;
                         checkout_ref.to_string()
                     }
