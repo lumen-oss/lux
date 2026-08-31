@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 use thiserror::Error;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 use crate::{
     build::{
@@ -119,7 +119,7 @@ impl BuildBackend for BuiltinBuildSpec {
         }
 
         let mut binaries = Vec::new();
-        for bin_script in autodetect_bin_scripts(build_dir) {
+        for bin_script in utils::detect_binaries(build_dir) {
             if let Some(target) = bin_script.file_name() {
                 let file_name = target.to_string_lossy().to_string();
                 let installed_bin_script =
@@ -215,15 +215,4 @@ fn autodetect_modules(
             lua_module.map(|lua_module| (lua_module, ModuleSpec::SourcePath(diff)))
         })
         .try_collect()
-}
-
-#[tracing::instrument(level = "trace")]
-fn autodetect_bin_scripts(build_dir: &Path) -> Vec<PathBuf> {
-    WalkDir::new(build_dir.join("src").join("bin"))
-        .into_iter()
-        .chain(WalkDir::new(build_dir.join("bin")))
-        .filter_map(|file| file.ok())
-        .filter(|file| file.clone().into_path().is_file())
-        .map(DirEntry::into_path)
-        .collect()
 }

@@ -85,26 +85,28 @@ impl BuildBackend for RustBinaryBuildSpec {
             Err(source) => return Err(RustBinaryError::RustBuild { source }),
         }
 
-        let binary_name = self.binary.split('@').next().unwrap_or(&self.binary);
-        let binary_path = build_dir.join("bin").join(binary_name);
-        let installed_binary = utils::install_binary(
-            &binary_path,
-            binary_name,
-            args.tree,
-            args.lua,
-            args.deploy,
-            config,
-        )
-        .await
-        .map_err(|source| RustBinaryError::InstallBinary {
-            file_name: binary_name.to_string(),
-            source,
-        })?;
-
-        let binaries = installed_binary
-            .file_name()
-            .map(|file_name| vec![file_name.into()])
-            .unwrap_or_default();
+        let mut binaries = Vec::new();
+        for bin_script in utils::detect_binaries(build_dir) {
+            if let Some(target) = bin_script.file_name() {
+                let file_name = target.to_string_lossy().to_string();
+                let installed_bin_script = utils::install_binary(
+                    &bin_script,
+                    &file_name,
+                    args.tree,
+                    args.lua,
+                    args.deploy,
+                    config,
+                )
+                .await
+                .map_err(|err| RustBinaryError::InstallBinary {
+                    file_name: file_name.to_string(),
+                    source: err,
+                })?;
+                if let Some(bin_script_file_name) = installed_bin_script.file_name() {
+                    binaries.push(bin_script_file_name.into());
+                }
+            }
+        }
 
         Ok(BuildInfo { binaries })
     }
