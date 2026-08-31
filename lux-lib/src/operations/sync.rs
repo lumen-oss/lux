@@ -83,21 +83,11 @@ where
     }
 
     pub async fn sync_build_dependencies(mut self) -> Result<SyncReport, SyncError> {
-        if cfg!(target_family = "unix") && !self.extra_packages.is_empty() {
-            for project in self.workspace.members() {
-                let toml = project.toml().into_local()?;
-                if toml
-                    .build()
-                    .current_platform()
-                    .build_backend
-                    .as_ref()
-                    .is_some_and(|build_backend| {
-                        matches!(
-                            build_backend,
-                            crate::lua_rockspec::BuildBackendSpec::LuaRock(_)
-                        )
-                    })
-                {
+        for project in self.workspace.members() {
+            let toml = project.toml().into_local()?;
+            if let Some(backend) = operations::resolve::luarocks_build_backend_name(&toml) {
+                self = self.add_package(backend.into());
+                if cfg!(target_family = "unix") {
                     let luarocks = unsafe {
                         PackageReq::new_unchecked("luarocks".into(), Some(LUAROCKS_VERSION.into()))
                     };
