@@ -1,6 +1,7 @@
 mod builtin;
 mod cmake;
 mod make;
+mod rust_binary;
 mod rust_mlua;
 mod tree_sitter;
 
@@ -8,6 +9,7 @@ pub use builtin::{BuiltinBuildSpec, LuaModule, ModulePaths, ModuleSpec, ParseLua
 pub use cmake::*;
 pub use make::*;
 use path_slash::PathBufExt;
+pub use rust_binary::*;
 pub use rust_mlua::*;
 pub use tree_sitter::*;
 
@@ -69,6 +71,8 @@ pub enum BuildSpecInternalError {
     ModulesHaveListElements,
     #[error("no 'modules' specified for the 'rust-mlua' build backend")]
     NoModulesSpecified,
+    #[error("no 'binary' specified for the 'rust-binary' build backend")]
+    NoBinarySpecified,
     #[error("no 'lang' specified for 'treesitter-parser' build backend")]
     NoTreesitterParserLanguageSpecified,
     #[error("invalid 'rust-mlua' modules format")]
@@ -173,6 +177,12 @@ impl BuildSpec {
                     })
                     .collect(),
             })),
+            BuildType::RustBinary => Some(BuildBackendSpec::RustBinary(RustBinaryBuildSpec {
+                binary: internal
+                    .binary
+                    .ok_or(BuildSpecInternalError::NoBinarySpecified)?,
+                features: internal.features.unwrap_or_default(),
+            })),
             BuildType::TreesitterParser => Some(BuildBackendSpec::TreesitterParser(
                 TreesitterParserBuildSpec {
                     lang: internal
@@ -246,6 +256,7 @@ pub enum BuildBackendSpec {
     Command(CommandBuildSpec),
     LuaRock(String),
     RustMlua(RustMluaBuildSpec),
+    RustBinary(RustBinaryBuildSpec),
     TreesitterParser(TreesitterParserBuildSpec),
     /// Build from the source rockspec, if present.
     /// Otherwise, fall back to the builtin build and copy all directories.
@@ -259,9 +270,11 @@ impl BuildBackendSpec {
     pub(crate) fn can_use_build_dependencies(&self) -> bool {
         match self {
             Self::Make(_) | Self::CMake(_) | Self::Command(_) | Self::LuaRock(_) => true,
-            Self::Builtin(_) | Self::RustMlua(_) | Self::TreesitterParser(_) | Self::Source => {
-                false
-            }
+            Self::Builtin(_)
+            | Self::RustMlua(_)
+            | Self::RustBinary(_)
+            | Self::TreesitterParser(_)
+            | Self::Source => false,
         }
     }
 }
@@ -546,6 +559,8 @@ pub(crate) struct BuildSpecInternal {
     #[serde(default)]
     pub(crate) features: Option<Vec<String>>,
     pub(crate) cargo_extra_args: Option<Vec<String>>,
+    #[serde(default)]
+    pub(crate) binary: Option<String>,
     #[serde(default, deserialize_with = "deserialize_map_or_seq")]
     #[display_lua(convert_with = "display_include")]
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
@@ -658,6 +673,7 @@ fn override_build_spec_internal(
         default_features: override_opt(&override_spec.default_features, &base.default_features),
         features: override_opt(&override_spec.features, &base.features),
         cargo_extra_args: override_opt(&override_spec.cargo_extra_args, &base.cargo_extra_args),
+        binary: override_opt(&override_spec.binary, &base.binary),
         include: merge_map_opts(&override_spec.include, &base.include),
         lang: override_opt(&override_spec.lang, &base.lang),
         parser: override_opt(&override_spec.parser, &base.parser),
@@ -714,6 +730,8 @@ pub(crate) enum BuildType {
     LuaRock(String),
     #[serde(rename = "rust-mlua")]
     RustMlua,
+    #[serde(rename = "rust-binary")]
+    RustBinary,
     #[serde(rename = "treesitter-parser")]
     TreesitterParser,
     Source,
@@ -732,6 +750,13 @@ impl BuildType {
             &BuildType::RustMlua => unsafe {
                 Some(
                     PackageReq::parse("luarocks-build-rust-mlua >= 0.2.6")
+                        .unwrap_unchecked()
+                        .into(),
+                )
+            },
+            &BuildType::RustBinary => unsafe {
+                Some(
+                    PackageReq::parse("luarocks-build-rust-binary >= 3.0.0")
                         .unwrap_unchecked()
                         .into(),
                 )
@@ -773,6 +798,7 @@ impl Display for BuildType {
             BuildType::None => write!(f, "none"),
             BuildType::LuaRock(s) => write!(f, "{s}"),
             BuildType::RustMlua => write!(f, "rust-mlua"),
+            BuildType::RustBinary => write!(f, "rust-binary"),
             BuildType::TreesitterParser => write!(f, "treesitter-parser"),
             BuildType::Source => write!(f, "source"),
         }

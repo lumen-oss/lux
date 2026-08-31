@@ -30,7 +30,7 @@ use lux_lib::{
         LuaModule, LuaScriptTestSpec, MakeBuildSpec, ModulePaths, ModuleSpec, PartialLuaRockspec,
         PartialOverride, PerPlatform, PlatformIdentifier, PlatformOverridable, PlatformSupport,
         RemoteLuaRockspec, RemoteRockSource, RockDescription, RockSourceSpec, RockspecFormat,
-        RustMluaBuildSpec, TestSpec, TreesitterParserBuildSpec,
+        RustBinaryBuildSpec, RustMluaBuildSpec, TestSpec, TreesitterParserBuildSpec,
     },
     lua_version::LuaVersion,
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
@@ -686,6 +686,7 @@ impl IntoLua for BuildBackendSpecLua {
             BuildBackendSpec::Command(spec) => CommandBuildSpecLua(spec).into_lua(lua),
             BuildBackendSpec::LuaRock(s) => s.into_lua(lua),
             BuildBackendSpec::RustMlua(spec) => RustMluaBuildSpecLua(spec).into_lua(lua),
+            BuildBackendSpec::RustBinary(spec) => RustBinaryBuildSpecLua(spec).into_lua(lua),
             BuildBackendSpec::TreesitterParser(spec) => {
                 TreesitterParserBuildSpecLua(spec).into_lua(lua)
             }
@@ -2108,6 +2109,42 @@ impl mlua::UserData for RustMluaBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
+pub struct RustBinaryBuildSpecLua(pub RustBinaryBuildSpec);
+
+impl Typed for RustBinaryBuildSpecLua {
+    fn ty() -> Type {
+        Type::named("RustBinaryBuildSpec")
+    }
+}
+
+impl TypedUserData for RustBinaryBuildSpecLua {
+    fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
+        methods.document(
+            r#"The name of the binary (or crate) to install, optionally including a version specifier (e.g. `foo@1.0.0`)."#,
+        );
+        methods.add_method("binary", |_, this, ()| Ok(this.0.binary.clone()));
+
+        methods.document("Cargo features to enable when building");
+        methods.add_method("features", |_, this, ()| Ok(this.0.features.clone()));
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("Specification for building a rock with the `rust-binary` build backend");
+    }
+}
+
+impl mlua::UserData for RustBinaryBuildSpecLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CommandBuildSpecLua(pub CommandBuildSpec);
 
 impl Typed for CommandBuildSpecLua {
@@ -3208,7 +3245,8 @@ mod definitions_registry {
         PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
         PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
         RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutConfigLua,
-        RockLayoutLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua, WorkspaceLua,
+        RockLayoutLua, RustBinaryBuildSpecLua, RustMluaBuildSpecLua, TreeLua,
+        TreesitterParserBuildSpecLua, WorkspaceLua,
     };
     use crate::definitions::LuxDefinition;
 
@@ -3248,6 +3286,7 @@ mod definitions_registry {
         "MakeBuildSpec" => MakeBuildSpecLua,
         "TreesitterParserBuildSpec" => TreesitterParserBuildSpecLua,
         "RustMluaBuildSpec" => RustMluaBuildSpecLua,
+        "RustBinaryBuildSpec" => RustBinaryBuildSpecLua,
         "CommandBuildSpec" => CommandBuildSpecLua,
         "InstallSpec" => InstallSpecLua,
         "BuildSpec" => BuildSpecLua,
