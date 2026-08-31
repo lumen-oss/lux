@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.0...lux-lib-v0.60.1) `lux-lib` - 2026-08-31
+
+### Added
+- *(build)* `rust-binary` build backend ([#1894](https://github.com/lumen-oss/lux/pull/1894))
+
+### Fixed
+- *(fetch)* properly checkout custom branches ([#1901](https://github.com/lumen-oss/lux/pull/1901))
+- *(vendor)* no such file or directory error when vendoring cargo deps ([#1900](https://github.com/lumen-oss/lux/pull/1900))
+- *(generate-rockspec)* properly generate `source.branch` ([#1899](https://github.com/lumen-oss/lux/pull/1899))
+- *(build/rust-binary)* auto-detect binaries ([#1898](https://github.com/lumen-oss/lux/pull/1898))
+- *(lockfile)* add luarocks build backends to build dependendies ([#1895](https://github.com/lumen-oss/lux/pull/1895))
+
 ## [0.60.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.59.1...lux-lib-v0.60.0) `lux-lib` - 2026-08-28
 
 ### Added
