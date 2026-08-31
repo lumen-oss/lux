@@ -67,7 +67,7 @@ lib.extendMkDerivation {
         git
         cacert
       ]
-      ++ lib.optional rustSupport [
+      ++ lib.optionals rustSupport [
         cargo
         writableTmpDirAsHomeHook
       ]
