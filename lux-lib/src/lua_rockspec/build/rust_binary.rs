@@ -4,6 +4,9 @@ pub struct RustBinaryBuildSpec {
     /// The name of the binary (or crate) to install, optionally including
     /// a version specifier (e.g. `foo@1.0.0`).
     pub binary: String,
+    /// The cargo package to build, if it differs from `binary`.
+    /// Used to locate the package within the source directory.
+    pub package: Option<String>,
     /// Cargo features to enable when building.
     pub features: Vec<String>,
 }
