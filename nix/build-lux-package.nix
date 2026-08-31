@@ -52,20 +52,13 @@ lib.extendMkDerivation {
       then "--nvim"
       else "--lua-version \"${luxLuaVersion}\"";
 
-    lockFile =
-      if luxLock != null
-      then luxLock
-      else if !lib.isDerivation src && lib.pathExists "${src}/${rootSubdir}lux.lock"
-      then "${src}/${rootSubdir}lux.lock"
-      else null;
-
     deps =
       if luxVendorDir != null
       then luxVendorDir
       else if luxDeps != null
       then luxDeps
-      else if lockFile != null
-      then importLuxLock {lockFile = lockFile;}
+      else if luxLock != null
+      then importLuxLock {lockFile = luxLock;}
       else if luxHash != null
       then
         fetchLuxDeps {
@@ -80,6 +73,13 @@ lib.extendMkDerivation {
     rootSubdir = lib.optionalString (luxRoot != null) "${luxRoot}/";
 
     buildSubdir = lib.optionalString (buildAndTestSubdir != null) "${buildAndTestSubdir}/";
+
+    lockFile =
+      if luxLock != null
+      then luxLock
+      else if !lib.isDerivation src && lib.pathExists "${src}/${rootSubdir}lux.lock"
+      then "${src}/${rootSubdir}lux.lock"
+      else null;
 
     expectedRocks =
       if lockFile == null
