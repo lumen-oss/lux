@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::git::url::RemoteGitUrlParseError;
-use crate::git::GitSource;
+use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
@@ -70,7 +70,7 @@ where
                     url, checkout_ref, ..
                 } => RockSourceSpec::Git(GitSource {
                     url: url.parse()?,
-                    checkout_ref: Some(checkout_ref.clone()),
+                    git_ref: Some(GitRef::Tag(checkout_ref.clone())),
                 }),
                 RemotePackageSourceUrl::Url { url } => RockSourceSpec::Url(url.clone()),
                 RemotePackageSourceUrl::File { path } => RockSourceSpec::File(path.clone()),
@@ -278,18 +278,23 @@ async fn fetch_src_impl<R: Rockspec>(
                 let mut fetch_options = FetchOptions::new();
                 fetch_options.update_fetchhead(false);
                 fetch_options.remote_callbacks(callbacks);
-                if git.checkout_ref.is_none() {
+                let checkout_ref = match &git.git_ref {
+                    Some(GitRef::Tag(tag)) => Some(tag.as_str()),
+                    Some(GitRef::Branch(branch)) => Some(branch.as_str()),
+                    None => None,
+                };
+                if checkout_ref.is_none() {
                     fetch_options.depth(1);
                 };
                 let mut repo_builder = RepoBuilder::new();
                 repo_builder.fetch_options(fetch_options);
                 let repo = repo_builder.clone(&url, dest_dir)?;
 
-                let checkout_ref = match &git.checkout_ref {
+                let checkout_ref = match checkout_ref {
                     Some(checkout_ref) => {
                         let (object, _) = repo.revparse_ext(checkout_ref)?;
                         repo.checkout_tree(&object, None)?;
-                        checkout_ref.clone()
+                        checkout_ref.to_string()
                     }
                     None => {
                         let head = repo.head()?;

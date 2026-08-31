@@ -5,6 +5,8 @@ use crate::{
     },
     lua_rockspec::per_platform_from_intermediate,
 };
+
+pub use crate::git::GitRef;
 use miette::Diagnostic;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
@@ -82,11 +84,11 @@ impl TryFrom<RockSourceInternal> for RemoteRockSource {
             (source, None, None) => Ok(RockSourceSpec::default_from_source_url(source)),
             (SourceUrl::Git(url), Some(tag), None) => Ok(RockSourceSpec::Git(GitSource {
                 url,
-                checkout_ref: Some(tag),
+                git_ref: Some(GitRef::Tag(tag)),
             })),
             (SourceUrl::Git(url), None, Some(branch)) => Ok(RockSourceSpec::Git(GitSource {
                 url,
-                checkout_ref: Some(branch),
+                git_ref: Some(GitRef::Branch(branch)),
             })),
             _ => Err(RockSourceError::InvalidCombination),
         }?;
@@ -117,10 +119,7 @@ impl RockSourceSpec {
         match url {
             SourceUrl::File(path) => Self::File(path),
             SourceUrl::Url(url) => Self::Url(url),
-            SourceUrl::Git(url) => Self::Git(GitSource {
-                url,
-                checkout_ref: None,
-            }),
+            SourceUrl::Git(url) => Self::Git(GitSource { url, git_ref: None }),
         }
     }
 }
@@ -194,18 +193,18 @@ impl PartialOverride for RockSourceInternal {
     type Err = Infallible;
 
     fn apply_overrides(&self, override_spec: &Self) -> Result<Self, Self::Err> {
+        let (tag, branch) = match (&override_spec.tag, &override_spec.branch) {
+            (Some(tag), _) => (Some(tag.clone()), None),
+            (_, Some(branch)) => (None, Some(branch.clone())),
+            (None, None) => (self.tag.clone(), self.branch.clone()),
+        };
+
         Ok(Self {
             url: override_opt(override_spec.url.as_ref(), self.url.as_ref()),
             file: override_opt(override_spec.file.as_ref(), self.file.as_ref()),
             dir: override_opt(override_spec.dir.as_ref(), self.dir.as_ref()),
-            tag: match &override_spec.branch {
-                None => override_opt(override_spec.tag.as_ref(), self.tag.as_ref()),
-                _ => None,
-            },
-            branch: match &override_spec.tag {
-                None => override_opt(override_spec.branch.as_ref(), self.branch.as_ref()),
-                _ => None,
-            },
+            tag,
+            branch,
         })
     }
 }

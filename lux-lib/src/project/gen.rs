@@ -43,6 +43,9 @@ pub(crate) struct RockSourceTemplate {
     /// The tag or revision to be checked out if the source URL is a git source.
     /// If unset, Lux will try to auto-detect it.
     tag: Option<String>,
+
+    /// The branch to be checked out if the source URL is a git source.
+    branch: Option<String>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -148,15 +151,22 @@ impl RockSourceTemplate {
             )?),
             None => None,
         };
+        let branch = match self.branch.as_ref() {
+            Some(branch) => Some(variables::substitute(
+                &[&package_spec, &Environment {}, &GitProject(project_root)],
+                branch,
+            )?),
+            None => None,
+        };
         match SourceUrl::from_str(&url_str)? {
             SourceUrl::File(_) | SourceUrl::Url(_) => Ok(RockSourceInternal {
                 url: Some(url_str.to_string()),
                 file,
                 dir,
-                branch: None,
+                branch,
                 tag,
             }),
-            SourceUrl::Git(_) if self.tag.is_none() => {
+            SourceUrl::Git(_) if self.tag.is_none() && self.branch.is_none() => {
                 if let Ok(repo) = Repository::open(project_root) {
                     let tag_or_rev = current_tag_or_revision(&repo)?;
                     Ok(RockSourceInternal {
@@ -175,7 +185,7 @@ impl RockSourceTemplate {
                 file,
                 dir,
                 tag,
-                branch: None,
+                branch,
             }),
         }
     }
