@@ -23,6 +23,7 @@ use std::{
 use target_lexicon::Triple;
 use thiserror::Error;
 use tokio::process::Command;
+use walkdir::{DirEntry, WalkDir};
 use which::which;
 
 #[cfg(unix)]
@@ -944,6 +945,17 @@ pub(crate) fn format_path(path: &Path) -> String {
             .map(|str| str.to_string())
             .unwrap_or(format!("'{path_str}'"))
     }
+}
+
+#[tracing::instrument(level = "trace")]
+pub(crate) fn detect_binaries(build_dir: &Path) -> Vec<PathBuf> {
+    WalkDir::new(build_dir.join("src").join("bin"))
+        .into_iter()
+        .chain(WalkDir::new(build_dir.join("bin")))
+        .filter_map(|file| file.ok())
+        .filter(|file| file.clone().into_path().is_file())
+        .map(DirEntry::into_path)
+        .collect()
 }
 
 #[cfg(test)]
