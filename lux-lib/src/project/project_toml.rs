@@ -2,7 +2,7 @@
 
 use crate::fs;
 use crate::git::shorthand::RemoteGitUrlShorthand;
-use crate::git::GitSource;
+use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
 use crate::lockfile::PinnedState;
@@ -102,18 +102,18 @@ where
                             ))),
                             (Some(git), Some(rev), None) => Ok(Some(RockSourceSpec::Git(GitSource {
                                 url: git.into(),
-                                checkout_ref: Some(rev),
+                                git_ref: Some(GitRef::Tag(rev)),
                             }))),
                             (Some(git), None, None) => Ok(Some(RockSourceSpec::Git(GitSource {
                                 url: git.into(),
-                                checkout_ref: Some(
+                                git_ref: Some(GitRef::Tag(
                                     entry
                                         .version
                                         .clone()
                                         .to_string()
                                         .trim_start_matches("=")
                                         .to_string(),
-                                ),
+                                )),
                             }))),
                             (None, None, Some(path)) => Ok(Some(RockSourceSpec::File(path))),
                             (_, _, Some(_)) => Err(de::Error::custom(format!(
@@ -1090,7 +1090,7 @@ mod tests {
     use url::Url;
 
     use crate::{
-        git::{url::RemoteGitUrl, GitSource},
+        git::{url::RemoteGitUrl, GitRef, GitSource},
         lua_rockspec::{PartialLuaRockspec, PerPlatform, RemoteLuaRockspec, RockSourceSpec},
         project::{Project, ProjectRoot, PROJECT_TOML},
         rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
@@ -1608,6 +1608,31 @@ mod tests {
             .unwrap();
     }
 
+    #[test]
+    fn generate_git_source_with_branch() {
+        let rockspec_content = r#"
+            package = "test-package"
+            version = "1.0.0"
+            lua = ">=5.1"
+
+            [source]
+            url = "git+https://example.com/owner/repo.git"
+            branch = "main"
+
+            [build]
+            type = "builtin"
+        "#;
+
+        let toml = PartialProjectToml::new(PROJECT_TOML, rockspec_content, ProjectRoot::default())
+            .unwrap()
+            .into_remote(None)
+            .unwrap();
+
+        let lua = toml.to_lua_remote_rockspec_string().unwrap();
+        assert!(lua.contains("branch = \"main\""));
+        assert!(!lua.contains("tag = "));
+    }
+
     fn init_sample_project_repo(temp_dir: &assert_fs::TempDir) -> Repository {
         let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample-projects/source-template/");
@@ -1646,11 +1671,11 @@ mod tests {
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Git { .. }));
-        if let RockSourceSpec::Git(GitSource { url, checkout_ref }) = source_spec {
+        if let RockSourceSpec::Git(GitSource { url, git_ref }) = source_spec {
             let expected_url: RemoteGitUrl =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
-            assert!(checkout_ref.is_some());
+            assert!(git_ref.is_some());
         }
         assert_eq!(source.unpack_dir, Some("lux-dev".into()));
     }
@@ -1666,11 +1691,11 @@ mod tests {
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &RockSourceSpec::Git { .. }));
-        if let RockSourceSpec::Git(GitSource { url, checkout_ref }) = source_spec {
+        if let RockSourceSpec::Git(GitSource { url, git_ref }) = source_spec {
             let expected_url: RemoteGitUrl =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
-            assert_eq!(checkout_ref, &Some(tag_name.to_string()));
+            assert_eq!(git_ref, &Some(GitRef::Tag(tag_name.to_string())));
         }
         assert_eq!(source.unpack_dir, Some("lux-dev".into()));
     }

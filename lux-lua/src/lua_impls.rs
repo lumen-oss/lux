@@ -19,7 +19,7 @@ use url::Url;
 use lux_lib::{
     build::BuildBehaviour,
     config::{tree::RockLayoutConfig, Config, ConfigBuilder},
-    git::GitSource,
+    git::{GitRef, GitSource},
     lockfile::{
         LocalPackage, LocalPackageHashes, LocalPackageId, LockConstraint, Lockfile, LockfileGuard,
         OptState, PinnedState, ReadOnly, ReadWrite,
@@ -1624,8 +1624,17 @@ impl Typed for GitSourceLua {
 impl TypedUserData for GitSourceLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.add_method("url", |_, this, ()| Ok(this.0.url.to_string()));
-        methods.add_method("checkout_ref", |_, this, ()| {
-            Ok(this.0.checkout_ref.clone())
+        methods.add_method("tag", |_, this, ()| {
+            Ok(match &this.0.git_ref {
+                Some(GitRef::Tag(tag)) => Some(tag.clone()),
+                _ => None,
+            })
+        });
+        methods.add_method("branch", |_, this, ()| {
+            Ok(match &this.0.git_ref {
+                Some(GitRef::Branch(branch)) => Some(branch.clone()),
+                _ => None,
+            })
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {

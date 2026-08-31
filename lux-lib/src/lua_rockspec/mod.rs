@@ -953,7 +953,7 @@ mod tests {
             rockspec.local.source.default.source_spec,
             RockSourceSpec::Git(GitSource {
                 url: "https://hub.com/owner/example-project/".parse().unwrap(),
-                checkout_ref: Some("bar".into())
+                git_ref: Some(GitRef::Branch("bar".into()))
             })
         );
         assert_eq!(rockspec.local.test, PerPlatform::default());
@@ -972,7 +972,7 @@ mod tests {
             rockspec.local.source.default.source_spec,
             RockSourceSpec::Git(GitSource {
                 url: "https://hub.com/owner/example-project/".parse().unwrap(),
-                checkout_ref: Some("bar".into())
+                git_ref: Some(GitRef::Tag("bar".into()))
             })
         );
         let rockspec_content = "
@@ -1384,7 +1384,7 @@ mod tests {
             rockspec.local.source.default.source_spec,
             RockSourceSpec::Git(GitSource {
                 url: "https://hub.com/example-project/.git".parse().unwrap(),
-                checkout_ref: Some("bar".into())
+                git_ref: Some(GitRef::Branch("bar".into()))
             })
         );
         assert_eq!(
@@ -1396,7 +1396,7 @@ mod tests {
                 .unwrap(),
             RockSourceSpec::Git(GitSource {
                 url: "https://hub.com/example-project/.git".parse().unwrap(),
-                checkout_ref: Some("mac".into())
+                git_ref: Some(GitRef::Branch("mac".into()))
             })
         );
         assert_eq!(
@@ -1408,7 +1408,7 @@ mod tests {
                 .unwrap(),
             RockSourceSpec::Git(GitSource {
                 url: "https://winhub.com/example-project/.git".parse().unwrap(),
-                checkout_ref: Some("win".into())
+                git_ref: Some(GitRef::Branch("win".into()))
             })
         );
         let rockspec_content = "
@@ -1784,7 +1784,7 @@ mod tests {
         let package_req = "foo@1.0.5".parse().unwrap();
         let source = GitSource {
             url: "https://hub.com/owner/example-project.git".parse().unwrap(),
-            checkout_ref: Some("1.0.5".into()),
+            git_ref: Some(GitRef::Tag("1.0.5".into())),
         };
         let source_spec = RockSourceSpec::Git(source);
         let rockspec =

@@ -13,7 +13,7 @@ use url::{ParseError, Url};
 use crate::{
     config::Config,
     fs,
-    git::GitSource,
+    git::{GitRef, GitSource},
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec, RockSourceSpec},
     luarocks,
@@ -167,13 +167,20 @@ impl RemoteRockDownload {
     ) -> Result<Self, SearchAndDownloadError> {
         let package_spec = package_req.try_into()?;
         let source_url = Some(match &source_spec {
-            RockSourceSpec::Git(GitSource { url, checkout_ref }) => RemotePackageSourceUrl::Git {
-                url: url.to_string(),
-                checkout_ref: checkout_ref
-                    .clone()
-                    .ok_or(SearchAndDownloadError::MissingCheckoutRef(url.to_string()))?,
-                submodules: false, // unknown until the source is fetched
-            },
+            RockSourceSpec::Git(GitSource { url, git_ref }) => {
+                let checkout_ref = match git_ref {
+                    Some(GitRef::Tag(tag)) => tag.clone(),
+                    Some(GitRef::Branch(branch)) => branch.clone(),
+                    None => {
+                        return Err(SearchAndDownloadError::MissingCheckoutRef(url.to_string()))
+                    }
+                };
+                RemotePackageSourceUrl::Git {
+                    url: url.to_string(),
+                    checkout_ref,
+                    submodules: false, // unknown until the source is fetched
+                }
+            }
             RockSourceSpec::File(path) => RemotePackageSourceUrl::File { path: path.clone() },
             RockSourceSpec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
         });

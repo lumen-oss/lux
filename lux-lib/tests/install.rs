@@ -3,7 +3,7 @@ use flaky_test::flaky_test;
 use itertools::Itertools;
 use lux_lib::{
     config::ConfigBuilder,
-    git::GitSource,
+    git::{GitRef, GitSource},
     lua_installation::detect_installed_lua_version,
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
@@ -25,7 +25,7 @@ async fn install_git_package() {
                 url: "https://github.com/mrcjkb/rustaceanvim.git"
                     .parse()
                     .unwrap(),
-                checkout_ref: Some("v6.0.3".into()),
+                git_ref: Some(GitRef::Tag("v6.0.3".into())),
             }))
             .build();
     test_install(install_spec).await
