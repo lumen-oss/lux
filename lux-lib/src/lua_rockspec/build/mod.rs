@@ -71,8 +71,6 @@ pub enum BuildSpecInternalError {
     ModulesHaveListElements,
     #[error("no 'modules' specified for the 'rust-mlua' build backend")]
     NoModulesSpecified,
-    #[error("no 'binary' specified for the 'rust-binary' build backend")]
-    NoBinarySpecified,
     #[error("no 'lang' specified for 'treesitter-parser' build backend")]
     NoTreesitterParserLanguageSpecified,
     #[error("invalid 'rust-mlua' modules format")]
@@ -178,9 +176,6 @@ impl BuildSpec {
                     .collect(),
             })),
             BuildType::RustBinary => Some(BuildBackendSpec::RustBinary(RustBinaryBuildSpec {
-                binary: internal
-                    .binary
-                    .ok_or(BuildSpecInternalError::NoBinarySpecified)?,
                 package: internal.package,
                 features: internal.features.unwrap_or_default(),
             })),
@@ -760,7 +755,7 @@ impl BuildType {
             },
             &BuildType::RustBinary => unsafe {
                 Some(
-                    PackageReq::parse("luarocks-build-rust-binary >= 3.0.0")
+                    PackageReq::parse("luarocks-build-rust-binary >= 4.0.0")
                         .unwrap_unchecked()
                         .into(),
                 )

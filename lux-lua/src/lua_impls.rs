@@ -2131,7 +2131,7 @@ impl TypedUserData for RustBinaryBuildSpecLua {
         methods.document(
             r#"The name of the binary (or crate) to install, optionally including a version specifier (e.g. `foo@1.0.0`)."#,
         );
-        methods.add_method("binary", |_, this, ()| Ok(this.0.binary.clone()));
+        methods.add_method("package", |_, this, ()| Ok(this.0.package.clone()));
 
         methods.document("Cargo features to enable when building");
         methods.add_method("features", |_, this, ()| Ok(this.0.features.clone()));

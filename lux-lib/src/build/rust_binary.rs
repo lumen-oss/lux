@@ -71,32 +71,20 @@ impl BuildBackend for RustBinaryBuildSpec {
             .map(|vendor_dir| vendor_dir.join("cargo"))
             .filter(|dir| dir.is_dir());
 
-        // NOTE: `cargo install <crate>@<version>` installs from crates.io.
-        // When offline, the crates.io index is unavailable.
-        let crate_dir = if cargo_vendor_dir.is_some() {
-            let package = self
-                .package
-                .as_deref()
-                .unwrap_or_else(|| self.binary.split('@').next().unwrap_or(&self.binary));
-            Some(
-                find_cargo_package_dir(config, build_dir, package)
-                    .await?
-                    .to_slash_lossy()
-                    .to_string(),
-            )
+        let crate_dir = if let Some(package) = &self.package {
+            find_cargo_package_dir(config, build_dir, package)
+                .await?
+                .to_slash_lossy()
+                .to_string()
         } else {
-            None
+            format!("{}", build_dir.display())
         };
 
-        if let Some(crate_dir) = &crate_dir {
-            install_args.push("--path");
-            install_args.push(crate_dir);
-            install_args.push("--offline");
-        } else {
-            install_args.push(&self.binary);
-        }
+        install_args.push("--path");
+        install_args.push(&crate_dir);
 
         if let Some(cargo_vendor_dir) = &cargo_vendor_dir {
+            install_args.push("--offline");
             utils::prepare_cargo_vendor_config(config, build_dir, cargo_vendor_dir).await?;
         }
 
