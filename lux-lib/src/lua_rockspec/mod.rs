@@ -1682,7 +1682,7 @@ mod tests {
     }\n
     build = {\n
         type = 'rust-binary',\n
-        binary = 'foo@1.0.0',\n
+        package = 'foo',\n
         features = {'extra', 'features'},\n
     }\n
             ";
@@ -1690,7 +1690,7 @@ mod tests {
         let build_spec = rockspec.local.build.current_platform();
         if let Some(BuildBackendSpec::RustBinary(build_spec)) = build_spec.build_backend.to_owned()
         {
-            assert_eq!(build_spec.binary, "foo@1.0.0");
+            assert_eq!(build_spec.package, Some("foo".to_string()));
             assert_eq!(build_spec.features, vec!["extra", "features"]);
         } else {
             panic!("Expected RustBinary build backend");
