@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.43.3](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.43.2...lux-lsp-v0.43.3) `lux-lsp` - 2026-09-01
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.60.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.1...lux-lib-v0.60.2) `lux-lib` - 2026-09-01
+
+### Fixed
+- fix!(build/rust-binary): require `package`, not `binary` field ([#1904](https://github.com/lumen-oss/lux/pull/1904))
+- *(build/rust-binary)* build from package path when offline ([#1902](https://github.com/lumen-oss/lux/pull/1902))
+
+## [0.43.3](https://github.com/lumen-oss/lux/compare/v0.43.2...v0.43.3) `lux-cli` - 2026-09-01
+
+### Other
+- updated the following local packages: lux-lib
+
 ## [0.43.2](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.43.1...lux-lsp-v0.43.2) `lux-lsp` - 2026-08-31
 
 ### Other
