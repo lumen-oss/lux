@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.1...lux-lib-v0.60.2) `lux-lib` - 2026-09-01
+
+### Fixed
+- fix!(build/rust-binary): require `package`, not `binary` field ([#1904](https://github.com/lumen-oss/lux/pull/1904))
+- *(build/rust-binary)* build from package path when offline ([#1902](https://github.com/lumen-oss/lux/pull/1902))
+
 ## [0.60.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.0...lux-lib-v0.60.1) `lux-lib` - 2026-08-31
 
 ### Added
