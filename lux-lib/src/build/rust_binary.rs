@@ -1,11 +1,13 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::build::utils::{self, InstallBinaryError};
-use crate::config::build;
+use crate::config::{build, Config};
 use crate::fs;
 use crate::lua_rockspec::RustBinaryBuildSpec;
 use crate::tree::InstallTree;
 use miette::Diagnostic;
+use path_slash::PathBufExt;
 use std::io;
+use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use thiserror::Error;
 
@@ -20,8 +22,19 @@ pub enum RustBinaryError {
         stdout: String,
         stderr: String,
     },
-    #[error("failed to run `cargo install`")]
+    #[error("failed to run `cargo`")]
+    #[diagnostic(help("ensure cargo is installed"))]
     RustBuild { source: io::Error },
+    #[error("`cargo metadata` failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
+    CargoMetadata {
+        status: ExitStatus,
+        stdout: String,
+        stderr: String,
+    },
+    #[error("failed to parse `cargo metadata` output")]
+    CargoMetadataParse(#[from] serde_json::Error),
+    #[error("could not locate cargo package '{package}' in the source")]
+    CargoPackageNotFound { package: String },
     #[error("failed to install binary '{file_name}'")]
     InstallBinary {
         file_name: String,
@@ -53,15 +66,38 @@ impl BuildBackend for RustBinaryBuildSpec {
             install_args.push("--features");
             install_args.push(&features);
         }
-        install_args.push(&self.binary);
-
-        if let Some(cargo_vendor_dir) = config
+        let cargo_vendor_dir = config
             .vendor_dir()
             .map(|vendor_dir| vendor_dir.join("cargo"))
-            .filter(|dir| dir.is_dir())
-        {
-            utils::prepare_cargo_vendor_config(config, build_dir, &cargo_vendor_dir).await?;
+            .filter(|dir| dir.is_dir());
+
+        // NOTE: `cargo install <crate>@<version>` installs from crates.io.
+        // When offline, the crates.io index is unavailable.
+        let crate_dir = if cargo_vendor_dir.is_some() {
+            let package = self
+                .package
+                .as_deref()
+                .unwrap_or_else(|| self.binary.split('@').next().unwrap_or(&self.binary));
+            Some(
+                find_cargo_package_dir(config, build_dir, package)
+                    .await?
+                    .to_slash_lossy()
+                    .to_string(),
+            )
+        } else {
+            None
+        };
+
+        if let Some(crate_dir) = &crate_dir {
+            install_args.push("--path");
+            install_args.push(crate_dir);
             install_args.push("--offline");
+        } else {
+            install_args.push(&self.binary);
+        }
+
+        if let Some(cargo_vendor_dir) = &cargo_vendor_dir {
+            utils::prepare_cargo_vendor_config(config, build_dir, cargo_vendor_dir).await?;
         }
 
         match config
@@ -110,4 +146,39 @@ impl BuildBackend for RustBinaryBuildSpec {
 
         Ok(BuildInfo { binaries })
     }
+}
+
+async fn find_cargo_package_dir(
+    config: &Config,
+    source_root: &Path,
+    package: &str,
+) -> Result<PathBuf, RustBinaryError> {
+    let output = config
+        .wrapped_command("cargo", ["metadata", "--no-deps", "--format-version", "1"])
+        .current_dir(source_root)
+        .output()
+        .await
+        .map_err(|source| RustBinaryError::RustBuild { source })?;
+    if !output.status.success() {
+        return Err(RustBinaryError::CargoMetadata {
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).into(),
+            stderr: String::from_utf8_lossy(&output.stderr).into(),
+        });
+    }
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    metadata
+        .get("packages")
+        .and_then(|packages| packages.as_array())
+        .and_then(|packages| {
+            packages
+                .iter()
+                .find(|pkg| pkg.get("name").and_then(|name| name.as_str()) == Some(package))
+        })
+        .and_then(|pkg| pkg.get("manifest_path").and_then(|path| path.as_str()))
+        .and_then(|path| Path::new(path).parent())
+        .map(Path::to_path_buf)
+        .ok_or_else(|| RustBinaryError::CargoPackageNotFound {
+            package: package.to_string(),
+        })
 }

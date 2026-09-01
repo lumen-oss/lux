@@ -181,6 +181,7 @@ impl BuildSpec {
                 binary: internal
                     .binary
                     .ok_or(BuildSpecInternalError::NoBinarySpecified)?,
+                package: internal.package,
                 features: internal.features.unwrap_or_default(),
             })),
             BuildType::TreesitterParser => Some(BuildBackendSpec::TreesitterParser(
@@ -561,6 +562,8 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) cargo_extra_args: Option<Vec<String>>,
     #[serde(default)]
     pub(crate) binary: Option<String>,
+    #[serde(default)]
+    pub(crate) package: Option<String>,
     #[serde(default, deserialize_with = "deserialize_map_or_seq")]
     #[display_lua(convert_with = "display_include")]
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
@@ -674,6 +677,7 @@ fn override_build_spec_internal(
         features: override_opt(&override_spec.features, &base.features),
         cargo_extra_args: override_opt(&override_spec.cargo_extra_args, &base.cargo_extra_args),
         binary: override_opt(&override_spec.binary, &base.binary),
+        package: override_opt(&override_spec.package, &base.package),
         include: merge_map_opts(&override_spec.include, &base.include),
         lang: override_opt(&override_spec.lang, &base.lang),
         parser: override_opt(&override_spec.parser, &base.parser),
