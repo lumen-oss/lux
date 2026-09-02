@@ -3712,7 +3712,7 @@ dependencies = [
  "clap_builder",
  "console 0.16.4",
  "crossbeam-utils",
- "darling 0.23.0",
+ "darling 0.24.1",
  "darling_core 0.23.0",
  "digest 0.10.7",
  "either",
