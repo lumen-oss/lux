@@ -92,7 +92,7 @@ clap_builder = { version = "4", default-features = false, features = ["color", "
 console = { version = "0.16", default-features = false, features = ["ansi-parsing", "std", "unicode-width"] }
 crossbeam-utils = { version = "0.8" }
 darling = { version = "0.23" }
-darling_core = { version = "0.23", default-features = false, features = ["suggestions"] }
+darling_core = { version = "0.24", default-features = false, features = ["suggestions"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
 either = { version = "1", features = ["use_std"] }
 flate2 = { version = "1", features = ["zlib-rs"] }

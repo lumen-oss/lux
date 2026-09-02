@@ -3713,7 +3713,7 @@ dependencies = [
  "console 0.16.4",
  "crossbeam-utils",
  "darling 0.23.0",
- "darling_core 0.23.0",
+ "darling_core 0.24.1",
  "digest 0.10.7",
  "either",
  "flate2",
