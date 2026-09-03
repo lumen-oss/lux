@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.2...lux-lib-v0.60.3) `lux-lib` - 2026-09-03
+
+### Added
+- *(toml)* `[project.root_dir]` for local project builds
+
+### Dependencies
+- *(deps)* bump tree-sitter-config from 0.26.11 to 0.27.0 ([#1911](https://github.com/lumen-oss/lux/pull/1911))
+
 ## [0.60.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.1...lux-lib-v0.60.2) `lux-lib` - 2026-09-01
 
 ### Fixed
