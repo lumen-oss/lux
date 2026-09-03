@@ -371,22 +371,25 @@ fn mk_rock_layout(
 ) -> RockLayout {
     let rock_path = tree.root_for(package);
     let bin = tree.bin();
-    let root = match layout_config.root {
-        Some(ref root) => tree.root().join(root),
-        None => rock_path.clone(),
-    };
-    let mut etc = match package.spec.opt {
-        OptState::Required => root.join(&layout_config.etc),
-        OptState::Optional => root.join(&layout_config.opt_etc),
-    };
-    if layout_config.root.is_some() {
-        etc = etc.join(format!("{}", package.name()));
-    }
-    let lib = rock_path.join(lib_dir_name);
-    let src = if layout_config.root.is_some() {
-        etc.join(&layout_config.src)
+    let (etc, lib, src) = if let Some(ref root) = layout_config.root {
+        let base = tree.root().join(root);
+
+        let etc = match package.spec.opt {
+            OptState::Required => base.join(&layout_config.etc),
+            OptState::Optional => base.join(&layout_config.opt_etc),
+        }
+        .join(format!("{}", package.name()));
+
+        let lib = etc.join(&layout_config.lib);
+        let src = etc.join(&layout_config.src);
+
+        (etc, lib, src)
     } else {
-        rock_path.join(src_dir_name)
+        let etc = rock_path.join(&layout_config.etc);
+        let lib = rock_path.join(lib_dir_name);
+        let src = rock_path.join(src_dir_name);
+
+        (etc, lib, src)
     };
     let conf = etc.join(&layout_config.conf);
     let doc = etc.join(&layout_config.doc);
@@ -580,7 +583,7 @@ mod tests {
                 bin: tree_path.join("5.1/bin"),
                 rock_path: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1")),
                 etc: tree_path.join("5.1/site/pack/lux/start/neorg"),
-                lib: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1/lib")),
+                lib: tree_path.join("5.1/site/pack/lux/start/neorg/lib"),
                 src: tree_path.join("5.1/site/pack/lux/start/neorg/lua"),
                 conf: tree_path.join("5.1/site/pack/lux/start/neorg/conf"),
                 doc: tree_path.join("5.1/site/pack/lux/start/neorg/doc"),
