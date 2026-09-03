@@ -23,6 +23,9 @@ pub struct RockLayoutConfig {
     /// Default: `src`
     /// With the `--nvim` preset, this is `lua`
     pub(crate) src: PathBuf,
+    /// The `lib` directory name
+    /// Default: `lib`
+    pub(crate) lib: PathBuf,
     /// The `conf` directory name
     /// Default: `conf`
     pub(crate) conf: PathBuf,
@@ -37,12 +40,14 @@ impl RockLayoutConfig {
     /// - `etc`: `start`
     /// - `opt_etc`: `opt`
     /// - `src`: `lua`
+    /// - `lib`: `lib`
     pub fn new_nvim_layout() -> Self {
         Self {
             root: Some("site/pack/lux".into()),
             etc: "start".into(),
             opt_etc: "opt".into(),
             src: "lua".into(),
+            lib: "lib".into(),
             conf: "conf".into(),
             doc: "doc".into(),
         }
@@ -60,6 +65,7 @@ impl Default for RockLayoutConfig {
             etc: "etc".into(),
             opt_etc: "etc".into(),
             src: "src".into(),
+            lib: "lib".into(),
             conf: "conf".into(),
             doc: "doc".into(),
         }
