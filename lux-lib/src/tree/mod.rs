@@ -371,19 +371,23 @@ fn mk_rock_layout(
 ) -> RockLayout {
     let rock_path = tree.root_for(package);
     let bin = tree.bin();
-    let etc_root = match layout_config.etc_root {
-        Some(ref etc_root) => tree.root().join(etc_root),
+    let root = match layout_config.root {
+        Some(ref root) => tree.root().join(root),
         None => rock_path.clone(),
     };
     let mut etc = match package.spec.opt {
-        OptState::Required => etc_root.join(&layout_config.etc),
-        OptState::Optional => etc_root.join(&layout_config.opt_etc),
+        OptState::Required => root.join(&layout_config.etc),
+        OptState::Optional => root.join(&layout_config.opt_etc),
     };
-    if layout_config.etc_root.is_some() {
+    if layout_config.root.is_some() {
         etc = etc.join(format!("{}", package.name()));
     }
     let lib = rock_path.join(lib_dir_name);
-    let src = rock_path.join(src_dir_name);
+    let src = if layout_config.root.is_some() {
+        etc.join(&layout_config.src)
+    } else {
+        rock_path.join(src_dir_name)
+    };
     let conf = etc.join(&layout_config.conf);
     let doc = etc.join(&layout_config.doc);
 
@@ -407,7 +411,7 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::{
-        config::ConfigBuilder,
+        config::{tree::RockLayoutConfig, ConfigBuilder},
         lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
         lua_version::LuaVersion,
         package::{PackageName, PackageSpec, PackageVersion},
@@ -528,6 +532,60 @@ mod tests {
             .collect_vec();
 
         assert_yaml_snapshot!(sorted_result)
+    }
+
+    #[test]
+    fn rock_layout_nvim() {
+        let tree_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree");
+
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.copy_from(&tree_path, &["**"]).unwrap();
+
+        let tree_path = temp.to_path_buf();
+
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(tree_path.clone()))
+            .entrypoint_layout(RockLayoutConfig::new_nvim_layout())
+            .build()
+            .unwrap();
+
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let mock_hashes = LocalPackageHashes {
+            rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                .parse()
+                .unwrap(),
+            source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                .parse()
+                .unwrap(),
+        };
+
+        let package = LocalPackage::from(
+            &PackageSpec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
+            LockConstraint::Unconstrained,
+            RockBinaries::default(),
+            RemotePackageSource::Test,
+            None,
+            mock_hashes,
+        );
+
+        let id = package.id();
+        let neorg = tree.entrypoint(&package).unwrap();
+
+        assert_eq!(
+            neorg,
+            RockLayout {
+                bin: tree_path.join("5.1/bin"),
+                rock_path: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1")),
+                etc: tree_path.join("5.1/site/pack/lux/start/neorg"),
+                lib: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1/lib")),
+                src: tree_path.join("5.1/site/pack/lux/start/neorg/lua"),
+                conf: tree_path.join("5.1/site/pack/lux/start/neorg/conf"),
+                doc: tree_path.join("5.1/site/pack/lux/start/neorg/doc"),
+            }
+        );
     }
 
     #[test]
