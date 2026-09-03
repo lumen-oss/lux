@@ -7145,9 +7145,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.26.11"
+version = "0.26.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1c71c1c4cc0920b20d6b0f6572e7682cd07a6a2faec71067a31fa394c586df"
+checksum = "17ebdd3a5a7e28a1890b876fdbd0c3c0fe0a6336cffaa104f11b9f720c9daa29"
 dependencies = [
  "cc",
  "regex",
@@ -7195,9 +7195,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-highlight"
-version = "0.26.11"
+version = "0.26.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd7a0c48d503cf4e0a57a2453424eaef2fce4b4269f13e3579e52f0d0c9e5cc8"
+checksum = "662316ecd27166f79e18865429638c05194aee76a7bc374136d844f05d778f74"
 dependencies = [
  "regex",
  "streaming-iterator",
@@ -7213,9 +7213,9 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-loader"
-version = "0.26.11"
+version = "0.26.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ac98a906517ad790c8eb896d4ad170479bb72f6081971658ab94f71528a34cf"
+checksum = "4f5699052bbd805b3e3521a4be1a8655e9a859846efa0ccc4ca5326c7d3e5874"
 dependencies = [
  "cc",
  "etcetera",
@@ -7237,9 +7237,9 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-tags"
-version = "0.26.11"
+version = "0.26.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d45f969e1d8bb7ff0ffbbf2e3d5cfda3c66a4ac213aaad5859a73b0900a01c6"
+checksum = "38f822ba86032a0e7907c6a24efd7bc15f57566e1f523f2a6841c61686c1f5b8"
 dependencies = [
  "memchr",
  "regex",
