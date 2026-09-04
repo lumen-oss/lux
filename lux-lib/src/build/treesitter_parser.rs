@@ -58,6 +58,7 @@ impl BuildBackend for TreesitterParserBuildSpec {
             tracing::debug!("ABI version: {abi_version}");
             let out_path: Option<PathBuf> = None;
             let grammar_path: Option<PathBuf> = None;
+            let mut diagnostics = Vec::new();
             tree_sitter_generate::generate_parser_in_directory(
                 &build_dir,
                 out_path,
@@ -67,7 +68,11 @@ impl BuildBackend for TreesitterParserBuildSpec {
                 None,
                 true,
                 tree_sitter_generate::OptLevel::default(),
+                &mut diagnostics,
             )?;
+            for diagnostic in diagnostics {
+                tracing::debug!("tree-sitter-{}: {diagnostic}", &self.lang);
+            }
         }
         if self.parser {
             build_parser(&build_dir, &output_paths.etc.join("parser"), &self.lang).await?;
