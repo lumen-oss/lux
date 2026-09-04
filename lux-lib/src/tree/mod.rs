@@ -7,7 +7,11 @@ use crate::{
     package::{PackageName, PackageReq},
     variables::{GetVariableError, HasVariables},
 };
-use std::{collections::HashMap, io, path::PathBuf};
+use std::{
+    collections::HashMap,
+    io,
+    path::{Path, PathBuf},
+};
 
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -222,12 +226,24 @@ impl Tree {
 
     /// Create a [`RockLayout`] for an entrypoint
     pub(crate) fn entrypoint_layout(&self, package: &LocalPackage) -> RockLayout {
-        mk_rock_layout("src", "lib", self, package, &self.entrypoint_layout)
+        mk_rock_layout(
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
+            package,
+            &self.entrypoint_layout,
+        )
     }
 
     /// Create a [`RockLayout`] for a dependency
     fn dependency_layout(&self, package: &LocalPackage) -> RockLayout {
-        mk_rock_layout("src", "lib", self, package, &RockLayoutConfig::default())
+        mk_rock_layout(
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
+            package,
+            &RockLayoutConfig::default(),
+        )
     }
 }
 
@@ -362,17 +378,15 @@ impl RockMatches {
 }
 
 /// Create a [`RockLayout`] for a package.
-fn mk_rock_layout(
-    src_dir_name: &str,
-    lib_dir_name: &str,
-    tree: &impl InstallTree,
+pub fn mk_rock_layout(
+    tree_root: &Path,
+    bin: &Path,
+    rock_path: &Path,
     package: &LocalPackage,
     layout_config: &RockLayoutConfig,
 ) -> RockLayout {
-    let rock_path = tree.root_for(package);
-    let bin = tree.bin();
     let (etc, lib, src) = if let Some(ref root) = layout_config.root {
-        let base = tree.root().join(root);
+        let base = tree_root.join(root);
 
         let etc = match package.spec.opt {
             OptState::Required => base.join(&layout_config.etc),
@@ -386,8 +400,8 @@ fn mk_rock_layout(
         (etc, lib, src)
     } else {
         let etc = rock_path.join(&layout_config.etc);
-        let lib = rock_path.join(lib_dir_name);
-        let src = rock_path.join(src_dir_name);
+        let lib = rock_path.join(&layout_config.lib);
+        let src = rock_path.join(&layout_config.src);
 
         (etc, lib, src)
     };
@@ -395,11 +409,11 @@ fn mk_rock_layout(
     let doc = etc.join(&layout_config.doc);
 
     RockLayout {
-        rock_path,
+        rock_path: rock_path.to_path_buf(),
         etc,
         lib,
         src,
-        bin,
+        bin: bin.to_path_buf(),
         conf,
         doc,
     }
