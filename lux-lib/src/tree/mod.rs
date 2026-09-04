@@ -258,6 +258,7 @@ impl InstallTree for Tree {
 
     fn entrypoint(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         let rock_layout = self.entrypoint_layout(package);
+        fs::sync::create_dir_all(&rock_layout.rock_path).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.lib).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.src).map_err(io::Error::other)?;
         Ok(rock_layout)
@@ -265,6 +266,7 @@ impl InstallTree for Tree {
 
     fn dependency(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         let rock_layout = self.dependency_layout(package);
+        fs::sync::create_dir_all(&rock_layout.rock_path).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.lib).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.src).map_err(io::Error::other)?;
         Ok(rock_layout)
