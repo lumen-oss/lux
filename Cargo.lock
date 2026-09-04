@@ -6206,12 +6206,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
-name = "smallbitvec"
-version = "2.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b0e903ee191d8f7a8fbf0d712c3a1699d19e04ceba5ad1eb673053c7d938a09"
-
-[[package]]
 name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7172,14 +7166,14 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-generate"
-version = "0.26.11"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a893a6cd8730c4cbafcd4a04f56747a7a6ae91e8a391bc2b6499c251032e142a"
+checksum = "53f840004ff54e68ec950cc7eeec2d487742eb7e1bdfdab4d55a73275325ce7e"
 dependencies = [
  "bitflags 2.13.1",
  "dunce",
+ "hashbrown 0.17.1",
  "indexmap 2.14.0",
- "indoc",
  "log",
  "pathdiff",
  "regex",
@@ -7188,7 +7182,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "smallbitvec",
  "thiserror 2.0.19",
  "topological-sort",
 ]

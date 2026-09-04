@@ -64,7 +64,7 @@ tree-sitter = "0.26"
 tree-sitter-config = "0.27"
 # NOTE: The default qjs-rt feature of tree-sitter-generate
 # includes a dependency on rquickjs, which brings in a dependency on libclang.
-tree-sitter-generate = { version = "0.26", default-features = false, features = [
+tree-sitter-generate = { version = "0.27", default-features = false, features = [
   "load",
   "pathdiff",
 ] }
