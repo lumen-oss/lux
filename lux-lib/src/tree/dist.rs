@@ -12,9 +12,6 @@ use crate::{
 use miette::{Diagnostic, Result};
 use thiserror::Error;
 
-const SRC_DIR_NAME: &str = "lua";
-const LIB_DIR_NAME: &str = "lib";
-
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(
@@ -110,9 +107,9 @@ impl InstallTree for FlatDistTree {
     fn entrypoint(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         self.guard_no_conflicting_package(package)?;
         Ok(mk_rock_layout(
-            SRC_DIR_NAME,
-            LIB_DIR_NAME,
-            self,
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
             package,
             &self.0.entrypoint_layout,
         ))
@@ -121,9 +118,9 @@ impl InstallTree for FlatDistTree {
     fn dependency(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         self.guard_no_conflicting_package(package)?;
         Ok(mk_rock_layout(
-            SRC_DIR_NAME,
-            LIB_DIR_NAME,
-            self,
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
             package,
             &RockLayoutConfig::default(),
         ))
@@ -153,9 +150,9 @@ impl InstallTree for FlatDistTree {
             RockLayoutConfig::default()
         };
         Ok(mk_rock_layout(
-            SRC_DIR_NAME,
-            LIB_DIR_NAME,
-            self,
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
             package,
             &layout_config,
         ))

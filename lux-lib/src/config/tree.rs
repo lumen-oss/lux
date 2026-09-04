@@ -9,29 +9,29 @@ pub struct RockLayoutConfig {
     /// If set, it is a directory relative to the given Lua version's install tree root.
     /// With the `--nvim` preset, this is `site/pack/lux`.
     #[serde(alias = "etc_root")]
-    pub(crate) root: Option<PathBuf>,
+    pub root: Option<PathBuf>,
     /// The `etc` directory for non-optional packages
     /// Default: `etc` With the `--nvim` preset, this is `start`
     /// Note: If `root` is set, the package ID is appended.
-    pub(crate) etc: PathBuf,
+    pub etc: PathBuf,
     /// The `etc` directory for optional packages
     /// Default: `etc`
     /// With the `--nvim` preset, this is `opt`
     /// Note: If `root` is set, the package ID is appended.
-    pub(crate) opt_etc: PathBuf,
+    pub opt_etc: PathBuf,
     /// The `src` directory name
     /// Default: `src`
     /// With the `--nvim` preset, this is `lua`
-    pub(crate) src: PathBuf,
+    pub src: PathBuf,
     /// The `lib` directory name
     /// Default: `lib`
-    pub(crate) lib: PathBuf,
+    pub lib: PathBuf,
     /// The `conf` directory name
     /// Default: `conf`
-    pub(crate) conf: PathBuf,
+    pub conf: PathBuf,
     /// The `doc` directory name
     /// Default: `doc`
-    pub(crate) doc: PathBuf,
+    pub doc: PathBuf,
 }
 
 impl RockLayoutConfig {
