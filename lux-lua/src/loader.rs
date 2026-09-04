@@ -5,7 +5,11 @@ use std::{
     rc::Rc,
 };
 
-use lux_lib::lockfile::{LocalPackageId, Lockfile, ReadOnly};
+use lux_lib::{
+    config::tree::RockLayoutConfig,
+    lockfile::{LocalPackage, LocalPackageId, Lockfile, ReadOnly},
+    tree::{mk_rock_layout, RockLayout},
+};
 use mlua::prelude::*;
 use path_absolutize::Absolutize;
 
@@ -31,7 +35,35 @@ fn current_file(lua: &Lua) -> Option<String> {
     })?
 }
 
-fn load_file(lua: &Lua, module: &str, path: &Path) -> mlua::Result<Option<mlua::Function>> {
+fn rock_layout(
+    tree_root: &Path,
+    package_id: &LocalPackageId,
+    package: &LocalPackage,
+    lockfile: &Lockfile<ReadOnly>,
+) -> RockLayout {
+    let config = if lockfile.is_entrypoint(package_id) {
+        lockfile.entrypoint_layout()
+    } else {
+        &RockLayoutConfig::default()
+    };
+
+    let rock_path = tree_root.join(format!(
+        "{}-{}@{}",
+        package_id,
+        package.name(),
+        package.version()
+    ));
+
+    mk_rock_layout(
+        tree_root,
+        &tree_root.join("bin"),
+        &rock_path,
+        package,
+        config,
+    )
+}
+
+fn load_file(lua: &Lua, module: &str, layout: &RockLayout) -> mlua::Result<Option<mlua::Function>> {
     let module_path = module.replace('.', std::path::MAIN_SEPARATOR_STR);
 
     #[cfg(not(target_env = "msvc"))]
@@ -40,10 +72,10 @@ fn load_file(lua: &Lua, module: &str, path: &Path) -> mlua::Result<Option<mlua::
     #[cfg(target_env = "msvc")]
     let c_dylib_extension = "dll";
 
-    let src_lua = path.join("src").join(format!("{module_path}.lua"));
-    let src_init = path.join("src").join(&module_path).join("init.lua");
-    let lib = path
-        .join("lib")
+    let src_lua = layout.src.join(format!("{module_path}.lua"));
+    let src_init = layout.src.join(&module_path).join("init.lua");
+    let lib = layout
+        .lib
         .join(format!("{module_path}.{c_dylib_extension}"));
 
     if let Some(file) = [src_lua, src_init].into_iter().find(|file| file.exists()) {
@@ -193,16 +225,16 @@ fn load_from_workspace_tree(
         return Ok(None);
     };
 
-    let path = tree_root.join(format!("{dep_id}-{}@{}", dep.name(), dep.version()));
-    load_file(lua, module, &path)
+    let layout = rock_layout(tree_root, dep_id, dep, &lockfile);
+    load_file(lua, module, &layout)
 }
 
 fn load_from_installed_tree(lua: &Lua, module: &str) -> mlua::Result<Option<mlua::Function>> {
     for tree_root in find_trees_from_package_path(lua)?.iter() {
         if let Some(lockfile) = cached_lockfile(tree_root) {
             for (id, package) in lockfile.rocks() {
-                let path = tree_root.join(format!("{id}-{}@{}", package.name(), package.version()));
-                if let Some(loader) = load_file(lua, module, &path)? {
+                let layout = rock_layout(tree_root, id, package, &lockfile);
+                if let Some(loader) = load_file(lua, module, &layout)? {
                     return Ok(Some(loader));
                 }
             }
@@ -522,6 +554,78 @@ mod tests {
             .unwrap();
         let foo_loaded: String = lua.globals().get("foo_loaded").unwrap();
         assert_eq!(foo_loaded, "yes");
+    }
+
+    #[test]
+    fn test_load_from_nvim_layout() {
+        let tree = TempDir::new().unwrap();
+        let nvim_lockfile = format!(
+            r#"{{
+  "version": "1.0.0",
+  "rocks": {{
+    "{FOO_HASH}": {{
+      "name": "foo",
+      "version": "1.0.0-1",
+      "pinned": false,
+      "opt": false,
+      "dependencies": [],
+      "constraint": null,
+      "binaries": [],
+      "source": "local",
+      "hashes": {{
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }}
+    }}
+  }},
+  "entrypoints": ["{FOO_HASH}"],
+  "root": "site/pack/lux",
+  "etc": "start",
+  "opt_etc": "opt",
+  "src": "lua",
+  "lib": "lib",
+  "conf": "conf",
+  "doc": "doc"
+}}"#
+        );
+
+        tree.child("5.1")
+            .child("lux.lock")
+            .write_str(&nvim_lockfile)
+            .unwrap();
+
+        tree.child("5.1")
+            .child("site")
+            .child("pack")
+            .child("lux")
+            .child("start")
+            .child("foo")
+            .child("lua")
+            .child("foo.lua")
+            .write_str("_G.foo_loaded = 'nvim'\n")
+            .unwrap();
+
+        let lua = Lua::new();
+        load_loader(&lua).unwrap();
+        let src_dir = tree
+            .path()
+            .join("5.1")
+            .join("site")
+            .join("pack")
+            .join("lux")
+            .join("start")
+            .join("foo")
+            .join("lua");
+
+        lua.globals()
+            .get::<mlua::Table>("package")
+            .unwrap()
+            .set("path", format!("{}/?.lua", src_dir.display()))
+            .unwrap();
+
+        lua.load("require('foo')").exec().unwrap();
+        let foo_loaded: String = lua.globals().get("foo_loaded").unwrap();
+        assert_eq!(foo_loaded, "nvim");
     }
 
     #[test]
