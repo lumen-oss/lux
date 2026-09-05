@@ -158,7 +158,8 @@ lib.extendMkDerivation {
       lx --profile release \
          ${luaVersionFlag} \
          --vendor-dir "${deps}" \
-         build
+         --tree "${buildSubdir}.lux" \
+         install --path .
 
       ${lib.optionalString (buildAndTestSubdir != null) "popd"}
 
