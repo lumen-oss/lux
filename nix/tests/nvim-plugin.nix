@@ -112,12 +112,14 @@
 in {
   test = pkgs.runCommandLocal "lux-nvim-plugin-test" {} ''
     output=$(${nvim}/bin/nvim --headless -c 'lua print(_G.foo_from_plugin)' -c 'qa!' 2>&1)
-    echo "$output" | grep -q "hello world"
+    echo "$output" | grep -q "hello world" \
+      || (echo "nvim did not print the expected greeting; output was:" >&2; echo "$output" >&2; exit 1)
     touch "$out"
   '';
   test-luxHash = pkgs.runCommandLocal "lux-nvim-plugin-test" {} ''
     output=$(${nvim-luxHash}/bin/nvim --headless -c 'lua print(_G.foo_from_plugin)' -c 'qa!' 2>&1)
-    echo "$output" | grep -q "hello world"
+    echo "$output" | grep -q "hello world" \
+      || (echo "nvim did not print the expected greeting; output was:" >&2; echo "$output" >&2; exit 1)
     touch "$out"
   '';
 }
