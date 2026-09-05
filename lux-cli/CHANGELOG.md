@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.4](https://github.com/lumen-oss/lux/compare/v0.43.3...v0.43.4) `lux-cli` - 2026-09-05
+
+### Added
+- *(install)* `--path` flag for installing local projects
+
 ## [0.43.3](https://github.com/lumen-oss/lux/compare/v0.43.2...v0.43.3) `lux-cli` - 2026-09-01
 
 ### Other

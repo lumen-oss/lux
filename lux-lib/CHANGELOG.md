@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.2...lux-lib-v0.61.0) `lux-lib` - 2026-09-05
+
+### Added
+- *(RockLayoutConfig)* allow changing `lib`
+- [**breaking**] relocate `src/` directory on `--nvim`
+- *(toml)* `[project.root_dir]` for local project builds
+
+### Dependencies
+- *(deps)* bump tree-sitter-config from 0.26.11 to 0.27.0 ([#1911](https://github.com/lumen-oss/lux/pull/1911))
+
+### Fixed
+- *(install-project)* don't install dependencies as entrypoints
+- create root directory structure
+- *(lux-lua/loader)* work with custom rock layouts
+
+### Performance
+- exclude vcs-ignored files when hashing & copying sources ([#1920](https://github.com/lumen-oss/lux/pull/1920))
+
 ## [0.60.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.60.1...lux-lib-v0.60.2) `lux-lib` - 2026-09-01
 
 ### Fixed
