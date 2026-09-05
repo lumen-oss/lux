@@ -1,10 +1,8 @@
 use super::FsError;
 #[cfg(unix)]
 use std::fs::Permissions;
-use std::io;
 use std::path::Path;
 use tokio::fs;
-use walkdir::WalkDir;
 
 /// Wrapped [`fs::read`].
 pub(crate) async fn read(path: impl AsRef<Path>) -> Result<Vec<u8>, FsError> {
@@ -49,39 +47,6 @@ pub(crate) async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result
         to: to.to_path_buf(),
         source,
     })
-}
-
-/// Recursively copies the contents of `src` into `dest`, including hidden files,
-/// but skipping VCS directories such as `.git`.
-pub(crate) async fn copy_dir_contents(
-    src: impl AsRef<Path>,
-    dest: impl AsRef<Path>,
-) -> Result<(), FsError> {
-    let src = src.as_ref();
-    let dest = dest.as_ref();
-    for path in WalkDir::new(src)
-        .into_iter()
-        .filter_entry(|entry| {
-            !matches!(
-                entry.file_name().to_string_lossy().to_string().as_str(),
-                ".git" | ".jj" | ".hg" | "_darcs" | ".svn" | ".bzr"
-            )
-        })
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.file_type().is_file().then(|| entry.into_path()))
-    {
-        let relative = path.strip_prefix(src).map_err(|source| FsError::Copy {
-            from: path.to_path_buf(),
-            to: dest.to_path_buf(),
-            source: io::Error::other(source),
-        })?;
-        let target = dest.join(relative);
-        if let Some(parent) = target.parent() {
-            create_dir_all(parent).await?;
-        }
-        copy(&path, &target).await?;
-    }
-    Ok(())
 }
 
 /// Wrapped [`fs::create_dir_all`].
