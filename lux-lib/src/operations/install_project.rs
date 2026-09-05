@@ -84,9 +84,10 @@ impl<
             tree,
             &mut dependencies_to_install,
             &mut build_dependencies_to_install,
+            tree::EntryType::DependencyOnly,
         );
 
-        InstallDependencies::new()
+        let dependencies = InstallDependencies::new()
             .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
             .build_dependencies(
                 build_dependencies_to_install
@@ -113,23 +114,10 @@ impl<
             .await?;
 
         let lockfile = tree.lockfile()?;
-        let dependencies = lockfile
-            .rocks()
-            .iter()
-            .filter_map(|(pkg_id, value)| {
-                if lockfile.is_entrypoint(pkg_id) {
-                    Some(value)
-                } else {
-                    None
-                }
-            })
-            .cloned()
-            .collect_vec();
         let mut lockfile = lockfile.write_guard();
         lockfile.add_entrypoint(&package);
         for dep in dependencies {
             lockfile.add_dependency(&package, &dep);
-            lockfile.remove_entrypoint(&dep);
         }
         Ok(package)
     }

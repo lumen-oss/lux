@@ -119,6 +119,7 @@ async fn do_build(args: BuildWorkspace<'_>) -> Result<Vec<LocalPackage>, BuildWo
                 &workspace_tree,
                 &mut dependencies_to_install,
                 &mut build_dependencies_to_install,
+                tree::EntryType::Entrypoint,
             );
         } else {
             for project in workspace.members() {
@@ -128,6 +129,7 @@ async fn do_build(args: BuildWorkspace<'_>) -> Result<Vec<LocalPackage>, BuildWo
                     &workspace_tree,
                     &mut dependencies_to_install,
                     &mut build_dependencies_to_install,
+                    tree::EntryType::Entrypoint,
                 );
             }
         }

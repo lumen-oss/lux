@@ -3,6 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     config::Config,
+    lockfile::LocalPackage,
     lua_installation::LuaInstallation,
     luarocks::luarocks_installation::LuaRocksInstallation,
     operations::{Install, InstallError},
@@ -33,7 +34,9 @@ impl<
         State: install_dependencies_builder::State + install_dependencies_builder::IsComplete,
     > InstallDependenciesBuilder<'_, T, State>
 {
-    pub(crate) async fn build(self) -> Result<(), InstallError> {
+    /// Installs the configured dependencies and build dependencies into [`Self::tree`],
+    /// returning the installed regular dependencies.
+    pub(crate) async fn build(self) -> Result<Vec<LocalPackage>, InstallError> {
         let args = self._build();
         let config = args.config;
         let dependencies = args.dependencies;
@@ -51,12 +54,12 @@ impl<
                 .await?;
         }
         // for some reason, cargo can't infer the type
-        Install::new(config)
+        let dependencies = Install::new(config)
             .packages(dependencies.into_iter().unique().collect_vec())
             .tree(tree.clone())
             .install()
             .await?;
-        Ok(())
+        Ok(dependencies)
     }
 }
 
@@ -65,6 +68,7 @@ pub(crate) fn prepare_dependencies_for_build(
     workspace_tree: &impl InstallTree,
     dependencies_to_install: &mut Vec<PackageInstallSpec>,
     build_dependencies_to_install: &mut Vec<PackageInstallSpec>,
+    entry_type: tree::EntryType,
 ) {
     let dependencies = project_toml
         .dependencies()
@@ -79,6 +83,7 @@ pub(crate) fn prepare_dependencies_for_build(
         .iter()
         .cloned()
         .collect_vec();
+
     dependencies
         .into_iter()
         .filter(|dep| {
@@ -87,7 +92,7 @@ pub(crate) fn prepare_dependencies_for_build(
                 .is_ok_and(|rock_match| !rock_match.is_found())
         })
         .map(|dep| {
-            PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
+            PackageInstallSpec::new(dep.clone().into_package_req(), entry_type)
                 .pin(*dep.pin())
                 .opt(*dep.opt())
                 .maybe_source(dep.source().clone())
@@ -103,7 +108,7 @@ pub(crate) fn prepare_dependencies_for_build(
                 .is_ok_and(|rock_match| !rock_match.is_found())
         })
         .map(|dep| {
-            PackageInstallSpec::new(dep.clone().into_package_req(), tree::EntryType::Entrypoint)
+            PackageInstallSpec::new(dep.clone().into_package_req(), entry_type)
                 .pin(*dep.pin())
                 .opt(*dep.opt())
                 .maybe_source(dep.source().clone())
