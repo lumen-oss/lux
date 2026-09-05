@@ -1,3 +1,4 @@
+use crate::build::utils::recursive_copy_dir;
 use crate::config::Config;
 use crate::git::url::RemoteGitUrlParseError;
 use crate::git::{GitRef, GitSource};
@@ -325,7 +326,7 @@ async fn fetch_src_impl<R: Rockspec>(
             }
         }
         RockSourceSpec::Url(url) => {
-            tracing::debug!(message = format!("📥 Downloading {url}").as_str());
+            tracing::debug!(message = format!("Downloading {url}").as_str());
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
@@ -365,11 +366,12 @@ async fn fetch_src_impl<R: Rockspec>(
             }
         }
         RockSourceSpec::File(path) => {
-            tracing::debug!(message = format!("📋 Copying {}", path.display()).as_str());
+            tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {
-                fs::tokio::copy_dir_contents(path, dest_dir).await?;
-                dest_dir.hash().await.map_err(FetchSrcError::Hash)?
+                let hash = path.hash().await.map_err(FetchSrcError::Hash)?;
+                recursive_copy_dir(path, dest_dir).await?;
+                hash
             } else {
                 let mut file = fs::sync::open(path)?;
                 let mut buffer = Vec::new();

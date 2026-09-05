@@ -3576,6 +3576,7 @@ dependencies = [
  "auth-git2",
  "bon",
  "bytes",
+ "camino",
  "cc",
  "chumsky",
  "clap 4.6.4",
