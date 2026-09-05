@@ -891,6 +891,10 @@ impl<P: LockfilePermissions> Lockfile<P> {
         self.lock.get(id)
     }
 
+    pub fn entrypoint_layout(&self) -> &RockLayoutConfig {
+        &self.entrypoint_layout
+    }
+
     /// Unsafe because this assumes a prior check if the package is present
     ///
     /// # Safety

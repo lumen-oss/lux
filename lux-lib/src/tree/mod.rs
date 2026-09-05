@@ -7,7 +7,11 @@ use crate::{
     package::{PackageName, PackageReq},
     variables::{GetVariableError, HasVariables},
 };
-use std::{collections::HashMap, io, path::PathBuf};
+use std::{
+    collections::HashMap,
+    io,
+    path::{Path, PathBuf},
+};
 
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -222,12 +226,24 @@ impl Tree {
 
     /// Create a [`RockLayout`] for an entrypoint
     pub(crate) fn entrypoint_layout(&self, package: &LocalPackage) -> RockLayout {
-        mk_rock_layout("src", "lib", self, package, &self.entrypoint_layout)
+        mk_rock_layout(
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
+            package,
+            &self.entrypoint_layout,
+        )
     }
 
     /// Create a [`RockLayout`] for a dependency
     fn dependency_layout(&self, package: &LocalPackage) -> RockLayout {
-        mk_rock_layout("src", "lib", self, package, &RockLayoutConfig::default())
+        mk_rock_layout(
+            &self.root(),
+            &self.bin(),
+            &self.root_for(package),
+            package,
+            &RockLayoutConfig::default(),
+        )
     }
 }
 
@@ -242,6 +258,7 @@ impl InstallTree for Tree {
 
     fn entrypoint(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         let rock_layout = self.entrypoint_layout(package);
+        fs::sync::create_dir_all(&rock_layout.rock_path).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.lib).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.src).map_err(io::Error::other)?;
         Ok(rock_layout)
@@ -249,6 +266,7 @@ impl InstallTree for Tree {
 
     fn dependency(&self, package: &LocalPackage) -> io::Result<RockLayout> {
         let rock_layout = self.dependency_layout(package);
+        fs::sync::create_dir_all(&rock_layout.rock_path).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.lib).map_err(io::Error::other)?;
         fs::sync::create_dir_all(&rock_layout.src).map_err(io::Error::other)?;
         Ok(rock_layout)
@@ -362,37 +380,42 @@ impl RockMatches {
 }
 
 /// Create a [`RockLayout`] for a package.
-fn mk_rock_layout(
-    src_dir_name: &str,
-    lib_dir_name: &str,
-    tree: &impl InstallTree,
+pub fn mk_rock_layout(
+    tree_root: &Path,
+    bin: &Path,
+    rock_path: &Path,
     package: &LocalPackage,
     layout_config: &RockLayoutConfig,
 ) -> RockLayout {
-    let rock_path = tree.root_for(package);
-    let bin = tree.bin();
-    let etc_root = match layout_config.etc_root {
-        Some(ref etc_root) => tree.root().join(etc_root),
-        None => rock_path.clone(),
+    let (etc, lib, src) = if let Some(ref root) = layout_config.root {
+        let base = tree_root.join(root);
+
+        let etc = match package.spec.opt {
+            OptState::Required => base.join(&layout_config.etc),
+            OptState::Optional => base.join(&layout_config.opt_etc),
+        }
+        .join(format!("{}", package.name()));
+
+        let lib = etc.join(&layout_config.lib);
+        let src = etc.join(&layout_config.src);
+
+        (etc, lib, src)
+    } else {
+        let etc = rock_path.join(&layout_config.etc);
+        let lib = rock_path.join(&layout_config.lib);
+        let src = rock_path.join(&layout_config.src);
+
+        (etc, lib, src)
     };
-    let mut etc = match package.spec.opt {
-        OptState::Required => etc_root.join(&layout_config.etc),
-        OptState::Optional => etc_root.join(&layout_config.opt_etc),
-    };
-    if layout_config.etc_root.is_some() {
-        etc = etc.join(format!("{}", package.name()));
-    }
-    let lib = rock_path.join(lib_dir_name);
-    let src = rock_path.join(src_dir_name);
     let conf = etc.join(&layout_config.conf);
     let doc = etc.join(&layout_config.doc);
 
     RockLayout {
-        rock_path,
+        rock_path: rock_path.to_path_buf(),
         etc,
         lib,
         src,
-        bin,
+        bin: bin.to_path_buf(),
         conf,
         doc,
     }
@@ -407,7 +430,7 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::{
-        config::ConfigBuilder,
+        config::{tree::RockLayoutConfig, ConfigBuilder},
         lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
         lua_version::LuaVersion,
         package::{PackageName, PackageSpec, PackageVersion},
@@ -528,6 +551,60 @@ mod tests {
             .collect_vec();
 
         assert_yaml_snapshot!(sorted_result)
+    }
+
+    #[test]
+    fn rock_layout_nvim() {
+        let tree_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree");
+
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.copy_from(&tree_path, &["**"]).unwrap();
+
+        let tree_path = temp.to_path_buf();
+
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(tree_path.clone()))
+            .entrypoint_layout(RockLayoutConfig::new_nvim_layout())
+            .build()
+            .unwrap();
+
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let mock_hashes = LocalPackageHashes {
+            rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                .parse()
+                .unwrap(),
+            source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                .parse()
+                .unwrap(),
+        };
+
+        let package = LocalPackage::from(
+            &PackageSpec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
+            LockConstraint::Unconstrained,
+            RockBinaries::default(),
+            RemotePackageSource::Test,
+            None,
+            mock_hashes,
+        );
+
+        let id = package.id();
+        let neorg = tree.entrypoint(&package).unwrap();
+
+        assert_eq!(
+            neorg,
+            RockLayout {
+                bin: tree_path.join("5.1/bin"),
+                rock_path: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1")),
+                etc: tree_path.join("5.1/site/pack/lux/start/neorg"),
+                lib: tree_path.join("5.1/site/pack/lux/start/neorg/lib"),
+                src: tree_path.join("5.1/site/pack/lux/start/neorg/lua"),
+                conf: tree_path.join("5.1/site/pack/lux/start/neorg/conf"),
+                doc: tree_path.join("5.1/site/pack/lux/start/neorg/doc"),
+            }
+        );
     }
 
     #[test]
