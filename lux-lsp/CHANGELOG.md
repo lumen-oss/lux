@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.5](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.43.4...lux-lsp-v0.43.5) `lux-lsp` - 2026-09-06
+
+### Other
+- update Cargo.lock dependencies
+
 ## [0.43.4](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.43.3...lux-lsp-v0.43.4) `lux-lsp` - 2026-09-05
 
 ### Other
