@@ -1250,17 +1250,6 @@ impl Lockfile<ReadWrite> {
         }
     }
 
-    pub(crate) fn remove_entrypoint(&mut self, rock: &LocalPackage) {
-        if let Some(index) = self
-            .lock
-            .entrypoints
-            .iter()
-            .position(|pkg_id| *pkg_id == rock.id())
-        {
-            self.lock.entrypoints.remove(index);
-        }
-    }
-
     fn add(&mut self, rock: &LocalPackage) {
         // Since rocks entries are mutable, we only add the dependency if it
         // has not already been added.
