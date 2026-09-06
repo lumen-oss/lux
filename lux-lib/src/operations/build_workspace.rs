@@ -205,7 +205,6 @@ async fn build_project(
     lockfile.add_entrypoint(&package);
     for dep in dependencies {
         lockfile.add_dependency(&package, &dep);
-        lockfile.remove_entrypoint(&dep);
     }
     Ok(package)
 }
