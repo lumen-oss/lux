@@ -7,10 +7,9 @@ use miette::Diagnostic;
 use serde::{Deserialize, Serialize, Serializer};
 use std::ffi::OsStr;
 use std::path::Path;
-use std::{collections::HashMap, env, path::PathBuf, time::Duration};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::process::Command;
-use tree::RockLayoutConfig;
 use url::Url;
 
 use crate::config::access_tokens::AccessToken;
@@ -18,14 +17,13 @@ use crate::fs;
 use crate::lua_version::LuaVersion;
 use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
-use crate::tree::{Tree, TreeError};
+use crate::tree::{CustomRockLayout, Tree, TreeError};
 use crate::variables::GetVariableError;
 use crate::{build::utils, variables::HasVariables};
 
 pub mod access_tokens;
 pub mod build;
 pub mod external_deps;
-pub mod tree;
 
 const DEV_PATH: &str = "dev/";
 const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
@@ -63,7 +61,7 @@ pub struct Config {
     external_deps: ExternalDependencySearchConfig,
 
     build: BuildConfig,
-    entrypoint_layout: RockLayoutConfig,
+    entrypoint_layout: Option<Arc<dyn CustomRockLayout>>,
 
     cache_dir: PathBuf,
     data_dir: PathBuf,
@@ -304,10 +302,9 @@ impl Config {
         &self.external_deps
     }
 
-    /// The rock layout for entrypoints of new install trees.
-    /// Does not affect existing install trees or dependency rock layouts.
-    pub fn entrypoint_layout(&self) -> &RockLayoutConfig {
-        &self.entrypoint_layout
+    /// The custom layout applied to entrypoint packages, if any.
+    pub fn entrypoint_layout(&self) -> Option<&Arc<dyn CustomRockLayout>> {
+        self.entrypoint_layout.as_ref()
     }
 
     /// The Lux cache directory
@@ -432,8 +429,8 @@ pub struct ConfigBuilder {
     #[serde(default)]
     build: BuildConfig,
 
-    #[serde(default)]
-    entrypoint_layout: RockLayoutConfig,
+    #[serde(skip)]
+    entrypoint_layout: Option<Arc<dyn CustomRockLayout>>,
     user_agent: Option<String>,
     generate_luarc: Option<bool>,
     luarc_file_name: Option<String>,
@@ -624,11 +621,10 @@ impl ConfigBuilder {
         }
     }
 
-    /// The rock layout for entrypoints of new install trees.
-    /// Does not affect existing install trees or dependency rock layouts.
-    pub fn entrypoint_layout(self, rock_layout: RockLayoutConfig) -> Self {
+    /// The custom layout to apply to entrypoint packages.
+    pub fn entrypoint_layout(self, layout: impl CustomRockLayout + 'static) -> Self {
         Self {
-            entrypoint_layout: rock_layout,
+            entrypoint_layout: Some(Arc::new(layout)),
             ..self
         }
     }
@@ -790,7 +786,7 @@ impl ConfigBuilder {
                 profile: other.build.profile.or(self.build.profile),
                 ..other.build
             },
-            entrypoint_layout: other.entrypoint_layout,
+            entrypoint_layout: other.entrypoint_layout.or(self.entrypoint_layout),
             user_agent: other.user_agent.or(self.user_agent),
             generate_luarc: other.generate_luarc.or(self.generate_luarc),
             luarc_file_name: other.luarc_file_name.or(self.luarc_file_name),

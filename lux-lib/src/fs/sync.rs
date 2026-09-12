@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    fs::{self, DirEntry},
     path::{Path, PathBuf},
 };
 
@@ -62,12 +62,25 @@ pub(crate) fn remove_dir_all(path: impl AsRef<Path>) -> Result<(), FsError> {
 }
 
 /// Wrapped [`fs::read_dir`].
-pub(crate) fn read_dir(path: impl AsRef<Path>) -> Result<fs::ReadDir, FsError> {
+pub(crate) fn read_dir(
+    path: impl AsRef<Path>,
+) -> Result<impl Iterator<Item = Result<DirEntry, FsError>>, FsError> {
     let path = path.as_ref();
-    fs::read_dir(path).map_err(|source| FsError::ReadDir {
-        path: path.to_path_buf(),
-        source,
-    })
+    fs::read_dir(path)
+        .map_err(|source| FsError::ReadDir {
+            path: path.to_path_buf(),
+            source,
+        })
+        .map(|entries| {
+            let path = path.to_path_buf();
+
+            entries.map(move |entry| {
+                entry.map_err(|source| FsError::ReadDir {
+                    path: path.clone(),
+                    source,
+                })
+            })
+        })
 }
 
 /// Wrapped [`fs::File::open`].

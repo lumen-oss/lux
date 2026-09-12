@@ -86,16 +86,16 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
     local_packages
         .into_iter()
         .filter_map(|pkg| {
-            let rock_layout = tree.installed_rock_layout(&pkg).ok()?;
-            let lib_path = rock_layout.lib.join(which.module.to_lib_path());
+            let layout = tree.layout_for(&pkg);
+            let lib_path = layout.lib.join(which.module.to_lib_path());
             if lib_path.is_file() {
                 return Some(lib_path);
             }
-            let lua_path = rock_layout.src.join(which.module.to_lua_path());
+            let lua_path = layout.src.join(which.module.to_lua_path());
             if lua_path.is_file() {
                 return Some(lua_path);
             }
-            let lua_path = rock_layout.src.join(which.module.to_lua_init_path());
+            let lua_path = layout.src.join(which.module.to_lua_init_path());
             if lua_path.is_file() {
                 return Some(lua_path);
             }

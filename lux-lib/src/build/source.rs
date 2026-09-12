@@ -71,7 +71,9 @@ pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Sou
 where
     T: InstallTree + Sync,
 {
-    let output_paths = args.output_paths;
+    let package = args.package;
+    let tree = args.tree;
+    let layout = tree.layout_for(package);
     let build_dir = args.build_dir;
 
     let mut build_spec = BuildSpec::default();
@@ -142,7 +144,7 @@ where
                 dir.file_name()
                     .is_some_and(|name| name != "doc" && name != "docs")
             }) {
-                recursive_copy_dir(&build_dir.join(directory), &output_paths.etc).await?;
+                recursive_copy_dir(&build_dir.join(directory), &layout.etc).await?;
             }
         }
         None => {
@@ -168,7 +170,7 @@ where
             {
                 recursive_copy_dir(
                     &build_dir.join(&subdirectory),
-                    &output_paths.etc.join(&subdirectory),
+                    &layout.etc.join(&subdirectory),
                 )
                 .await?;
             }

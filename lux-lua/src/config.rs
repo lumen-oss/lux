@@ -1,8 +1,8 @@
-use lux_lib::config::{tree::RockLayoutConfig, ConfigBuilder};
+use lux_lib::config::ConfigBuilder;
 use mlua::ExternalResult;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
-use crate::lua_impls::{ConfigBuilderLua, ConfigLua, RockLayoutConfigLua};
+use crate::lua_impls::{ConfigBuilderLua, ConfigLua};
 
 const DEFAULT_USER_AGENT: &str = concat!("lux-lua/", env!("CARGO_PKG_VERSION"));
 
@@ -37,14 +37,6 @@ if present, or otherwise by instantiating the default config"#,
         );
         methods.add_function("new", |_, ()| {
             ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
-        });
-        methods.document("Instantiate the default rock layout config");
-        methods.add_function("default_rock_layout", |_, ()| {
-            Ok(RockLayoutConfigLua(RockLayoutConfig::default()))
-        });
-        methods.document("Instantiate the a rock layout for Neovim plugins");
-        methods.add_function("nvim_rock_layout", |_, ()| {
-            Ok(RockLayoutConfigLua(RockLayoutConfig::new_nvim_layout()))
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -127,7 +119,6 @@ mod tests {
                 :timeout(10)
                 :cache_dir(cache)
                 :data_dir(data)
-                :entrypoint_layout({ layout = "nvim" })
                 :build()
 
             assert(full_config, "default config should not be nil")
@@ -143,7 +134,6 @@ mod tests {
             assert(full_config:timeout() == 10, "timeout should be 10")
             assert(full_config:cache_dir() == cache, "cache_dir should be /cache")
             assert(full_config:data_dir() == data, "data_dir should be /data")
-            assert(full_config:entrypoint_layout(), "entrypoint_layout should be not nil")
             "#,
         )
         .exec()

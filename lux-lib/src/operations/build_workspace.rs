@@ -248,15 +248,13 @@ mod tests {
             .unwrap();
         let workspace = Workspace::from_exact(project_root).unwrap().unwrap();
         let tree = workspace.tree(&config).unwrap();
-        let package = BuildWorkspace::new(&workspace, &config)
+        BuildWorkspace::new(&workspace, &config)
             .no_lock(false)
             .only_deps(false)
             .build()
             .await
             .unwrap();
-        let package = package.first().unwrap();
-        let layout = tree.installed_rock_layout(package).unwrap();
-        let bin_dir = layout.bin;
+        let bin_dir = tree.bin();
         assert!(bin_dir.join("foo").is_file());
         assert!(bin_dir.join("bar").is_file());
     }
@@ -292,8 +290,7 @@ mod tests {
             .unwrap();
         let package = package.first().unwrap();
         let tree = workspace.tree(&config).unwrap();
-        let layout = tree.installed_rock_layout(package).unwrap();
-        let src_dir = layout.src;
+        let src_dir = tree.layout_for(package).src;
         assert!(src_dir.join("init.lua").is_file());
     }
 }

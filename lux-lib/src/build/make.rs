@@ -60,14 +60,15 @@ impl BuildBackend for MakeBuildSpec {
     where
         T: InstallTree,
     {
-        let output_paths = args.output_paths;
         let no_install = args.no_install;
         let lua = args.lua;
         let external_dependencies = args.external_dependencies;
         let config = args.config;
+        let tree = args.tree;
+        let layout = tree.layout_for(args.package);
         let build_dir = args.build_dir;
 
-        let build_tree = args.tree.build_tree(config)?;
+        let build_tree = tree.build_tree(config)?;
         let build_paths = Paths::new(&build_tree)?;
         let lua_path = build_paths.package_path_prepended().joined();
         let lua_cpath = build_paths.package_cpath_prepended().joined();
@@ -83,7 +84,7 @@ impl BuildBackend for MakeBuildSpec {
                 .map(|(key, value)| {
                     let substituted_value = utils::substitute_variables(
                         value,
-                        output_paths,
+                        &layout,
                         lua,
                         external_dependencies,
                         config,
@@ -142,7 +143,7 @@ impl BuildBackend for MakeBuildSpec {
                 .map(|(key, value)| {
                     let substituted_value = utils::substitute_variables(
                         value,
-                        output_paths,
+                        &layout,
                         lua,
                         external_dependencies,
                         config,

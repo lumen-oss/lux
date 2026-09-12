@@ -12,7 +12,6 @@ use crate::luarocks::rock_manifest::RockManifestLib;
 use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
 use crate::tree::InstallTree;
-use crate::tree::RockLayout;
 use crate::tree::Tree;
 use bon::Builder;
 use clean_path::Clean;
@@ -71,8 +70,8 @@ pub enum PackError {
 async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let package = args.package;
     let tree = args.tree;
-    let layout = tree.entrypoint_layout(&package);
-    let suffix = if is_binary_rock(&layout) {
+    let layout = tree.layout_for(&package);
+    let suffix = if is_binary_rock(&layout.lib) {
         format!("{}.rock", luarocks::current_platform_luarocks_identifier())
     } else {
         "all.rock".into()
@@ -115,7 +114,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
             let binary_path = tree.bin().join(binary_name);
             if binary_path.is_file() {
                 let (path, digest) =
-                    add_rock_entry(&mut zip, binary_path, &layout.bin, &PathBuf::default())?;
+                    add_rock_entry(&mut zip, binary_path, &tree.bin(), &PathBuf::default())?;
                 bin_entries.insert(path, digest);
             }
         }
@@ -148,11 +147,11 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     Ok(output_path)
 }
 
-fn is_binary_rock(layout: &RockLayout) -> bool {
-    if !&layout.lib.is_dir() {
+fn is_binary_rock(lib_dir: &Path) -> bool {
+    if !lib_dir.is_dir() {
         return false;
     }
-    WalkDir::new(&layout.lib).into_iter().any(|entry| {
+    WalkDir::new(lib_dir).into_iter().any(|entry| {
         entry.is_ok_and(|entry| {
             let file = entry.into_path();
             file.is_file()

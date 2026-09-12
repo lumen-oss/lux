@@ -23,7 +23,6 @@ use crate::{
     operations::{self, FetchSrcError},
     package::PackageSpec,
     remote_package_source::RemotePackageSource,
-    tree::RockLayout,
 };
 use bon::Builder;
 use builtin::BuiltinBuildError;
@@ -245,20 +244,21 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
     tree: &T,
-    output_paths: &RockLayout,
+    package: &LocalPackage,
     lua: &LuaInstallation,
     build_dir: &Path,
     entry_type: &EntryType,
     config: &Config,
 ) -> Result<(), BuildError> {
     let install_spec = &rockspec.build().current_platform().install;
+    let layout = tree.layout_for(package);
     {
         let span = tracing::info_span!("Copying Lua modules");
         let _enter = span.enter();
         for (target, source) in &install_spec.lua {
             let _enter = span.enter();
             let absolute_source = build_dir.join(source);
-            utils::copy_lua_to_module_path(&absolute_source, target, &output_paths.src)?;
+            utils::copy_lua_to_module_path(&absolute_source, target, &layout.src)?;
         }
     }
     {
@@ -266,7 +266,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         let _enter = span.enter();
         for (target, source) in &install_spec.lib {
             let absolute_source = build_dir.join(source);
-            let resolved_target = output_paths.lib.join(target);
+            let resolved_target = layout.lib.join(target);
             fs::tokio::copy(&absolute_source, &resolved_target)
                 .instrument(tracing::trace_span!("copying target"))
                 .await?;
@@ -299,7 +299,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         let _enter = span.enter();
         for (target, source) in &install_spec.conf {
             let absolute_source = build_dir.join(source);
-            let target = output_paths.conf.join(target);
+            let target = layout.conf.join(target);
             if let Some(parent_dir) = target.parent() {
                 fs::tokio::create_dir_all(parent_dir)
                     .instrument(tracing::trace_span!("creating configuration directory"))
@@ -378,10 +378,8 @@ where
     match tree.lockfile()?.get(&package.id()) {
         Some(package) if build.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
         _ => {
-            let output_paths = match build.entry_type {
-                tree::EntryType::Entrypoint => tree.entrypoint(&package)?,
-                tree::EntryType::DependencyOnly => tree.dependency(&package)?,
-            };
+            tree.prepare(&package, build.entry_type)?;
+            let layout = tree.layout_for(&package);
 
             let rock_source = rockspec.source().current_platform();
             let build_dir = resolve_source_dir(
@@ -405,7 +403,7 @@ where
             let output = run_build(
                 rockspec,
                 RunBuildArgs::new()
-                    .output_paths(&output_paths)
+                    .package(&package)
                     .no_install(false)
                     .lua(lua)
                     .external_dependencies(&external_dependencies)
@@ -422,7 +420,7 @@ where
             install(
                 rockspec,
                 tree,
-                &output_paths,
+                &package,
                 lua,
                 &build_dir,
                 &build.entry_type,
@@ -440,17 +438,13 @@ where
                         .is_some_and(|name| name != "doc" && name != "docs")
                 })
             {
-                recursive_copy_dir(
-                    &build_dir.join(directory),
-                    &output_paths.etc.join(directory),
-                )
-                .await?;
+                recursive_copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
             }
 
-            recursive_copy_doc_dir(&output_paths, &build_dir).await?;
+            recursive_copy_doc_dir(&layout.doc, &build_dir).await?;
 
             if let Ok(rockspec_str) = rockspec.to_lua_remote_rockspec_string() {
-                fs::sync::write(output_paths.rockspec_path(), rockspec_str)?;
+                fs::sync::write(layout.rockspec_path(), rockspec_str)?;
             }
 
             Ok(package)
@@ -514,15 +508,12 @@ pub(crate) fn resolve_source_dir(
 }
 
 #[tracing::instrument(level = "trace")]
-async fn recursive_copy_doc_dir(
-    output_paths: &RockLayout,
-    build_dir: &Path,
-) -> Result<(), BuildError> {
+async fn recursive_copy_doc_dir(target_doc_dir: &Path, build_dir: &Path) -> Result<(), BuildError> {
     let mut doc_dir = build_dir.join("doc");
     if !doc_dir.exists() {
         doc_dir = build_dir.join("docs");
     }
-    recursive_copy_dir(&doc_dir, &output_paths.doc).await?;
+    recursive_copy_dir(&doc_dir, target_doc_dir).await?;
     Ok(())
 }
 
@@ -542,7 +533,7 @@ mod tests {
         lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_version::LuaVersion,
         project::Project,
-        tree::RockLayout,
+        rockspec::RockBinaries,
     };
 
     #[tokio::test]
@@ -562,24 +553,31 @@ mod tests {
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
-        let dest_dir = assert_fs::TempDir::new().unwrap();
-        let rock_layout = RockLayout {
-            rock_path: dest_dir.to_path_buf(),
-            etc: dest_dir.join("etc"),
-            lib: dest_dir.join("lib"),
-            src: dest_dir.join("src"),
-            bin: tree.bin(),
-            conf: dest_dir.join("conf"),
-            doc: dest_dir.join("doc"),
-        };
         let lua_version = config.lua_version().unwrap_or(&LuaVersion::Lua51);
         let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
         let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
+        let package = LocalPackage::from(
+            &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+            LockConstraint::Unconstrained,
+            RockBinaries::default(),
+            RemotePackageSource::Test,
+            None,
+            LocalPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        tree.prepare(&package, EntryType::Entrypoint).unwrap();
+        let src_dir = tree.layout_for(&package).src;
         run_build(
             &rockspec,
             RunBuildArgs::new()
-                .output_paths(&rock_layout)
+                .package(&package)
                 .no_install(false)
                 .lua(&lua)
                 .external_dependencies(&HashMap::default())
@@ -591,19 +589,25 @@ mod tests {
         )
         .await
         .unwrap();
-        let foo_dir = dest_dir.child("src").child("foo");
-        foo_dir.assert(predicate::path::is_dir());
-        let foo_init = foo_dir.child("init.lua");
-        foo_init.assert(predicate::path::is_file());
-        foo_init.assert(predicate::str::contains("return true"));
-        let foo_bar_dir = foo_dir.child("bar");
-        foo_bar_dir.assert(predicate::path::is_dir());
-        let foo_bar_init = foo_bar_dir.child("init.lua");
-        foo_bar_init.assert(predicate::path::is_file());
-        foo_bar_init.assert(predicate::str::contains("return true"));
-        let foo_bar_baz = foo_bar_dir.child("baz.lua");
-        foo_bar_baz.assert(predicate::path::is_file());
-        foo_bar_baz.assert(predicate::str::contains("return true"));
+        let foo_dir = src_dir.join("foo");
+        assert!(foo_dir.is_dir());
+        let foo_init = foo_dir.join("init.lua");
+        assert!(foo_init.is_file());
+        assert!(std::fs::read_to_string(&foo_init)
+            .unwrap()
+            .contains("return true"));
+        let foo_bar_dir = foo_dir.join("bar");
+        assert!(foo_bar_dir.is_dir());
+        let foo_bar_init = foo_bar_dir.join("init.lua");
+        assert!(foo_bar_init.is_file());
+        assert!(std::fs::read_to_string(&foo_bar_init)
+            .unwrap()
+            .contains("return true"));
+        let foo_bar_baz = foo_bar_dir.join("baz.lua");
+        assert!(foo_bar_baz.is_file());
+        assert!(std::fs::read_to_string(&foo_bar_baz)
+            .unwrap()
+            .contains("return true"));
         let bin_file = tree_dir
             .child(lua_version.to_string())
             .child("bin")

@@ -7,17 +7,14 @@ use std::{
 use bon::Builder;
 
 use crate::{
-    build::external_dependency::ExternalDependencyInfo,
-    config::Config,
-    lua_installation::LuaInstallation,
-    lua_rockspec::DeploySpec,
-    tree::{InstallTree, RockLayout},
+    build::external_dependency::ExternalDependencyInfo, config::Config, lockfile::LocalPackage,
+    lua_installation::LuaInstallation, lua_rockspec::DeploySpec, tree::InstallTree,
 };
 
 #[derive(Builder)]
 #[builder(start_fn(name = "new"))]
 pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
-    pub(crate) output_paths: &'a RockLayout,
+    pub(crate) package: &'a LocalPackage,
     pub(crate) no_install: bool,
     pub(crate) lua: &'a LuaInstallation,
     pub(crate) external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,

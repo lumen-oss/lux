@@ -3,9 +3,9 @@ use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::build::utils;
 use crate::config::build;
 use crate::fs;
+use crate::lua_rockspec::RustMluaBuildSpec;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::tree::InstallTree;
-use crate::{lua_rockspec::RustMluaBuildSpec, tree::RockLayout};
 use itertools::Itertools;
 use miette::Diagnostic;
 use std::collections::HashMap;
@@ -43,8 +43,10 @@ impl BuildBackend for RustMluaBuildSpec {
     where
         T: InstallTree,
     {
-        let output_paths = args.output_paths;
+        let package = args.package;
         let config = args.config;
+        let tree = args.tree;
+        let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
         let lua_version = LuaVersion::from(config)?;
         let lua_feature = match lua_version {
@@ -105,7 +107,7 @@ impl BuildBackend for RustMluaBuildSpec {
                 Err(source) => return Err(RustError::RustBuild { source }),
             }
         }
-        fs::tokio::create_dir_all(&output_paths.lib).await?;
+        fs::tokio::create_dir_all(&layout.lib).await?;
         let profile_dir = match config.build_profile() {
             build::Profile::Release => "release",
             build::Profile::Dev => "debug",
@@ -114,17 +116,17 @@ impl BuildBackend for RustMluaBuildSpec {
             self.modules,
             &self.target_path,
             build_dir,
-            output_paths,
+            &layout.lib,
             profile_dir,
         )
         .await
         {
-            cleanup(output_paths).await;
+            cleanup(&layout.root).await;
             return Err(err.into());
         }
-        fs::tokio::create_dir_all(&output_paths.src).await?;
-        if let Err(err) = install_lua_libs(self.include, build_dir, output_paths).await {
-            cleanup(output_paths).await;
+        fs::tokio::create_dir_all(&layout.src).await?;
+        if let Err(err) = install_lua_libs(self.include, build_dir, &layout.src).await {
+            cleanup(&layout.root).await;
             return Err(err.into());
         }
         Ok(BuildInfo::default())
@@ -136,12 +138,12 @@ async fn install_rust_libs(
     modules: HashMap<String, PathBuf>,
     target_path: &Path,
     build_dir: &Path,
-    output_paths: &RockLayout,
+    lib_dir: &Path,
     profile_dir: &str,
 ) -> Result<(), fs::FsError> {
     for (module, rust_lib) in modules {
         let src = build_dir.join(target_path).join(profile_dir).join(rust_lib);
-        let mut dst: PathBuf = output_paths.lib.join(module);
+        let mut dst: PathBuf = lib_dir.join(module);
         dst.set_extension(c_dylib_extension());
         fs::tokio::copy(&src, &dst).await?;
     }
@@ -152,20 +154,18 @@ async fn install_rust_libs(
 async fn install_lua_libs(
     include: HashMap<PathBuf, PathBuf>,
     build_dir: &Path,
-    output_paths: &RockLayout,
+    src_dir: &Path,
 ) -> Result<(), fs::FsError> {
     for (from, to) in include {
         let src = build_dir.join(from);
-        let dst = output_paths.src.join(to);
+        let dst = src_dir.join(to);
         fs::tokio::copy(&src, &dst).await?;
     }
     Ok(())
 }
 
 #[tracing::instrument(level = "trace")]
-async fn cleanup(output_paths: &RockLayout) -> () {
-    let root_dir = &output_paths.rock_path;
-
+async fn cleanup(root_dir: &Path) -> () {
     match fs::tokio::remove_dir_all(root_dir).await {
         Ok(_) => (),
         Err(err) => tracing::warn!("failed to clean up {}: {}", root_dir.display(), err),
