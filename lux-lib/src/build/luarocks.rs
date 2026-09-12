@@ -10,8 +10,8 @@ use std::path::Path;
 
 use crate::{
     config::Config,
+    lockfile::LocalPackage,
     luarocks::luarocks_installation::{ExecLuaRocksError, LuaRocksError, LuaRocksInstallation},
-    tree::RockLayout,
 };
 
 use super::utils::recursive_copy_dir;
@@ -52,7 +52,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
 ) -> Result<BuildInfo, LuarocksBuildError> {
-    let output_paths = args.output_paths;
+    let package = args.package;
     let lua = args.lua;
     let config = args.config;
     let build_dir = args.build_dir;
@@ -76,17 +76,19 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     luarocks
         .make(&rockspec_file, build_dir, luarocks_tree.path(), lua)
         .await?;
-    install(rockspec, luarocks_tree.path(), output_paths, config).await
+    install(rockspec, luarocks_tree.path(), tree, package, config).await
 }
 
-async fn install<R: Rockspec>(
+async fn install<R: Rockspec, T: InstallTree>(
     rockspec: &R,
     luarocks_tree: &Path,
-    output_paths: &RockLayout,
+    tree: &T,
+    package: &LocalPackage,
     config: &Config,
 ) -> Result<BuildInfo, LuarocksBuildError> {
+    let layout = tree.layout_for(package);
     let lua_version = rockspec.lua_version_matches(config)?;
-    fs::tokio::create_dir_all(&output_paths.bin).await?;
+    fs::tokio::create_dir_all(tree.bin()).await?;
     let lua_version = lua_version.version_compatibility_str();
     let package_dir = luarocks_tree
         .join("lib")
@@ -95,11 +97,11 @@ async fn install<R: Rockspec>(
         .join(format!("lux-{}", lua_version))
         .join(format!("{}", rockspec.package()))
         .join(format!("{}", rockspec.version()));
-    recursive_copy_dir(&package_dir.join("doc"), &output_paths.doc).await?;
-    recursive_copy_dir(&luarocks_tree.join("bin"), &output_paths.bin).await?;
+    recursive_copy_dir(&package_dir.join("doc"), &layout.doc).await?;
+    recursive_copy_dir(&luarocks_tree.join("bin"), &tree.bin()).await?;
     let src_dir = luarocks_tree.join("share").join("lua").join(&lua_version);
-    recursive_copy_dir(&src_dir, &output_paths.src).await?;
+    recursive_copy_dir(&src_dir, &layout.src).await?;
     let lib_dir = luarocks_tree.join("lib").join("lua").join(&lua_version);
-    recursive_copy_dir(&lib_dir, &output_paths.lib).await?;
+    recursive_copy_dir(&lib_dir, &layout.lib).await?;
     Ok(BuildInfo::default())
 }

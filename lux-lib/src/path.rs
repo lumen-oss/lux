@@ -43,26 +43,17 @@ impl Paths {
     }
 
     pub fn new(tree: &impl InstallTree) -> Result<Self, PathsError> {
-        let mut paths = tree
-            .list()?
-            .values()
-            .flat_map(|packages| {
-                packages
-                    .iter()
-                    .map(|package| tree.installed_rock_layout(package))
-                    .collect_vec()
-            })
-            .try_fold(Self::default(tree), |mut paths, package| {
-                let package = package?;
-                paths.src.0.push(package.src.join("?.lua"));
-                paths.src.0.push(package.src.join("?").join("init.lua"));
-                paths
-                    .lib
-                    .0
-                    .push(package.lib.join(format!("?.{}", c_dylib_extension())));
-                paths.bin.add_path(package.bin);
-                Ok::<Paths, TreeError>(paths)
-            })?;
+        let mut paths = Self::default(tree);
+        for package in tree.list()?.values().flatten() {
+            let layout = tree.layout_for(package);
+            paths.src.0.push(layout.src.join("?.lua"));
+            paths.src.0.push(layout.src.join("?").join("init.lua"));
+            paths
+                .lib
+                .0
+                .push(layout.lib.join(format!("?.{}", c_dylib_extension())));
+            paths.bin.add_path(tree.bin());
+        }
 
         if let Some(lib_path) = tree.version().lux_lib_dir() {
             paths.prepend(&Paths {

@@ -16,7 +16,6 @@ use strum_macros::EnumIter;
 use thiserror::Error;
 use url::Url;
 
-use crate::config::tree::RockLayoutConfig;
 use crate::fs;
 use crate::package::{
     PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq,
@@ -25,7 +24,7 @@ use crate::package::{
 use crate::remote_package_source::RemotePackageSource;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
-use crate::tree::{InstallTree, Tree};
+use crate::tree::{EntryType, InstallTree, Tree};
 
 const LOCKFILE_VERSION_STR: &str = "1.0.0";
 
@@ -734,7 +733,7 @@ impl LocalPackageLock {
     ) -> PackageSyncSpec {
         let pkg_dir_exists = |pkg: &LocalPackage| match strategy {
             SyncStrategy::LockfileOnly => true,
-            SyncStrategy::EnsureInstalled(tree) => tree.root_for(pkg).is_dir(),
+            SyncStrategy::EnsureInstalled(tree) => tree.layout_for(pkg).root.is_dir(),
         };
 
         let entrypoints_to_keep: HashSet<LocalPackage> = self
@@ -803,8 +802,6 @@ pub struct Lockfile<P: LockfilePermissions> {
     version: String,
     #[serde(flatten)]
     lock: LocalPackageLock,
-    #[serde(default, skip_serializing_if = "RockLayoutConfig::is_default")]
-    pub(crate) entrypoint_layout: RockLayoutConfig,
 }
 
 #[derive(EnumIter, Debug, PartialEq, Eq)]
@@ -840,8 +837,6 @@ pub enum LockfileError {
     ParseJson(#[source] serde_json::Error),
     #[error("error writing lockfile to JSON")]
     WriteJson(#[source] serde_json::Error),
-    #[error("attempt load to a lockfile that does not match the expected rock layout.")]
-    MismatchedRockLayout,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -926,8 +921,12 @@ impl<P: LockfilePermissions> Lockfile<P> {
         self.lock.is_entrypoint(package)
     }
 
-    pub fn entry_type(&self, package: &LocalPackageId) -> bool {
-        self.lock.is_entrypoint(package)
+    pub fn entry_type(&self, package: &LocalPackageId) -> EntryType {
+        if self.lock.is_entrypoint(package) {
+            EntryType::Entrypoint
+        } else {
+            EntryType::DependencyOnly
+        }
     }
 
     pub(crate) fn local_pkg_lock(&self) -> &LocalPackageLock {
@@ -936,10 +935,6 @@ impl<P: LockfilePermissions> Lockfile<P> {
 
     pub fn get(&self, id: &LocalPackageId) -> Option<&LocalPackage> {
         self.lock.get(id)
-    }
-
-    pub fn entrypoint_layout(&self) -> &RockLayoutConfig {
-        &self.entrypoint_layout
     }
 
     /// Unsafe because this assumes a prior check if the package is present
@@ -1121,10 +1116,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
 impl Lockfile<ReadOnly> {
     /// Create a new `Lockfile`, writing an empty file if none exists.
     #[tracing::instrument(level = "trace")]
-    pub(crate) fn new(
-        filepath: PathBuf,
-        rock_layout: RockLayoutConfig,
-    ) -> Result<Lockfile<ReadOnly>, LockfileError> {
+    pub(crate) fn new(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, LockfileError> {
         // Ensure that the lockfile exists
         match File::options().create_new(true).write(true).open(&filepath) {
             Ok(mut file) => {
@@ -1133,7 +1125,6 @@ impl Lockfile<ReadOnly> {
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
                     lock: LocalPackageLock::default(),
-                    entrypoint_layout: rock_layout.clone(),
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
@@ -1151,25 +1142,16 @@ impl Lockfile<ReadOnly> {
             }
         }
 
-        Self::load(filepath, Some(&rock_layout))
+        Self::load(filepath)
     }
 
     /// Load a `Lockfile`, failing if none exists.
-    /// If `expected_rock_layout` is `Some`, this fails if the rock layouts don't match
     #[tracing::instrument(level = "trace")]
-    pub fn load(
-        filepath: PathBuf,
-        expected_rock_layout: Option<&RockLayoutConfig>,
-    ) -> Result<Lockfile<ReadOnly>, LockfileError> {
+    pub fn load(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, LockfileError> {
         let content = fs::sync::read_to_string(&filepath)?;
         let mut lockfile: Lockfile<ReadOnly> =
             serde_json::from_str(&content).map_err(LockfileError::ParseJson)?;
         lockfile.filepath = filepath;
-        if let Some(expected_rock_layout) = expected_rock_layout {
-            if &lockfile.entrypoint_layout != expected_rock_layout {
-                return Err(LockfileError::MismatchedRockLayout);
-            }
-        }
         Ok(lockfile)
     }
 
@@ -1180,7 +1162,6 @@ impl Lockfile<ReadOnly> {
             filepath: self.filepath,
             version: self.version,
             lock: self.lock,
-            entrypoint_layout: self.entrypoint_layout,
         }
     }
 
@@ -1633,7 +1614,7 @@ mod tests {
     fn get_test_lockfile() -> Lockfile<ReadOnly> {
         let sample_tree = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample-tree/5.1/lux.lock");
-        Lockfile::new(sample_tree, RockLayoutConfig::default()).unwrap()
+        Lockfile::new(sample_tree).unwrap()
     }
 
     #[test]

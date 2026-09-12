@@ -136,8 +136,6 @@ where
         .map(entrypoint_stem)
         .unwrap_or_else(|| pkg_name.clone());
 
-    let layout = args.tree.installed_rock_layout(&package)?;
-
     let lua = LuaInstallation::new_from_config(args.config).await?;
 
     let output = match args.output {
@@ -156,7 +154,7 @@ where
         std::env::current_dir()?.join(output)
     };
 
-    let lib_root = layout.lib.clone();
+    let lib_root = args.tree.layout_for(&package).lib;
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
 
     let work_dir = fs::tempfile::tempdir()?;
@@ -175,8 +173,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
     let c_dylib_ext = c_dylib_extension();
 
     for package in tree.list()?.values().flatten() {
-        let layout = tree.installed_rock_layout(package)?;
-
+        let layout = tree.layout_for(package);
         if layout.src.is_dir() {
             let src_canonical = layout.src.canonicalize().unwrap_or(layout.src.clone());
             for path in WalkDir::new(&src_canonical)
@@ -548,7 +545,11 @@ mod tests {
     use assert_fs::TempDir;
 
     use crate::lua_installation::detect_installed_lua_version;
-    use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
+    use crate::{
+        config::ConfigBuilder,
+        lua_version::LuaVersion,
+        tree::{EntryType, FlatDistTree},
+    };
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
@@ -590,7 +591,8 @@ mod tests {
         let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap()));
-        let layout_a = tree.entrypoint(&pkg_a).unwrap();
+        tree.prepare(&pkg_a, EntryType::Entrypoint).unwrap();
+        let layout_a = tree.layout_for(&pkg_a);
         staging
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
@@ -600,7 +602,8 @@ mod tests {
             .unwrap();
 
         let pkg_b = mk_dummy_package(PackageSpec::new("bar".into(), "2.0.0-1".parse().unwrap()));
-        let layout_b = tree.entrypoint(&pkg_b).unwrap();
+        tree.prepare(&pkg_b, EntryType::Entrypoint).unwrap();
+        let layout_b = tree.layout_for(&pkg_b);
         staging
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()

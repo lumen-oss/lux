@@ -42,7 +42,9 @@ impl BuildBackend for TreesitterParserBuildSpec {
     where
         T: InstallTree,
     {
-        let output_paths = args.output_paths;
+        let package = args.package;
+        let tree = args.tree;
+        let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
         let build_dir = self
             .location
@@ -75,10 +77,10 @@ impl BuildBackend for TreesitterParserBuildSpec {
             }
         }
         if self.parser {
-            build_parser(&build_dir, &output_paths.etc.join("parser"), &self.lang).await?;
+            build_parser(&build_dir, &layout.etc.join("parser"), &self.lang).await?;
         }
 
-        let queries_dir = output_paths.etc.join("queries").join(&self.lang);
+        let queries_dir = layout.etc.join("queries").join(&self.lang);
         install_queries(&build_dir, &queries_dir, &self.lang, self.queries).await?;
 
         Ok(BuildInfo::default())

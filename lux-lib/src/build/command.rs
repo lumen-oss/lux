@@ -70,20 +70,22 @@ impl BuildBackend for CommandBuildSpec {
     where
         T: InstallTree,
     {
-        let output_paths = args.output_paths;
+        let package = args.package;
         let no_install = args.no_install;
         let lua = args.lua;
         let external_dependencies = args.external_dependencies;
         let config = args.config;
+        let tree = args.tree;
+        let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
 
-        let build_tree = args.tree.build_tree(config)?;
+        let build_tree = tree.build_tree(config)?;
         let build_paths = Paths::new(&build_tree)?;
 
         if let Some(build_command) = &self.build_command {
             run_command(
                 build_command,
-                output_paths,
+                &layout,
                 lua,
                 external_dependencies,
                 config,
@@ -96,7 +98,7 @@ impl BuildBackend for CommandBuildSpec {
             if let Some(install_command) = &self.install_command {
                 run_command(
                     install_command,
-                    output_paths,
+                    &layout,
                     lua,
                     external_dependencies,
                     config,
@@ -110,7 +112,7 @@ impl BuildBackend for CommandBuildSpec {
     }
 }
 
-#[tracing::instrument(level = "trace", skip(config))]
+#[tracing::instrument(level = "trace", skip_all)]
 async fn run_command(
     command: &str,
     output_paths: &RockLayout,

@@ -54,11 +54,12 @@ impl BuildBackend for BuiltinBuildSpec {
     where
         T: InstallTree + Sync,
     {
-        let output_paths = args.output_paths;
+        let package = args.package;
         let lua = args.lua;
         let external_dependencies = args.external_dependencies;
         let config = args.config;
         let tree = args.tree;
+        let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
 
         // Detect all Lua modules
@@ -75,7 +76,7 @@ impl BuildBackend for BuiltinBuildSpec {
                         utils::compile_c_files(
                             &absolute_source_paths,
                             destination_path,
-                            &output_paths.lib,
+                            &layout.lib,
                             lua,
                             external_dependencies,
                             config,
@@ -86,7 +87,7 @@ impl BuildBackend for BuiltinBuildSpec {
                         utils::copy_lua_to_module_path(
                             &absolute_source_path,
                             destination_path,
-                            &output_paths.src,
+                            &layout.src,
                         )?;
                     }
                 }
@@ -96,7 +97,7 @@ impl BuildBackend for BuiltinBuildSpec {
                     utils::compile_c_files(
                         &absolute_source_paths,
                         destination_path,
-                        &output_paths.lib,
+                        &layout.lib,
                         lua,
                         external_dependencies,
                         config,
@@ -108,7 +109,7 @@ impl BuildBackend for BuiltinBuildSpec {
                         data,
                         build_dir,
                         destination_path,
-                        &output_paths.lib,
+                        &layout.lib,
                         lua,
                         external_dependencies,
                         config,

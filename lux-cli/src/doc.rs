@@ -61,15 +61,15 @@ async fn open_homepage(pkg: LocalPackage, tree: &Tree) -> Result<()> {
 }
 
 fn get_homepage(pkg: &LocalPackage, tree: &Tree) -> Result<Option<Url>> {
-    let layout = tree.installed_rock_layout(pkg)?;
-    let rockspec_content = std::fs::read_to_string(layout.rockspec_path()).into_diagnostic()?;
+    let rockspec_content =
+        std::fs::read_to_string(tree.layout_for(pkg).rockspec_path()).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&rockspec_content)?;
     Ok(rockspec.description().homepage.clone())
 }
 
 async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Result<()> {
-    let layout = tree.installed_rock_layout(&pkg)?;
-    let files: Vec<String> = WalkDir::new(&layout.doc)
+    let doc_dir = tree.layout_for(&pkg).doc;
+    let files: Vec<String> = WalkDir::new(&doc_dir)
         .into_iter()
         .filter_map_ok(|file| {
             let path = file.into_path();
@@ -84,7 +84,7 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
         .into_diagnostic()?;
     match files.first() {
         Some(file) if files.len() == 1 => {
-            edit::edit_file(layout.doc.join(file)).into_diagnostic()?;
+            edit::edit_file(doc_dir.join(file)).into_diagnostic()?;
             Ok(())
         }
         Some(_) => {
@@ -95,7 +95,7 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
             .prompt()
             .into_diagnostic()
             .wrap_err("error selecting from multiple files")?;
-            edit::edit_file(layout.doc.join(file)).into_diagnostic()?;
+            edit::edit_file(doc_dir.join(file)).into_diagnostic()?;
             Ok(())
         }
         None => match get_homepage(&pkg, tree)? {

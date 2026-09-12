@@ -3,7 +3,7 @@ use std::io;
 use crate::fs;
 use crate::lockfile::{FlushLockfileError, LocalPackage, LocalPackageId};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
-use crate::tree::{InstallTree, TreeError};
+use crate::tree::{EntryType, InstallTree, TreeError};
 use crate::{config::Config, tree::Tree};
 use bon::Builder;
 use futures::StreamExt;
@@ -82,14 +82,18 @@ async fn remove(
 
     let packages = package_ids
         .iter()
-        .filter_map(|id| lockfile.get(id))
-        .cloned()
+        .filter_map(|id| {
+            lockfile
+                .get(id)
+                .map(|package| (package.clone(), lockfile.entry_type(id)))
+        })
         .collect_vec();
 
-    futures::stream::iter(packages.into_iter().map(|package| {
+    futures::stream::iter(packages.into_iter().map(|(package, entry_type)| {
         let tree = tree.clone();
         tokio::spawn(
-            remove_package(package, tree).instrument(tracing::trace_span!("remove_worker")),
+            remove_package(package, tree, entry_type)
+                .instrument(tracing::trace_span!("remove_worker")),
         )
     }))
     .buffered(config.max_jobs())
@@ -116,23 +120,11 @@ async fn remove(
         version = package.version().to_string(),
     ),
 )]
-async fn remove_package(package: LocalPackage, tree: Tree) -> Result<(), RemoveError> {
-    let rock_layout = tree.installed_rock_layout(&package)?;
-    fs::tokio::remove_dir_all(&rock_layout.etc).await?;
-    fs::tokio::remove_dir_all(&rock_layout.rock_path).await?;
-
-    for relative_binary_path in package.spec.binaries() {
-        if let Some(binary_file_name) = relative_binary_path.file_name() {
-            let binary_path = tree.bin().join(binary_file_name);
-            if binary_path.is_file() {
-                fs::tokio::remove_file(binary_path).await?;
-            }
-
-            let unwrapped_binary_path = tree.unwrapped_bin().join(binary_file_name);
-            if unwrapped_binary_path.is_file() {
-                fs::tokio::remove_file(unwrapped_binary_path).await?;
-            }
-        }
-    }
+async fn remove_package(
+    package: LocalPackage,
+    tree: Tree,
+    entry_type: EntryType,
+) -> Result<(), RemoveError> {
+    tree.cleanup(&package, entry_type)?;
     Ok(())
 }

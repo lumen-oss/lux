@@ -70,8 +70,8 @@ pub fn set_pinned_state(
     }
 
     let old_package = package.clone();
-    let package_root = tree.root_for(&package);
-    let items = fs::sync::read_dir(&package_root)?
+    let layout = tree.layout_for(&package);
+    let items = fs::sync::read_dir(&layout.root)?
         .filter_map(Result::ok)
         .map(|dir| dir.path())
         .collect_vec();
@@ -85,11 +85,9 @@ pub fn set_pinned_state(
         });
     }
 
-    let new_root = tree.root_for(&package);
+    fs::sync::create_dir_all(&layout.root)?;
 
-    fs::sync::create_dir_all(&new_root)?;
-
-    fs_extra::move_items(&items, new_root, &CopyOptions::new())?;
+    fs_extra::move_items(&items, layout.root, &CopyOptions::new())?;
 
     lockfile.map_then_flush(|lockfile| {
         lockfile.remove(&old_package);

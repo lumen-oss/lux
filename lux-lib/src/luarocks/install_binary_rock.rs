@@ -20,7 +20,7 @@ use crate::{
     package::PackageSpec,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
-    tree::{self, InstallTree, TreeError},
+    tree::{EntryType, InstallTree, TreeError},
 };
 use crate::{fs, lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
 use bytes::Bytes;
@@ -71,7 +71,7 @@ where
     source: RemotePackageSource,
     pin: PinnedState,
     opt: OptState,
-    entry_type: tree::EntryType,
+    entry_type: EntryType,
     constraint: LockConstraint,
     behaviour: BuildBehaviour,
     config: &'a Config,
@@ -86,7 +86,7 @@ where
         rockspec: &'a RemoteLuaRockspec,
         source: RemotePackageSource,
         rock_bytes: Bytes,
-        entry_type: tree::EntryType,
+        entry_type: EntryType,
         config: &'a Config,
         tree: &'a T,
     ) -> Self {
@@ -166,49 +166,46 @@ where
                     return Err(InstallBinaryRockError::RockManifestNotFound);
                 }
                 let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
-                let output_paths = match self.entry_type {
-                    tree::EntryType::Entrypoint => self.tree.entrypoint(&package)?,
-                    tree::EntryType::DependencyOnly => self.tree.dependency(&package)?,
-                };
+                self.tree.prepare(&package, self.entry_type)?;
+                let layout = self.tree.layout_for(&package);
                 let rock_manifest = RockManifest::new(&rock_manifest_content)?;
                 install_manifest_entries(
                     &rock_manifest.lib.entries,
                     &unpack_dir.path().join("lib"),
-                    &output_paths.lib,
+                    &layout.lib,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.lua.entries,
                     &unpack_dir.path().join("lua"),
-                    &output_paths.src,
+                    &layout.src,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.bin.entries,
                     &unpack_dir.path().join("bin"),
-                    &output_paths.bin,
+                    &self.tree.bin(),
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.doc.entries,
                     &unpack_dir.path().join("doc"),
-                    &output_paths.doc,
+                    &layout.doc,
                 )
                 .await?;
                 install_manifest_entries(
                     &rock_manifest.root.entries,
                     unpack_dir.path(),
-                    &output_paths.etc,
+                    &layout.etc,
                 )
                 .await?;
                 // rename <name>-<version>.rockspec
-                let rockspec_path = output_paths.etc.join(format!(
-                    "{}-{}.rockspec",
-                    package.name(),
-                    package.version()
-                ));
+                let rockspec_path =
+                    layout
+                        .etc
+                        .join(format!("{}-{}.rockspec", package.name(), package.version()));
                 if rockspec_path.is_file() {
-                    fs::tokio::copy(&rockspec_path, output_paths.rockspec_path()).await?;
+                    fs::tokio::copy(&rockspec_path, layout.rockspec_path()).await?;
                     fs::tokio::remove_file(&rockspec_path).await?;
                 }
                 Ok(package)
@@ -290,15 +287,18 @@ mod tests {
             &rockspec,
             RemotePackageSource::Test,
             rock.bytes,
-            tree::EntryType::Entrypoint,
+            EntryType::Entrypoint,
             &config,
             &tree,
         )
         .install()
         .await
         .unwrap();
-        let rock_layout = tree.entrypoint_layout(&local_package);
-        let foo_bar_module = rock_layout.src.join("foo").join("bar.lua");
+        let foo_bar_module = tree
+            .layout_for(&local_package)
+            .src
+            .join("foo")
+            .join("bar.lua");
         assert!(foo_bar_module.is_file());
     }
 
@@ -354,18 +354,17 @@ mod tests {
             &rockspec,
             RemotePackageSource::Test,
             rock.bytes,
-            tree::EntryType::Entrypoint,
+            EntryType::Entrypoint,
             &config,
             &tree,
         )
         .install()
         .await
         .unwrap();
-        let rock_layout = tree.entrypoint_layout(&local_package);
+        let layout = tree.layout_for(&local_package);
+        assert!(layout.lib.join("toml_edit.so").is_file());
 
-        assert!(rock_layout.lib.join("toml_edit.so").is_file());
-
-        let orig_install_tree_integrity = rock_layout.rock_path.hash().await.unwrap();
+        let orig_install_tree_integrity = layout.root.hash().await.unwrap();
 
         let pack_dest_dir = assert_fs::TempDir::new().unwrap();
         let packed_rock = Pack::new(
@@ -414,16 +413,16 @@ mod tests {
             &rockspec,
             RemotePackageSource::Test,
             rock.bytes,
-            tree::EntryType::Entrypoint,
+            EntryType::Entrypoint,
             &config,
             &tree,
         )
         .install()
         .await
         .unwrap();
-        let rock_layout = tree.entrypoint_layout(&local_package);
-        assert!(rock_layout.rockspec_path().is_file());
-        let new_install_tree_integrity = rock_layout.rock_path.hash().await.unwrap();
+        let layout = tree.layout_for(&local_package);
+        assert!(layout.rockspec_path().is_file());
+        let new_install_tree_integrity = layout.root.hash().await.unwrap();
         assert_eq!(orig_install_tree_integrity, new_install_tree_integrity);
     }
 }

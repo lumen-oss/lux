@@ -4,6 +4,12 @@ use thiserror::Error;
 pub mod sync;
 pub mod tempfile;
 pub mod tokio;
+#[cfg(unix)]
+pub mod unix;
+#[cfg(windows)]
+pub mod windows;
+
+pub type Result<T> = core::result::Result<T, FsError>;
 
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
@@ -148,4 +154,16 @@ pub enum FsError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to create symlink '{}' pointing to '{}'", link.display(), target.display())]
+    #[diagnostic(
+        code(lux_lib::fs::symlink),
+        help("ensure the parent directory of '{}' exists and is writable", link.display())
+    )]
+    Symlink {
+        target: std::path::PathBuf,
+        link: std::path::PathBuf,
+        source: std::io::Error,
+    },
+    #[error("{0}")]
+    Other(String),
 }

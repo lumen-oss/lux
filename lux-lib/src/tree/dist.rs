@@ -1,13 +1,12 @@
 use std::{collections::HashMap, io, path::PathBuf};
 
-use super::{InstallTree, RockLayout, Tree, TreeError};
+use super::{EntryType, InstallTree, RockLayout, Tree, TreeError};
 use crate::{
-    config::{tree::RockLayoutConfig, Config},
+    config::Config,
     fs,
     lockfile::{LocalPackage, Lockfile, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageVersion},
-    tree::mk_rock_layout,
 };
 use miette::{Diagnostic, Result};
 use thiserror::Error;
@@ -92,8 +91,8 @@ impl InstallTree for FlatDistTree {
         self.0.root()
     }
 
-    fn root_for(&self, _package: &LocalPackage) -> PathBuf {
-        self.0.root()
+    fn layout_for(&self, _package: &LocalPackage) -> RockLayout {
+        RockLayout::new(self.0.root(), self.0.bin())
     }
 
     fn bin(&self) -> PathBuf {
@@ -104,26 +103,19 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn entrypoint(&self, package: &LocalPackage) -> io::Result<RockLayout> {
-        self.guard_no_conflicting_package(package)?;
-        Ok(mk_rock_layout(
-            &self.root(),
-            &self.bin(),
-            &self.root_for(package),
-            package,
-            &self.0.entrypoint_layout,
-        ))
+    fn prepare(&self, package: &LocalPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+        self.guard_no_conflicting_package(package)
+            .map_err(TreeError::Io)?;
+        let layout = self.layout_for(package);
+        fs::sync::create_dir_all(&layout.root)?;
+        fs::sync::create_dir_all(&layout.lib)?;
+        fs::sync::create_dir_all(&layout.src)?;
+        Ok(())
     }
 
-    fn dependency(&self, package: &LocalPackage) -> io::Result<RockLayout> {
-        self.guard_no_conflicting_package(package)?;
-        Ok(mk_rock_layout(
-            &self.root(),
-            &self.bin(),
-            &self.root_for(package),
-            package,
-            &RockLayoutConfig::default(),
-        ))
+    // Dist trees do not undergo traditional cleanup for packages
+    fn cleanup(&self, _package: &LocalPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+        unreachable!("cannot clean up dist tree")
     }
 
     fn lockfile(&self) -> Result<Lockfile<ReadOnly>, TreeError> {
@@ -140,22 +132,6 @@ impl InstallTree for FlatDistTree {
 
     fn test_tree(&self, config: &Config) -> Result<Tree, TreeError> {
         self.0.test_tree(config)
-    }
-
-    fn installed_rock_layout(&self, package: &LocalPackage) -> Result<RockLayout, TreeError> {
-        let lockfile = self.lockfile()?;
-        let layout_config = if lockfile.is_entrypoint(&package.id()) {
-            self.0.entrypoint_layout.clone()
-        } else {
-            RockLayoutConfig::default()
-        };
-        Ok(mk_rock_layout(
-            &self.root(),
-            &self.bin(),
-            &self.root_for(package),
-            package,
-            &layout_config,
-        ))
     }
 
     fn list(&self) -> Result<HashMap<PackageName, Vec<LocalPackage>>, TreeError> {

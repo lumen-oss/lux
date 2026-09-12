@@ -193,13 +193,9 @@ async fn treesitter_parser_build() {
         .await
         .unwrap();
 
-    let rock_layout = tree.installed_rock_layout(&package).unwrap();
+    let etc = tree.layout_for(&package).etc;
 
-    let folds_query = rock_layout
-        .etc
-        .join("queries")
-        .join("rust")
-        .join("folds.scm");
+    let folds_query = etc.join("queries").join("rust").join("folds.scm");
     assert!(folds_query.is_file());
 }
 
@@ -243,23 +239,15 @@ async fn treesitter_parser_build_source_queries() {
         .await
         .unwrap();
 
-    let rock_layout = tree.installed_rock_layout(&package).unwrap();
+    let etc = tree.layout_for(&package).etc;
 
-    let highlights_query = rock_layout
-        .etc
-        .join("queries")
-        .join("tmux")
-        .join("highlights.scm");
+    let highlights_query = etc.join("queries").join("tmux").join("highlights.scm");
     assert!(highlights_query.is_file());
 
-    let injections_query = rock_layout
-        .etc
-        .join("queries")
-        .join("tmux")
-        .join("injections.scm");
+    let injections_query = etc.join("queries").join("tmux").join("injections.scm");
     assert!(injections_query.is_file());
 
-    let top_level_queries_dir = rock_layout.etc.join("queries");
+    let top_level_queries_dir = etc.join("queries");
     assert!(top_level_queries_dir.is_dir());
     let mut top_level_scm_files = Vec::new();
     let mut entries = tokio::fs::read_dir(&top_level_queries_dir).await.unwrap();
@@ -309,11 +297,11 @@ async fn test_build_local_project_no_source() {
         .await
         .unwrap();
 
-    let rock_layout = tree.installed_rock_layout(&package).unwrap();
-    let conf_file = rock_layout.conf.join("foo").join("bar.toml");
+    let layout = tree.layout_for(&package);
+    let conf_file = layout.conf.join("foo").join("bar.toml");
     assert!(conf_file.is_file());
 
-    let plugin_file = rock_layout.etc.join("plugin").join("foo.lua");
+    let plugin_file = layout.etc.join("plugin").join("foo.lua");
     assert!(plugin_file.is_file());
 }
 
@@ -350,10 +338,10 @@ async fn test_build_local_project_only_src() {
         .await
         .unwrap();
 
-    let layout = tree.installed_rock_layout(&pkg).unwrap();
-    assert!(layout.src.is_dir());
-    assert!(layout.src.join("main.lua").is_file());
-    assert!(layout.src.join("foo.lua").is_file());
+    let src = tree.layout_for(&pkg).src;
+    assert!(src.is_dir());
+    assert!(src.join("main.lua").is_file());
+    assert!(src.join("foo.lua").is_file());
 }
 
 #[flaky_test(times = 5)]
@@ -487,8 +475,7 @@ async fn test_multiline_command_build() {
         .await
         .unwrap();
 
-    let rock_layout = tree.installed_rock_layout(&package).unwrap();
-    let success_dir = rock_layout.src.join("success");
+    let success_dir = tree.layout_for(&package).src.join("success");
     assert!(success_dir.is_dir());
 }
 

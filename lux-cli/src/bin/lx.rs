@@ -14,9 +14,9 @@ use lux_cli::{
     util, vendor, which, Cli, Commands,
 };
 use lux_lib::{
-    config::tree::RockLayoutConfig,
     lockfile::PinnedState::{Pinned, Unpinned},
     lua_installation::nvim_lua_version,
+    tree::NvimLayout,
 };
 
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
         .no_tfa(Some(cli.no_tfa));
 
     if cli.nvim {
-        config_builder = config_builder.entrypoint_layout(RockLayoutConfig::new_nvim_layout());
+        config_builder = config_builder.entrypoint_layout(NvimLayout);
     }
 
     let config = config_builder.build()?;

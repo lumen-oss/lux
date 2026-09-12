@@ -87,9 +87,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LocalPackageLockType::Regular)
         .rocks()
         .values()
-        .map(|dependency| dependency_tree.installed_rock_layout(dependency))
-        .filter_map(Result::ok)
-        .map(|rock_layout| rock_layout.src)
+        .map(|dependency| dependency_tree.layout_for(dependency).src)
         .filter(|dir| dir.is_dir())
         .filter_map(|dependency_dir| diff_paths(dependency_dir, workspace.root()));
 
@@ -98,9 +96,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LocalPackageLockType::Test)
         .rocks()
         .values()
-        .map(|dependency| test_dependency_tree.installed_rock_layout(dependency))
-        .filter_map(Result::ok)
-        .map(|rock_layout| rock_layout.src)
+        .map(|dependency| test_dependency_tree.layout_for(dependency).src)
         .filter(|dir| dir.is_dir())
         .filter_map(|test_dependency_dir| diff_paths(test_dependency_dir, workspace.root()));
 
