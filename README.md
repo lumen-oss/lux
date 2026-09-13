@@ -145,8 +145,8 @@ Lux includes the following packages and libraries:
 
 > [!NOTE]
 >
-> Lux can detect a lux-lua installation using pkg-config
-> or via the `LUX_LIB_DIR` environment variable.
+> Lux can detect a lux-lua installation using [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)
+> or [pkgconf](http://pkgconf.org/).
 >
 > Our [prebuilt binary release artifacts](https://github.com/lumen-oss/lux/releases/latest)
 > are bundled with `lux-lua`.
@@ -192,16 +192,23 @@ cargo build --locked --profile release --no-default-features --features vendored
 You can build `lux-lua` for a given Lua version with:
 
 ```bash
-cargo xtask51 dist-lua # lux-lua for Lua 5.1
-cargo xtask52 dist-lua # for Lua 5.2
-cargo xtask53 dist-lua # ...
-cargo xtask54 dist-lua
-cargo xtask55 dist-lua
-cargo xtaskjit dist-lua
+cargo xtask-lua51 dist # lux-lua for Lua 5.1
+cargo xtask-lua52 dist # for Lua 5.2
+cargo xtask-lua53 dist # ...
+cargo xtask-lua54 dist
+cargo xtask-lua55 dist
+cargo xtask-luajit dist
 ```
 
 This will install `lux-lua` to `target/dist/share/lux-lua/<lua>/lux.so`
 and a pkg-config `.pc` file to `target/dist/lib/lux-lua*.pc`.
+
+By default, the `$prefix` in the generated `.pc` file is `${{pcfiledir}}/../../share/lux-lua/`.
+You can override it by setting `LUX_LIB_DIR`, for example:
+
+```bash
+LUX_LIB_DIR="/usr/lib/lua/5.1" cargo xtask-lua51 dist
+```
 
 To build completions:
 
