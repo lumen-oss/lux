@@ -91,10 +91,10 @@ pub enum ExecError {
     LuaVersionError(#[from] LuaVersionError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildProject(#[from] BuildWorkspaceError),
+    BuildProject(#[from] Box<BuildWorkspaceError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallCommand(#[from] InstallCommandError),
+    InstallCommand(#[from] Box<InstallCommandError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
@@ -102,14 +102,32 @@ pub enum ExecError {
     Io(String, io::Error),
 }
 
+impl From<BuildWorkspaceError> for ExecError {
+    fn from(source: BuildWorkspaceError) -> Self {
+        Self::BuildProject(Box::new(source))
+    }
+}
+
+impl From<InstallCommandError> for ExecError {
+    fn from(source: InstallCommandError) -> Self {
+        Self::InstallCommand(Box::new(source))
+    }
+}
+
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum InstallCommandError {
-    InstallError(#[from] InstallError),
+    InstallError(#[from] Box<InstallError>),
     PackageVersionReqError(#[from] PackageVersionReqError),
     RemotePackageDBError(#[from] RemotePackageDBError),
     Tree(#[from] TreeError),
     LuaVersionUnset(#[from] LuaVersionUnset),
+}
+
+impl From<InstallError> for InstallCommandError {
+    fn from(source: InstallError) -> Self {
+        Self::InstallError(Box::new(source))
+    }
 }
 
 async fn exec(run: Exec<'_>) -> Result<(), ExecError> {

@@ -30,13 +30,19 @@ use super::{Download, PackageInstallSpec, RemoteRockDownload, SearchAndDownloadE
 pub enum ResolveDependenciesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    SearchAndDownload(#[from] SearchAndDownloadError),
+    SearchAndDownload(#[from] Box<SearchAndDownloadError>),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependency(DependencyCycle),
     #[error("error processing resolved dependency:\n{0}")]
     ChannelSend(String),
     #[error("error fetching vendored dependency '{0}'")]
-    FetchVendored(PackageReq, #[source] FetchVendoredError),
+    FetchVendored(PackageReq, #[source] Box<FetchVendoredError>),
+}
+
+impl From<SearchAndDownloadError> for ResolveDependenciesError {
+    fn from(source: SearchAndDownloadError) -> Self {
+        Self::SearchAndDownload(Box::new(source))
+    }
 }
 
 #[derive(Debug)]
@@ -197,7 +203,7 @@ where
                                     .map_err(|err| {
                                         ResolveDependenciesError::FetchVendored(
                                             package.clone(),
-                                            err,
+                                            Box::new(err),
                                         )
                                     })?
                             } else {

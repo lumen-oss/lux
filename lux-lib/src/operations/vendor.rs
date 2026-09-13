@@ -81,7 +81,7 @@ pub enum VendorError {
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to resolve dependencies")]
     #[diagnostic(forward(0))]
-    ResolveDependencies(#[from] ResolveDependenciesError),
+    ResolveDependencies(#[from] Box<ResolveDependenciesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
@@ -106,6 +106,12 @@ pub enum VendorError {
         stdout: String,
         stderr: String,
     },
+}
+
+impl From<ResolveDependenciesError> for VendorError {
+    fn from(source: ResolveDependenciesError) -> Self {
+        Self::ResolveDependencies(Box::new(source))
+    }
 }
 
 impl<State> VendorBuilder<'_, State>

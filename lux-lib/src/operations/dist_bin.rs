@@ -54,7 +54,7 @@ use miette::Diagnostic;
 pub enum DistProjectBinError {
     #[error("error installing project")]
     #[diagnostic(forward(0))]
-    InstallProject(#[from] InstallProjectError),
+    InstallProject(#[from] Box<InstallProjectError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
@@ -84,6 +84,12 @@ Cannot link the following binaries:
         stdout: String,
         stderr: String,
     },
+}
+
+impl From<InstallProjectError> for DistProjectBinError {
+    fn from(source: InstallProjectError) -> Self {
+        Self::InstallProject(Box::new(source))
+    }
 }
 
 impl<T, State> DistProjectBinBuilder<'_, T, State>

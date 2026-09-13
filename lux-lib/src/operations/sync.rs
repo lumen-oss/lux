@@ -145,7 +145,7 @@ pub enum SyncError {
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] InstallError),
+    Install(#[from] Box<InstallError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Remove(#[from] RemoveError),
@@ -170,6 +170,12 @@ pub enum SyncError {
     #[error("failed to generate `.luarc.json`")]
     #[diagnostic(forward(0))]
     GenLuaRc(#[from] GenLuaRcError),
+}
+
+impl From<InstallError> for SyncError {
+    fn from(source: InstallError) -> Self {
+        Self::Install(Box::new(source))
+    }
 }
 
 #[tracing::instrument(name = "Syncing dependencies", skip_all)]

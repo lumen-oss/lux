@@ -27,7 +27,7 @@ pub enum UpdateError {
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
     #[error("failed to update rock")]
     #[diagnostic(forward(0))]
-    Install(#[from] InstallError),
+    Install(#[from] Box<InstallError>),
     #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
@@ -50,7 +50,19 @@ pub enum UpdateError {
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("error syncing the workspace install tree")]
     #[diagnostic(forward(0))]
-    Sync(#[from] SyncError),
+    Sync(#[from] Box<SyncError>),
+}
+
+impl From<InstallError> for UpdateError {
+    fn from(source: InstallError) -> Self {
+        Self::Install(Box::new(source))
+    }
+}
+
+impl From<SyncError> for UpdateError {
+    fn from(source: SyncError) -> Self {
+        Self::Sync(Box::new(source))
+    }
 }
 
 /// A rocks package updater, providing fine-grained control

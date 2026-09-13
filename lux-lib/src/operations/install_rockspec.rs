@@ -25,13 +25,31 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[diagnostic(transparent)]
-    Install(#[from] InstallError),
+    Install(#[from] Box<InstallError>),
     #[diagnostic(transparent)]
     LuaRocks(#[from] LuaRocksError),
     #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] LuaRocksInstallError),
+    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[diagnostic(transparent)]
-    Build(#[from] BuildError),
+    Build(#[from] Box<BuildError>),
+}
+
+impl From<InstallError> for InstallRockspecError {
+    fn from(source: InstallError) -> Self {
+        Self::Install(Box::new(source))
+    }
+}
+
+impl From<LuaRocksInstallError> for InstallRockspecError {
+    fn from(source: LuaRocksInstallError) -> Self {
+        Self::LuaRocksInstall(Box::new(source))
+    }
+}
+
+impl From<BuildError> for InstallRockspecError {
+    fn from(source: BuildError) -> Self {
+        Self::Build(Box::new(source))
+    }
 }
 
 /// Installs a Lua RockSpec into a [`Tree`].
