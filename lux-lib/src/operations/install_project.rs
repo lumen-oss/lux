@@ -34,16 +34,28 @@ pub enum InstallProjectError {
     LuaRocks(#[from] LuaRocksError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] LuaRocksInstallError),
+    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[error("error installind dependencies")]
     #[diagnostic(forward(0))]
-    InstallDependencies(InstallError),
+    InstallDependencies(Box<InstallError>),
     #[error("error installind build dependencies")]
     #[diagnostic(forward(0))]
-    InstallBuildDependencies(InstallError),
+    InstallBuildDependencies(Box<InstallError>),
     #[error("error building project")]
     #[diagnostic(forward(0))]
-    Build(#[from] BuildError),
+    Build(#[from] Box<BuildError>),
+}
+
+impl From<LuaRocksInstallError> for InstallProjectError {
+    fn from(source: LuaRocksInstallError) -> Self {
+        Self::LuaRocksInstall(Box::new(source))
+    }
+}
+
+impl From<BuildError> for InstallProjectError {
+    fn from(source: BuildError) -> Self {
+        Self::Build(Box::new(source))
+    }
 }
 
 /// Installs a project into a [`Tree`].
@@ -101,7 +113,7 @@ impl<
             .config(config)
             .build()
             .await
-            .map_err(InstallProjectError::InstallBuildDependencies)?;
+            .map_err(|err| InstallProjectError::InstallBuildDependencies(Box::new(err)))?;
 
         let package = Build::new()
             .rockspec(&project_toml)

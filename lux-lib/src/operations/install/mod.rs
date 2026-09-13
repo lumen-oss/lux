@@ -134,7 +134,7 @@ type InstallWorkerOutput = Result<(LocalPackageId, (LocalPackage, tree::EntryTyp
 pub enum InstallError {
     #[error("unable to resolve dependencies")]
     #[diagnostic(forward(0))]
-    ResolveDependencies(#[from] ResolveDependenciesError),
+    ResolveDependencies(#[from] Box<ResolveDependenciesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
@@ -155,16 +155,16 @@ pub enum InstallError {
     LuaRocks(#[from] LuaRocksError),
     #[error("error installing LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
-    LuaRocksInstall(#[from] LuaRocksInstallError),
+    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[error("failed to build {0}")]
-    Build(PackageName, #[source] BuildError),
+    Build(PackageName, #[source] Box<BuildError>),
     #[error("failed to install build depencency {0}")]
-    BuildDependency(PackageName, #[source] BuildError),
+    BuildDependency(PackageName, #[source] Box<BuildError>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
     #[error("failed to install pre-built rock {0}")]
-    InstallBinaryRock(PackageName, #[source] InstallBinaryRockError),
+    InstallBinaryRock(PackageName, #[source] Box<InstallBinaryRockError>),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
     #[error("install worker panicked")]
@@ -173,6 +173,18 @@ pub enum InstallError {
 retrying with fewer parallel jobs (`--max-jobs`) may avoid the panic in the meantime"#
     ))]
     Join(#[from] tokio::task::JoinError),
+}
+
+impl From<ResolveDependenciesError> for InstallError {
+    fn from(source: ResolveDependenciesError) -> Self {
+        Self::ResolveDependencies(Box::new(source))
+    }
+}
+
+impl From<LuaRocksInstallError> for InstallError {
+    fn from(source: LuaRocksInstallError) -> Self {
+        Self::LuaRocksInstall(Box::new(source))
+    }
 }
 
 async fn install_impl<T>(install: Install<'_, T>) -> Result<Vec<LocalPackage>, InstallError>
@@ -414,7 +426,7 @@ where
                         .behaviour(build_dep_spec.build_behaviour)
                         .build()
                         .await
-                        .map_err(|err| InstallError::BuildDependency(package, err))?;
+                        .map_err(|err| InstallError::BuildDependency(package, Box::new(err)))?;
                     build_lockfile.add_entrypoint(&pkg);
                     Ok::<_, InstallError>(pkg)
                 }
@@ -743,7 +755,7 @@ where
         .source_spec(source_spec)
         .build()
         .await
-        .map_err(|err| InstallError::Build(package, err))?;
+        .map_err(|err| InstallError::Build(package, Box::new(err)))?;
     Ok(pkg)
 }
 
@@ -784,6 +796,6 @@ async fn install_binary_rock(
     .behaviour(behaviour)
     .install()
     .await
-    .map_err(|err| InstallError::InstallBinaryRock(package, err))?;
+    .map_err(|err| InstallError::InstallBinaryRock(package, Box::new(err)))?;
     Ok(pkg)
 }

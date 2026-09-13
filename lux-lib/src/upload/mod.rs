@@ -170,12 +170,18 @@ if the issue persists, the server may be temporarily unavailable."#
     MaxSpecRevsExceeded,
     #[error("rock already exists on server. Error downloading existing rockspec")]
     #[diagnostic(forward(0))]
-    SearchAndDownload(#[from] SearchAndDownloadError),
+    SearchAndDownload(#[from] Box<SearchAndDownloadError>),
     #[error("error computing rockspec hash")]
     Hash(io::Error),
     #[error("the 2FA code '{0}' was rejected by the server: {1}")]
     #[diagnostic(help("it may have expired; try again with a new code."))]
     TfaCodeRejected(String, String),
+}
+
+impl From<SearchAndDownloadError> for UploadError {
+    fn from(source: SearchAndDownloadError) -> Self {
+        Self::SearchAndDownload(Box::new(source))
+    }
 }
 
 pub struct ApiKey(String);

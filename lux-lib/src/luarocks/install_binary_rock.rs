@@ -59,7 +59,7 @@ pub enum InstallBinaryRockError {
     #[error(
         "the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}"
     )]
-    NotAFileOrDirectory(String, std::fs::Metadata),
+    NotAFileOrDirectory(String, Box<std::fs::Metadata>),
 }
 
 pub(crate) struct BinaryRockInstall<'a, T>
@@ -237,7 +237,7 @@ async fn install_manifest_entries<T>(
             let metadata = fs::tokio::metadata(&src_path).await?;
             return Err(InstallBinaryRockError::NotAFileOrDirectory(
                 src_path.to_string_lossy().to_string(),
-                metadata,
+                Box::new(metadata),
             ));
         }
     }

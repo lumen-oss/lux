@@ -147,7 +147,7 @@ pub enum BuildError {
     LuarocksBuild(#[from] LuarocksBuildError),
     #[error("building from rock source failed")]
     #[diagnostic(forward(0))]
-    SourceBuild(#[from] SourceBuildError),
+    SourceBuild(#[from] Box<SourceBuildError>),
     #[error("IO operation failed")]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -202,6 +202,12 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
+}
+
+impl From<SourceBuildError> for BuildError {
+    fn from(source: SourceBuildError) -> Self {
+        Self::SourceBuild(Box::new(source))
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]

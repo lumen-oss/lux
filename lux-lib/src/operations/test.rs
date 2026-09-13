@@ -85,10 +85,10 @@ pub enum RunTestsError {
     Config(#[from] ConfigError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallTestDependencies(#[from] InstallTestDependenciesError),
+    InstallTestDependencies(#[from] Box<InstallTestDependenciesError>),
     #[error("build failed")]
     #[diagnostic(forward(0))]
-    BuildWorkspace(#[from] BuildWorkspaceError),
+    BuildWorkspace(#[from] Box<BuildWorkspaceError>),
     #[error("tests failed!")]
     #[diagnostic(help("see the test runner's output for details"))]
     TestFailure,
@@ -119,7 +119,7 @@ pub enum RunTestsError {
     ProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("failed to sync dependencies")]
     #[diagnostic(forward(0))]
-    Sync(#[from] SyncError),
+    Sync(#[from] Box<SyncError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     TestSpec(#[from] TestSpecError),
@@ -129,6 +129,24 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaBinary(#[from] LuaBinaryError),
+}
+
+impl From<InstallTestDependenciesError> for RunTestsError {
+    fn from(source: InstallTestDependenciesError) -> Self {
+        Self::InstallTestDependencies(Box::new(source))
+    }
+}
+
+impl From<BuildWorkspaceError> for RunTestsError {
+    fn from(source: BuildWorkspaceError) -> Self {
+        Self::BuildWorkspace(Box::new(source))
+    }
+}
+
+impl From<SyncError> for RunTestsError {
+    fn from(source: SyncError) -> Self {
+        Self::Sync(Box::new(source))
+    }
 }
 
 #[tracing::instrument(name = "🧪 Running tests", skip_all)]
@@ -250,8 +268,14 @@ async fn run_project_tests(
 pub enum InstallTestDependenciesError {
     WorkspaceTree(#[from] WorkspaceTreeError),
     Tree(#[from] TreeError),
-    Install(#[from] InstallError),
+    Install(#[from] Box<InstallError>),
     PackageVersionReq(#[from] PackageVersionReqError),
+}
+
+impl From<InstallError> for InstallTestDependenciesError {
+    fn from(source: InstallError) -> Self {
+        Self::Install(Box::new(source))
+    }
 }
 
 /// Ensure test dependencies are installed

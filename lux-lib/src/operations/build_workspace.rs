@@ -41,19 +41,31 @@ pub enum BuildWorkspaceError {
     LuaRocks(#[from] LuaRocksError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] LuaRocksInstallError),
+    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[error("error installind dependencies")]
     #[diagnostic(forward(0))]
-    InstallDependencies(#[source] InstallError),
+    InstallDependencies(#[source] Box<InstallError>),
     #[error("error installind build dependencies")]
     #[diagnostic(forward(0))]
-    InstallBuildDependencies(#[source] InstallError),
+    InstallBuildDependencies(#[source] Box<InstallError>),
     #[error("syncing dependencies with the workspace lockfile failed")]
     #[diagnostic(forward(0))]
-    SyncDependencies(#[source] SyncError),
+    SyncDependencies(#[source] Box<SyncError>),
     #[error("error building the workspace")]
     #[diagnostic(forward(0))]
-    Build(#[from] BuildError),
+    Build(#[from] Box<BuildError>),
+}
+
+impl From<LuaRocksInstallError> for BuildWorkspaceError {
+    fn from(source: LuaRocksInstallError) -> Self {
+        Self::LuaRocksInstall(Box::new(source))
+    }
+}
+
+impl From<BuildError> for BuildWorkspaceError {
+    fn from(source: BuildError) -> Self {
+        Self::Build(Box::new(source))
+    }
 }
 
 #[derive(Builder)]
@@ -98,7 +110,7 @@ async fn do_build(args: BuildWorkspace<'_>) -> Result<Vec<LocalPackage>, BuildWo
         Sync::new(workspace, config)
             .sync()
             .await
-            .map_err(BuildWorkspaceError::SyncDependencies)?;
+            .map_err(|err| BuildWorkspaceError::SyncDependencies(Box::new(err)))?;
     } else {
         let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
         let mut dependencies_to_install = Vec::new();
@@ -142,7 +154,7 @@ async fn do_build(args: BuildWorkspace<'_>) -> Result<Vec<LocalPackage>, BuildWo
             .config(config)
             .build()
             .await
-            .map_err(BuildWorkspaceError::InstallBuildDependencies)?;
+            .map_err(|err| BuildWorkspaceError::InstallBuildDependencies(Box::new(err)))?;
     }
 
     let mut packages = Vec::new();

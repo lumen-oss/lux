@@ -35,7 +35,7 @@ pub enum FetchVendoredError {
     #[error("could not parse vendored RockSpec '{rockspec_path}'")]
     ParseRockspec {
         rockspec_path: String,
-        source: LuaRockspecError,
+        source: Box<LuaRockspecError>,
     },
     #[error("could not find a source or .rock archive for {0} in vendor directory {1}.")]
     PackageNotFound(PackageSpec, String),
@@ -124,7 +124,7 @@ async fn load_vendored_rockspec(
     let rockspec = RemoteLuaRockspec::new(&rockspec_content).map_err(|err| {
         FetchVendoredError::ParseRockspec {
             rockspec_path: rockspec_path.to_slash_lossy().to_string(),
-            source: err,
+            source: Box::new(err),
         }
     })?;
     Ok(rockspec)

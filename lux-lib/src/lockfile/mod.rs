@@ -881,7 +881,7 @@ check the source URL, then rerun the command with `lx --no-lock` to update the h
         got: Integrity,
     },
     #[error("package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile.")]
-    PackageNotFound(PackageName, PackageVersion, PinnedState, String),
+    PackageNotFound(PackageName, Box<PackageVersion>, PinnedState, String),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -1502,7 +1502,7 @@ where
 fn integrity_err_not_found(package: &LocalPackage) -> LockfileIntegrityError {
     LockfileIntegrityError::PackageNotFound(
         package.name().clone(),
-        package.version().clone(),
+        Box::new(package.version().clone()),
         package.spec.pinned,
         package
             .spec

@@ -75,7 +75,7 @@ pub enum LuaRocksInstallError {
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildError(#[from] BuildError),
+    BuildError(#[from] Box<BuildError>),
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
@@ -83,6 +83,12 @@ pub enum LuaRocksInstallError {
     UnpackError(#[from] UnpackError),
     #[error("luarocks integrity mismatch.\nExpected: {expected}\nBut got: {got}")]
     IntegrityMismatch { expected: Integrity, got: Integrity },
+}
+
+impl From<BuildError> for LuaRocksInstallError {
+    fn from(source: BuildError) -> Self {
+        Self::BuildError(Box::new(source))
+    }
 }
 
 #[derive(Error, Debug, Diagnostic)]
