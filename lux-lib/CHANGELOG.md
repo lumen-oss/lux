@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.63.0...lux-lib-v0.63.1) `lux-lib` - 2026-09-13
+
+### Fixed
+- *(xtask-lua)* pick up `LUX_LIB_DIR` for generated `.pc` file ([#1941](https://github.com/lumen-oss/lux/pull/1941))
+
 ## [0.63.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.62.0...lux-lib-v0.63.0) `lux-lib` - 2026-09-11
 
 ### Fixed
