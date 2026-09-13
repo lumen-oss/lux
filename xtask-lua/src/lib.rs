@@ -190,8 +190,13 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
         format!("Lua {canonical_lua_version}")
     };
 
+    let prefix = option_env!("LUX_LIB_DIR")
+        .map(|dir| dir.to_string())
+        .unwrap_or(format!(
+            "${{pcfiledir}}/../../share/lux-lua/{canonical_lua_version}"
+        ));
     let pc_content = format!(
-        r#"prefix=${{pcfiledir}}/../../share/lux-lua/{canonical_lua_version}
+        r#"prefix={prefix}
 exec_prefix=${{prefix}}
 libdir=${{prefix}}
 luaversion={canonical_lua_version}
