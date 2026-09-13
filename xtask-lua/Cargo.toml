@@ -12,10 +12,11 @@ target-lexicon = { workspace = true }
 toml = { workspace = true }
 
 [features] # For lux-lua distribution
-default = []
+default = ["definitions"]
 lua51 = []
 lua52 = []
 lua53 = []
 lua54 = []
 lua55 = []
 luajit = []
+definitions = []
