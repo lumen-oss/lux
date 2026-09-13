@@ -213,40 +213,43 @@ Libs: -L${{libdir}}"#
     fs::write(pc_file, pc_content)?;
 
     // Generate Lua definitions
-    let definitions_dir = dist_dir.join("definitions");
-    let mut args = vec![
-        "run".into(),
-        "--package".into(),
-        "lux-definitions".into(),
-        "--locked".into(),
-        "--no-default-features".into(),
-        "--features".into(),
-        lua_feature_flag.into(),
-    ];
+    #[cfg(feature = "definitions")]
+    {
+        let definitions_dir = dist_dir.join("definitions");
+        let mut args = vec![
+            "run".into(),
+            "--package".into(),
+            "lux-definitions".into(),
+            "--locked".into(),
+            "--no-default-features".into(),
+            "--features".into(),
+            lua_feature_flag.into(),
+        ];
 
-    if opts.vendored {
-        args.push("--features".into());
-        args.push("vendored".into());
-    }
+        if opts.vendored {
+            args.push("--features".into());
+            args.push("vendored".into());
+        }
 
-    args.push("--".into());
-    args.push(definitions_dir.to_string_lossy().to_string());
+        args.push("--".into());
+        args.push(definitions_dir.to_string_lossy().to_string());
 
-    println!("Generating lux-lua definitions...");
-    let status = Command::new(cargo)
-        .current_dir(&project_root)
-        .args(args)
-        .status()?;
-    if !status.success() {
-        Err("lux-definitions failed")?;
+        println!("Generating lux-lua definitions...");
+        let status = Command::new(cargo)
+            .current_dir(&project_root)
+            .args(args)
+            .status()?;
+        if !status.success() {
+            Err("lux-definitions failed")?;
+        }
+        // We don't build lux-lua for luau yet
+        let definitions_src = definitions_dir.join("lua/lux.d.lua");
+        let definitions_dest = lib_dir.join("lux.d.lua");
+        if !definitions_src.is_file() {
+            Err(format!("{} does not exist", definitions_src.display()))?;
+        }
+        fs::copy(definitions_src, definitions_dest)?;
     }
-    // We don't build lux-lua for luau yet
-    let definitions_src = definitions_dir.join("lua/lux.d.lua");
-    let definitions_dest = lib_dir.join("lux.d.lua");
-    if !definitions_src.is_file() {
-        Err(format!("{} does not exist", definitions_src.display()))?;
-    }
-    fs::copy(definitions_src, definitions_dest)?;
     Ok(())
 }
 
