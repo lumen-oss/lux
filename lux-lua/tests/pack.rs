@@ -6,7 +6,6 @@ use lux_lib::{
     lua_installation::detect_installed_lua_version,
     lua_version::LuaVersion,
     operations::{BuildWorkspace, Pack},
-    project::Project,
     workspace::Workspace,
 };
 use mlua::Lua;

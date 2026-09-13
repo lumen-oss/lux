@@ -44,7 +44,7 @@ use lux_lib::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         Rockspec,
     },
-    tree::{EntryType, InstallTree, RockMatches, Tree},
+    tree::{EntryType, InstallTree, NvimLayout, RockLayout, RockMatches, Tree},
     workspace::Workspace,
 };
 
@@ -967,6 +967,84 @@ impl mlua::UserData for LocalPackageLua {
     }
 }
 
+pub struct RockLayoutLua(pub RockLayout);
+
+impl Typed for RockLayoutLua {
+    fn ty() -> Type {
+        Type::named("RockLayout")
+    }
+}
+
+impl TypedUserData for RockLayoutLua {
+    fn add_fields<F: TypedDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("root", |_, this| {
+            Ok(this.0.root.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("etc", |_, this| {
+            Ok(this.0.etc.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("lib", |_, this| {
+            Ok(this.0.lib.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("src", |_, this| {
+            Ok(this.0.src.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("bin", |_, this| {
+            Ok(this.0.bin.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("conf", |_, this| {
+            Ok(this.0.conf.to_slash_lossy().into_owned())
+        });
+        fields.add_field_method_get("doc", |_, this| {
+            Ok(this.0.doc.to_slash_lossy().into_owned())
+        });
+    }
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("The standard install layout for a rock");
+    }
+}
+
+impl mlua::UserData for RockLayoutLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NvimLayoutLua(pub NvimLayout);
+
+impl Typed for NvimLayoutLua {
+    fn ty() -> Type {
+        Type::named("NvimLayout")
+    }
+}
+
+impl_from_lua_userdata!(NvimLayoutLua);
+
+impl TypedUserData for NvimLayoutLua {
+    fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
+        docs.add("A custom layout for Neovim plugins");
+    }
+}
+
+impl mlua::UserData for NvimLayoutLua {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
+        <Self as TypedUserData>::add_fields(&mut wrapper);
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        let mut wrapper = mlua_extras::typed::WrappedBuilder::new(methods);
+        <Self as TypedUserData>::add_methods(&mut wrapper);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TreeLua(pub Tree);
 
@@ -997,6 +1075,11 @@ impl TypedUserData for TreeLua {
         methods.document("Where wrapped package binaries are installed");
         methods.add_method("bin", |_, this, ()| {
             Ok(this.0.bin().to_slash_lossy().into_owned())
+        });
+        methods.document("Get the `RockLayout` for an installed package.");
+        methods.param("package", "");
+        methods.add_method("rock_layout", |_, this, package: LocalPackageLua| {
+            Ok(RockLayoutLua(this.0.layout_for(&package.0)))
         });
         methods.document("Find installed rocks that match the given `PackageReq`");
         methods.param("req", "");
@@ -1289,6 +1372,18 @@ Default: A `.lux` directory in the workspace root.
                 this.0.clone().data_dir(data_dir.map(PathBuf::from)),
             ))
         });
+
+        methods.document("The custom layout to apply to entrypoint packages.");
+        methods.param("layout", "An `NvimLayout`, or nil for the standard layout");
+        methods.add_method(
+            "entrypoint_layout",
+            |_, this, layout: Option<NvimLayoutLua>| {
+                Ok(ConfigBuilderLua(match layout {
+                    Some(layout) => this.0.clone().entrypoint_layout(layout.0),
+                    None => this.0.clone(),
+                }))
+            },
+        );
 
         methods.document("The user agent to set when making web requests.");
         methods.param("user_agent", "Default: 'lux-lua/<version>'");
@@ -3127,10 +3222,11 @@ mod definitions_registry {
         InstallSpecLua, LocalLuaRockspecLua, LocalPackageHashesLua, LocalPackageLua,
         LocalProjectTomlLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
         LuaDependencySpecLua, LuaScriptTestSpecLua, MakeBuildSpecLua, ModulePathsLua,
-        PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
+        NvimLayoutLua, PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
         PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
-        RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RustBinaryBuildSpecLua,
-        RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua, WorkspaceLua,
+        RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutLua,
+        RustBinaryBuildSpecLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua,
+        WorkspaceLua,
     };
     use crate::definitions::LuxDefinition;
 
@@ -3152,7 +3248,9 @@ mod definitions_registry {
         "PackageReq" => PackageReqLua,
         "LocalPackageHashes" => LocalPackageHashesLua,
         "LocalPackage" => LocalPackageLua,
+        "RockLayout" => RockLayoutLua,
         "Tree" => TreeLua,
+        "NvimLayout" => NvimLayoutLua,
         "Config" => ConfigLua,
         "ConfigBuilder" => ConfigBuilderLua,
         "LuaDependencySpec" => LuaDependencySpecLua,
@@ -3598,6 +3696,55 @@ type = "builtin"
             assert(type(tree:bin()) == "string", "bin should be a string")
             assert(tree:lockfile(), "lockfile should not be nil")
             assert(type(tree:match_rocks("foo")) == "table", "match_rocks should return a table")
+        "#,
+        )
+        .exec()
+        .unwrap();
+    }
+
+    #[test]
+    fn lua_api_test_tree_rock_layout_lua() {
+        let (tree, lua) = setup_lua();
+        let version_dir = tree.path().join("5.1");
+        std::fs::create_dir_all(&version_dir).unwrap();
+        std::fs::write(
+            version_dir.join("lux.lock"),
+            r#"{
+  "version": "1.0.0",
+  "rocks": {
+    "aaaaa": {
+      "name": "foo",
+      "version": "1.0.0-1",
+      "source": "local",
+      "hashes": {
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    }
+  },
+  "entrypoints": ["aaaaa"]
+}"#,
+        )
+        .unwrap();
+
+        lua.load(
+            r#"
+            local config = lux.config.builder()
+                :lua_version("5.1")
+                :user_tree(user_tree)
+                :build()
+            local tree = config:user_tree("5.1")
+            local pkg = tree:lockfile():rocks()["aaaaa"]
+            assert(pkg, "package should not be nil")
+            local layout = tree:rock_layout(pkg)
+            assert(layout, "layout should not be nil")
+            assert(type(layout.root) == "string", "root should be a string")
+            assert(type(layout.etc) == "string", "etc should be a string")
+            assert(type(layout.lib) == "string", "lib should be a string")
+            assert(type(layout.src) == "string", "src should be a string")
+            assert(type(layout.bin) == "string", "bin should be a string")
+            assert(type(layout.conf) == "string", "conf should be a string")
+            assert(type(layout.doc) == "string", "doc should be a string")
         "#,
         )
         .exec()

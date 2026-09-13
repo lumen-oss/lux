@@ -20,7 +20,7 @@ use crate::{
     package::PackageSpec,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
-    tree::{EntryType, InstallTree, TreeError},
+    tree::{self, InstallTree, TreeError},
 };
 use crate::{fs, lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
 use bytes::Bytes;
@@ -71,7 +71,7 @@ where
     source: RemotePackageSource,
     pin: PinnedState,
     opt: OptState,
-    entry_type: EntryType,
+    entry_type: tree::EntryType,
     constraint: LockConstraint,
     behaviour: BuildBehaviour,
     config: &'a Config,
@@ -86,7 +86,7 @@ where
         rockspec: &'a RemoteLuaRockspec,
         source: RemotePackageSource,
         rock_bytes: Bytes,
-        entry_type: EntryType,
+        entry_type: tree::EntryType,
         config: &'a Config,
         tree: &'a T,
     ) -> Self {
@@ -166,7 +166,7 @@ where
                     return Err(InstallBinaryRockError::RockManifestNotFound);
                 }
                 let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
-                self.tree.prepare(&package, self.entry_type)?;
+                self.tree.prepare(&package)?;
                 let layout = self.tree.layout_for(&package);
                 let rock_manifest = RockManifest::new(&rock_manifest_content)?;
                 install_manifest_entries(
@@ -208,6 +208,7 @@ where
                     fs::tokio::copy(&rockspec_path, layout.rockspec_path()).await?;
                     fs::tokio::remove_file(&rockspec_path).await?;
                 }
+                self.tree.finalize(&package, self.entry_type)?;
                 Ok(package)
             }
         }
@@ -287,7 +288,7 @@ mod tests {
             &rockspec,
             RemotePackageSource::Test,
             rock.bytes,
-            EntryType::Entrypoint,
+            tree::EntryType::Entrypoint,
             &config,
             &tree,
         )
@@ -354,7 +355,7 @@ mod tests {
             &rockspec,
             RemotePackageSource::Test,
             rock.bytes,
-            EntryType::Entrypoint,
+            tree::EntryType::Entrypoint,
             &config,
             &tree,
         )
@@ -413,7 +414,7 @@ mod tests {
             &rockspec,
             RemotePackageSource::Test,
             rock.bytes,
-            EntryType::Entrypoint,
+            tree::EntryType::Entrypoint,
             &config,
             &tree,
         )

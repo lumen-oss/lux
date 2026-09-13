@@ -378,7 +378,7 @@ where
     match tree.lockfile()?.get(&package.id()) {
         Some(package) if build.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
         _ => {
-            tree.prepare(&package, build.entry_type)?;
+            tree.prepare(&package)?;
             let layout = tree.layout_for(&package);
 
             let rock_source = rockspec.source().current_platform();
@@ -446,6 +446,8 @@ where
             if let Ok(rockspec_str) = rockspec.to_lua_remote_rockspec_string() {
                 fs::sync::write(layout.rockspec_path(), rockspec_str)?;
             }
+
+            tree.finalize(&package, build.entry_type)?;
 
             Ok(package)
         }
@@ -572,7 +574,7 @@ mod tests {
                     .unwrap(),
             },
         );
-        tree.prepare(&package, EntryType::Entrypoint).unwrap();
+        tree.prepare(&package).unwrap();
         let src_dir = tree.layout_for(&package).src;
         run_build(
             &rockspec,
