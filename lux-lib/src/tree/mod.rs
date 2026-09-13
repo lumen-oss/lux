@@ -56,9 +56,14 @@ pub trait InstallTree {
     /// Find installed rocks that match the given [`PackageReq`].
     fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, TreeError>;
     /// Create the standard directories (src, lib, etc.) for a package.
+    fn prepare(&self, package: &LocalPackage) -> Result<(), TreeError>;
+    /// Apply the custom layout once a package has been fully installed.
     ///
-    /// For entrypoints, this also applies the custom layout, if one is configured.
-    fn prepare(&self, package: &LocalPackage, entry_type: EntryType) -> Result<(), TreeError>;
+    /// For entrypoints, this creates the symlinks for the custom layout, if one is configured.
+    /// Must be called after the package's files have been written to the standard layout.
+    fn finalize(&self, _package: &LocalPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+        Ok(())
+    }
     /// Remove the install layout directories.
     ///
     /// For entrypoints, this also applies the custom layout, if one is configured.
@@ -247,13 +252,17 @@ impl InstallTree for Tree {
         self.root_parent.join(self.version.to_string())
     }
 
-    fn prepare(&self, package: &LocalPackage, entry_type: EntryType) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LocalPackage) -> Result<(), TreeError> {
         let layout = self.layout_for(package);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
         fs::sync::create_dir_all(&layout.src)?;
         fs::sync::create_dir_all(&layout.etc)?;
 
+        Ok(())
+    }
+
+    fn finalize(&self, package: &LocalPackage, entry_type: EntryType) -> Result<(), TreeError> {
         if entry_type.is_entrypoint() {
             if let Some(custom_layout) = &self.entrypoint_layout {
                 custom_layout.make_symlinks(self, package)?;
@@ -403,7 +412,7 @@ mod tests {
         package::{PackageName, PackageSpec, PackageVersion},
         remote_package_source::RemotePackageSource,
         rockspec::RockBinaries,
-        tree::{EntryType, InstallTree, RockLayout},
+        tree::{InstallTree, RockLayout},
         variables,
     };
 
@@ -442,7 +451,7 @@ mod tests {
         );
 
         let id = package.id();
-        tree.prepare(&package, EntryType::Entrypoint).unwrap();
+        tree.prepare(&package).unwrap();
 
         assert_eq!(
             tree.layout_for(&package),

@@ -545,11 +545,7 @@ mod tests {
     use assert_fs::TempDir;
 
     use crate::lua_installation::detect_installed_lua_version;
-    use crate::{
-        config::ConfigBuilder,
-        lua_version::LuaVersion,
-        tree::{EntryType, FlatDistTree},
-    };
+    use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
@@ -591,7 +587,7 @@ mod tests {
         let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_a, EntryType::Entrypoint).unwrap();
+        tree.prepare(&pkg_a).unwrap();
         let layout_a = tree.layout_for(&pkg_a);
         staging
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
@@ -602,7 +598,7 @@ mod tests {
             .unwrap();
 
         let pkg_b = mk_dummy_package(PackageSpec::new("bar".into(), "2.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_b, EntryType::Entrypoint).unwrap();
+        tree.prepare(&pkg_b).unwrap();
         let layout_b = tree.layout_for(&pkg_b);
         staging
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())

@@ -103,7 +103,7 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn prepare(&self, package: &LocalPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LocalPackage) -> Result<(), TreeError> {
         self.guard_no_conflicting_package(package)
             .map_err(TreeError::Io)?;
         let layout = self.layout_for(package);
@@ -113,9 +113,8 @@ impl InstallTree for FlatDistTree {
         Ok(())
     }
 
-    // Dist trees do not undergo traditional cleanup for packages
     fn cleanup(&self, _package: &LocalPackage, _entry_type: EntryType) -> Result<(), TreeError> {
-        unreachable!("cannot clean up dist tree")
+        unreachable!("dist trees do not undergo cleanup for packages")
     }
 
     fn lockfile(&self) -> Result<Lockfile<ReadOnly>, TreeError> {

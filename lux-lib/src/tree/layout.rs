@@ -50,8 +50,12 @@ impl CustomRockLayout for NvimLayout {
     }
 
     fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
-        // SAFETY: does not follow symlinks, only removes them
-        fs::sync::remove_dir_all(Self::target_for(tree, package))
+        let target = Self::target_for(tree, package);
+        if target.is_dir() {
+            // SAFETY: does not follow symlinks, only removes them
+            fs::sync::remove_dir_all(target)?;
+        }
+        Ok(())
     }
 }
 
@@ -63,7 +67,7 @@ fn try_create_symlink(target: &Path, link: &Path) -> fs::Result<()> {
     let relative = pathdiff::diff_paths(
         target,
         link.parent()
-            .ok_or_else(|| FsError::Other("invalid parent directory".into()))?,
+            .ok_or_else(|| unreachable!("missing parent directory"))?,
     )
     .ok_or_else(|| {
         FsError::Other(format!(
@@ -140,7 +144,8 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package, EntryType::Entrypoint).unwrap();
+        tree.prepare(&package).unwrap();
+        tree.finalize(&package, EntryType::Entrypoint).unwrap();
 
         let custom_dir = tree_path
             .join("5.1/site/pack/lux/start")
@@ -152,11 +157,31 @@ mod tests {
     }
 
     #[test]
+    fn nvim_layout_links_etc_entries_after_finalize() {
+        let (_temp, tree_path, tree) = sample_tree();
+        let package = sample_package();
+
+        tree.prepare(&package).unwrap();
+
+        let etc = tree.layout_for(&package).etc;
+        std::fs::create_dir_all(etc.join("plugin")).unwrap();
+        std::fs::write(etc.join("plugin/foo.vim"), "lua _G.foo = 1\n").unwrap();
+
+        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+
+        let custom_dir = tree_path
+            .join("5.1/site/pack/lux/start")
+            .join(package.name().to_string());
+        assert!(custom_dir.join("plugin").symlink_metadata().is_ok());
+    }
+
+    #[test]
     fn nvim_layout_skips_dependencies() {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package, EntryType::DependencyOnly).unwrap();
+        tree.prepare(&package).unwrap();
+        tree.finalize(&package, EntryType::DependencyOnly).unwrap();
 
         let custom_dir = tree_path
             .join("5.1/site/pack/lux/start")
@@ -169,7 +194,8 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package, EntryType::Entrypoint).unwrap();
+        tree.prepare(&package).unwrap();
+        tree.finalize(&package, EntryType::Entrypoint).unwrap();
         let custom_dir = tree_path
             .join("5.1/site/pack/lux/start")
             .join(package.name().to_string());

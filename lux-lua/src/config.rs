@@ -1,8 +1,8 @@
-use lux_lib::config::ConfigBuilder;
+use lux_lib::{config::ConfigBuilder, tree::NvimLayout};
 use mlua::ExternalResult;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
-use crate::lua_impls::{ConfigBuilderLua, ConfigLua};
+use crate::lua_impls::{ConfigBuilderLua, ConfigLua, NvimLayoutLua};
 
 const DEFAULT_USER_AGENT: &str = concat!("lux-lua/", env!("CARGO_PKG_VERSION"));
 
@@ -38,6 +38,9 @@ if present, or otherwise by instantiating the default config"#,
         methods.add_function("new", |_, ()| {
             ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
         });
+
+        methods.document("Instantiate a custom layout for Neovim plugins");
+        methods.add_function("nvim_layout", |_, ()| Ok(NvimLayoutLua(NvimLayout)));
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Module for building a Lux `Config`");
@@ -119,6 +122,7 @@ mod tests {
                 :timeout(10)
                 :cache_dir(cache)
                 :data_dir(data)
+                :entrypoint_layout(config.nvim_layout())
                 :build()
 
             assert(full_config, "default config should not be nil")

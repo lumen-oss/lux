@@ -112,7 +112,7 @@ impl BuildBackend for CommandBuildSpec {
     }
 }
 
-#[tracing::instrument(level = "trace", skip_all)]
+#[tracing::instrument(level = "trace", skip(config, output_paths))]
 async fn run_command(
     command: &str,
     output_paths: &RockLayout,
