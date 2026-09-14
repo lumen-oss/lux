@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.64.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.63.1...lux-lib-v0.64.0) `lux-lib` - 2026-09-14
+
+### Added
+- [**breaking**] add lua API surface for new rock layout logic
+- [**breaking**] use symlinks for custom entrypoint layouts instead of physically moving directories
+
 ## [0.63.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.63.0...lux-lib-v0.63.1) `lux-lib` - 2026-09-13
 
 ### Fixed
