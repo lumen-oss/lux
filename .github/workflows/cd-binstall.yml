@@ -36,22 +36,28 @@ jobs:
         include:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
+            features: vendored,gpgme
           - target: aarch64-unknown-linux-musl
             os: ubuntu-22.04-arm
+            features: vendored,gpgme
           - target: aarch64-apple-darwin
             os: macos-15
+            features: vendored,gpgme
           # - target: aarch64-pc-windows-msvc
           #   os: windows-2022
+          #   features: vendored
           - target: x86_64-pc-windows-msvc
             os: windows-2025
+            features: vendored
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
+            features: vendored,gpgme
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
-          - target: x86_64-apple-darwin
-            os: macos-13
+            features: vendored,gpgme
           - target: x86_64-unknown-freebsd
             os: ubuntu-22.04
+            features: vendored
     timeout-minutes: 60
     steps:
       - name: Checkout repository
@@ -93,7 +99,9 @@ jobs:
         with:
           bin: lx
           target: ${{ matrix.target }}
-          features: vendored
+          features: ${{ matrix.features || '' }}
           tar: all
           zip: windows
           token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          SYSTEM_DEPS_LINK: static
