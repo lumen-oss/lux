@@ -102,17 +102,27 @@ impl LuaVersion {
         option_env!("LUX_LIB_DIR")
             .map(PathBuf::from)
             .map(|path| path.join(self.to_string()))
+            .or_else(|| self.probe_lux_lib_dir())
             .or_else(|| {
-                let lib_name = format!("lux-lua{self}");
-                pkg_config::Config::new()
-                    .print_system_libs(false)
-                    .cargo_metadata(false)
-                    .env_metadata(false)
-                    .probe(&lib_name)
-                    .ok()
-                    .and_then(|library| library.link_paths.first().cloned())
+                match self {
+                    LuaVersion::LuaJIT => Some(LuaVersion::Lua51),
+                    LuaVersion::LuaJIT52 => Some(LuaVersion::Lua52),
+                    _ => None,
+                }
+                .and_then(|compat_version| compat_version.probe_lux_lib_dir())
             })
             .or_else(|| lux_lib_resource_dir().map(|path| path.join(self.to_string())))
+    }
+
+    fn probe_lux_lib_dir(&self) -> Option<PathBuf> {
+        let lib_name = format!("lux-lua{self}");
+        pkg_config::Config::new()
+            .print_system_libs(false)
+            .cargo_metadata(false)
+            .env_metadata(false)
+            .probe(&lib_name)
+            .ok()
+            .and_then(|library| library.link_paths.first().cloned())
     }
 }
 
