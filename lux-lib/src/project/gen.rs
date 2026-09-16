@@ -165,7 +165,7 @@ impl RockSourceTemplate {
                 tag,
             }),
             SourceUrl::Git(_) if self.tag.is_none() && self.branch.is_none() => {
-                if let Ok(repo) = Repository::open(project_root) {
+                if let Ok(repo) = find_git_repo(project_root) {
                     let tag_or_rev = current_tag_or_revision(&repo)?;
                     Ok(RockSourceInternal {
                         url: Some(url_str.to_string()),
