@@ -1120,7 +1120,7 @@ mod tests {
     use std::path::PathBuf;
 
     use assert_fs::prelude::{PathChild, PathCopy, PathCreateDir};
-    use git2::{Repository, RepositoryInitOptions};
+    use git2::Repository;
     use url::Url;
 
     use crate::{
@@ -1712,30 +1712,27 @@ mod tests {
         assert!(!lua.contains("tag = "));
     }
 
-    fn init_sample_project_repo(temp_dir: &assert_fs::TempDir) -> Repository {
-        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test/sample-projects/source-template/");
-        temp_dir.copy_from(&sample_project, &["**"]).unwrap();
-        let repo = Repository::init(temp_dir).unwrap();
-        let mut opts = RepositoryInitOptions::new();
-        opts.initial_head("main");
+    fn init_git_repo(path: &std::path::Path) -> Repository {
+        let repo = Repository::init(path).unwrap();
         {
-            let mut config = repo.config().unwrap();
-            config.set_str("user.name", "name").unwrap();
-            config.set_str("user.email", "email").unwrap();
-            let mut index = repo.index().unwrap();
-            let id = index.write_tree().unwrap();
-
-            let tree = repo.find_tree(id).unwrap();
-            let sig = repo.signature().unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "initial\n\nbody", &tree, &[])
+            let tree_id = repo.index().unwrap().write_tree().unwrap();
+            let tree = repo.find_tree(tree_id).unwrap();
+            let sig = git2::Signature::now("name", "email").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
                 .unwrap();
         }
         repo
     }
 
+    fn init_sample_project_repo(temp_dir: &assert_fs::TempDir) -> Repository {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/source-template/");
+        temp_dir.copy_from(&sample_project, &["**"]).unwrap();
+        init_git_repo(temp_dir.path())
+    }
+
     fn create_tag(repo: &Repository, name: &str) {
-        let sig = repo.signature().unwrap();
+        let sig = git2::Signature::now("name", "email").unwrap();
         let id = repo.head().unwrap().target().unwrap();
         let obj = repo.find_object(id, None).unwrap();
         repo.tag(name, &obj, &sig, "msg", true).unwrap();
@@ -1829,21 +1826,7 @@ mod tests {
         let project_dir = temp_dir.child("lux");
         project_dir.create_dir_all().unwrap();
         project_dir.copy_from(&sample_project, &["**"]).unwrap();
-        let repo = Repository::init(&temp_dir).unwrap();
-        let mut opts = RepositoryInitOptions::new();
-        opts.initial_head("main");
-        {
-            let mut config = repo.config().unwrap();
-            config.set_str("user.name", "name").unwrap();
-            config.set_str("user.email", "email").unwrap();
-            let mut index = repo.index().unwrap();
-            let id = index.write_tree().unwrap();
-
-            let tree = repo.find_tree(id).unwrap();
-            let sig = repo.signature().unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "initial\n\nbody", &tree, &[])
-                .unwrap();
-        }
+        let repo = init_git_repo(temp_dir.path());
         create_tag(&repo, "bla");
         let tag_name = "1.0.0";
         create_tag(&repo, tag_name);
@@ -1859,5 +1842,25 @@ mod tests {
             assert_eq!(url, &expected_url);
         }
         assert_eq!(source.unpack_dir, Some("lux-1.0.0".into()));
+    }
+
+    #[test]
+    fn test_git_project_in_subdirectory_generate_dev_source() {
+        let temp_dir = assert_fs::TempDir::new().unwrap();
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/source-template/");
+        let project_dir = temp_dir.child("lux");
+        project_dir.create_dir_all().unwrap();
+        project_dir.copy_from(&sample_project, &["**"]).unwrap();
+        init_git_repo(temp_dir.path());
+
+        let project = Project::from_exact(&project_dir).unwrap().unwrap();
+        let remote_project_toml = project.toml().into_remote(None).unwrap();
+        let RockSourceSpec::Git(GitSource { git_ref, .. }) =
+            &remote_project_toml.source.current_platform().source_spec
+        else {
+            panic!("expected a git source");
+        };
+        assert!(git_ref.is_some());
     }
 }
