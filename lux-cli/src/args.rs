@@ -1,5 +1,8 @@
 use clap::ValueEnum;
-use lux_lib::package::PackageReq;
+use lux_lib::{
+    config::ConfigBuilder, lua_installation::nvim_lua_version, lua_version::LuaVersion,
+    package::PackageReq, tree::NvimLayout,
+};
 use miette::{miette, Result};
 use std::{path::PathBuf, str::FromStr};
 
@@ -13,6 +16,27 @@ pub enum PackageOrRockspec {
 pub enum OutputFormat {
     Json,
     Text,
+}
+
+/// Configures Lux for a specific environment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Preset {
+    /// Configure Lux for Neovim plugins.
+    Nvim,
+}
+
+impl Preset {
+    pub fn lua_version(self) -> Option<LuaVersion> {
+        match self {
+            Self::Nvim => nvim_lua_version(),
+        }
+    }
+
+    pub fn apply(self, config: ConfigBuilder) -> ConfigBuilder {
+        match self {
+            Self::Nvim => config.entrypoint_layout(NvimLayout),
+        }
+    }
 }
 
 impl FromStr for PackageOrRockspec {
@@ -31,5 +55,25 @@ impl FromStr for PackageOrRockspec {
             })?;
             Ok(Self::Package(pkg))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn parses_preset_and_deprecated_nvim_flag() {
+        let with_preset = Cli::try_parse_from(["lx", "--preset", "nvim", "list"]).unwrap();
+        assert_eq!(with_preset.preset, Some(Preset::Nvim));
+        assert!(!with_preset.nvim);
+
+        let with_nvim = Cli::try_parse_from(["lx", "--nvim", "list"]).unwrap();
+        assert!(with_nvim.nvim);
+        assert_eq!(with_nvim.preset, None);
+
+        assert!(Cli::try_parse_from(["lx", "--preset", "nvim", "--nvim", "list"]).is_err());
     }
 }
