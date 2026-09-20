@@ -166,6 +166,10 @@ fn load_from_workspace_tree(
     module: &str,
     current_file: &Path,
 ) -> mlua::Result<Option<mlua::Function>> {
+    let Ok(current_file) = current_file.canonicalize() else {
+        return Ok(None);
+    };
+
     let Some(tree_root) = current_file
         .ancestors()
         .find(|path| path.join("lux.lock").exists())
@@ -243,7 +247,7 @@ pub fn loader(lua: &Lua, module: String) -> mlua::Result<Option<mlua::Function>>
 #[cfg(test)]
 mod tests {
     use assert_fs::{
-        prelude::{FileWriteStr, PathChild},
+        prelude::{FileWriteStr, PathChild, PathCreateDir},
         TempDir,
     };
     use mlua::Lua;
@@ -479,6 +483,52 @@ mod tests {
         let lua = Lua::new();
         load_loader(&lua).unwrap();
         lua.load(entrypoint.path()).exec().unwrap();
+        let foo_loaded: String = lua.globals().get("foo_loaded").unwrap();
+        assert_eq!(foo_loaded, "yes");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_load_from_symlinked_entrypoint_layout() {
+        let tree = TempDir::new().unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child("lux.lock")
+            .write_str(&workspace_lockfile())
+            .unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child(format!("{FOO_HASH}-foo@1.0.0-1"))
+            .child("src")
+            .child("foo.lua")
+            .write_str("_G.foo_loaded = 'yes'\n")
+            .unwrap();
+        let main_src = tree
+            .child("tree")
+            .child("5.1")
+            .child(format!("{MAIN_HASH}-main@1.0.0-1"))
+            .child("src");
+        main_src
+            .child("main.lua")
+            .write_str("require('foo')\n")
+            .unwrap();
+
+        let link_dir = tree
+            .child("tree")
+            .child("5.1")
+            .child("site")
+            .child("pack")
+            .child("lux")
+            .child("start")
+            .child("main");
+        link_dir.create_dir_all().unwrap();
+        std::os::unix::fs::symlink(main_src.path(), link_dir.child("lua").path()).unwrap();
+
+        let lua = Lua::new();
+        load_loader(&lua).unwrap();
+        lua.load(link_dir.child("lua").child("main.lua").path())
+            .exec()
+            .unwrap();
         let foo_loaded: String = lua.globals().get("foo_loaded").unwrap();
         assert_eq!(foo_loaded, "yes");
     }
