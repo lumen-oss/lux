@@ -1,5 +1,5 @@
 use crate::{
-    args::PackageOrRockspec,
+    args::{PackageOrRockspec, Preset},
     dist::{Bin, Dist, FlatArchive},
     format::Fmt,
     project::NewProject,
@@ -168,8 +168,14 @@ pub struct Cli {
     #[arg(long)]
     pub no_prompt: Option<bool>,
 
-    /// Configure lux for installing Neovim packages.
-    #[arg(long)]
+    /// Configure Lux for a specific environment.{n}
+    /// Valid presets are: 'nvim'.
+    #[arg(long, value_enum, value_name = "preset")]
+    pub preset: Option<Preset>,
+
+    /// [DEPRECATED] Configure lux for installing Neovim packages.{n}
+    /// Use `--preset nvim` instead.
+    #[arg(long, conflicts_with = "preset")]
     pub nvim: bool,
     /// Disable prompts for two-factor authentication (2FA) codes.{n}
     /// It is strongly recommended to enable 2FA instead

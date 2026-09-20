@@ -4,7 +4,9 @@ use std::time::Duration;
 
 use clap::Parser;
 use lux_cli::{
-    add, build, check, config,
+    add,
+    args::Preset,
+    build, check, config,
     debug::{self, Debug},
     dist::{self, Dist},
     doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
@@ -13,11 +15,7 @@ use lux_cli::{
     upload::{self},
     util, vendor, which, Cli, Commands,
 };
-use lux_lib::{
-    lockfile::PinnedState::{Pinned, Unpinned},
-    lua_installation::nvim_lua_version,
-    tree::NvimLayout,
-};
+use lux_lib::lockfile::PinnedState::{Pinned, Unpinned};
 
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result};
 use tracing::{span::Id, Subscriber};
@@ -66,9 +64,11 @@ async fn main() -> Result<()> {
         }
     };
 
+    let preset = cli.preset.or_else(|| cli.nvim.then_some(Preset::Nvim));
+
     let lua_version = cli
         .lua_version
-        .or(if cli.nvim { nvim_lua_version() } else { None })
+        .or_else(|| preset.and_then(Preset::lua_version))
         .or_else(|| cli.command.lua_version());
 
     let mut config_builder = cli
@@ -104,8 +104,8 @@ async fn main() -> Result<()> {
         .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())))
         .no_tfa(Some(cli.no_tfa));
 
-    if cli.nvim {
-        config_builder = config_builder.entrypoint_layout(NvimLayout);
+    if let Some(preset) = preset {
+        config_builder = preset.apply(config_builder);
     }
 
     let config = config_builder.build()?;
@@ -156,6 +156,10 @@ async fn main() -> Result<()> {
             .with(ProgressStyleTemplateLayer {})
             .with(indicatif_layer)
             .init();
+    }
+
+    if cli.nvim {
+        tracing::warn!("The `--nvim` flag is deprecated. Use `--preset nvim` instead.");
     }
 
     match cli.command {
