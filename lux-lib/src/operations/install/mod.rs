@@ -167,6 +167,11 @@ pub enum InstallError {
     InstallBinaryRock(PackageName, #[source] Box<InstallBinaryRockError>),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
+    #[error("cannot install conflicting entrypoints:\n{0}")]
+    #[diagnostic(help(
+        "only a single entrypoint per package is allowed.\nretry with `--force` to overwrite the existing entrypoint"
+    ))]
+    ConflictingEntrypoints(String),
     #[error("install worker panicked")]
     #[diagnostic(help(
         r#"this is a bug in Lux, please report it, ideally with `RUST_BACKTRACE=1`.
@@ -223,6 +228,41 @@ where
 
     let lockfile = tree.lockfile()?;
     let build_lockfile = tree.build_tree(config)?.lockfile()?;
+
+    let entrypoint_specs = packages
+        .iter()
+        .filter(|spec| spec.entry_type == tree::EntryType::Entrypoint)
+        .collect_vec();
+
+    // Entrypoints already installed that conflict with another entrypoint. This enumerates both
+    // packages that are planned to be removed (`--force`), as well as those which are
+    // unintentionally causing conflicts.
+    let conflicting_entrypoints: HashMap<PackageName, LocalPackage> = entrypoint_specs
+        .iter()
+        .filter_map(|spec| lockfile.entrypoint(spec.package.name()).cloned())
+        .map(|package| (package.name().clone(), package))
+        .collect();
+
+    let unforced_conflicts = entrypoint_specs
+        .iter()
+        .filter(|spec| spec.build_behaviour != BuildBehaviour::Force)
+        .filter_map(|spec| conflicting_entrypoints.get(spec.package.name()))
+        .map(|existing| format!("{}@{}", existing.name(), existing.version()))
+        .collect_vec();
+
+    if !unforced_conflicts.is_empty() {
+        return Err(InstallError::ConflictingEntrypoints(
+            unforced_conflicts.join("\n"),
+        ));
+    }
+
+    // Forced overwrites: remove the conflicting entrypoints from the tree.
+    // NOTE: non-transactional. If an error occurs, this removes the conflicting package without
+    // installing the substitute. Fix when transactions are implemented.
+    let conflicting_entrypoints = conflicting_entrypoints.into_values().collect_vec();
+    for package in &conflicting_entrypoints {
+        tree.cleanup(package, tree::EntryType::Entrypoint)?;
+    }
 
     let lua = Arc::new(LuaInstallation::new_from_config(config).await?);
 
@@ -326,6 +366,9 @@ where
             while wait_for_next_install(&mut ongoing_installs, &mut installed_packages).await? {}
 
             lockfile.map_then_flush(|lockfile| {
+                for package in &conflicting_entrypoints {
+                    lockfile.remove_by_id(&package.id());
+                }
                 for (package_id, (package, is_entrypoint)) in installed_packages.iter().unique() {
                     lockfile.add_dependencies(
                         package_id,

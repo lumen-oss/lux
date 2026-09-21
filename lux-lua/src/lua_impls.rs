@@ -3710,7 +3710,7 @@ type = "builtin"
         std::fs::write(
             version_dir.join("lux.lock"),
             r#"{
-  "version": "1.0.0",
+  "version": "2.0.0",
   "rocks": {
     "aaaaa": {
       "name": "foo",
@@ -3722,7 +3722,7 @@ type = "builtin"
       }
     }
   },
-  "entrypoints": ["aaaaa"]
+  "entrypoints": {"foo": "aaaaa"}
 }"#,
         )
         .unwrap();

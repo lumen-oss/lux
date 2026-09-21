@@ -1,14 +1,13 @@
 //! Utilities for converting a list of packages into a list with the correct build behaviour.
 
 use inquire::Confirm;
-use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    lockfile::{LocalPackageId, OptState, PinnedState},
+    lockfile::{OptState, PinnedState},
     operations::install::PackageInstallSpec,
     package::PackageReq,
-    tree::{self, InstallTree, RockMatches, Tree},
+    tree::{self, InstallTree, Tree},
 };
 use miette::Result;
 
@@ -23,33 +22,25 @@ pub fn apply_build_behaviour(
     Ok(package_reqs
         .into_iter()
         .filter_map(|req| {
-            let existing_packages: Vec<LocalPackageId> =
-                match tree.match_rocks_and(&req, |rock| pin == rock.pinned()) {
-                    Ok(RockMatches::Single(id)) => vec![id],
-                    Ok(RockMatches::Many(ids)) => ids.into_iter().collect_vec(),
-                    _ => Vec::new(),
-                };
-            // NOTE: Because the rock layout may change, we must force a rebuild
-            // if a package is installed, but it is not an entrypoint.
-            let force = force
-                || existing_packages
-                    .iter()
-                    .all(|pkg_id| !lockfile.is_entrypoint(pkg_id));
-            let build_behaviour: Option<BuildBehaviour> = if force || existing_packages.is_empty() {
-                Some(if force {
-                    BuildBehaviour::Force
-                } else {
-                    BuildBehaviour::NoForce
-                })
-            } else if !config.no_prompt()
-                && Confirm::new(&format!("Package {req} already exists. Overwrite?"))
-                    .with_default(false)
-                    .prompt()
-                    .is_ok_and(|is_overwrite_confirmed| is_overwrite_confirmed)
-            {
-                Some(BuildBehaviour::Force)
-            } else {
-                None
+            // Look up any existing entrypoint by name, regardless of version.
+            let build_behaviour = match lockfile.entrypoint(req.name()) {
+                Some(existing) => {
+                    let overwrite = force
+                        || (!config.no_prompt()
+                            && Confirm::new(&format!(
+                                "Package {}@{} already exists. Overwrite?",
+                                existing.name(),
+                                existing.version()
+                            ))
+                            .with_default(false)
+                            .prompt()
+                            .is_ok_and(|overwrite_confirmed| overwrite_confirmed));
+                    overwrite.then_some(BuildBehaviour::Force)
+                }
+                // No entrypoint exists, so always force install. This will force dependencies
+                // designated as entrypoints to be rebuilt, since their layouts may change during
+                // reinstall.
+                None => Some(BuildBehaviour::Force),
             };
             build_behaviour.map(|build_behaviour| {
                 PackageInstallSpec::new(req, tree::EntryType::Entrypoint)
