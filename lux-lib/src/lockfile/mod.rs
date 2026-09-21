@@ -26,7 +26,10 @@ use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
 
-const LOCKFILE_VERSION_STR: &str = "1.0.0";
+/// Bump this whenever an incompatible change is made to the lockfile format.
+/// Lockfiles with a different major version are rejected on load.
+const LOCKFILE_VERSION: u64 = 2;
+const LOCKFILE_VERSION_STR: &str = "2.0.0";
 
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
 pub enum PinnedState {
@@ -632,11 +635,11 @@ impl LockfilePermissions for ReadWrite {}
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub(crate) struct LocalPackageLock {
     // NOTE: We cannot directly serialize to a `Sha256` object as they don't implement serde traits.
-    // NOTE: We want to retain ordering of rocks and entrypoints when de/serializing.
+    // NOTE: We want to retain ordering of rocks when de/serializing.
     rocks: BTreeMap<LocalPackageId, LocalPackage>,
 
-    #[serde(serialize_with = "serialize_sorted_package_ids")]
-    entrypoints: Vec<LocalPackageId>,
+    /// The entrypoints of the tree. Enforces one entrypoint per package name.
+    entrypoints: BTreeMap<PackageName, LocalPackageId>,
 }
 
 impl LocalPackageLock {
@@ -653,7 +656,12 @@ impl LocalPackageLock {
     }
 
     fn is_entrypoint(&self, package: &LocalPackageId) -> bool {
-        self.entrypoints.contains(package)
+        self.entrypoints.values().any(|id| id == package)
+    }
+
+    /// Returns the entrypoint with the given package name, if any.
+    pub(crate) fn entrypoint(&self, name: &PackageName) -> Option<&LocalPackage> {
+        self.entrypoints.get(name).and_then(|id| self.get(id))
     }
 
     fn is_dependency(&self, package: &LocalPackageId) -> bool {
@@ -677,7 +685,7 @@ impl LocalPackageLock {
 
     fn remove_by_id(&mut self, target: &LocalPackageId) {
         self.rocks.remove(target);
-        self.entrypoints.retain(|x| x != target);
+        self.entrypoints.retain(|_, id| id != target);
     }
 
     pub(crate) fn has_rock(
@@ -738,7 +746,7 @@ impl LocalPackageLock {
 
         let entrypoints_to_keep: HashSet<LocalPackage> = self
             .entrypoints
-            .iter()
+            .values()
             .filter_map(|id| self.get(id))
             .filter(|local_pkg| {
                 packages.iter().any(|req| {
@@ -794,7 +802,7 @@ impl LocalPackageLock {
     /// dependency graph.
     fn reachable(&self) -> HashSet<&LocalPackage> {
         self.entrypoints
-            .iter()
+            .values()
             .flat_map(|id| self.get_all_dependencies(id))
             .collect()
     }
@@ -846,6 +854,21 @@ pub enum LockfileError {
     ParseJson(#[source] serde_json::Error),
     #[error("error writing lockfile to JSON")]
     WriteJson(#[source] serde_json::Error),
+    #[error("invalid version string in lockfile: {version}")]
+    #[diagnostic(help("did you or a tool modify the lockfile manually?"))]
+    InvalidVersion {
+        version: String,
+        source: semver::Error,
+    },
+    #[error("incompatible lockfile version: expected {expected}, found {found}")]
+    // TODO(vhyrro): create a CLI command that does this?
+    // Difficult to find a good name or a consisent behaviour for the command.
+    #[diagnostic(help(
+        r#"this lockfile was created by an incompatible version of Lux.
+remove the `lux.lock` and run `lx sync` to regenerate it.
+"#
+    ))]
+    IncompatibleVersion { found: String, expected: String },
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -928,6 +951,11 @@ impl<P: LockfilePermissions> Lockfile<P> {
 
     pub fn is_entrypoint(&self, package: &LocalPackageId) -> bool {
         self.lock.is_entrypoint(package)
+    }
+
+    /// Returns the entrypoint with the given package name, if any.
+    pub fn entrypoint(&self, name: &PackageName) -> Option<&LocalPackage> {
+        self.lock.entrypoint(name)
     }
 
     /// Returns all rocks in the lockfile that are reachable from an entrypoint
@@ -1164,8 +1192,7 @@ impl Lockfile<ReadOnly> {
     #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, LockfileError> {
         let content = fs::sync::read_to_string(&filepath)?;
-        let mut lockfile: Lockfile<ReadOnly> =
-            serde_json::from_str(&content).map_err(LockfileError::ParseJson)?;
+        let mut lockfile: Lockfile<ReadOnly> = parse_lockfile(&content)?;
         lockfile.filepath = filepath;
         Ok(lockfile)
     }
@@ -1265,8 +1292,7 @@ impl WorkspaceLockfile<ReadOnly> {
     #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         let content = fs::sync::read_to_string(&filepath)?;
-        let mut lockfile: WorkspaceLockfile<ReadOnly> =
-            serde_json::from_str(&content).map_err(LockfileError::ParseJson)?;
+        let mut lockfile: WorkspaceLockfile<ReadOnly> = parse_lockfile(&content)?;
 
         lockfile.filepath = filepath;
 
@@ -1295,10 +1321,7 @@ impl WorkspaceLockfile<ReadOnly> {
 impl Lockfile<ReadWrite> {
     pub(crate) fn add_entrypoint(&mut self, rock: &LocalPackage) {
         self.add(rock);
-        let id = rock.id().clone();
-        if !self.lock.entrypoints.contains(&id) {
-            self.lock.entrypoints.push(id)
-        }
+        self.lock.entrypoints.insert(rock.name().clone(), rock.id());
     }
 
     fn add(&mut self, rock: &LocalPackage) {
@@ -1481,18 +1504,35 @@ impl Drop for ProjectLockfileGuard {
     }
 }
 
-fn serialize_sorted_package_ids<S>(
-    package_ids: &[LocalPackageId],
-    serializer: S,
-) -> Result<S::Ok, S::Error>
+fn parse_lockfile<T>(content: &str) -> Result<T, LockfileError>
 where
-    S: Serializer,
+    T: serde::de::DeserializeOwned,
 {
-    package_ids
-        .iter()
-        .sorted()
-        .collect_vec()
-        .serialize(serializer)
+    let value: serde_json::Value =
+        serde_json::from_str(content).map_err(LockfileError::ParseJson)?;
+
+    let version = value
+        .get("version")
+        .and_then(|version| version.as_str())
+        .ok_or_else(|| LockfileError::IncompatibleVersion {
+            found: "<missing>".into(),
+            expected: LOCKFILE_VERSION_STR.into(),
+        })?;
+
+    let found =
+        semver::Version::parse(version).map_err(|source| LockfileError::InvalidVersion {
+            version: version.to_string(),
+            source,
+        })?;
+
+    if found.major != LOCKFILE_VERSION {
+        return Err(LockfileError::IncompatibleVersion {
+            found: version.into(),
+            expected: LOCKFILE_VERSION_STR.into(),
+        });
+    }
+
+    serde_json::from_value(value).map_err(LockfileError::ParseJson)
 }
 
 fn integrity_err_not_found(package: &LocalPackage) -> LockfileIntegrityError {
@@ -1805,5 +1845,20 @@ mod tests {
             .to_add
             .iter()
             .any(|req| req.name().to_string() == "nonexistent"));
+    }
+
+    #[test]
+    fn verify_lockfile_version() {
+        for version in ["1.0.0", "9999.0.0", "not-a-version"] {
+            let lockfile = format!(
+                r#"
+                {{
+                    "version": {version}
+                }}
+            "#
+            );
+
+            assert!(super::parse_lockfile::<Lockfile<ReadOnly>>(&lockfile).is_err());
+        }
     }
 }

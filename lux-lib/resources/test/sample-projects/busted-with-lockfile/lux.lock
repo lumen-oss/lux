@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "test_dependencies": {
     "rocks": {
       "01a3c364614bddff7370223a5a9c4580f8e62d144384148444c518ec5367a59b": {
@@ -189,8 +189,8 @@
         }
       }
     },
-    "entrypoints": [
-      "aa700d6a934caa749d578927c97e22211ffabf97234705d63e95dc6403f6aafe"
-    ]
+    "entrypoints": {
+      "busted": "aa700d6a934caa749d578927c97e22211ffabf97234705d63e95dc6403f6aafe"
+    }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "dependencies": {
     "rocks": {
       "0e7601c45f13611fa5b85cb3ba46a554ad6fb6c4546776b310c9ebfc5581e663": {
@@ -173,10 +173,10 @@
         }
       }
     },
-    "entrypoints": [
-      "0e7601c45f13611fa5b85cb3ba46a554ad6fb6c4546776b310c9ebfc5581e663",
-      "b7fa2fc76ac7b515ab09c4982a9805528218639fda3b3a86a49825f3cf42bd0b",
-      "fdd927c4d96d1063ce66246cfd5ecb1939a8f8e8425f29428894b43586fb72cd"
-    ]
+    "entrypoints": {
+      "lua-cjson": "b7fa2fc76ac7b515ab09c4982a9805528218639fda3b3a86a49825f3cf42bd0b",
+      "neorg": "fdd927c4d96d1063ce66246cfd5ecb1939a8f8e8425f29428894b43586fb72cd",
+      "say": "0e7601c45f13611fa5b85cb3ba46a554ad6fb6c4546776b310c9ebfc5581e663"
+    }
   }
 }

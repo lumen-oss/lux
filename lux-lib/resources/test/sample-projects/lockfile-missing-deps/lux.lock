@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "rocks": {
     "04bfd5b08a74ba37c05241ef51d7afc47e1f3379c872dca34d99031b1ea7b855": {
       "name": "neorg",
@@ -221,7 +221,7 @@
       }
     }
   },
-  "entrypoints": [
-    "5f37e8dc4251f549b25ec62138484f4912ae3d332e57bdb1b30184db3f59d270"
-  ]
+  "entrypoints": {
+    "missing-dependency": "5f37e8dc4251f549b25ec62138484f4912ae3d332e57bdb1b30184db3f59d270"
+  }
 }
