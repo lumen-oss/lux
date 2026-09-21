@@ -12,6 +12,10 @@ use path_absolutize::Absolutize;
 // NOTE: The loader runs on the Lua thread.
 thread_local! {
     static CACHE: RefCell<LoaderCache> = RefCell::new(LoaderCache::default());
+    /// A list of tracked files. Imagine `lib/init.lua` requires `lib/bar/init.lua`.
+    /// Under tail-call conditions (`return require("lib.bar")`), luajit can compile
+    /// the call, making `inspect_stack()` unreliable.
+    static LOADING: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
 }
 
 #[derive(Default)]
@@ -21,14 +25,24 @@ struct LoaderCache {
 }
 
 fn current_file(lua: &Lua) -> Option<String> {
-    lua.inspect_stack(2, |debug| {
-        debug
-            .source()
-            .source
-            .as_deref()
-            .and_then(|source| source.strip_prefix('@'))
-            .map(str::to_string)
-    })?
+    if let Some(file) = LOADING.with(|loading| loading.borrow().last().cloned()) {
+        return Some(file.to_string_lossy().into_owned());
+    }
+
+    for level in 1.. {
+        match lua.inspect_stack(level, |debug| {
+            debug.source().source.as_deref().map(str::to_string)
+        })? {
+            Some(path) => {
+                if let Some(path) = path.strip_prefix('@') {
+                    return Some(path.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn rock_layout(
@@ -66,7 +80,14 @@ fn load_file(
     if let Some(file) = [src_lua, src_init].into_iter().find(|file| file.exists()) {
         lua.create_function(move |lua, ()| {
             let dofile: mlua::Function = lua.globals().get("dofile")?;
-            dofile.call::<mlua::Value>(file.clone())
+            LOADING.with(|loading| {
+                // `borrow_mut()` must be scoped or `borrow()` in dofile fails
+                loading.borrow_mut().push(file.clone());
+                let result = dofile.call::<mlua::Value>(file.clone());
+                loading.borrow_mut().pop();
+
+                result
+            })
         })
         .map(Some)
     } else if lib.is_file() {
@@ -197,25 +218,33 @@ fn load_from_workspace_tree(
     // with the lux tree and malform the package hash. In this case, this
     // should never cause any security-related problems anyway, as we'll
     // crash right after this function returns None.
-    let Some(package) =
-        lockfile.get(unsafe { &LocalPackageId::from_unchecked(module_hash.to_string()) })
-    else {
+    let owner_id = unsafe { LocalPackageId::from_unchecked(module_hash.to_string()) };
+    let Some(package) = lockfile.get(&owner_id) else {
         return Ok(None);
     };
 
-    let Some(dep_id) = package.dependencies().iter().copied().find_map(|id| {
-        let dep = lockfile.get(id)?;
-        (dep.name().to_string() == module).then_some(id)
-    }) else {
-        return Ok(None);
-    };
+    // Try the package that owns the requiring file first (for nested modules within the same
+    // package).
+    let layout = rock_layout(tree_root, &owner_id, package);
+    if let Some(loader) = load_file(lua, module, &layout)? {
+        return Ok(Some(loader));
+    }
 
-    let Some(dep) = lockfile.get(dep_id) else {
-        return Ok(None);
-    };
+    // Loop over all dependencies to try and locate the module. A package's name does not
+    // necessarily reflect its module name (`pathlib.nvim` -> pathlib, `nvim-nio` -> nio, and so
+    // on).
+    for dep_id in package.dependencies() {
+        let Some(dep) = lockfile.get(dep_id) else {
+            continue;
+        };
 
-    let layout = rock_layout(tree_root, dep_id, dep);
-    load_file(lua, module, &layout)
+        let layout = rock_layout(tree_root, dep_id, dep);
+        if let Some(loader) = load_file(lua, module, &layout)? {
+            return Ok(Some(loader));
+        }
+    }
+
+    Ok(None)
 }
 
 fn load_from_installed_tree(lua: &Lua, module: &str) -> mlua::Result<Option<mlua::Function>> {
@@ -260,7 +289,7 @@ mod tests {
     fn lockfile() -> String {
         format!(
             r#"{{
-  "version": "1.0.0",
+  "version": "2.0.0",
   "rocks": {{
     "{FOO_HASH}": {{
       "name": "foo",
@@ -272,7 +301,7 @@ mod tests {
       }}
     }}
   }},
-  "entrypoints": []
+  "entrypoints": {{}}
 }}"#
         )
     }
@@ -280,7 +309,7 @@ mod tests {
     fn workspace_lockfile() -> String {
         format!(
             r#"{{
-  "version": "1.0.0",
+  "version": "2.0.0",
   "rocks": {{
     "{MAIN_HASH}": {{
       "name": "main",
@@ -302,7 +331,7 @@ mod tests {
       }}
     }}
   }},
-  "entrypoints": []
+  "entrypoints": {{}}
 }}"#
         )
     }
@@ -534,10 +563,172 @@ mod tests {
     }
 
     #[test]
+    fn test_load_module_name_differs_from_package_name() {
+        let tree = TempDir::new().unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child("lux.lock")
+            .write_str(&format!(
+                r#"{{
+  "version": "2.0.0",
+  "rocks": {{
+    "{MAIN_HASH}": {{
+      "name": "main",
+      "version": "1.0.0-1",
+      "dependencies": ["{FOO_HASH}"],
+      "source": "local",
+      "hashes": {{
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }}
+    }},
+    "{FOO_HASH}": {{
+      "name": "tool.nvim",
+      "version": "1.0.0-1",
+      "source": "local",
+      "hashes": {{
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }}
+    }}
+  }},
+  "entrypoints": {{}}
+}}"#
+            ))
+            .unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child(format!("{FOO_HASH}-tool.nvim@1.0.0-1"))
+            .child("src")
+            .child("tool.lua")
+            .write_str("_G.tool_loaded = 'yes'\n")
+            .unwrap();
+        let entrypoint = tree
+            .child("tree")
+            .child("5.1")
+            .child(format!("{MAIN_HASH}-main@1.0.0-1"))
+            .child("src")
+            .child("main.lua");
+        entrypoint.write_str("require('tool')\n").unwrap();
+
+        let lua = Lua::new();
+        load_loader(&lua).unwrap();
+        lua.load(entrypoint.path()).exec().unwrap();
+        let tool_loaded: String = lua.globals().get("tool_loaded").unwrap();
+        assert_eq!(tool_loaded, "yes");
+    }
+
+    #[test]
+    fn test_load_nested_module_from_workspace_tree() {
+        let tree = TempDir::new().unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child("lux.lock")
+            .write_str(&workspace_lockfile())
+            .unwrap();
+        let main = tree
+            .child("tree")
+            .child("5.1")
+            .child(format!("{MAIN_HASH}-main@1.0.0-1"));
+        main.child("src")
+            .child("main.lua")
+            .write_str("require('main.sub')\n")
+            .unwrap();
+        main.child("src")
+            .child("main")
+            .child("sub.lua")
+            .write_str("_G.sub_loaded = 'yes'\n")
+            .unwrap();
+
+        let lua = Lua::new();
+        load_loader(&lua).unwrap();
+        lua.load(main.child("src").child("main.lua").path())
+            .exec()
+            .unwrap();
+        let sub_loaded: String = lua.globals().get("sub_loaded").unwrap();
+        assert_eq!(sub_loaded, "yes");
+    }
+
+    #[test]
+    #[cfg(feature = "luajit")]
+    fn test_load_dependency_from_tail_call() {
+        let tree = TempDir::new().unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child("lux.lock")
+            .write_str(&format!(
+                r#"{{
+  "version": "2.0.0",
+  "rocks": {{
+    "ccccc": {{
+      "name": "outer",
+      "version": "1.0.0-1",
+      "dependencies": ["{MAIN_HASH}"],
+      "source": "local",
+      "hashes": {{
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }}
+    }},
+    "{MAIN_HASH}": {{
+      "name": "main",
+      "version": "1.0.0-1",
+      "dependencies": ["{FOO_HASH}"],
+      "source": "local",
+      "hashes": {{
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }}
+    }},
+    "{FOO_HASH}": {{
+      "name": "foo",
+      "version": "1.0.0-1",
+      "source": "local",
+      "hashes": {{
+        "rockspec": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "source": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }}
+    }}
+  }},
+  "entrypoints": {{}}
+}}"#
+            ))
+            .unwrap();
+        let outer = tree.child("tree").child("5.1").child("ccccc-outer@1.0.0-1");
+        outer
+            .child("src")
+            .child("outer.lua")
+            .write_str("local _ = require('main')\n")
+            .unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child(format!("{MAIN_HASH}-main@1.0.0-1"))
+            .child("src")
+            .child("main.lua")
+            .write_str("return require('foo')\n") // tail call
+            .unwrap();
+        tree.child("tree")
+            .child("5.1")
+            .child(format!("{FOO_HASH}-foo@1.0.0-1"))
+            .child("src")
+            .child("foo.lua")
+            .write_str("_G.foo_loaded = 'yes'\n")
+            .unwrap();
+
+        let lua = Lua::new();
+        load_loader(&lua).unwrap();
+        lua.load(outer.child("src").child("outer.lua").path())
+            .exec()
+            .unwrap();
+        let foo_loaded: String = lua.globals().get("foo_loaded").unwrap();
+        assert_eq!(foo_loaded, "yes");
+    }
+
+    #[test]
     fn test_source_file_skips_workspace_lockfile() {
         let tree = TempDir::new().unwrap();
         tree.child("lux.lock")
-            .write_str(r#"{"version":"1.0.0","dependencies":{"rocks":{},"entrypoints":[]}}"#)
+            .write_str(r#"{"version":"2.0.0","dependencies":{"rocks":{},"entrypoints":{}}}"#)
             .unwrap();
         tree.child("tree")
             .child("5.1")
