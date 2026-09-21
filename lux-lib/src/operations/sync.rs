@@ -387,7 +387,7 @@ async fn do_sync(
     Ok(report)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "impure_tests"))]
 mod tests {
     use super::Sync;
     use crate::{
@@ -399,10 +399,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_add_rocks() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let temp_dir = TempDir::new().unwrap();
         temp_dir
             .copy_from(
@@ -425,10 +421,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_add_rocks_with_new_package() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let temp_dir = TempDir::new().unwrap();
         temp_dir
             .copy_from(
@@ -463,10 +455,6 @@ mod tests {
     async fn regression_sync_nonexistent_lock() {
         // This test checks that we can sync a lockfile that doesn't exist yet, and whether
         // the sync report is valid.
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let temp_dir = TempDir::new().unwrap();
         temp_dir
             .copy_from(
@@ -498,10 +486,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_remove_rocks() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let temp_dir = TempDir::new().unwrap();
         temp_dir
             .copy_from(

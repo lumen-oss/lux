@@ -5,6 +5,10 @@ tt = "--locked nextest run --tests --no-fail-fast"
 tl = "--locked nextest run --lib --no-fail-fast"
 # Lua API
 ttl = "--locked nextest run -p lux-lua --lib --no-fail-fast --features test"
+# lux-lib + lux-cli + impure tests (network required)
+tti = "--locked nextest run --tests --no-fail-fast --features impure_tests"
+# Lua API + impure tests (network required)
+ttil = "--locked nextest run -p lux-lua --lib --no-fail-fast --features test,impure_tests"
 lx = "--locked run --bin lx --"
 xtask = "--locked run --package xtask --"
 xtask-lua51 = "--locked run --package xtask-lua --features lua51 --"

@@ -125,6 +125,7 @@ vendored = ["vendored-openssl", "vendored-libgit2"]
 vendored-openssl = ["openssl/vendored", "reqwest/native-tls-vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
 ssh-tests = []
+impure_tests = []
 
 [lints.clippy]
 panic = "warn"

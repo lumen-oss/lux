@@ -115,7 +115,7 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "impure_tests"))]
 mod tests {
     use assert_fs::{prelude::PathCopy, TempDir};
     use lux_lib::config::ConfigBuilder;
@@ -127,10 +127,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_add_regular_dependencies() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let sample_project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = TempDir::new().unwrap();
@@ -173,10 +169,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_add_build_dependencies() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let sample_project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = TempDir::new().unwrap();
@@ -219,10 +211,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_add_test_dependencies() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let sample_project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
         let project_root = TempDir::new().unwrap();

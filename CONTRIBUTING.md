@@ -96,8 +96,25 @@ but that is up to you.
 > Impure unit tests that require a network connection cannot be built with Nix.
 > So we try to avoid them if possible (this is not the case for integration tests,
 > which we don't run with Nix).
-> If a unit test absolutely needs a network connection, please make sure to skip
-> it if the `LUX_SKIP_IMPURE_TESTS` environment variable is set to 1.
+> If a unit test absolutely needs a network connection, please gate it behind
+> the `impure_tests` cargo feature:
+>
+> ```rust
+> #[cfg(all(test, feature = "impure_tests"))]
+> mod tests {
+>     // ...
+> }
+> ```
+>
+> or, for a single test:
+>
+> ```rust
+> #[tokio::test]
+> #[cfg(feature = "impure_tests")]
+> async fn test_that_needs_network() {
+>     // ...
+> }
+> ```
 
 #### Running tests without Nix
 
@@ -116,6 +133,12 @@ To run lux-lua API tests:
 
 ```bash
 cargo ttl
+```
+
+To run impure tests that require a network connection:
+
+```bash
+cargo tti
 ```
 
 #### Running tests and checks with Nix

@@ -538,8 +538,6 @@ fn parse_lua_version_from_output(
 
 #[cfg(test)]
 mod tests {
-    use crate::config::ConfigBuilder;
-
     use super::*;
 
     #[tokio::test]
@@ -555,13 +553,13 @@ mod tests {
         parse_lua_version_from_output(lua_output).unwrap();
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn lua_installation_bin() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = crate::config::ConfigBuilder::new()
+            .unwrap()
+            .build()
+            .unwrap();
         let lua_version = config.lua_version().unwrap();
         let lua_installation = LuaInstallation::new(lua_version, &config).await.unwrap();
         // FIXME: This fails when run in the nix checkPhase

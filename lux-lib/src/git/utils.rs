@@ -123,7 +123,7 @@ fn latest_commit_sha(url: &RemoteGitUrl, config: &Config) -> Result<Option<Strin
     }))
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "impure_tests", feature = "ssh-tests")))]
 mod tests {
 
     use super::*;
@@ -134,11 +134,8 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "impure_tests")]
     async fn test_latest_semver_tag_http() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_semver_tag(&url, &test_config()).unwrap().is_some());
     }
@@ -158,11 +155,8 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "impure_tests")]
     async fn test_latest_commit_sha_http() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_commit_sha(&url, &test_config()).unwrap().is_some());
     }
