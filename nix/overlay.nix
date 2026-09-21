@@ -121,7 +121,6 @@
     env = {
       # disable vendored packages
       LIBSSH2_SYS_USE_PKG_CONFIG = 1;
-      LUX_SKIP_IMPURE_TESTS = 1;
     };
   };
 

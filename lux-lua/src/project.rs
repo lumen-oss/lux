@@ -98,7 +98,7 @@ type = "builtin"
 
     #[test]
     fn lua_api_test_project() {
-        let (project, lua) = create_fake_project();
+        let (_project, lua) = create_fake_project();
 
         lua.load(
             r#"
@@ -125,11 +125,12 @@ type = "builtin"
         )
         .exec()
         .unwrap();
+    }
 
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
+    #[test]
+    #[cfg(feature = "impure_tests")]
+    fn lua_api_test_project_add_remove_dependencies() {
+        let (project, lua) = create_fake_project();
 
         // ADDING DEPENDENCIES
 

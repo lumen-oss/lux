@@ -313,15 +313,11 @@ mod tests {
     /// - Install the package from our packed rock.
     /// - Verify that the contents of the install directories when installing from both packed rocks
     ///   are the same.
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "impure_tests"))]
     #[tokio::test]
     async fn install_binary_rock_roundtrip() {
         use crate::operations::{Pack, Uninstall};
 
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            println!("Skipping impure test");
-            return;
-        }
         let rock = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/toml-edit-0.6.0-1.linux-x86_64.rock");
         let content = std::fs::read(rock).unwrap();

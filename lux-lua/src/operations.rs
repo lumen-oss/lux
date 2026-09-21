@@ -516,11 +516,8 @@ type = "builtin"
     }
 
     #[test]
+    #[cfg(feature = "impure_tests")]
     fn test_sync_report_shape() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            return;
-        }
-
         let tree = TempDir::new().unwrap();
         let (_project, lua) = create_fake_project();
         lua.globals().set("tree", tree.path()).unwrap();
@@ -551,11 +548,8 @@ type = "builtin"
     }
 
     #[test]
+    #[cfg(feature = "impure_tests")]
     fn test_downloaded_rockspec_shape() {
-        if std::env::var("LUX_SKIP_IMPURE_TESTS").unwrap_or("0".into()) == "1" {
-            return;
-        }
-
         let lua = setup_lua();
         lua.load(
             r#"

@@ -81,6 +81,7 @@ default = ["gpgme"]
 gpgme = ["lux-lib/gpgme"]
 vendored = ["lux-lib/vendored"]
 ssh-tests = ["lux-lib/ssh-tests"]
+impure_tests = ["lux-lib/impure_tests"]
 
 [lints.clippy]
 panic = "warn"
