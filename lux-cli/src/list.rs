@@ -1,6 +1,13 @@
+use std::collections::HashSet;
+
 use clap::Args;
 use itertools::Itertools as _;
-use lux_lib::{config::Config, lockfile::PinnedState, lua_version::LuaVersion, tree::InstallTree};
+use lux_lib::{
+    config::Config,
+    lockfile::{LocalPackageId, PinnedState},
+    lua_version::LuaVersion,
+    tree::InstallTree,
+};
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
@@ -10,12 +17,28 @@ use crate::args::OutputFormat;
 pub struct ListCmd {
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,
+
+    /// Only list rocks that are not reachable from an entrypoint.
+    #[arg(long)]
+    orphans: bool,
 }
 
 /// List rocks that are installed in the user tree
 pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
     let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
-    let available_rocks = tree.list()?;
+    let lockfile = tree.lockfile()?;
+    let mut available_rocks = tree.list()?;
+    if list_data.orphans {
+        let reachable: HashSet<LocalPackageId> = lockfile
+            .reachable_rocks()
+            .into_iter()
+            .map(|package| package.id())
+            .collect();
+        available_rocks.retain(|_, packages| {
+            packages.retain(|package| !reachable.contains(&package.id()));
+            !packages.is_empty()
+        });
+    }
 
     match list_data.output_format {
         OutputFormat::Json => {
