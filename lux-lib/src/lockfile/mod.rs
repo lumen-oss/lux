@@ -789,6 +789,15 @@ impl LocalPackageLock {
         }
         packages
     }
+
+    /// The set of all packages reachable from the entrypoints via the
+    /// dependency graph.
+    fn reachable(&self) -> HashSet<&LocalPackage> {
+        self.entrypoints
+            .iter()
+            .flat_map(|id| self.get_all_dependencies(id))
+            .collect()
+    }
 }
 
 /// A lockfile for an install tree
@@ -919,6 +928,12 @@ impl<P: LockfilePermissions> Lockfile<P> {
 
     pub fn is_entrypoint(&self, package: &LocalPackageId) -> bool {
         self.lock.is_entrypoint(package)
+    }
+
+    /// Returns all rocks in the lockfile that are reachable from an entrypoint
+    /// via the dependency graph.
+    pub fn reachable_rocks(&self) -> Vec<LocalPackage> {
+        self.lock.reachable().into_iter().cloned().collect()
     }
 
     pub fn entry_type(&self, package: &LocalPackageId) -> EntryType {
