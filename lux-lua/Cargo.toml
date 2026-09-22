@@ -31,6 +31,7 @@ path = "../lux-lib"
 assert_fs = "1.1"
 tokio = { workspace = true }
 zip = { workspace = true }
+flaky_test = "0.2"
 
 [features]
 module = ["mlua/module"]

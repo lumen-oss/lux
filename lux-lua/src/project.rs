@@ -60,6 +60,8 @@ mod definitions_registry {
 #[cfg(test)]
 mod tests {
     use assert_fs::{assert::PathAssert, prelude::PathChild, TempDir};
+    #[cfg(feature = "impure_tests")]
+    use flaky_test::flaky_test;
     use mlua::Lua;
 
     fn create_fake_project() -> (TempDir, Lua) {
@@ -127,8 +129,8 @@ type = "builtin"
         .unwrap();
     }
 
-    #[test]
     #[cfg(feature = "impure_tests")]
+    #[flaky_test(times = 5)]
     fn lua_api_test_project_add_remove_dependencies() {
         let (project, lua) = create_fake_project();
 

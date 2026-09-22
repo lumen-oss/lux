@@ -109,12 +109,16 @@ but that is up to you.
 > or, for a single test:
 >
 > ```rust
-> #[tokio::test]
 > #[cfg(feature = "impure_tests")]
+> #[flaky_test(tokio, times = 5)]
 > async fn test_that_needs_network() {
 >     // ...
 > }
 > ```
+>
+> Impure tests are run in CI, so please mark them as flaky with
+> [`flaky_test`](https://crates.io/crates/flaky_test) using `flaky_test(tokio, times = 5)`
+> for async tests and `flaky_test(times = 5)` for sync ones.
 
 #### Running tests without Nix
 

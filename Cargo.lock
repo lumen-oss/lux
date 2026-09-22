@@ -3521,6 +3521,7 @@ dependencies = [
  "emmylua_check",
  "emmylua_codestyle",
  "emmylua_formatter",
+ "flaky_test",
  "git2",
  "ignore",
  "indicatif",
@@ -3672,6 +3673,7 @@ name = "lux-lua"
 version = "0.46.0"
 dependencies = [
  "assert_fs",
+ "flaky_test",
  "inventory",
  "itertools 0.15.0",
  "lux-lib",

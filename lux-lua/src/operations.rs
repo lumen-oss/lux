@@ -401,6 +401,8 @@ fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LocalPack
 #[cfg(test)]
 mod tests {
     use assert_fs::TempDir;
+    #[cfg(feature = "impure_tests")]
+    use flaky_test::flaky_test;
     use mlua::{FromLua, Lua, LuaSerdeExt};
 
     use crate::lua_impls::PackageInstallSpecLua;
@@ -515,8 +517,8 @@ type = "builtin"
         assert!(PackageInstallSpecLua::from_lua(value, &lua).is_err());
     }
 
-    #[test]
     #[cfg(feature = "impure_tests")]
+    #[flaky_test(times = 5)]
     fn test_sync_report_shape() {
         let tree = TempDir::new().unwrap();
         let (_project, lua) = create_fake_project();
@@ -547,8 +549,8 @@ type = "builtin"
         .unwrap();
     }
 
-    #[test]
     #[cfg(feature = "impure_tests")]
+    #[flaky_test(times = 5)]
     fn test_downloaded_rockspec_shape() {
         let lua = setup_lua();
         lua.load(

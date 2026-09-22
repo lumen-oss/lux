@@ -128,13 +128,15 @@ mod tests {
 
     use super::*;
     use crate::config::ConfigBuilder;
+    #[cfg(feature = "impure_tests")]
+    use flaky_test::flaky_test;
 
     fn test_config() -> Config {
         ConfigBuilder::new().unwrap().build().unwrap()
     }
 
-    #[tokio::test]
     #[cfg(feature = "impure_tests")]
+    #[flaky_test(tokio, times = 5)]
     async fn test_latest_semver_tag_http() {
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_semver_tag(&url, &test_config()).unwrap().is_some());
@@ -154,8 +156,8 @@ mod tests {
         assert!(latest_semver_tag(&url, &test_config()).unwrap().is_some());
     }
 
-    #[tokio::test]
     #[cfg(feature = "impure_tests")]
+    #[flaky_test(tokio, times = 5)]
     async fn test_latest_commit_sha_http() {
         let url = "https://github.com/lumen-oss/lux.git".parse().unwrap();
         assert!(latest_commit_sha(&url, &test_config()).unwrap().is_some());
