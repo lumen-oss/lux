@@ -540,8 +540,10 @@ mod tests {
         config::ConfigBuilder,
         lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_version::LuaVersion,
+        operations::{unpack_rockspec, DownloadedPackedRockBytes},
         project::Project,
         rockspec::RockBinaries,
+        tree::Tree,
     };
 
     #[tokio::test]
@@ -623,5 +625,149 @@ mod tests {
         bin_file.assert(predicate::path::is_file());
         bin_file.assert(predicate::str::contains("#!/usr/bin/env bash"));
         bin_file.assert(predicate::str::contains("echo \"Hello\""));
+    }
+
+    const LUATEST_SRC_ROCK: &str = "resources/test/luatest-0.2-1.src.rock";
+    /// `sha256` of the checked-in `.src.rock` archive, i.e. what `Materialize` must
+    /// record as the `source` integrity.
+    const LUATEST_SRC_ROCK_SOURCE_HASH: &str = "sha256-2jS0XOq0iIVhsZJ3BVqXSlKsx2vsqCAaaYyqcBEb7RI=";
+    /// `sha256` of the rockspec text embedded in the `.src.rock`, i.e. the `rockspec` integrity.
+    const LUATEST_ROCKSPEC_HASH: &str = "sha256-NljJ20A+VadUyhhBjrRnojeQjSqRpQy7FWcgjUt2Fdc=";
+
+    fn luatest_src_rock_bytes() -> Bytes {
+        Bytes::copy_from_slice(
+            &std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(LUATEST_SRC_ROCK))
+                .unwrap(),
+        )
+    }
+
+    fn luatest_config(dir: &assert_fs::TempDir) -> Config {
+        ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(dir.to_path_buf()))
+            .lua_version(Some(LuaVersion::Lua51))
+            .build()
+            .unwrap()
+    }
+
+    /// Builds `luatest` from the checked-in `.src.rock` fixture, entirely offline.
+    /// This exercises the fetch + hash + build + deploy path end to end.
+    async fn build_luatest(
+        config: &Config,
+        tree: &Tree,
+        entry_type: EntryType,
+        behaviour: BuildBehaviour,
+    ) -> LocalPackage {
+        let bytes = luatest_src_rock_bytes();
+        let rock = DownloadedPackedRockBytes {
+            name: "luatest".into(),
+            version: "0.2-1".parse().unwrap(),
+            bytes: bytes.clone(),
+            file_name: "luatest-0.2-1.src.rock".into(),
+            url: "https://example.org/luatest-0.2-1.src.rock".parse().unwrap(),
+        };
+        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let lua = LuaInstallation::new_from_config(config).await.unwrap();
+        Build::new()
+            .rockspec(&rockspec)
+            .lua(&lua)
+            .tree(tree)
+            .entry_type(entry_type)
+            .config(config)
+            .behaviour(behaviour)
+            .source_spec(RemotePackageSourceSpec::SrcRock(SrcRockSource {
+                bytes,
+                source_url: RemotePackageSourceUrl::Url {
+                    url: "https://example.org/luatest-0.2-1.src.rock".parse().unwrap(),
+                },
+            }))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    /// The materialized `LocalPackage` must carry the exact source and rockspec
+    /// integrities, derived from the fetched bytes. This is the contract that
+    /// `lx generate-lockfile` and the manifest cache depend on.
+    #[tokio::test]
+    async fn materialize_src_rock_produces_expected_hashes() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        let config = luatest_config(&dir);
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let package =
+            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+
+        assert_eq!(
+            package.hashes().source,
+            LUATEST_SRC_ROCK_SOURCE_HASH.parse().unwrap()
+        );
+        assert_eq!(
+            package.hashes().rockspec,
+            LUATEST_ROCKSPEC_HASH.parse().unwrap()
+        );
+        // The source integrity is the hash of the fetched artifact.
+        assert_eq!(
+            package.hashes().source,
+            luatest_src_rock_bytes().hash().await.unwrap()
+        );
+        // Entrypoints expose their binaries.
+        assert!(tree.bin().join("luatest").is_file());
+    }
+
+    /// Two independent forced builds of the same rockspec must produce identical
+    /// lockfile entries (id, source, source_url, hashes). This guards the
+    /// determinism that reproducible lockfiles depend on.
+    #[tokio::test]
+    async fn force_build_is_deterministic() {
+        let dir1 = assert_fs::TempDir::new().unwrap();
+        let config1 = luatest_config(&dir1);
+        let tree1 = config1.user_tree(LuaVersion::Lua51).unwrap();
+
+        let dir2 = assert_fs::TempDir::new().unwrap();
+        let config2 = luatest_config(&dir2);
+        let tree2 = config2.user_tree(LuaVersion::Lua51).unwrap();
+
+        let package1 =
+            build_luatest(&config1, &tree1, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        let package2 =
+            build_luatest(&config2, &tree2, EntryType::Entrypoint, BuildBehaviour::Force).await;
+
+        assert_eq!(package1, package2);
+        assert_eq!(package1.hashes(), package2.hashes());
+    }
+
+    /// `NoForce` must short-circuit on the tree lockfile without touching the
+    /// tree, while `Force` must rebuild and redeploy.
+    #[tokio::test]
+    async fn noforce_skips_rebuild_when_package_is_locked() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        let config = luatest_config(&dir);
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let package =
+            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        let bin = tree.bin().join("luatest");
+        assert!(bin.is_file());
+
+        // Simulate a committed install by writing the package into the tree lockfile.
+        {
+            let mut lockfile = tree.lockfile().unwrap().write_guard();
+            lockfile.add_entrypoint(&package);
+        }
+
+        // Simulate a partially broken install.
+        std::fs::remove_file(&bin).unwrap();
+
+        let skipped =
+            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::NoForce).await;
+        assert_eq!(skipped.id(), package.id());
+        assert!(
+            !bin.is_file(),
+            "NoForce must not rebuild a package that is already in the lockfile"
+        );
+
+        build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        assert!(bin.is_file(), "Force must rebuild the package");
     }
 }
