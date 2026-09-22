@@ -1,71 +1,19 @@
 use crate::{
-    build::{Build, BuildBehaviour, BuildError},
-    config::Config,
-    lockfile::LocalPackage,
-    lua_installation::{LuaInstallation, LuaInstallationError},
-    luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
-    operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
-    package::PackageName,
-    project::{project_toml::LocalProjectTomlValidationError, Project},
-    tree::{self, InstallTree, TreeError},
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
+    config::Config, lockfile::LockedPackage, operations::pipeline::Pipeline, package::PackageName,
+    workspace::Workspace,
 };
 use bon::Builder;
-use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use tracing::{info_span, Instrument};
 
-use super::{InstallError, Sync, SyncError};
-
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
 pub enum BuildWorkspaceError {
+    // FIXME(vhyrro): don't use dyn here
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    LuaRocks(#[from] LuaRocksError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
-    #[error("error installind dependencies")]
-    #[diagnostic(forward(0))]
-    InstallDependencies(#[source] Box<InstallError>),
-    #[error("error installind build dependencies")]
-    #[diagnostic(forward(0))]
-    InstallBuildDependencies(#[source] Box<InstallError>),
-    #[error("syncing dependencies with the workspace lockfile failed")]
-    #[diagnostic(forward(0))]
-    SyncDependencies(#[source] Box<SyncError>),
-    #[error("error building the workspace")]
-    #[diagnostic(forward(0))]
-    Build(#[from] Box<BuildError>),
-}
-
-impl From<LuaRocksInstallError> for BuildWorkspaceError {
-    fn from(source: LuaRocksInstallError) -> Self {
-        Self::LuaRocksInstall(Box::new(source))
-    }
-}
-
-impl From<BuildError> for BuildWorkspaceError {
-    fn from(source: BuildError) -> Self {
-        Self::Build(Box::new(source))
-    }
+    Pipeline(Box<dyn Diagnostic + Send + Sync + 'static>),
 }
 
 #[derive(Builder)]
@@ -90,133 +38,27 @@ pub struct BuildWorkspace<'a> {
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>
     BuildWorkspaceBuilder<'_, State>
 {
-    pub async fn build(self) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
+    pub async fn build(self) -> Result<Vec<LockedPackage>, BuildWorkspaceError> {
         let build = self._build();
         let span = match &build.package {
             Some(package) => info_span!("Building workspace", package = package.to_string()),
             None => info_span!("Building workspace"),
         };
-        do_build(build).instrument(span).await
-    }
-}
-
-async fn do_build(args: BuildWorkspace<'_>) -> Result<Vec<LocalPackage>, BuildWorkspaceError> {
-    let config = args.config;
-    let workspace = args.workspace;
-    let workspace_tree = workspace.tree(config)?;
-    let build_tree = workspace.build_tree(config)?;
-    let lua = LuaInstallation::new_from_config(config).await?;
-    if !args.no_lock {
-        Sync::new(workspace, config)
-            .sync()
-            .await
-            .map_err(|err| BuildWorkspaceError::SyncDependencies(Box::new(err)))?;
-    } else {
-        let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
-        let mut dependencies_to_install = Vec::new();
-        let mut build_dependencies_to_install = Vec::new();
-        if let Some(package) = &args.package {
-            let project = workspace.select_member(package)?;
-            let project_toml = project.toml().into_local()?;
-            prepare_dependencies_for_build(
-                &project_toml,
-                &workspace_tree,
-                &mut dependencies_to_install,
-                &mut build_dependencies_to_install,
-                tree::EntryType::Entrypoint,
-            );
-        } else {
-            for project in workspace.members() {
-                let project_toml = project.toml().into_local()?;
-                prepare_dependencies_for_build(
-                    &project_toml,
-                    &workspace_tree,
-                    &mut dependencies_to_install,
-                    &mut build_dependencies_to_install,
-                    tree::EntryType::Entrypoint,
-                );
-            }
-        }
-
-        let tree = workspace.tree(config)?;
-
-        InstallDependencies::new()
-            .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
-            .build_dependencies(
-                build_dependencies_to_install
-                    .into_iter()
-                    .unique()
-                    .collect_vec(),
+        async move {
+            // NOTE: `Pipeline::run`'s future is large, so we box it to avoid inflating this frame.
+            let result = Box::pin(
+                Pipeline::new(build.config, build.workspace)
+                    .maybe_package(build.package)
+                    .no_lock(build.no_lock)
+                    .build_projects(!build.only_deps)
+                    .run(),
             )
-            .tree(&tree)
-            .lua(&lua)
-            .luarocks(&luarocks)
-            .config(config)
-            .build()
-            .await
-            .map_err(|err| BuildWorkspaceError::InstallBuildDependencies(Box::new(err)))?;
-    }
-
-    let mut packages = Vec::new();
-    if !args.only_deps {
-        if let Some(package) = &args.package {
-            let project = workspace.select_member(package)?;
-            let pkg = build_project(project, workspace, &lua, config).await?;
-            packages.push(pkg);
-        } else {
-            for project in workspace.members() {
-                let pkg = build_project(project, workspace, &lua, config).await?;
-                packages.push(pkg);
-            }
+            .await;
+            result.map_err(|err| BuildWorkspaceError::Pipeline(err.into()))
         }
+        .instrument(span)
+        .await
     }
-    Ok(packages)
-}
-
-async fn build_project(
-    project: &Project,
-    workspace: &Workspace,
-    lua: &LuaInstallation,
-    config: &Config,
-) -> Result<LocalPackage, BuildWorkspaceError> {
-    let workspace_tree = workspace.tree(config)?;
-    let project_toml = project.toml().into_local()?;
-
-    let package = Build::new()
-        .rockspec(&project_toml)
-        .lua(lua)
-        .tree(&workspace_tree)
-        .entry_type(tree::EntryType::Entrypoint)
-        .config(config)
-        .behaviour(BuildBehaviour::Force)
-        .build()
-        .await?;
-
-    let lockfile = workspace_tree.lockfile()?;
-    let dependencies = lockfile
-        .rocks()
-        .iter()
-        .filter_map(|(pkg_id, value)| {
-            if lockfile.is_entrypoint(pkg_id) {
-                Some(value)
-            } else {
-                None
-            }
-        })
-        .cloned()
-        .collect_vec();
-
-    let build_lockfile = workspace.build_tree(config)?.lockfile()?;
-
-    let mut lockfile = lockfile.write_guard();
-    lockfile.add_entrypoint(&package);
-    for dep in dependencies {
-        lockfile.add_dependency(&package, &dep);
-    }
-    for dep in build_lockfile.rocks().values() {
-        lockfile.add_build_dependency(&package, dep);
-    }
-    Ok(package)
 }
 
 #[cfg(test)]
@@ -225,7 +67,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder, fs, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion,
+        lua_version::LuaVersion, tree::InstallTree,
     };
     use assert_fs::prelude::PathCopy;
     use std::path::PathBuf;

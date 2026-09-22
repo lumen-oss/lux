@@ -4,7 +4,7 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    lockfile::LocalPackageId,
+    lockfile::LockedPackageId,
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageReq,
@@ -83,7 +83,7 @@ multiple packages satisfying your version requirements were found:
         ));
     }
 
-    let (dependencies, entrypoints): (Vec<LocalPackageId>, Vec<LocalPackageId>) = packages
+    let (dependencies, entrypoints): (Vec<LockedPackageId>, Vec<LockedPackageId>) = packages
         .iter()
         .cloned()
         .partition(|pkg_id| lockfile.is_dependency(pkg_id));

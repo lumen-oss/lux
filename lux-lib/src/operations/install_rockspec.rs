@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::{
     build::{self, BuildBehaviour, BuildError},
     config::Config,
-    lockfile::{LocalPackage, OptState, PinnedState},
+    lockfile::{LockedPackage, OptState, PinnedState},
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_rockspec::{BuildBackendSpec, LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
@@ -73,7 +73,7 @@ impl<
         State: install_rockspec_builder::State + install_rockspec_builder::IsComplete,
     > InstallRockspecBuilder<'_, T, State>
 {
-    pub async fn install(self) -> Result<LocalPackage, InstallRockspecError> {
+    pub async fn install(self) -> Result<LockedPackage, InstallRockspecError> {
         let args = self._build();
         let rockspec = args.rockspec;
         let pin = args.pin;

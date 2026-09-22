@@ -1,7 +1,7 @@
 use crate::build::utils;
 use crate::build::utils::c_dylib_extension;
 use crate::fs;
-use crate::lockfile::LocalPackage;
+use crate::lockfile::LockedPackage;
 use crate::luarocks;
 use crate::luarocks::rock_manifest::DirOrFileEntry;
 use crate::luarocks::rock_manifest::RockManifest;
@@ -42,7 +42,7 @@ pub struct Pack {
     #[builder(start_fn)]
     tree: Tree,
     #[builder(start_fn)]
-    package: LocalPackage,
+    package: LockedPackage,
 }
 
 impl<State> PackBuilder<State>

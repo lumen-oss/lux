@@ -3,7 +3,7 @@ use std::io;
 use crate::{
     config::Config,
     lockfile::{
-        LocalPackage, LocalPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
+        LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
         WorkspaceLockfile,
     },
     lua_version::{LuaVersion, LuaVersionUnset},
@@ -18,7 +18,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{Install, InstallError, PackageInstallSpec, RemoveError, SyncError, Uninstall};
+use super::{
+    InstallError, PackageInstallSpec, RemoveError, SyncError, Uninstall,
+    pipeline::install_packages::InstallPackages,
+};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UpdateError {
@@ -115,7 +118,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
     #[tracing::instrument(name = "Updating packages", skip_all)]
 
     /// Returns the packages that were installed or removed
-    pub async fn update(self) -> Result<Vec<LocalPackage>, UpdateError>
+    pub async fn update(self) -> Result<Vec<LockedPackage>, UpdateError>
     where
         State: update_builder::IsComplete,
     {
@@ -153,7 +156,7 @@ async fn update_workspace(
     workspace: Workspace,
     args: Update<'_>,
     package_db: RemotePackageDB,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let mut project_lockfile = workspace.lockfile()?.write_guard();
     let tree = workspace.tree(args.config)?;
 
@@ -166,7 +169,7 @@ async fn update_workspace(
     let updated_dependencies = update_dependency_tree(
         tree,
         &mut project_lockfile,
-        LocalPackageLockType::Regular,
+        LockedPackageLockType::Regular,
         package_db.clone(),
         args.config,
         &args.packages,
@@ -178,7 +181,7 @@ async fn update_workspace(
     let updated_test_dependencies = update_dependency_tree(
         test_tree,
         &mut project_lockfile,
-        LocalPackageLockType::Test,
+        LockedPackageLockType::Test,
         package_db.clone(),
         args.config,
         &args.test_dependencies,
@@ -190,7 +193,7 @@ async fn update_workspace(
     let updated_build_dependencies = update_dependency_tree(
         build_tree,
         &mut project_lockfile,
-        LocalPackageLockType::Build,
+        LockedPackageLockType::Build,
         package_db.clone(),
         args.config,
         &args.build_dependencies,
@@ -209,11 +212,11 @@ async fn update_workspace(
 async fn update_dependency_tree(
     tree: Tree,
     project_lockfile: &mut WorkspaceLockfile<ReadWrite>,
-    lock_type: LocalPackageLockType,
+    lock_type: LockedPackageLockType,
     package_db: RemotePackageDB,
     config: &Config,
     packages: &Option<Vec<PackageReq>>,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let lockfile = tree.lockfile()?;
     let dependencies = updatable_packages(&lockfile)
         .into_iter()
@@ -228,7 +231,7 @@ async fn update_dependency_tree(
 }
 
 fn is_included(
-    (pkg, _): &(LocalPackage, PackageReq),
+    (pkg, _): &(LockedPackage, PackageReq),
     package_reqs: &Option<Vec<PackageReq>>,
 ) -> bool {
     package_reqs.is_none()
@@ -242,7 +245,7 @@ fn is_included(
 async fn update_install_tree(
     args: Update<'_>,
     package_db: RemotePackageDB,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let tree = args
         .config
         .user_tree(LuaVersion::from(args.config)?.clone())?;
@@ -255,12 +258,12 @@ async fn update_install_tree(
 }
 
 async fn update(
-    packages: Vec<(LocalPackage, PackageReq)>,
+    packages: Vec<(LockedPackage, PackageReq)>,
     package_db: RemotePackageDB,
     tree: Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let updatable = packages
         .clone()
         .into_iter()
@@ -284,22 +287,23 @@ async fn update(
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .remove()
             .await?;
-        let updated_packages = Install::new(config)
+        let updated_packages = InstallPackages::new(config, tree)
             .packages(
                 updatable
                     .iter()
                     .map(|updatable| mk_install_spec(updatable, lockfile))
                     .collect(),
             )
-            .tree(tree)
-            .package_db(package_db)
+            .maybe_package_db(Some(package_db))
             .install()
-            .await?;
+            .await
+            .map_err(InstallError::from)
+            .map_err(UpdateError::from)?;
         Ok(updated_packages)
     }
 }
 
-fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LocalPackage, PackageReq)> {
+fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, PackageReq)> {
     lockfile
         .rocks()
         .values()
@@ -322,7 +326,7 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LocalPackage, Packa
 }
 
 fn mk_install_spec(
-    (package, req): &(LocalPackage, PackageReq),
+    (package, req): &(LockedPackage, PackageReq),
     lockfile: &Lockfile<ReadOnly>,
 ) -> PackageInstallSpec {
     let entry_type = if lockfile.is_entrypoint(&package.id()) {

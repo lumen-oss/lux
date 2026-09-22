@@ -13,7 +13,7 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{
-        LocalPackage, LocalPackageHashes, LockConstraint, LockfileError, OptState, PinnedState,
+        LockConstraint, LockedPackage, LockedPackageHashes, LockfileError, OptState, PinnedState,
     },
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::rock_manifest::RockManifest,
@@ -121,7 +121,7 @@ where
     }
 
     #[tracing::instrument(name = "Installing binary rock", skip_all)]
-    pub(crate) async fn install(self) -> Result<LocalPackage, InstallBinaryRockError> {
+    pub(crate) async fn install(self) -> Result<LockedPackage, InstallBinaryRockError> {
         let rockspec = self.rockspec;
         for (name, dep) in rockspec.external_dependencies().current_platform() {
             let _ = ExternalDependencyInfo::probe(name, dep, self.config.external_deps())?;
@@ -129,7 +129,7 @@ where
 
         rockspec.validate_lua_version_from_config(self.config)?;
 
-        let hashes = LocalPackageHashes {
+        let hashes = LockedPackageHashes {
             rockspec: rockspec.hash().await?,
             source: self.rock_bytes.hash().await?,
         };
@@ -139,7 +139,7 @@ where
             }
             _ => None,
         };
-        let mut package = LocalPackage::from(
+        let mut package = LockedPackage::from(
             &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
             self.constraint,
             rockspec.binaries(),
