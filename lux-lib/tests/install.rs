@@ -8,8 +8,8 @@ use lux_lib::{
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
     operations::{Exec, Install, PackageInstallSpec},
-    package::PackageReq,
-    tree::EntryType,
+    package::{PackageName, PackageReq},
+    tree::{EntryType, InstallTree},
 };
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -130,4 +130,50 @@ async fn test_install(install_spec: PackageInstallSpec) {
         .await
         .unwrap();
     assert!(!installed.is_empty());
+}
+
+/// Guards the resolved dependency graph recorded in the install tree lockfile:
+/// entrypoints, dependency edges, and dependency-only classification.
+#[flaky_test(tokio, times = 5)]
+async fn install_records_dependency_edges_in_tree_lockfile() {
+    let dir = TempDir::new().unwrap();
+    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+
+    let config = ConfigBuilder::new()
+        .unwrap()
+        .user_tree(Some(dir.to_path_buf()))
+        .lua_version(lua_version)
+        .build()
+        .unwrap();
+
+    let tree = config
+        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .unwrap();
+
+    // `luassert` depends on `say`.
+    let install_spec =
+        PackageInstallSpec::new("luassert@1.9.0-1".parse().unwrap(), EntryType::Entrypoint).build();
+    Install::new(&config)
+        .package(install_spec)
+        .tree(tree.clone())
+        .install()
+        .await
+        .unwrap();
+
+    let lockfile = tree.lockfile().unwrap();
+    let luassert = lockfile
+        .entrypoint(&PackageName::new("luassert".into()))
+        .expect("luassert must be recorded as an entrypoint");
+    assert_eq!(luassert.version(), &"1.9.0-1".parse().unwrap());
+
+    let say = luassert
+        .dependencies()
+        .into_iter()
+        .filter_map(|id| lockfile.get(id))
+        .find(|pkg| pkg.name().to_string() == "say")
+        .expect("luassert's lockfile entry must depend on say");
+    assert!(
+        !lockfile.is_entrypoint(&say.id()),
+        "transitive dependencies must be recorded as dependency-only"
+    );
 }

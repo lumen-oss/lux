@@ -297,6 +297,13 @@ mod tests {
         .install()
         .await
         .unwrap();
+        // The `source` integrity of a binary rock is the hash of the packed rock bytes.
+        assert_eq!(
+            local_package.hashes().source,
+            "sha256-zDmnjE2b8GxX+6j5vTCWUEBxe0aFXFVhC4JOrnAgQ2g="
+                .parse()
+                .unwrap()
+        );
         let foo_bar_module = tree
             .layout_for(&local_package)
             .src
