@@ -70,6 +70,7 @@ zip = { workspace = true }
 [dev-dependencies]
 serial_test = { version = "4.0" }
 assert_fs = "1.1"
+flaky_test = "0.2"
 
 [dependencies.lux-lib]
 version = "0.64.2"

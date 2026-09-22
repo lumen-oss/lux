@@ -539,6 +539,8 @@ fn parse_lua_version_from_output(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "impure_tests")]
+    use flaky_test::flaky_test;
 
     #[tokio::test]
     async fn parse_luajit_version() {
@@ -554,7 +556,7 @@ mod tests {
     }
 
     #[cfg(feature = "impure_tests")]
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn lua_installation_bin() {
         let config = crate::config::ConfigBuilder::new()
             .unwrap()

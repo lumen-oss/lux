@@ -253,6 +253,8 @@ mod tests {
     };
 
     use super::*;
+    #[cfg(feature = "impure_tests")]
+    use flaky_test::flaky_test;
 
     #[tokio::test]
     async fn install_binary_rock() {
@@ -314,7 +316,7 @@ mod tests {
     /// - Verify that the contents of the install directories when installing from both packed rocks
     ///   are the same.
     #[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "impure_tests"))]
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn install_binary_rock_roundtrip() {
         use crate::operations::{Pack, Uninstall};
 

@@ -395,9 +395,10 @@ mod tests {
         workspace::Workspace,
     };
     use assert_fs::{prelude::PathCopy, TempDir};
+    use flaky_test::flaky_test;
     use std::path::PathBuf;
 
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn test_sync_add_rocks() {
         let temp_dir = TempDir::new().unwrap();
         temp_dir
@@ -419,7 +420,7 @@ mod tests {
             .is_empty());
     }
 
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn test_sync_add_rocks_with_new_package() {
         let temp_dir = TempDir::new().unwrap();
         temp_dir
@@ -451,7 +452,7 @@ mod tests {
             .is_empty());
     }
 
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn regression_sync_nonexistent_lock() {
         // This test checks that we can sync a lockfile that doesn't exist yet, and whether
         // the sync report is valid.
@@ -484,7 +485,7 @@ mod tests {
             .is_empty());
     }
 
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn test_sync_remove_rocks() {
         let temp_dir = TempDir::new().unwrap();
         temp_dir

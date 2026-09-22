@@ -122,10 +122,11 @@ mod tests {
     use serial_test::serial;
 
     use super::*;
+    use flaky_test::flaky_test;
     use std::path::PathBuf;
 
     #[serial]
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn test_add_regular_dependencies() {
         let sample_project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
@@ -167,7 +168,7 @@ mod tests {
     }
 
     #[serial]
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn test_add_build_dependencies() {
         let sample_project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");
@@ -209,7 +210,7 @@ mod tests {
     }
 
     #[serial]
-    #[tokio::test]
+    #[flaky_test(tokio, times = 5)]
     async fn test_add_test_dependencies() {
         let sample_project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/init/");

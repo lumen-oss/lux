@@ -55,3 +55,26 @@ jobs:
             --test "*" \
             --no-fail-fast \
             --features vendored
+
+      - name: Run impure tests
+        if: matrix.os == 'ubuntu-24.04' && matrix.lua.feature == 'lua51'
+        run: |
+          nix develop .#${{ matrix.lua.feature }}-ci \
+            --accept-flake-config \
+            --command cargo nextest run \
+            --locked \
+            --lib \
+            --no-fail-fast \
+            --features impure_tests
+
+      - name: Run lux-lua impure tests
+        if: matrix.os == 'ubuntu-24.04' && matrix.lua.feature == 'lua51'
+        run: |
+          nix develop .#${{ matrix.lua.feature }}-ci \
+            --accept-flake-config \
+            --command cargo nextest run \
+            --locked \
+            -p lux-lua \
+            --lib \
+            --no-fail-fast \
+            --features test,impure_tests
