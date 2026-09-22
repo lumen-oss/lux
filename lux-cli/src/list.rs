@@ -21,6 +21,10 @@ pub struct ListCmd {
     /// Only list rocks that are not reachable from an entrypoint.
     #[arg(long)]
     orphans: bool,
+
+    /// Only list rocks that are not a dependency of any other rock.
+    #[arg(long)]
+    removable: bool,
 }
 
 /// List rocks that are installed in the user tree
@@ -36,6 +40,12 @@ pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
             .collect();
         available_rocks.retain(|_, packages| {
             packages.retain(|package| !reachable.contains(&package.id()));
+            !packages.is_empty()
+        });
+    }
+    if list_data.removable {
+        available_rocks.retain(|_, packages| {
+            packages.retain(|package| !lockfile.is_dependency(&package.id()));
             !packages.is_empty()
         });
     }
