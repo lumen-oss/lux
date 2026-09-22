@@ -549,15 +549,15 @@ mod tests {
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
-        lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
+        lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         package::PackageSpec,
         remote_package_source::RemotePackageSource,
         rockspec::RockBinaries,
     };
 
     #[cfg(target_os = "linux")]
-    fn mk_dummy_package(spec: PackageSpec) -> LocalPackage {
-        let hashes = LocalPackageHashes {
+    fn mk_dummy_package(spec: PackageSpec) -> LockedPackage {
+        let hashes = LockedPackageHashes {
             rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 .parse()
                 .unwrap(),
@@ -565,7 +565,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         };
-        LocalPackage::from(
+        LockedPackage::from(
             &spec,
             LockConstraint::Unconstrained,
             RockBinaries::default(),

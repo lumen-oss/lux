@@ -20,7 +20,7 @@ use crate::{
     build::{resolve_source_dir, RemotePackageSourceSpec, SrcRockSource},
     config::Config,
     fs,
-    lockfile::{LocalPackageLockType, ReadOnly, RemotePackageSourceUrl},
+    lockfile::{LockedPackageLockType, ReadOnly, RemotePackageSourceUrl},
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{
         self,
@@ -133,7 +133,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     let config = args.config;
     let mut all_packages = Vec::new();
 
-    for lock_type in LocalPackageLockType::iter() {
+    for lock_type in LockedPackageLockType::iter() {
         let (package_db, install_specs) =
             mk_resolve_args(lock_type, no_lock, &target, config).await?;
 
@@ -188,7 +188,7 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
 }
 
 async fn mk_resolve_args(
-    lock_type: LocalPackageLockType,
+    lock_type: LockedPackageLockType,
     no_lock: bool,
     target: &VendorTarget,
     config: &Config,
@@ -207,7 +207,7 @@ async fn mk_resolve_args(
             for project in workspace.members() {
                 let toml = project.toml().into_local()?;
                 push_dependencies(&lock_type, &toml, &mut install_specs)?;
-                if lock_type == LocalPackageLockType::Test {
+                if lock_type == LockedPackageLockType::Test {
                     for test_spec_dependency in toml
                         .test()
                         .current_platform()
@@ -232,31 +232,31 @@ async fn mk_resolve_args(
 }
 
 fn push_dependencies<R: Rockspec>(
-    lock_type: &LocalPackageLockType,
+    lock_type: &LockedPackageLockType,
     rockspec: &R,
     install_specs: &mut Vec<PackageInstallSpec>,
 ) -> Result<(), LocalProjectTomlValidationError> {
     let mut dependencies: Vec<PackageReq> = match lock_type {
-        LocalPackageLockType::Regular => rockspec
+        LockedPackageLockType::Regular => rockspec
             .dependencies()
             .current_platform()
             .iter()
             .map(|dep| dep.package_req().clone())
             .collect_vec(),
-        LocalPackageLockType::Test => rockspec
+        LockedPackageLockType::Test => rockspec
             .test_dependencies()
             .current_platform()
             .iter()
             .map(|dep| dep.package_req().clone())
             .collect_vec(),
-        LocalPackageLockType::Build => rockspec
+        LockedPackageLockType::Build => rockspec
             .build_dependencies()
             .current_platform()
             .iter()
             .map(|dep| dep.package_req().clone())
             .collect_vec(),
     };
-    if *lock_type == LocalPackageLockType::Build {
+    if *lock_type == LockedPackageLockType::Build {
         if let Some(backend) = luarocks_build_backend_name(rockspec) {
             dependencies.insert(0, backend.into());
         }

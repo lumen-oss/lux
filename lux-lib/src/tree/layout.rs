@@ -1,6 +1,6 @@
 use crate::{
     fs::{self, FsError},
-    lockfile::{LocalPackage, OptState},
+    lockfile::{LockedPackage, OptState},
     tree::{InstallTree, Tree},
 };
 use std::path::{Path, PathBuf};
@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 /// A custom layout for entrypoint packages.
 /// Implementations arrange symlinks so external tools can find files at the locations they expect.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
-    fn make_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
+    fn make_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()>;
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
+    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()>;
 }
 
 /// A [`CustomRockLayout`] for Neovim plugins. Packages are exposed under `<tree>/site/pack/lux/{start,opt}/<package>`
@@ -18,7 +18,7 @@ pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
 pub struct NvimLayout;
 
 impl NvimLayout {
-    fn target_for(tree: &Tree, package: &LocalPackage) -> PathBuf {
+    fn target_for(tree: &Tree, package: &LockedPackage) -> PathBuf {
         let subdir = match package.spec.opt {
             OptState::Required => "start",
             OptState::Optional => "opt",
@@ -31,7 +31,7 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn make_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
+    fn make_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()> {
         let custom_dir = Self::target_for(tree, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
@@ -49,7 +49,7 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
+    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()> {
         let target = Self::target_for(tree, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
@@ -93,7 +93,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder,
-        lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
+        lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         lua_version::LuaVersion,
         package::PackageSpec,
         remote_package_source::RemotePackageSource,
@@ -101,8 +101,8 @@ mod tests {
         tree::{EntryType, InstallTree, NvimLayout},
     };
 
-    fn mock_hashes() -> LocalPackageHashes {
-        LocalPackageHashes {
+    fn mock_hashes() -> LockedPackageHashes {
+        LockedPackageHashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                 .parse()
                 .unwrap(),
@@ -128,8 +128,8 @@ mod tests {
         (temp, tree_path, tree)
     }
 
-    fn sample_package() -> LocalPackage {
-        LocalPackage::from(
+    fn sample_package() -> LockedPackage {
+        LockedPackage::from(
             &PackageSpec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
             LockConstraint::Unconstrained,
             RockBinaries::default(),

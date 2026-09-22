@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::fs;
-use crate::lockfile::LocalPackageLockType;
+use crate::lockfile::LockedPackageLockType;
 use crate::tree::InstallTree;
 use crate::workspace::Workspace;
 use crate::workspace::WorkspaceError;
@@ -84,7 +84,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
 
     let dependency_tree = workspace.tree(config)?;
     let dependency_dirs = lockfile
-        .local_pkg_lock(&LocalPackageLockType::Regular)
+        .local_pkg_lock(&LockedPackageLockType::Regular)
         .rocks()
         .values()
         .map(|dependency| dependency_tree.layout_for(dependency).src)
@@ -93,7 +93,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
 
     let test_dependency_tree = workspace.test_tree(config)?;
     let test_dependency_dirs = lockfile
-        .local_pkg_lock(&LocalPackageLockType::Test)
+        .local_pkg_lock(&LockedPackageLockType::Test)
         .rocks()
         .values()
         .map(|dependency| test_dependency_tree.layout_for(dependency).src)

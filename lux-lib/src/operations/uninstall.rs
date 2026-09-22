@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::fs;
-use crate::lockfile::{FlushLockfileError, LocalPackage, LocalPackageId};
+use crate::lockfile::{FlushLockfileError, LockedPackage, LockedPackageId};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::tree::{EntryType, InstallTree, TreeError};
 use crate::{config::Config, tree::Tree};
@@ -31,7 +31,7 @@ pub enum RemoveError {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Uninstall<'a> {
     #[builder(field)]
-    packages: Vec<LocalPackageId>,
+    packages: Vec<LockedPackageId>,
     config: &'a Config,
     tree: Option<Tree>,
 }
@@ -43,7 +43,7 @@ where
     /// Add packages to remove.
     pub fn packages<I>(self, packages: I) -> Self
     where
-        I: IntoIterator<Item = LocalPackageId>,
+        I: IntoIterator<Item = LockedPackageId>,
     {
         Self {
             packages: self.packages.into_iter().chain(packages).collect_vec(),
@@ -52,7 +52,7 @@ where
     }
 
     /// Add a package to the set of packages to remove.
-    pub fn package(self, package: LocalPackageId) -> Self {
+    pub fn package(self, package: LockedPackageId) -> Self {
         self.packages(std::iter::once(package))
     }
 }
@@ -62,7 +62,7 @@ where
     State: uninstall_builder::State + uninstall_builder::IsComplete,
 {
     /// Remove the packages.
-    pub async fn remove(self) -> Result<Vec<LocalPackageId>, RemoveError> {
+    pub async fn remove(self) -> Result<Vec<LockedPackageId>, RemoveError> {
         let args = self._build();
         let tree = args.tree.unwrap_or(
             args.config
@@ -74,10 +74,10 @@ where
 
 // TODO: Remove dependencies recursively too!
 async fn remove(
-    package_ids: Vec<LocalPackageId>,
+    package_ids: Vec<LockedPackageId>,
     tree: Tree,
     config: &Config,
-) -> Result<Vec<LocalPackageId>, RemoveError> {
+) -> Result<Vec<LockedPackageId>, RemoveError> {
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids
@@ -121,7 +121,7 @@ async fn remove(
     ),
 )]
 async fn remove_package(
-    package: LocalPackage,
+    package: LockedPackage,
     tree: Tree,
     entry_type: EntryType,
 ) -> Result<(), RemoveError> {

@@ -1,0 +1,6 @@
+- ensure llm writes crazy comprehensive test suite before writing the reimplementation
+- ensure llm first implements structure with a bunch of todo!s so it can be reviewed before finalizing
+- ask llm to update cache.luanox.org with the right metadata for reproducibility
+- ask llm after about transactionality for trees (make builds run in separate temporary tree and copy over afterwards)
+- implement bin/ symlinking
+- replace all map_err(XYZ::from) to real thiserror errors

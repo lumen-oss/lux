@@ -7,7 +7,7 @@ use clap::Args;
 use lux_lib::{
     build::{Build, BuildBehaviour},
     config::{Config, ConfigBuilder},
-    lockfile::LocalPackage,
+    lockfile::LockedPackage,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
@@ -132,7 +132,7 @@ async fn install_project(
     package: Option<&PackageName>,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LockedPackage, PathBuf)> {
     let workspace = Workspace::current_or_err()?;
     let project = match package {
         Some(package) => workspace.select_member(package)?,
@@ -155,7 +155,7 @@ async fn install_package(
     package: &PackageReq,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LockedPackage, PathBuf)> {
     let lua_version = LuaVersion::from(config)?.clone();
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
     let packages = Install::new(config)
@@ -178,7 +178,7 @@ async fn install_rockspec(
     rockspec_path: &Path,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LockedPackage, PathBuf)> {
     let content = tokio::fs::read_to_string(&rockspec_path)
         .await
         .into_diagnostic()?;
