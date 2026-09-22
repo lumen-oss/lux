@@ -15,9 +15,11 @@ use crate::{
     },
     fs,
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
-    lua_version::LuaVersion,
     tree::{InstallTree, TreeError},
 };
+
+#[cfg(not(feature = "luau-transpile"))]
+use crate::lua_version::LuaVersion;
 
 use super::utils::{CompileCFilesError, CompileCModulesError, InstallBinaryError};
 
@@ -50,12 +52,17 @@ pub enum BuiltinBuildError {
         "the luau runtime cannot load native libraries. use pure-Luau packages or Lua"
     ))]
     LuauNativeDepsUnsupported,
-    #[error("cannot install Luau modules [{modules}] on {lua_version}")]
+    #[cfg(feature = "luau-transpile")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LuauTranspile(#[from] super::luau::LuauTranspileError),
+    #[cfg(not(feature = "luau-transpile"))]
+    #[error("cannot install Luau module `{module}` on {lua_version}")]
     #[diagnostic(help(
-        "running Luau modules on a Lua runtime requires transpilation, which is not supported yet"
+        "this build of Lux was compiled without support for transpiling Luau to Lua"
     ))]
-    LuauModulesOnLuaRuntime {
-        modules: String,
+    LuauTranspileDisabled {
+        module: String,
         lua_version: LuaVersion,
     },
 }
@@ -82,18 +89,6 @@ impl BuildBackend for BuiltinBuildSpec {
             .chain(self.modules)
             .collect::<HashMap<_, _>>();
 
-        let luau_modules = modules
-            .iter()
-            .filter_map(|(module, spec)| match spec {
-                ModuleSpec::SourcePath(source)
-                    if source.extension().is_some_and(|ext| ext == "luau") =>
-                {
-                    Some(module.to_string())
-                }
-                _ => None,
-            })
-            .collect_vec();
-
         if lua.version.is_luau() {
             let has_native_modules = modules.values().any(|spec| match spec {
                 ModuleSpec::SourcePath(source) => source.extension().is_some_and(|ext| ext == "c"),
@@ -102,11 +97,6 @@ impl BuildBackend for BuiltinBuildSpec {
             if has_native_modules {
                 return Err(BuiltinBuildError::LuauNativeDepsUnsupported);
             }
-        } else if !luau_modules.is_empty() {
-            return Err(BuiltinBuildError::LuauModulesOnLuaRuntime {
-                modules: luau_modules.join(", "),
-                lua_version: lua.version.clone(),
-            });
         }
 
         for (destination_path, module_type) in modules.iter() {
@@ -123,6 +113,24 @@ impl BuildBackend for BuiltinBuildSpec {
                             config,
                         )
                         .await?;
+                    } else if source.extension().is_some_and(|ext| ext == "luau")
+                        && !lua.version.is_luau()
+                    {
+                        #[cfg(feature = "luau-transpile")]
+                        {
+                            let absolute_source_path = build_dir.join(source);
+                            super::luau::transpile_luau_to_lua_module(
+                                &absolute_source_path,
+                                destination_path,
+                                &layout.src,
+                            )
+                            .await?;
+                        }
+                        #[cfg(not(feature = "luau-transpile"))]
+                        return Err(BuiltinBuildError::LuauTranspileDisabled {
+                            module: destination_path.to_string(),
+                            lua_version: lua.version.clone(),
+                        });
                     } else {
                         let absolute_source_path = build_dir.join(source);
                         utils::copy_lua_to_module_path(

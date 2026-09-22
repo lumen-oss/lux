@@ -102,6 +102,8 @@ pub fn dist(release: bool, opts: Option<DistOpts>) -> Result<(), DynError> {
         "module".into(),
         "--features".into(),
         lua_feature_flag.into(),
+        "--features".into(),
+        "luau-transpile".into(),
     ];
 
     if opts.vendored {

@@ -7,10 +7,11 @@ members = [
   "lux-macros",
   "lux-lsp",
   "lux-workspace-hack",
+  "kalua",
   "xtask",
   "xtask-lua",
 ]
-default-members = ["lux-cli", "lux-lib"]
+default-members = ["lux-cli", "lux-lib", "kalua"]
 resolver = "2"
 
 [workspace.package]
@@ -19,6 +20,7 @@ version = "0.48.0"
 [workspace.dependencies]
 clap_mangen = "0.3"
 clap_complete = "4"
+darklua = "0.19"
 mlua = { version = "0.11", features = [
   "serialize",
   "macros",
@@ -31,6 +33,7 @@ ignore = "0.4"
 itertools = "0.15"
 lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
 lux-macros = { version = "0.2", path = "./lux-macros" }
+kalua = { version = "0.1.0", path = "./kalua" }
 miette = { version = "7.6", features = ["derive"] }
 path-absolutize = "4.0"
 path-slash = "0.2"

@@ -27,7 +27,7 @@ platforms = [
 # exact-versions = true
 
 [traversal-excludes]
-workspace-members = ["lux-definitions", "lux-lua"]
+workspace-members = ["lux-definitions", "lux-lua", "kalua"]
 
 # NOTE: We have to exclude crates that can have mutually exclusive feature sets
 # (vendored | non-vendored, Lua version, ...)

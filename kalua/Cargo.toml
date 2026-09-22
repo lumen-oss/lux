@@ -1,0 +1,25 @@
+[package]
+name = "kalua"
+version = "0.1.0"
+description = "Transpile Luau source code to Lua (kālua: cooking in an underground oven)."
+authors = ["vhyrro <vhyrro@gmail.com>", "mrcjkb <marc@jakobi.dev>"]
+repository = "https://github.com/lumen-oss/lux"
+homepage = "https://lux.lumen-labs.org"
+license = "LGPL-3.0+"
+readme = "../README.md"
+keywords = ["luau", "lua", "transpiler"]
+categories = ["development-tools", "compilers"]
+edition = "2021"
+
+[dependencies]
+darklua = { workspace = true }
+miette = { workspace = true }
+thiserror = "2.0"
+
+[dev-dependencies]
+mlua = { workspace = true, features = ["lua51", "vendored"] }
+
+[lints.clippy]
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"

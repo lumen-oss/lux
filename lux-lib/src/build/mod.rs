@@ -46,6 +46,8 @@ mod builtin;
 mod cmake;
 mod command;
 mod luarocks;
+#[cfg(feature = "luau-transpile")]
+mod luau;
 mod make;
 mod patch;
 mod rust_binary;

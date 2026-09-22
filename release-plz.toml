@@ -13,6 +13,11 @@ changelog_path = "lux-lib/CHANGELOG.md"
 semver_check = true
 
 [[package]]
+name = "kalua"
+changelog_path = "kalua/CHANGELOG.md"
+semver_check = true
+
+[[package]]
 name = "lux-macros"
 changelog_path = "lux-macros/CHANGELOG.md"
 semver_check = false

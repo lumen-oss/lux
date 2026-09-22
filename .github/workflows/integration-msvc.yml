@@ -64,8 +64,8 @@ jobs:
         uses: taiki-e/install-action@nextest
 
       - name: Build
-        run: cargo build --locked --no-default-features --features vendored
+        run: cargo build --locked --no-default-features --features vendored,luau-transpile
 
       - name: Run tests
         run: |
-          cargo nextest run --locked --test "*" --no-fail-fast --no-default-features --features vendored
+          cargo nextest run --locked --test "*" --no-fail-fast --no-default-features --features vendored,luau-transpile

@@ -82,6 +82,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 itertools = { workspace = true }
 lux-macros = { workspace = true }
 lux-workspace-hack = { workspace = true }
+kalua = { workspace = true, optional = true }
 miette = { workspace = true }
 path-slash = { workspace = true }
 pathdiff = { workspace = true }
@@ -106,6 +107,7 @@ auth-git2 = "0.6.0"
 gag = "1.0.0"
 
 [dev-dependencies]
+mlua = { workspace = true, features = ["lua51", "vendored"] }
 httptest = { version = "0.16" }
 serial_test = { version = "4.0" }
 proptest = "1.11"
@@ -121,6 +123,7 @@ default = [
 ]
 clap = ["dep:clap"]
 gpgme = ["dep:gpgme"]
+luau-transpile = ["dep:kalua"]
 vendored = ["vendored-openssl", "vendored-libgit2"]
 vendored-openssl = ["openssl/vendored", "reqwest/native-tls-vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
