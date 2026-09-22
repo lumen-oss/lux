@@ -1,7 +1,7 @@
 use crate::{
     build::{Build, BuildBehaviour, BuildError},
     config::Config,
-    lockfile::LocalPackage,
+    lockfile::LockedPackage,
     lua_installation::{LuaInstallation, LuaInstallationError},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
@@ -80,7 +80,7 @@ impl<
     > InstallProjectBuilder<'_, T, State>
 {
     /// Returns `Some` if the `only_deps` option is set to `false`.
-    pub async fn build(self) -> Result<LocalPackage, InstallProjectError> {
+    pub async fn build(self) -> Result<LockedPackage, InstallProjectError> {
         let args = self._build();
         let config = args.config;
         let project = args.project;

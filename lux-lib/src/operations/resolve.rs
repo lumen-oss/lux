@@ -13,7 +13,7 @@ use crate::{
     build::BuildBehaviour,
     config::Config,
     lockfile::{
-        LocalPackageId, LocalPackageSpec, Lockfile, LockfilePermissions, OptState, PinnedState,
+        LockedPackageId, LockedPackageSpec, Lockfile, LockfilePermissions,
     },
     lua_rockspec::BuildBackendSpec,
     operations::{FetchVendored, FetchVendoredError},
@@ -56,12 +56,8 @@ impl Display for DependencyCycle {
 
 #[derive(Clone, Debug)]
 pub(crate) struct PackageInstallData {
-    pub build_behaviour: BuildBehaviour,
-    pub pin: PinnedState,
-    pub opt: OptState,
     pub downloaded_rock: RemoteRockDownload,
-    pub spec: LocalPackageSpec,
-    pub entry_type: tree::EntryType,
+    pub spec: LockedPackageSpec,
 }
 
 #[derive(Builder)]
@@ -87,7 +83,7 @@ where
 {
     pub(crate) async fn get_all_dependencies(
         self,
-    ) -> Result<Vec<LocalPackageId>, ResolveDependenciesError> {
+    ) -> Result<Vec<LockedPackageId>, ResolveDependenciesError> {
         let args = self._build();
         do_get_all_dependencies(args).await
     }
@@ -132,7 +128,7 @@ pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<P
 #[async_recursion]
 async fn do_get_all_dependencies<'a, P>(
     args: Resolve<'a, P>,
-) -> Result<Vec<LocalPackageId>, ResolveDependenciesError>
+) -> Result<Vec<LockedPackageId>, ResolveDependenciesError>
 where
     'a: 'async_recursion,
     P: LockfilePermissions + Send + Sync + 'static,
@@ -168,9 +164,9 @@ where
                      build_behaviour,
                      pin,
                      opt,
-                     entry_type,
                      constraint,
                      source,
+                     ..
                  }| {
                     let config = config.clone();
                     let dependencies_tx = dependencies_tx.clone();
@@ -344,7 +340,7 @@ where
                                 .await?;
 
                             let rockspec = downloaded_rock.rockspec();
-                            let local_spec = LocalPackageSpec::new(
+                            let local_spec = LockedPackageSpec::new(
                                 rockspec.package(),
                                 rockspec.version(),
                                 constraint,
@@ -356,12 +352,8 @@ where
                             );
 
                             let install_spec = PackageInstallData {
-                                build_behaviour,
-                                pin,
-                                opt,
                                 spec: local_spec.clone(),
                                 downloaded_rock,
-                                entry_type,
                             };
 
                             dependencies_tx.send(install_spec).map_err(|err| {

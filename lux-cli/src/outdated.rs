@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    config::Config, lockfile::LocalPackage, lua_version::LuaVersion, package::PackageVersion,
+    config::Config, lockfile::LockedPackage, lua_version::LuaVersion, package::PackageVersion,
     remote_package_db::RemotePackageDB, workspace::Workspace,
 };
 
@@ -49,7 +49,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
                 .map(|mb_version| mb_version.map(|version| (rock, version)))
         })
         .filter_map_ok(|mb_tuple| mb_tuple)
-        .try_collect::<_, Vec<(&LocalPackage, PackageVersion)>, _>()?;
+        .try_collect::<_, Vec<(&LockedPackage, PackageVersion)>, _>()?;
 
     let rock_list = rock_list
         .iter()

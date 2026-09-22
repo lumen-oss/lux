@@ -3,10 +3,10 @@ use itertools::Itertools;
 
 use crate::{
     config::Config,
-    lockfile::LocalPackage,
+    lockfile::LockedPackage,
     lua_installation::LuaInstallation,
     luarocks::luarocks_installation::LuaRocksInstallation,
-    operations::{Install, InstallError},
+    operations::{InstallError, pipeline::install_packages::InstallPackages},
     project::project_toml::LocalProjectToml,
     rockspec::Rockspec,
     tree::{self, InstallTree},
@@ -36,7 +36,7 @@ impl<
 {
     /// Installs the configured dependencies and build dependencies into [`Self::tree`],
     /// returning the installed regular dependencies.
-    pub(crate) async fn build(self) -> Result<Vec<LocalPackage>, InstallError> {
+    pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, InstallError> {
         let args = self._build();
         let config = args.config;
         let dependencies = args.dependencies;
@@ -47,18 +47,17 @@ impl<
         let luarocks = args.luarocks;
         if !build_dependencies.is_empty() {
             luarocks.ensure_installed(lua).await?;
-            Install::new(config)
+            InstallPackages::new(config, build_tree.clone())
                 .packages(build_dependencies.into_iter().unique().collect_vec())
-                .tree(build_tree.clone())
                 .install()
-                .await?;
+                .await
+                .map_err(InstallError::from)?;
         }
-        // for some reason, cargo can't infer the type
-        let dependencies = Install::new(config)
+        let dependencies = InstallPackages::new(config, (*tree).clone())
             .packages(dependencies.into_iter().unique().collect_vec())
-            .tree(tree.clone())
             .install()
-            .await?;
+            .await
+            .map_err(InstallError::from)?;
         Ok(dependencies)
     }
 }

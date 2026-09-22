@@ -3,7 +3,7 @@ use inquire::{Confirm, Select};
 use itertools::Itertools;
 use lux_lib::{
     config::Config,
-    lockfile::LocalPackage,
+    lockfile::LockedPackage,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     package::PackageReq,
@@ -50,7 +50,7 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
     }
 }
 
-async fn open_homepage(pkg: LocalPackage, tree: &Tree) -> Result<()> {
+async fn open_homepage(pkg: LockedPackage, tree: &Tree) -> Result<()> {
     let homepage = match get_homepage(&pkg, tree)? {
         Some(homepage) => Ok(homepage),
         None => Err(miette!(
@@ -62,7 +62,7 @@ async fn open_homepage(pkg: LocalPackage, tree: &Tree) -> Result<()> {
     Ok(())
 }
 
-fn get_homepage(pkg: &LocalPackage, tree: &Tree) -> Result<Option<Url>> {
+fn get_homepage(pkg: &LockedPackage, tree: &Tree) -> Result<Option<Url>> {
     let rockspec_content =
         std::fs::read_to_string(tree.layout_for(pkg).rockspec_path()).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&rockspec_content)?;
@@ -88,7 +88,7 @@ fn open_doc_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Result<()> {
+async fn open_local_docs(pkg: LockedPackage, tree: &Tree, config: &Config) -> Result<()> {
     let doc_dir = tree.layout_for(&pkg).doc;
     let files: Vec<String> = WalkDir::new(&doc_dir)
         .into_iter()

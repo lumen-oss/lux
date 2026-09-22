@@ -1,4 +1,4 @@
-use crate::{lockfile::LocalPackage, tree::InstallTree};
+use crate::{lockfile::LockedPackage, tree::InstallTree};
 
 use super::{Tree, TreeError};
 
@@ -8,7 +8,7 @@ use super::{Tree, TreeError};
 // Cloning isn't destructive, but it's sure expensive.
 
 impl Tree {
-    pub fn as_rock_list(&self) -> Result<Vec<LocalPackage>, TreeError> {
+    pub fn as_rock_list(&self) -> Result<Vec<LockedPackage>, TreeError> {
         let rock_list = self.list()?;
 
         Ok(rock_list.values().flatten().cloned().collect())

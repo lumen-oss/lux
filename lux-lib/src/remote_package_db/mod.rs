@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, ConfigError},
-    lockfile::{LocalPackageLock, LockfileIntegrityError},
+    lockfile::{LockedPackageLock, LockfileIntegrityError},
     manifest::{Manifest, ManifestError},
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
@@ -19,7 +19,7 @@ pub struct RemotePackageDB(Impl);
 #[derive(Clone, Debug)]
 enum Impl {
     LuarocksManifests(Vec<Manifest>),
-    LocalPackageLocks(Vec<LocalPackageLock>),
+    LockedPackageLocks(Vec<LockedPackageLock>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -90,7 +90,7 @@ impl RemotePackageDB {
                     None => Err(SearchError::RockNotFound(package_req.clone())),
                 }
             }
-            Impl::LocalPackageLocks(locks) => {
+            Impl::LockedPackageLocks(locks) => {
                 match locks
                     .iter()
                     .filter_map(|lock| lock.has_rock(package_req, filter.clone()))
@@ -138,7 +138,7 @@ impl RemotePackageDB {
                         })
                 })
                 .collect(),
-            Impl::LocalPackageLocks(locks) => locks
+            Impl::LockedPackageLocks(locks) => locks
                 .iter()
                 .flat_map(|lock| lock.rocks().values())
                 .filter_map(|package| {
@@ -180,8 +180,8 @@ impl From<Manifest> for RemotePackageDB {
     }
 }
 
-impl From<Vec<LocalPackageLock>> for RemotePackageDB {
-    fn from(locks: Vec<LocalPackageLock>) -> Self {
-        Self(Impl::LocalPackageLocks(locks))
+impl From<Vec<LockedPackageLock>> for RemotePackageDB {
+    fn from(locks: Vec<LockedPackageLock>) -> Self {
+        Self(Impl::LockedPackageLocks(locks))
     }
 }

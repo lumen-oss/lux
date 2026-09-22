@@ -158,10 +158,17 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
 
     if let Some(package) = test.package {
         let project = workspace.select_member(&package)?;
-        run_project_tests(&workspace, project, no_lock, &test.args, &test.env, config).await
+        // NOTE: `run_project_tests`' future is large, so we box it to avoid inflating this frame.
+        Box::pin(run_project_tests(
+            &workspace, project, no_lock, &test.args, &test.env, config,
+        ))
+        .await
     } else {
         for project in workspace.members() {
-            run_project_tests(&workspace, project, no_lock, &test.args, &test.env, config).await?;
+            Box::pin(run_project_tests(
+                &workspace, project, no_lock, &test.args, &test.env, config,
+            ))
+            .await?;
         }
         Ok(())
     }
@@ -186,12 +193,15 @@ async fn run_project_tests(
         Sync::new(workspace, &test_config).test(true).sync().await?;
     }
 
-    BuildWorkspace::new(workspace, &test_config)
-        .package(project.toml().package().clone())
-        .no_lock(no_lock)
-        .only_deps(false)
-        .build()
-        .await?;
+    // NOTE: `BuildWorkspace::build`'s future is large, so we box it to avoid inflating this frame.
+    Box::pin(
+        BuildWorkspace::new(workspace, &test_config)
+            .package(project.toml().package().clone())
+            .no_lock(no_lock)
+            .only_deps(false)
+            .build(),
+    )
+    .await?;
 
     let lua_version = project.lua_version(&test_config)?;
     let project_tree = workspace.lua_version_tree(lua_version, &test_config)?;

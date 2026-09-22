@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use lux_lib::lockfile::{LocalPackage, LocalPackageId, Lockfile, ReadOnly};
+use lux_lib::lockfile::{LockedPackage, LockedPackageId, Lockfile, ReadOnly};
 use mlua::prelude::*;
 use path_absolutize::Absolutize;
 
@@ -47,8 +47,8 @@ fn current_file(lua: &Lua) -> Option<String> {
 
 fn rock_layout(
     tree_root: &Path,
-    package_id: &LocalPackageId,
-    package: &LocalPackage,
+    package_id: &LockedPackageId,
+    package: &LockedPackage,
 ) -> (PathBuf, PathBuf) {
     let rock_path = tree_root.join(format!(
         "{}-{}@{}",
@@ -218,7 +218,7 @@ fn load_from_workspace_tree(
     // with the lux tree and malform the package hash. In this case, this
     // should never cause any security-related problems anyway, as we'll
     // crash right after this function returns None.
-    let owner_id = unsafe { LocalPackageId::from_unchecked(module_hash.to_string()) };
+    let owner_id = unsafe { LockedPackageId::from_unchecked(module_hash.to_string()) };
     let Some(package) = lockfile.get(&owner_id) else {
         return Ok(None);
     };

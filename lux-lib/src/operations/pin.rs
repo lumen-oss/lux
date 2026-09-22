@@ -2,7 +2,7 @@ use std::io;
 
 use crate::{
     fs,
-    lockfile::{FlushLockfileError, LocalPackageId, PinnedState},
+    lockfile::{FlushLockfileError, LockedPackageId, PinnedState},
     package::PackageSpec,
     tree::{InstallTree, Tree, TreeError},
 };
@@ -11,13 +11,13 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-// TODO(vhyrro): Differentiate pinned LocalPackages at the type level?
+// TODO(vhyrro): Differentiate pinned LockedPackages at the type level?
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PinError {
     #[error("package with ID '{0}' not found in the lockfile")]
     #[diagnostic(help("this is probably a bug"))]
-    PackageNotFound(LocalPackageId),
+    PackageNotFound(LockedPackageId),
     #[error("rock {rock} is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {
         pin_state: PinnedState,
@@ -46,7 +46,7 @@ pub enum PinError {
 }
 
 pub fn set_pinned_state(
-    package_id: &LocalPackageId,
+    package_id: &LockedPackageId,
     tree: &Tree,
     pin: PinnedState,
 ) -> Result<(), PinError> {
