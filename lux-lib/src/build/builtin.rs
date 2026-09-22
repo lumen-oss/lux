@@ -15,7 +15,6 @@ use crate::{
     },
     fs,
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
-    lua_version::LuaVersion,
     tree::{InstallTree, TreeError},
 };
 
@@ -50,14 +49,9 @@ pub enum BuiltinBuildError {
         "the luau runtime cannot load native libraries. use pure-Luau packages or Lua"
     ))]
     LuauNativeDepsUnsupported,
-    #[error("cannot install Luau modules [{modules}] on {lua_version}")]
-    #[diagnostic(help(
-        "running Luau modules on a Lua runtime requires transpilation, which is not supported yet"
-    ))]
-    LuauModulesOnLuaRuntime {
-        modules: String,
-        lua_version: LuaVersion,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LuauTranspile(#[from] super::luau::LuauTranspileError),
 }
 
 impl BuildBackend for BuiltinBuildSpec {
@@ -82,18 +76,6 @@ impl BuildBackend for BuiltinBuildSpec {
             .chain(self.modules)
             .collect::<HashMap<_, _>>();
 
-        let luau_modules = modules
-            .iter()
-            .filter_map(|(module, spec)| match spec {
-                ModuleSpec::SourcePath(source)
-                    if source.extension().is_some_and(|ext| ext == "luau") =>
-                {
-                    Some(module.to_string())
-                }
-                _ => None,
-            })
-            .collect_vec();
-
         if lua.version.is_luau() {
             let has_native_modules = modules.values().any(|spec| match spec {
                 ModuleSpec::SourcePath(source) => source.extension().is_some_and(|ext| ext == "c"),
@@ -102,11 +84,6 @@ impl BuildBackend for BuiltinBuildSpec {
             if has_native_modules {
                 return Err(BuiltinBuildError::LuauNativeDepsUnsupported);
             }
-        } else if !luau_modules.is_empty() {
-            return Err(BuiltinBuildError::LuauModulesOnLuaRuntime {
-                modules: luau_modules.join(", "),
-                lua_version: lua.version.clone(),
-            });
         }
 
         for (destination_path, module_type) in modules.iter() {
@@ -121,6 +98,16 @@ impl BuildBackend for BuiltinBuildSpec {
                             lua,
                             external_dependencies,
                             config,
+                        )
+                        .await?;
+                    } else if source.extension().is_some_and(|ext| ext == "luau")
+                        && !lua.version.is_luau()
+                    {
+                        let absolute_source_path = build_dir.join(source);
+                        super::luau::transpile_luau_to_lua_module(
+                            &absolute_source_path,
+                            destination_path,
+                            &layout.src,
                         )
                         .await?;
                     } else {
