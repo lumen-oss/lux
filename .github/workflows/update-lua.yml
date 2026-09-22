@@ -1,0 +1,25 @@
+---
+name: update-lua
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Update Lua
+        run: nix run .#update-lua
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PAT }}
+          branch: update-lua
+          title: "chore: update lua"
+          commit-message: "chore: update lua"
+          delete-branch: true
