@@ -44,6 +44,7 @@ pub struct Config {
     enable_development_packages: bool,
     server: Url,
     extra_servers: Vec<Url>,
+    extra_wally_registries: Vec<Url>,
     namespace: Option<String>,
     lua_dir: Option<PathBuf>,
     lua_version: Option<LuaVersion>,
@@ -146,6 +147,12 @@ impl Config {
     /// Additional luarocks repository servers
     pub fn extra_servers(&self) -> &Vec<Url> {
         self.extra_servers.as_ref()
+    }
+
+    /// Additional wally package registries (git-index URLs), in addition to the
+    /// official wally index.
+    pub fn extra_wally_registries(&self) -> &Vec<Url> {
+        self.extra_wally_registries.as_ref()
     }
 
     /// Enabled luarocks repository servers that provide dev/scm rocks
@@ -405,6 +412,12 @@ pub struct ConfigBuilder {
         serialize_with = "serialize_url_vec"
     )]
     extra_servers: Option<Vec<Url>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_url_vec",
+        serialize_with = "serialize_url_vec"
+    )]
+    extra_wally_registries: Option<Vec<Url>>,
     namespace: Option<String>,
     lua_version: Option<LuaVersion>,
     user_tree: Option<PathBuf>,
@@ -492,6 +505,14 @@ impl ConfigBuilder {
     pub fn extra_servers(self, extra_servers: Option<Vec<Url>>) -> Self {
         Self {
             extra_servers: extra_servers.or(self.extra_servers),
+            ..self
+        }
+    }
+
+    /// Additional wally package registries, in addition to the official wally index
+    pub fn extra_wally_registries(self, extra_wally_registries: Option<Vec<Url>>) -> Self {
+        Self {
+            extra_wally_registries: extra_wally_registries.or(self.extra_wally_registries),
             ..self
         }
     }
@@ -763,6 +784,7 @@ impl ConfigBuilder {
         Self {
             server: other.server.or(self.server),
             extra_servers: other.extra_servers.or(self.extra_servers),
+            extra_wally_registries: other.extra_wally_registries.or(self.extra_wally_registries),
             namespace: other.namespace.or(self.namespace),
             lua_version: other.lua_version.or(self.lua_version),
             user_tree: other.user_tree.or(self.user_tree),
@@ -812,6 +834,7 @@ impl ConfigBuilder {
                 Url::parse("https://luarocks.org/").unwrap_unchecked()
             }),
             extra_servers: self.extra_servers.unwrap_or_default(),
+            extra_wally_registries: self.extra_wally_registries.unwrap_or_default(),
             namespace: self.namespace,
             lua_dir: self.lua_dir,
             lua_version,
@@ -854,6 +877,7 @@ impl From<Config> for ConfigBuilder {
             enable_development_packages: Some(value.enable_development_packages),
             server: Some(value.server),
             extra_servers: Some(value.extra_servers),
+            extra_wally_registries: Some(value.extra_wally_registries),
             namespace: value.namespace,
             lua_dir: value.lua_dir,
             lua_version: value.lua_version,

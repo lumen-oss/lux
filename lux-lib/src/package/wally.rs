@@ -4,12 +4,16 @@ use std::{
     collections::BTreeMap, fmt::{self, Display}, io, path::{Path, PathBuf}, str::FromStr,
 };
 
+use git2::Repository;
 use semver::{Version, VersionReq};
 use serde::{de::Error as _, ser::Serializer, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use url::Url;
 
 pub(crate) const MANIFEST_FILE_NAME: &str = "wally.toml";
+
+/// The official wally package index.
+pub(crate) const DEFAULT_INDEX_URL: &str = "https://github.com/UpliftGames/wally-index";
 
 /// A package name, of the form `scope/name`.
 ///
@@ -312,6 +316,36 @@ impl WallyIndex {
         Ok(Self { path, config })
     }
 
+    /// Open a wally index, cloning it into `cache_dir` and updating it if needed.
+    pub(crate) fn open(url: &Url, cache_dir: &Path) -> Result<Self, WallyIndexError> {
+        let path = Self::cache_path(url, cache_dir);
+        if path.join(".git").is_dir() {
+            let repo = Repository::open(&path)?;
+            let mut remote = repo.find_remote("origin")?;
+            remote.fetch(&[] as &[&str], None, None)?;
+            let head = repo.refname_to_id("refs/remotes/origin/HEAD")?;
+            repo.reset(&repo.find_object(head, None)?, git2::ResetType::Hard, None)?;
+        } else {
+            if path.exists() {
+                std::fs::remove_dir_all(&path)?;
+            }
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            Repository::clone(url.as_str(), &path)?;
+        }
+        Self::new(path)
+    }
+
+    fn cache_path(url: &Url, cache_dir: &Path) -> PathBuf {
+        let ident: String = url
+            .as_str()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        cache_dir.join("wally").join("index").join(ident)
+    }
+
     pub(crate) fn config(&self) -> &WallyIndexConfig {
         &self.config
     }
@@ -348,6 +382,8 @@ pub(crate) enum WallyIndexError {
     Io(#[from] io::Error),
     #[error("failed to parse wally index")]
     Json(#[from] serde_json::Error),
+    #[error("failed to fetch wally index")]
+    Git(#[from] git2::Error),
 }
 
 #[cfg(test)]
@@ -477,6 +513,42 @@ testez = "roblox/testez@0.4.1"
         assert_eq!(
             index.find(&req).unwrap().unwrap().package.version,
             Version::new(2, 4, 0)
+        );
+    }
+
+    #[test]
+    fn opens_local_index() {
+        let remote = assert_fs::TempDir::new().unwrap();
+        std::fs::write(
+            remote.path().join("config.json"),
+            r#"{"api":"https://api.wally.run"}"#,
+        )
+        .unwrap();
+        let pkg_path = remote.path().join("evaera").join("promise");
+        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
+        let jsonl = serde_json::to_string(&package(Version::new(1, 0, 0))).unwrap();
+        std::fs::write(&pkg_path, format!("{jsonl}\n")).unwrap();
+
+        let repo = git2::Repository::init(remote.path()).unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index
+                .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+                .unwrap();
+            index.write().unwrap();
+            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+            let sig = git2::Signature::now("test", "test@example.com").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+                .unwrap();
+        }
+
+        let cache = assert_fs::TempDir::new().unwrap();
+        let url = Url::from_directory_path(remote.path()).unwrap();
+        let index = WallyIndex::open(&url, cache.path()).unwrap();
+        let req: PackageReq = "evaera/promise@1".parse().unwrap();
+        assert_eq!(
+            index.find(&req).unwrap().unwrap().package.version,
+            Version::new(1, 0, 0)
         );
     }
 }
