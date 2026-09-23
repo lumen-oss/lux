@@ -3,10 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     config::{Config, ConfigError},
     lockfile::{LockfileIntegrityError, PackageLock},
-    lua_rockspec::RemoteLuaRockspec,
+    lua_rockspec::{RemoteLuaRockspec, RockSourceSpec},
     manifest::{Manifest, ManifestError},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
-    operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
+    operations::{
+        download_wally_rock, Download, FetchVendored, PackageInstallSpec, RemoteRockDownload,
+    },
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage, RemotePackageType,
         RemotePackageTypeFilterSpec,
@@ -390,11 +392,20 @@ impl PackageDB {
         config: &Config,
     ) -> Result<FoundPackage, DiscoverError> {
         if let Some(source) = &spec.source {
-            let download = RemoteRockDownload::from_package_req_and_source_spec(
-                spec.package.clone(),
-                source.clone(),
-            )
-            .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
+            let download = match source {
+                RockSourceSpec::Wally(wally_req) => {
+                    download_wally_rock(&spec.package, wally_req, config)
+                        .await
+                        .map_err(|err| {
+                            DiscoverError::Download(spec.package.clone(), Box::new(err))
+                        })?
+                }
+                _ => RemoteRockDownload::from_package_req_and_source_spec(
+                    spec.package.clone(),
+                    source.clone(),
+                )
+                .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?,
+            };
             let rockspec = download.rockspec().clone();
             let package = RemotePackage::new(
                 spec.package.clone().try_into().map_err(|err| {
