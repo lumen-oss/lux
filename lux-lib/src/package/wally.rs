@@ -1,7 +1,11 @@
 #![allow(dead_code)]
 
 use std::{
-    collections::BTreeMap, fmt::{self, Display}, io, path::{Path, PathBuf}, str::FromStr,
+    collections::{BTreeMap, HashMap},
+    fmt::{self, Display},
+    io,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use git2::Repository;
@@ -10,10 +14,16 @@ use serde::{de::Error as _, ser::Serializer, Deserialize, Deserializer, Serializ
 use thiserror::Error;
 use url::Url;
 
+use crate::lua_rockspec::{LuaModule, ModuleSpec, ParseLuaModuleError};
+
 pub(crate) const MANIFEST_FILE_NAME: &str = "wally.toml";
 
 /// The official wally package index.
 pub(crate) const DEFAULT_INDEX_URL: &str = "https://github.com/UpliftGames/wally-index";
+
+/// The wally client version advertised when downloading package contents.
+/// The registry rejects requests without a sufficiently recent `Wally-Version` header.
+pub(crate) const WALLY_VERSION: &str = "0.3.2";
 
 /// A package name, of the form `scope/name`.
 ///
@@ -377,7 +387,7 @@ impl WallyIndex {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum WallyIndexError {
+pub enum WallyIndexError {
     #[error("failed to read wally index")]
     Io(#[from] io::Error),
     #[error("failed to parse wally index")]
@@ -386,9 +396,83 @@ pub(crate) enum WallyIndexError {
     Git(#[from] git2::Error),
 }
 
+/// Compute the module map for a wally package's contents.
+pub(crate) fn modules_from_zip(
+    bytes: &[u8],
+) -> Result<HashMap<LuaModule, ModuleSpec>, WallyModulesError> {
+    let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes))?;
+    let mut modules = HashMap::new();
+    for index in 0..archive.len() {
+        let file = archive.by_index(index)?;
+        let name = file.name().to_string();
+        if name.ends_with('/') {
+            continue;
+        }
+        let path = Path::new(&name);
+        if !is_lua_path(path) || is_test_file(path) {
+            continue;
+        }
+        modules.insert(
+            lua_module_from_entry(path)?,
+            ModuleSpec::SourcePath(path.to_path_buf()),
+        );
+    }
+    Ok(modules)
+}
+
+fn is_lua_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|ext| ext.to_str()),
+        Some("lua" | "luau")
+    )
+}
+
+fn is_test_file(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(|stem| stem.ends_with(".test") || stem.ends_with(".spec"))
+}
+
+fn lua_module_from_entry(path: &Path) -> Result<LuaModule, ParseLuaModuleError> {
+    let stripped: PathBuf = match path.components().next() {
+        Some(component)
+            if matches!(component.as_os_str().to_str(), Some("src" | "lua" | "lib")) =>
+        {
+            path.components().skip(1).collect()
+        }
+        _ => path.to_path_buf(),
+    };
+    if stripped
+        .parent()
+        .is_none_or(|parent| parent.as_os_str().is_empty())
+    {
+        let mut file = stripped;
+        file.set_extension("");
+        LuaModule::from_pathbuf(file)
+    } else {
+        let mut module = LuaModule::from_pathbuf(stripped.to_path_buf())?;
+        if matches!(
+            stripped.file_name().and_then(|name| name.to_str()),
+            Some("init.lua" | "init.luau")
+        ) {
+            module = module.join(unsafe { &LuaModule::from_str("init").unwrap_unchecked() });
+        }
+        Ok(module)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum WallyModulesError {
+    #[error("failed to read package contents archive")]
+    Zip(#[from] zip::result::ZipError),
+    #[error("invalid module path in package contents")]
+    Module(#[from] ParseLuaModuleError),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     const MANIFEST: &str = r#"
 [package]
@@ -549,6 +633,37 @@ testez = "roblox/testez@0.4.1"
         assert_eq!(
             index.find(&req).unwrap().unwrap().package.version,
             Version::new(1, 0, 0)
+        );
+    }
+
+    #[test]
+    fn computes_modules_from_zip() {
+        let mut bytes = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));
+            let options = zip::write::SimpleFileOptions::default();
+            for entry in [
+                "init.luau",
+                "init.test.luau",
+                "src/foo.luau",
+                "src/bar/baz.luau",
+                "sub/init.lua",
+                "foo.spec.lua",
+                "wally.toml",
+            ] {
+                zip.start_file(entry, options).unwrap();
+                zip.write_all(b"").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+
+        let modules = modules_from_zip(&bytes).unwrap();
+        let mut names: Vec<_> = modules.keys().map(|module| module.to_string()).collect();
+        names.sort();
+        assert_eq!(names, vec!["bar.baz", "foo", "init", "sub.init"]);
+        assert_eq!(
+            modules.get(&LuaModule::from_str("foo").unwrap()),
+            Some(&ModuleSpec::SourcePath("src/foo.luau".into()))
         );
     }
 }
