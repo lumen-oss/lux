@@ -116,6 +116,7 @@
                   zlib
                   gnum4
                   luau
+                  rojo
                   curl
                   jq
                 ])
