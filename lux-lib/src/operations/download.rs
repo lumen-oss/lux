@@ -336,6 +336,7 @@ async fn download_remote_rock(
                 source_url: RemotePackageSourceUrl::Url { url },
             })
         }
+        RemotePackageSource::Wally(_) => unimplemented!("wally packages"),
         RemotePackageSource::Local => Err(SearchAndDownloadError::LocalSource),
         #[cfg(test)]
         RemotePackageSource::Test => unimplemented!(),
