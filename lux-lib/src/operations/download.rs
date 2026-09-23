@@ -183,6 +183,7 @@ impl RemoteRockDownload {
             }
             RockSourceSpec::File(path) => RemotePackageSourceUrl::File { path: path.clone() },
             RockSourceSpec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
+            RockSourceSpec::Wally(_) => unimplemented!(),
         });
         let rockspec = RemoteLuaRockspec::from_package_and_source_spec(package_spec, source_spec);
         let rockspec_content = rockspec

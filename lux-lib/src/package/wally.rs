@@ -56,7 +56,7 @@ impl FromStr for PackageNamePart {
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub(crate) enum PackageNameError {
+pub enum PackageNameError {
     #[error("wally package name part '{0}' is invalid: it must contain only lowercase letters, digits and '-', and be 1-64 characters long")]
     InvalidPart(String),
     #[error("wally package name must be of the form SCOPE/NAME")]
@@ -102,7 +102,7 @@ impl<'de> Deserialize<'de> for PackageName {
 ///
 /// A bare version defaults to the `^` ("compatible") requirement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct PackageReq {
+pub struct PackageReq {
     name: PackageName,
     version_req: VersionReq,
 }
@@ -150,7 +150,7 @@ impl FromStr for PackageReq {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum PackageReqError {
+pub enum PackageReqError {
     #[error("wally package requirement must be of the form SCOPE/NAME@VERSION_REQ")]
     InvalidFormat,
     #[error(transparent)]
