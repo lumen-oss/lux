@@ -267,7 +267,7 @@ impl InstallTree for Tree {
     fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError> {
         if let Some(custom_layout) = &self.entrypoint_layout {
             if entry_type.is_entrypoint() || custom_layout.layout_dependencies() {
-                custom_layout.make_symlinks(self, &package.spec)?;
+                custom_layout.apply_layout(self, &package.spec)?;
             }
         }
 
@@ -277,7 +277,7 @@ impl InstallTree for Tree {
     fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError> {
         if let Some(layout) = &self.entrypoint_layout {
             if entry_type.is_entrypoint() || layout.layout_dependencies() {
-                layout.remove_symlinks(self, &package.spec)?;
+                layout.remove_layout(self, &package.spec)?;
             }
         }
 
