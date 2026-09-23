@@ -104,7 +104,7 @@ where
                         }
                     }
                 }
-                RockSourceSpec::File(_) => Err(err),
+                RockSourceSpec::File(_) | RockSourceSpec::Wally(_) => Err(err),
             },
             Ok(metadata) => Ok(metadata),
         }
@@ -365,6 +365,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 source_url: RemotePackageSourceUrl::Url { url: url.clone() },
             }
         }
+        RockSourceSpec::Wally(_) => unimplemented!(),
         RockSourceSpec::File(path) => {
             tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 
