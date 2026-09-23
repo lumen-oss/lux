@@ -295,6 +295,16 @@ impl HasModRev for SemVer {
 
 impl Display for SemVer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self
+            .version
+            .pre
+            .as_str()
+            .chars()
+            .any(|c| c.is_ascii_alphabetic())
+        {
+            // pre-release instead of specrev
+            return self.version.fmt(f);
+        }
         let (version_str, remainder) = split_semver_version(&self.version.to_string());
         let mut luarocks_version_str = version_str.split('.').take(self.component_count).join(".");
         if let Some(remainder) = remainder {
@@ -733,7 +743,12 @@ fn correct_version_req_str(text: &str) -> String {
 
 fn trim_specrev(version_str: &str) -> &str {
     if let Some(pos) = version_str.rfind('-') {
-        &version_str[..pos]
+        let suffix = &version_str[pos + 1..];
+        if suffix.chars().all(|c| c.is_ascii_digit()) {
+            &version_str[..pos]
+        } else {
+            version_str
+        }
     } else {
         version_str
     }
@@ -764,10 +779,8 @@ fn split_specrev(version_str: &str) -> Result<(&str, SpecRev), SpecrevParseError
                         })?;
                 Ok((&version_str[..pos], specrev.into()))
             } else {
-                Err(SpecrevParseError::InvalidSpecrev {
-                    specrev: specrev_str.into(),
-                    full_version: version_str.into(),
-                })
+                // A non-numeric suffix is a semver prerelease, not a specrev.
+                Ok((version_str, 1.into()))
             }
         } else {
             Err(SpecrevParseError::InvalidVersion(version_str.into()))
@@ -846,16 +859,18 @@ fn correct_version_string(version: &str) -> String {
 }
 
 fn correct_prerelease_version_string(version: &str) -> String {
+    if version.contains('-') {
+        return version.to_string();
+    }
     let parts: Vec<&str> = version.split('.').collect();
     if parts.len() > 3 {
-        let corrected_version = format!(
+        format!(
             "{}.{}.{}-{}",
             parts[0],
             parts[1],
             parts[2],
             parts[3..].join(".")
-        );
-        corrected_version
+        )
     } else {
         version.to_string()
     }
@@ -952,6 +967,35 @@ mod tests {
         assert!(req.matches(&PackageVersion::parse("2.1.0.10-1").unwrap()));
         assert!(req.matches(&PackageVersion::parse("2.1.0-1").unwrap()));
         assert!(!req.matches(&PackageVersion::parse("2.0.9-1").unwrap()));
+    }
+
+    #[test]
+    fn parse_semver_prerelease() {
+        let prerelease = PackageVersion::parse("1.2.3-alpha.1").unwrap();
+        assert_eq!(
+            prerelease,
+            PackageVersion::SemVer(SemVer {
+                version: "1.2.3-alpha.1".parse().unwrap(),
+                component_count: 3,
+                specrev: 1.into()
+            })
+        );
+        assert_eq!(prerelease.to_string(), "1.2.3-alpha.1");
+        assert_eq!(
+            PackageVersion::parse("1.2.3-1").unwrap().to_string(),
+            "1.2.3-1"
+        );
+        assert_eq!(
+            PackageVersion::parse(&prerelease.to_string()).unwrap(),
+            prerelease
+        );
+    }
+
+    #[test]
+    fn prerelease_req_matches() {
+        let req = PackageVersionReq::parse("=1.2.3-alpha.1").unwrap();
+        assert!(req.matches(&PackageVersion::parse("1.2.3-alpha.1").unwrap()));
+        assert!(!req.matches(&PackageVersion::parse("1.2.3-alpha.2").unwrap()));
     }
 
     #[tokio::test]
