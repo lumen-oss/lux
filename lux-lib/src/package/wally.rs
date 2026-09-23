@@ -1,0 +1,371 @@
+#![allow(dead_code)]
+
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display},
+    path::Path,
+    str::FromStr,
+};
+
+use semver::{Version, VersionReq};
+use serde::{de::Error as _, ser::Serializer, Deserialize, Deserializer, Serialize};
+use thiserror::Error;
+use url::Url;
+
+pub(crate) const MANIFEST_FILE_NAME: &str = "wally.toml";
+
+/// A package name, of the form `scope/name`.
+///
+/// Both parts contain only lowercase letters, digits, and dashes (`-`), and
+/// are at most 64 characters long.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct PackageName {
+    scope: PackageNamePart,
+    name: PackageNamePart,
+}
+
+impl PackageName {
+    pub(crate) fn scope(&self) -> &str {
+        self.scope.as_str()
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
+/// A part of a [`PackageName`]: lowercase letters, digits, and dashes, 1-64 chars.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct PackageNamePart(String);
+
+impl PackageNamePart {
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl FromStr for PackageNamePart {
+    type Err = PackageNameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let valid = s
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        if !valid || s.is_empty() || s.len() > 64 {
+            return Err(PackageNameError::InvalidPart(s.to_string()));
+        }
+        Ok(Self(s.to_string()))
+    }
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub(crate) enum PackageNameError {
+    #[error("wally package name part '{0}' is invalid: it must contain only lowercase letters, digits and '-', and be 1-64 characters long")]
+    InvalidPart(String),
+    #[error("wally package name must be of the form SCOPE/NAME")]
+    InvalidFormat,
+}
+
+impl Display for PackageName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.scope.as_str(), self.name.as_str())
+    }
+}
+
+impl FromStr for PackageName {
+    type Err = PackageNameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (scope, name) = s.split_once('/').ok_or(PackageNameError::InvalidFormat)?;
+        if name.contains('/') {
+            return Err(PackageNameError::InvalidFormat);
+        }
+        Ok(Self {
+            scope: scope.parse()?,
+            name: name.parse()?,
+        })
+    }
+}
+
+impl Serialize for PackageName {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for PackageName {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(D::Error::custom)
+    }
+}
+
+/// A requirement on a package: a name plus a SemVer range.
+///
+/// A bare version defaults to the `^` ("compatible") requirement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct PackageReq {
+    name: PackageName,
+    version_req: VersionReq,
+}
+
+impl PackageReq {
+    pub(crate) fn new(name: PackageName, version_req: VersionReq) -> Self {
+        Self { name, version_req }
+    }
+
+    pub(crate) fn name(&self) -> &PackageName {
+        &self.name
+    }
+
+    pub(crate) fn version_req(&self) -> &VersionReq {
+        &self.version_req
+    }
+
+    pub(crate) fn matches(&self, name: &PackageName, version: &Version) -> bool {
+        self.name == *name && self.version_req.matches(version)
+    }
+}
+
+impl Display for PackageReq {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.name, self.version_req)
+    }
+}
+
+impl FromStr for PackageReq {
+    type Err = PackageReqError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (name, req) = s.split_once('@').ok_or(PackageReqError::InvalidFormat)?;
+        if req.is_empty() || req.chars().all(char::is_whitespace) {
+            return Err(PackageReqError::InvalidFormat);
+        }
+        let name: PackageName = name.parse()?;
+        let version_req = if Version::parse(req).is_ok() {
+            VersionReq::parse(&format!("^{req}"))?
+        } else {
+            VersionReq::parse(req)?
+        };
+        Ok(Self::new(name, version_req))
+    }
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum PackageReqError {
+    #[error("wally package requirement must be of the form SCOPE/NAME@VERSION_REQ")]
+    InvalidFormat,
+    #[error(transparent)]
+    Name(#[from] PackageNameError),
+    #[error(transparent)]
+    Version(#[from] semver::Error),
+}
+
+impl Serialize for PackageReq {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for PackageReq {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(D::Error::custom)
+    }
+}
+
+/// The realm a package can be used in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Realm {
+    /// May depend on any realm.
+    Server,
+    /// May depend only on [`Realm::Shared`].
+    Shared,
+    /// Only valid as a root dependency.
+    Dev,
+}
+
+impl Realm {
+    pub(crate) fn is_dependency_valid(dep_type: Self, dep_realm: Self) -> bool {
+        matches!(
+            (dep_type, dep_realm),
+            (Self::Server, _) | (Self::Shared, Self::Shared) | (Self::Dev, _)
+        )
+    }
+}
+
+/// The contents of a `wally.toml` file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct Manifest {
+    pub(crate) package: Package,
+
+    #[serde(default)]
+    pub(crate) place: PlaceInfo,
+
+    #[serde(default)]
+    pub(crate) dependencies: BTreeMap<String, PackageReq>,
+
+    #[serde(default)]
+    pub(crate) server_dependencies: BTreeMap<String, PackageReq>,
+
+    #[serde(default)]
+    pub(crate) dev_dependencies: BTreeMap<String, PackageReq>,
+}
+
+impl Manifest {
+    pub(crate) fn load(dir: &Path) -> Result<Self, ManifestError> {
+        let path = dir.join(MANIFEST_FILE_NAME);
+        let content = std::fs::read_to_string(path).map_err(ManifestError::Io)?;
+        Self::parse(&content)
+    }
+
+    pub(crate) fn parse(content: &str) -> Result<Self, ManifestError> {
+        Ok(toml::from_str(content)?)
+    }
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum ManifestError {
+    #[error("failed to read {MANIFEST_FILE_NAME}")]
+    Io(#[source] std::io::Error),
+    #[error("failed to parse {MANIFEST_FILE_NAME}: {0}")]
+    Toml(#[from] toml::de::Error),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Package {
+    /// The scope and name of the package, e.g. `jsdotperf/roact`.
+    pub(crate) name: PackageName,
+
+    /// The current SemVer version of the package.
+    pub(crate) version: Version,
+
+    /// The URL of the git index this package pulls its dependencies from.
+    pub(crate) registry: Url,
+
+    /// The realm (`shared`, `server`, or `dev`) this package can be used in.
+    pub(crate) realm: Realm,
+
+    /// A short description of the package.
+    pub(crate) description: Option<String>,
+
+    /// An SPDX license specifier for the package.
+    pub(crate) license: Option<String>,
+
+    /// The package's authors.
+    #[serde(default)]
+    pub(crate) authors: Vec<String>,
+
+    /// Glob patterns of paths to include in the published package.
+    #[serde(default)]
+    pub(crate) include: Vec<String>,
+
+    /// Glob patterns of paths to exclude from the published package.
+    #[serde(default)]
+    pub(crate) exclude: Vec<String>,
+
+    /// Whether the package can be published.
+    #[serde(default)]
+    pub(crate) private: bool,
+
+    /// The package homepage.
+    pub(crate) homepage: Option<String>,
+
+    /// The package source repository.
+    pub(crate) repository: Option<String>,
+}
+
+/// Where shared and server packages are placed in the Roblox data model.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct PlaceInfo {
+    /// E.g. `game.ReplicatedStorage.Packages`.
+    #[serde(default)]
+    pub(crate) shared_packages: Option<String>,
+
+    /// E.g. `game.ServerScriptService.Packages`.
+    #[serde(default)]
+    pub(crate) server_packages: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MANIFEST: &str = r#"
+[package]
+name = "jsdotperf/roact"
+version = "1.4.2"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+description = "A declarative UI library"
+license = "MIT"
+authors = ["Johnny Morgan <johnny@test.com>"]
+include = ["src", "*.lua"]
+exclude = ["*.spec.lua"]
+private = false
+homepage = "https://github.com/jsdotperf/roact"
+repository = "https://github.com/jsdotperf/roact"
+
+[place]
+shared-packages = "game.ReplicatedStorage.Packages"
+server-packages = "game.ServerScriptService.Packages"
+
+[dependencies]
+promise = "evaera/promise@^3.1.0"
+signal = "sleitnick/signal@2.0.0"
+
+[server-dependencies]
+data-store = "campfire/data-store@1.0.0"
+
+[dev-dependencies]
+testez = "roblox/testez@0.4.1"
+"#;
+
+    #[test]
+    fn test_parse_manifest() {
+        let manifest = Manifest::parse(MANIFEST).unwrap();
+        assert_eq!(manifest.package.name.to_string(), "jsdotperf/roact");
+        assert_eq!(manifest.package.version, Version::new(1, 4, 2));
+        assert_eq!(manifest.package.realm, Realm::Shared);
+        assert_eq!(manifest.package.license.as_deref(), Some("MIT"));
+        assert_eq!(
+            manifest.place.shared_packages.as_deref(),
+            Some("game.ReplicatedStorage.Packages")
+        );
+        assert_eq!(manifest.dependencies.len(), 2);
+        assert_eq!(manifest.server_dependencies.len(), 1);
+        assert_eq!(manifest.dev_dependencies.len(), 1);
+    }
+
+    #[test]
+    fn bare_version_defaults_to_caret() {
+        let req: PackageReq = "sleitnick/signal@2.0.0".parse().unwrap();
+        assert_eq!(req.version_req(), &VersionReq::parse("^2.0.0").unwrap());
+        let name: PackageName = "sleitnick/signal".parse().unwrap();
+        assert!(req.matches(&name, &Version::new(2, 0, 0)));
+        assert!(!req.matches(&name, &Version::new(3, 0, 0)));
+    }
+
+    #[test]
+    fn realm_dependency_rules() {
+        assert!(Realm::is_dependency_valid(Realm::Server, Realm::Shared));
+        assert!(Realm::is_dependency_valid(Realm::Server, Realm::Server));
+        assert!(Realm::is_dependency_valid(Realm::Shared, Realm::Shared));
+        assert!(Realm::is_dependency_valid(Realm::Dev, Realm::Shared));
+        assert!(!Realm::is_dependency_valid(Realm::Shared, Realm::Server));
+        assert!(!Realm::is_dependency_valid(Realm::Shared, Realm::Dev));
+    }
+
+    #[test]
+    fn test_parse_package_name() {
+        assert!("Upper-Skewer".parse::<PackageNamePart>().is_err());
+        assert!("snake_case".parse::<PackageNamePart>().is_err());
+        assert!("hello/world/foo".parse::<PackageName>().is_err());
+        assert!("hello/world".parse::<PackageName>().is_ok());
+    }
+}
