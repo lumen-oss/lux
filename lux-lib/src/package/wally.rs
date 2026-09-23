@@ -1,10 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
-    collections::BTreeMap,
-    fmt::{self, Display},
-    path::Path,
-    str::FromStr,
+    collections::BTreeMap, fmt::{self, Display}, io, path::{Path, PathBuf}, str::FromStr,
 };
 
 use semver::{Version, VersionReq};
@@ -231,7 +228,7 @@ impl Manifest {
 #[derive(Debug, Error)]
 pub(crate) enum ManifestError {
     #[error("failed to read {MANIFEST_FILE_NAME}")]
-    Io(#[source] std::io::Error),
+    Io(#[source] io::Error),
     #[error("failed to parse {MANIFEST_FILE_NAME}: {0}")]
     Toml(#[from] toml::de::Error),
 }
@@ -290,6 +287,67 @@ pub(crate) struct PlaceInfo {
     /// E.g. `game.ServerScriptService.Packages`.
     #[serde(default)]
     pub(crate) server_packages: Option<String>,
+}
+
+/// Configuration in a wally index's `config.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct WallyIndexConfig {
+    /// The HTTP registry that serves package contents.
+    pub(crate) api: Url,
+
+    #[serde(default)]
+    pub(crate) fallback_registries: Vec<String>,
+}
+
+/// A local checkout of a wally package index.
+#[derive(Debug, Clone)]
+pub(crate) struct WallyIndex {
+    path: PathBuf,
+    config: WallyIndexConfig,
+}
+
+impl WallyIndex {
+    pub(crate) fn new(path: PathBuf) -> Result<Self, WallyIndexError> {
+        let config = serde_json::from_str(&std::fs::read_to_string(path.join("config.json"))?)?;
+        Ok(Self { path, config })
+    }
+
+    pub(crate) fn config(&self) -> &WallyIndexConfig {
+        &self.config
+    }
+
+    /// All published versions of a package, newest first.
+    pub(crate) fn versions(&self, name: &PackageName) -> Result<Vec<Manifest>, WallyIndexError> {
+        let path = self.path.join(name.scope()).join(name.name());
+        let content = match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) => return Err(err.into()),
+        };
+        let mut versions: Vec<Manifest> = content
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).map_err(WallyIndexError::from))
+            .collect::<Result<_, _>>()?;
+        versions.sort_by(|a, b| b.package.version.cmp(&a.package.version));
+        Ok(versions)
+    }
+
+    /// The latest version of a package matching `req`.
+    pub(crate) fn find(&self, req: &PackageReq) -> Result<Option<Manifest>, WallyIndexError> {
+        Ok(self
+            .versions(req.name())?
+            .into_iter()
+            .find(|manifest| req.matches(&manifest.package.name, &manifest.package.version)))
+    }
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum WallyIndexError {
+    #[error("failed to read wally index")]
+    Io(#[from] io::Error),
+    #[error("failed to parse wally index")]
+    Json(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
@@ -367,5 +425,58 @@ testez = "roblox/testez@0.4.1"
         assert!("snake_case".parse::<PackageNamePart>().is_err());
         assert!("hello/world/foo".parse::<PackageName>().is_err());
         assert!("hello/world".parse::<PackageName>().is_ok());
+    }
+
+    fn package(version: Version) -> Manifest {
+        Manifest {
+            package: Package {
+                name: "evaera/promise".parse().unwrap(),
+                version,
+                registry: Url::parse("https://github.com/UpliftGames/wally-index").unwrap(),
+                realm: Realm::Shared,
+                description: None,
+                license: None,
+                authors: Vec::new(),
+                include: Vec::new(),
+                exclude: Vec::new(),
+                private: false,
+                homepage: None,
+                repository: None,
+            },
+            place: PlaceInfo::default(),
+            dependencies: BTreeMap::new(),
+            server_dependencies: BTreeMap::new(),
+            dev_dependencies: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn resolves_from_index() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("config.json"),
+            r#"{"api":"https://api.wally.run"}"#,
+        )
+        .unwrap();
+        let pkg_path = dir.path().join("evaera").join("promise");
+        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
+        let jsonl = [Version::new(2, 4, 0), Version::new(3, 1, 0)]
+            .into_iter()
+            .map(|version| serde_json::to_string(&package(version)).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(pkg_path, format!("{jsonl}\n")).unwrap();
+
+        let index = WallyIndex::new(dir.path().to_path_buf()).unwrap();
+        assert_eq!(
+            index.config().api,
+            Url::parse("https://api.wally.run").unwrap()
+        );
+
+        let req: PackageReq = "evaera/promise@2".parse().unwrap();
+        assert_eq!(
+            index.find(&req).unwrap().unwrap().package.version,
+            Version::new(2, 4, 0)
+        );
     }
 }
