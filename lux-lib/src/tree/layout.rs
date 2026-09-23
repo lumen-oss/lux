@@ -11,6 +11,11 @@ pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
     fn make_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
 
     fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
+
+    /// Whether the layout applies to dependency packages, not just entrypoints.
+    fn layout_dependencies(&self) -> bool {
+        false
+    }
 }
 
 /// A [`CustomRockLayout`] for Neovim plugins. Packages are exposed under `<tree>/site/pack/lux/{start,opt}/<package>`
