@@ -68,6 +68,33 @@ pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, 
     })
 }
 
+/// Wrapped [`fs::hard_link`].
+pub(crate) fn hard_link(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), FsError> {
+    let from = from.as_ref();
+    let to = to.as_ref();
+    fs::hard_link(from, to).map_err(|source| FsError::HardLink {
+        from: from.to_path_buf(),
+        to: to.to_path_buf(),
+        source,
+    })
+}
+
+/// Recursively hard link the contents of a directory into `dest`.
+pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), FsError> {
+    create_dir_all(dest)?;
+    for entry in read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        if from.is_dir() {
+            link_dir_all(&from, &to)?;
+        } else {
+            hard_link(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
 /// Wrapped [`fs::create_dir_all`].
 pub(crate) fn create_dir_all(path: impl AsRef<Path>) -> Result<(), FsError> {
     let path = path.as_ref();

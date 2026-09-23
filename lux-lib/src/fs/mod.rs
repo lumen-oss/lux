@@ -164,6 +164,16 @@ pub enum FsError {
         link: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to create hard link '{}' pointing to '{}'", to.display(), from.display())]
+    #[diagnostic(
+        code(lux_lib::fs::hard_link),
+        help("ensure '{}' is on a filesystem that supports hard links", to.display())
+    )]
+    HardLink {
+        from: std::path::PathBuf,
+        to: std::path::PathBuf,
+        source: std::io::Error,
+    },
     #[error("{0}")]
     Other(String),
 }

@@ -5,12 +5,13 @@ use crate::{
 };
 use std::path::{Path, PathBuf};
 
-/// A custom layout for entrypoint packages.
-/// Implementations arrange symlinks so external tools can find files at the locations they expect.
+/// A custom layout for installed packages, applied in addition to the standard tree layout.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
-    fn make_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    /// Arrange the package's files where external tools expect them.
+    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    /// Remove the files arranged by [`Self::apply_layout`].
+    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
 
     /// Whether the layout applies to dependency packages, not just entrypoints.
     fn layout_dependencies(&self) -> bool {
@@ -36,7 +37,7 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn make_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
         let custom_dir = Self::target_for(tree, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
@@ -54,7 +55,7 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
         let target = Self::target_for(tree, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
@@ -97,18 +98,19 @@ impl RojoLayout {
 }
 
 impl CustomRockLayout for RojoLayout {
-    fn make_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
 
-        // NOTE: Rojo does not follow symlinks (https://github.com/rojo-rbx/rojo/issues/392).
+        // NOTE: Rojo does not follow symlinks (https://github.com/rojo-rbx/rojo/issues/392),
+        // so we hard link the package sources.
         let layout = tree.layout_for(package);
         let content_dir = Self::content_dir(tree, package);
         if content_dir.is_dir() {
             fs::sync::remove_dir_all(&content_dir)?;
         }
-        copy_dir_recursive(&layout.src, &content_dir)?;
+        fs::sync::link_dir_all(&layout.src, &content_dir)?;
 
         let name = package.name().to_string();
         let has_init = ["init.luau", "init.lua"]
@@ -122,7 +124,7 @@ impl CustomRockLayout for RojoLayout {
             });
             match entrypoint {
                 Some((ext, entrypoint)) => {
-                    fs::sync::copy(&entrypoint, content_dir.join(format!("init.{ext}")))?;
+                    fs::sync::hard_link(&entrypoint, content_dir.join(format!("init.{ext}")))?;
                 }
                 None => {
                     return Err(FsError::Other(format!(
@@ -149,7 +151,7 @@ impl CustomRockLayout for RojoLayout {
         Ok(())
     }
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -170,21 +172,6 @@ impl CustomRockLayout for RojoLayout {
     fn layout_dependencies(&self) -> bool {
         true
     }
-}
-
-fn copy_dir_recursive(src: &Path, dest: &Path) -> fs::Result<()> {
-    fs::sync::create_dir_all(dest)?;
-    for entry in fs::sync::read_dir(src)? {
-        let entry = entry?;
-        let from = entry.path();
-        let to = dest.join(entry.file_name());
-        if from.is_dir() {
-            copy_dir_recursive(&from, &to)?;
-        } else {
-            fs::sync::copy(&from, &to)?;
-        }
-    }
-    Ok(())
 }
 
 fn try_create_symlink(target: &Path, link: &Path) -> fs::Result<()> {
