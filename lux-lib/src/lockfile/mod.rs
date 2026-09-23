@@ -703,6 +703,7 @@ impl LocalPackageLock {
                             RemotePackageSource::LuarocksRockspec(_) => filter_spec.rockspec,
                             RemotePackageSource::LuarocksSrcRock(_) => filter_spec.src,
                             RemotePackageSource::LuarocksBinaryRock(_) => filter_spec.binary,
+                            RemotePackageSource::Wally(_) => true,
                             RemotePackageSource::RockspecContent(_) => true,
                             RemotePackageSource::Local => true,
                             #[cfg(test)]
