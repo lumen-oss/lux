@@ -174,7 +174,7 @@ pub struct Cli {
     pub no_prompt: Option<bool>,
 
     /// Configure Lux for a specific environment.{n}
-    /// Valid presets are: 'nvim'.
+    /// Valid presets are: 'nvim', 'rojo'.
     #[arg(long, global = true, value_enum, value_name = "preset")]
     pub preset: Option<Preset>,
 
