@@ -45,6 +45,7 @@ pub struct Config {
     server: Url,
     extra_servers: Vec<Url>,
     manifest_cache_url: Option<Url>,
+    extra_wally_registries: Vec<Url>,
     namespace: Option<String>,
     lua_dir: Option<PathBuf>,
     lua_version: Option<LuaVersion>,
@@ -152,6 +153,12 @@ impl Config {
     /// The base URL of the precomputed manifest cache.
     pub fn manifest_cache_url(&self) -> Option<&Url> {
         self.manifest_cache_url.as_ref()
+    }
+
+    /// Additional wally package registries (git-index URLs), in addition to the
+    /// official wally index.
+    pub fn extra_wally_registries(&self) -> &Vec<Url> {
+        self.extra_wally_registries.as_ref()
     }
 
     /// Enabled luarocks repository servers that provide dev/scm rocks
@@ -418,6 +425,12 @@ pub struct ConfigBuilder {
     )]
     manifest_cache_url: Option<Url>,
     no_manifest_cache: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_url_vec",
+        serialize_with = "serialize_url_vec"
+    )]
+    extra_wally_registries: Option<Vec<Url>>,
     namespace: Option<String>,
     lua_version: Option<LuaVersion>,
     user_tree: Option<PathBuf>,
@@ -523,6 +536,14 @@ impl ConfigBuilder {
     pub fn no_manifest_cache(self, no_manifest_cache: Option<bool>) -> Self {
         Self {
             no_manifest_cache: no_manifest_cache.or(self.no_manifest_cache),
+            ..self
+        }
+    }
+
+    /// Additional wally package registries, in addition to the official wally index
+    pub fn extra_wally_registries(self, extra_wally_registries: Option<Vec<Url>>) -> Self {
+        Self {
+            extra_wally_registries: extra_wally_registries.or(self.extra_wally_registries),
             ..self
         }
     }
@@ -796,6 +817,7 @@ impl ConfigBuilder {
             extra_servers: other.extra_servers.or(self.extra_servers),
             manifest_cache_url: other.manifest_cache_url.or(self.manifest_cache_url),
             no_manifest_cache: other.no_manifest_cache.or(self.no_manifest_cache),
+            extra_wally_registries: other.extra_wally_registries.or(self.extra_wally_registries),
             namespace: other.namespace.or(self.namespace),
             lua_version: other.lua_version.or(self.lua_version),
             user_tree: other.user_tree.or(self.user_tree),
@@ -852,6 +874,7 @@ impl ConfigBuilder {
                     Some(Url::parse("https://cache.luanox.org/").unwrap_unchecked())
                 })
             },
+            extra_wally_registries: self.extra_wally_registries.unwrap_or_default(),
             namespace: self.namespace,
             lua_dir: self.lua_dir,
             lua_version,
@@ -899,6 +922,7 @@ impl From<Config> for ConfigBuilder {
             extra_servers: Some(value.extra_servers),
             manifest_cache_url: value.manifest_cache_url,
             no_manifest_cache,
+            extra_wally_registries: Some(value.extra_wally_registries),
             namespace: value.namespace,
             lua_dir: value.lua_dir,
             lua_version: value.lua_version,
