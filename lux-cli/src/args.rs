@@ -1,7 +1,10 @@
 use clap::ValueEnum;
 use lux_lib::{
-    config::ConfigBuilder, lua_installation::nvim_lua_version, lua_version::LuaVersion,
-    package::PackageReq, tree::NvimLayout,
+    config::ConfigBuilder,
+    lua_installation::nvim_lua_version,
+    lua_version::LuaVersion,
+    package::PackageReq,
+    tree::{NvimLayout, RojoLayout},
 };
 use miette::{miette, Result};
 use std::{path::PathBuf, str::FromStr};
@@ -21,20 +24,24 @@ pub enum OutputFormat {
 /// Configures Lux for a specific environment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Preset {
-    /// Configure Lux for Neovim plugins.
+    /// Configure Lux for [Neovim](https://neovim.io/) plugins.
     Nvim,
+    /// Configure Lux for [Rojo](https://rojo.space/).
+    Rojo,
 }
 
 impl Preset {
     pub fn lua_version(self) -> Option<LuaVersion> {
         match self {
             Self::Nvim => nvim_lua_version(),
+            Self::Rojo => Some(LuaVersion::Luau),
         }
     }
 
     pub fn apply(self, config: ConfigBuilder) -> ConfigBuilder {
         match self {
             Self::Nvim => config.entrypoint_layout(NvimLayout),
+            Self::Rojo => config.entrypoint_layout(RojoLayout),
         }
     }
 }
@@ -63,6 +70,14 @@ mod tests {
     use super::*;
     use crate::Cli;
     use clap::Parser;
+    use lux_lib::lua_version::LuaVersion;
+
+    #[test]
+    fn parses_rojo_preset() {
+        let cli = Cli::try_parse_from(["lx", "--preset", "rojo", "list"]).unwrap();
+        assert_eq!(cli.preset, Some(Preset::Rojo));
+        assert_eq!(Preset::Rojo.lua_version(), Some(LuaVersion::Luau));
+    }
 
     #[test]
     fn parses_preset_and_deprecated_nvim_flag() {
