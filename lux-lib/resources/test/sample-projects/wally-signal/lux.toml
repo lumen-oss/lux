@@ -1,0 +1,9 @@
+package = "wally-signal"
+version = "0.1.0"
+lua = "luau"
+
+[dependencies.signal]
+wally = "sleitnick/signal@=2.0.3"
+
+[run]
+args = ["src/main.luau"]
