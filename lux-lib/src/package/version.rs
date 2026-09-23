@@ -47,6 +47,10 @@ impl PackageVersion {
     pub fn parse(text: &str) -> Result<Self, PackageVersionParseError> {
         PackageVersion::from_str(text)
     }
+    /// The package version without its spec revision.
+    pub fn to_version_string(&self) -> String {
+        self.to_modrev_string()
+    }
     /// Note that this loses the specrev information.
     pub fn into_version_req(&self) -> PackageVersionReq {
         match self {
