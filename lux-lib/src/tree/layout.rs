@@ -5,12 +5,13 @@ use crate::{
 };
 use std::path::{Path, PathBuf};
 
-/// A custom layout for entrypoint packages.
-/// Implementations arrange symlinks so external tools can find files at the locations they expect.
+/// A custom layout for installed packages, applied in addition to the standard tree layout.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
-    fn make_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
+    /// Arrange the package's files where external tools expect them.
+    fn apply_layout(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
+    /// Remove the files arranged by [`Self::apply_layout`].
+    fn remove_layout(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()>;
 
     /// Whether the layout applies to dependency packages, not just entrypoints.
     fn layout_dependencies(&self) -> bool {
@@ -36,7 +37,7 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn make_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
         let custom_dir = Self::target_for(tree, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
@@ -54,7 +55,7 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
         let target = Self::target_for(tree, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
@@ -97,7 +98,7 @@ impl RojoLayout {
 }
 
 impl CustomRockLayout for RojoLayout {
-    fn make_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -149,7 +150,7 @@ impl CustomRockLayout for RojoLayout {
         Ok(())
     }
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &Tree, package: &LocalPackage) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
