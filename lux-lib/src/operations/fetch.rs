@@ -5,7 +5,7 @@ use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
-use crate::package::PackageSpec;
+use crate::package::{wally, PackageSpec};
 use crate::reqwest::{RequestBuilderExt, RequestError};
 use crate::rockspec::Rockspec;
 use crate::{fs, operations};
@@ -330,14 +330,16 @@ async fn fetch_src_impl<R: Rockspec>(
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
-            let response = crate::reqwest::http_client(config)?
+            let request = crate::reqwest::http_client(config)?
                 .get(url.clone())
-                .apply_access_token(config, url)
-                .send()
-                .await?
-                .error_for_status()?
-                .bytes()
-                .await?;
+                .apply_access_token(config, url);
+            let request = if url.path().starts_with("/v1/package-contents/") {
+                // HACK: The wally registry rejects requests without a sufficiently recent `Wally-Version` header.
+                request.header("Wally-Version", wally::WALLY_VERSION)
+            } else {
+                request
+            };
+            let response = request.send().await?.error_for_status()?.bytes().await?;
             let hash = response.hash().await.map_err(FetchSrcError::Hash)?;
             let file_name = url
                 .path_segments()
