@@ -565,3 +565,263 @@ async fn cargo_vendor(
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use bytes::Bytes;
+
+    use super::*;
+    use crate::{
+        config::ConfigBuilder,
+        lockfile::{LockConstraint, LockedPackageSpec, OptState, PinnedState, RemotePackageSourceUrl},
+        lua_rockspec::RockSourceSpec,
+        operations::{unpack_rockspec, DownloadedPackedRockBytes, DownloadedRockspec},
+        package::{PackageName, PackageVersion},
+        remote_package_source::RemotePackageSource,
+        rockspec::RockBinaries,
+    };
+    use assert_fs::prelude::PathCopy;
+
+    use crate::operations::RemoteRockDownload;
+
+    fn test_config() -> Config {
+        ConfigBuilder::new()
+            .unwrap()
+            .lua_version(Some(crate::lua_version::LuaVersion::Lua51))
+            .build()
+            .unwrap()
+    }
+
+    fn fixture_bytes(name: &str) -> Bytes {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test")
+            .join(name);
+        Bytes::from(std::fs::read(path).unwrap())
+    }
+
+    /// Builds a `PackageInstallData` for a source-tree-only package from a generated rockspec.
+    fn make_install_data(
+        rockspec: RemoteLuaRockspec,
+        source_url: Option<RemotePackageSourceUrl>,
+        source: RemotePackageSource,
+    ) -> PackageInstallData {
+        let spec = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
+            LockConstraint::Unconstrained,
+            Vec::new(),
+            Vec::new(),
+            &PinnedState::Unpinned,
+            &OptState::Required,
+            RockBinaries::default(),
+        );
+        let rockspec_download = DownloadedRockspec {
+            rockspec,
+            source,
+            source_url,
+        };
+        PackageInstallData {
+            downloaded_rock: RemoteRockDownload::RockspecOnly { rockspec_download },
+            spec,
+        }
+    }
+
+    /// Vendors a `RockspecOnly`(url) dependency and asserts the rockspec and source
+    /// tree are laid out as expected.
+    #[tokio::test]
+    async fn vendor_rockspec_only_url_writes_rockspec_and_source_tree() {
+        let config = test_config();
+        let vendor_dir = assert_fs::TempDir::new().unwrap();
+
+        // A local `File` source so no network is needed. `FetchSrc` copies the
+        // directory into the vendored source path.
+        let src_dir = assert_fs::TempDir::new().unwrap();
+        std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
+        let rockspec = RemoteLuaRockspec::from_package_and_source_spec(
+            "rockspec-only-url@1.0.0".parse().unwrap(),
+            RockSourceSpec::File(src_dir.path().to_path_buf()),
+        );
+
+        let install_data = make_install_data(
+            rockspec,
+            Some(RemotePackageSourceUrl::File {
+                path: src_dir.path().to_path_buf(),
+            }),
+            RemotePackageSource::RockspecContent(String::new()),
+        );
+
+        vendor_sources(
+            Arc::new(vendor_dir.to_path_buf()),
+            config,
+            vec![install_data],
+        )
+        .await
+        .unwrap();
+
+        let rockspec_file = vendor_dir.path().join("rockspec-only-url-1.0.0-1.rockspec");
+        assert!(rockspec_file.is_file(), "rockspec not vendored");
+        let rockspec_content = std::fs::read_to_string(&rockspec_file).unwrap();
+        assert!(
+            rockspec_content.contains("rockspec-only-url"),
+            "vendored rockspec is not for rockspec-only-url:\n{rockspec_content}"
+        );
+
+        let source_path = vendor_dir.path().join("rockspec-only-url@1.0.0-1");
+        assert!(source_path.is_dir(), "source tree not vendored");
+        assert!(
+            source_path.join("hello.lua").is_file(),
+            "source tree contents not vendored"
+        );
+    }
+
+    /// Vendors a `BinaryRock` dependency: both the packed `.rock` and its
+    /// extracted rockspec must be written.
+    #[tokio::test]
+    async fn vendor_binary_rock_writes_rock_and_rockspec() {
+        let vendor_dir = assert_fs::TempDir::new().unwrap();
+
+        let bytes = fixture_bytes("toml-edit-0.6.0-1.linux-x86_64.rock");
+        let rock = DownloadedPackedRockBytes {
+            name: "toml-edit".into(),
+            version: "0.6.0-1".parse().unwrap(),
+            bytes: bytes.clone(),
+            file_name: "toml-edit-0.6.0-1.linux-x86_64.rock".into(),
+            url: "https://example.org/toml-edit-0.6.0-1.linux-x86_64.rock"
+                .parse()
+                .unwrap(),
+        };
+        let rockspec = unpack_rockspec(&rock).await.unwrap();
+
+        vendor_binary_rock(
+            vendor_dir.path(),
+            DownloadedRockspec {
+                rockspec,
+                source: RemotePackageSource::LuarocksBinaryRock(
+                    "https://example.org/".parse().unwrap(),
+                ),
+                source_url: None,
+            },
+            bytes,
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            vendor_dir.path().join("toml-edit@0.6.0-1.rock").is_file(),
+            "packed rock not vendored"
+        );
+        let rockspec_file = vendor_dir.path().join("toml-edit-0.6.0-1.rockspec");
+        assert!(rockspec_file.is_file(), "rockspec not vendored");
+        let rockspec_content = std::fs::read_to_string(&rockspec_file).unwrap();
+        assert!(
+            rockspec_content.contains("package = "),
+            "vendored rockspec is not valid:\n{rockspec_content}"
+        );
+        assert!(
+            rockspec_content.contains("toml-edit"),
+            "vendored rockspec is not for toml-edit:\n{rockspec_content}"
+        );
+    }
+
+    /// Vendors a `SrcRock` dependency. The raw `.src.rock` bytes must be written
+    /// verbatim to `<name>@<version>`.
+    #[tokio::test]
+    async fn vendor_src_rock_writes_bytes_verbatim() {
+        let config = test_config();
+        let vendor_dir = assert_fs::TempDir::new().unwrap();
+
+        let bytes = fixture_bytes("luatest-0.2-1.src.rock");
+        let rock = DownloadedPackedRockBytes {
+            name: "luatest".into(),
+            version: "0.2-1".parse().unwrap(),
+            bytes: bytes.clone(),
+            file_name: "luatest-0.2-1.src.rock".into(),
+            url: "https://example.org/luatest-0.2-1.src.rock"
+                .parse()
+                .unwrap(),
+        };
+        let rockspec = unpack_rockspec(&rock).await.unwrap();
+
+        let src_rock_source = SrcRockSource {
+            bytes: bytes.clone(),
+            source_url: RemotePackageSourceUrl::Url {
+                url: "https://example.org/luatest-0.2-1.src.rock".parse().unwrap(),
+            },
+        };
+
+        vendor_sources(
+            Arc::new(vendor_dir.to_path_buf()),
+            config,
+            vec![PackageInstallData {
+                downloaded_rock: RemoteRockDownload::SrcRock {
+                    rockspec_download: DownloadedRockspec {
+                        rockspec,
+                        source: RemotePackageSource::LuarocksSrcRock(
+                            "https://example.org/".parse().unwrap(),
+                        ),
+                        source_url: Some(src_rock_source.source_url.clone()),
+                    },
+                    src_rock: bytes.clone(),
+                    source_url: src_rock_source.source_url.clone(),
+                },
+                spec: LockedPackageSpec::new(
+                    &PackageName::new("luatest".to_string()),
+                    &"0.2-1".parse::<PackageVersion>().unwrap(),
+                    LockConstraint::Unconstrained,
+                    Vec::new(),
+                    Vec::new(),
+                    &PinnedState::Unpinned,
+                    &OptState::Required,
+                    RockBinaries::default(),
+                ),
+            }],
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            vendor_dir.path().join("luatest-0.2-1.rockspec").is_file(),
+            "rockspec not vendored"
+        );
+        let source_path = vendor_dir.path().join("luatest@0.2-1");
+        assert!(source_path.is_file(), ".src.rock not vendored");
+        assert_eq!(
+            std::fs::read(&source_path).unwrap(),
+            bytes.to_vec(),
+            "vendored .src.rock bytes differ from source"
+        );
+    }
+
+    /// `no_delete` must be respected: if the vendor dir exists and `no_delete` is
+    /// set, pre-existing contents are preserved.
+    #[tokio::test]
+    async fn vendor_workspace_no_delete_preserves_existing_contents() {
+        let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/busted-with-lockfile/");
+        let temp_dir = assert_fs::TempDir::new().unwrap();
+        temp_dir
+            .copy_from(&sample_project_dir, &["**"])
+            .expect("failed to copy sample project");
+        let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
+        let config = test_config();
+        let vendor_dir = assert_fs::TempDir::new().unwrap();
+        let marker = vendor_dir.path().join("EXISTING_FILE");
+        std::fs::write(&marker, "keep me").unwrap();
+
+        Vendor::new()
+            .target(VendorTarget::Workspace(workspace))
+            .vendor_dir(vendor_dir.to_path_buf())
+            .no_delete(true)
+            .config(&config)
+            .vendor_dependencies()
+            .await
+            .unwrap();
+
+        assert!(
+            marker.is_file(),
+            "no_delete should have preserved existing contents"
+        );
+    }
+}
