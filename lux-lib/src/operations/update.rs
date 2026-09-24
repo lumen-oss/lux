@@ -116,8 +116,6 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
     #[tracing::instrument(name = "Updating packages", skip_all)]
-
-    /// Returns the packages that were installed or removed
     pub async fn update(self) -> Result<Vec<LockedPackage>, UpdateError>
     where
         State: update_builder::IsComplete,
@@ -146,8 +144,8 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
         };
 
         match workspace {
-            Some(workspace) => update_workspace(workspace, args, package_db).await,
-            None => update_install_tree(args, package_db).await,
+            Some(workspace) => Box::pin(update_workspace(workspace, args, package_db)).await,
+            None => Box::pin(update_install_tree(args, package_db)).await,
         }
     }
 }

@@ -49,8 +49,6 @@ pub(crate) struct DownloadSourcesAndHashArtifacts {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub(crate) enum DownloadSourcesAndHashError {
-    #[error("failed to fetch source for '{0}'")]
-    Fetch(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] FsError),

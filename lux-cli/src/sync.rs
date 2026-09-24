@@ -1,5 +1,9 @@
 use clap::Args;
-use lux_lib::{config::Config, operations::pipeline::Pipeline, workspace::Workspace};
+use lux_lib::{
+    config::Config,
+    operations::{GenLuaRc, pipeline::install_workspace::InstallWorkspaceDependencies},
+    workspace::Workspace,
+};
 
 use miette::Result;
 
@@ -16,9 +20,15 @@ pub async fn sync(args: SyncProject, config: Config) -> Result<()> {
     let _ = args.no_integrity_check;
     let workspace = Workspace::current_or_err()?;
 
-    Pipeline::new(&config, &workspace)
+    InstallWorkspaceDependencies::new(&config, &workspace)
         .test(true)
-        .run()
+        .install()
+        .await?;
+
+    GenLuaRc::new()
+        .config(&config)
+        .workspace(&workspace)
+        .generate_luarc()
         .await?;
 
     // FIXME(vhyrro): Readd report publishing
