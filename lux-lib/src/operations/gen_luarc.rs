@@ -35,7 +35,7 @@ pub enum GenLuaRcError {
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct GenLuaRc<'a> {
+pub struct GenLuaRc<'a> {
     config: &'a Config,
     workspace: &'a Workspace,
 }

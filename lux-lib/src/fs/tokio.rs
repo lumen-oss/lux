@@ -60,6 +60,32 @@ pub(crate) async fn create_dir_all(path: impl AsRef<Path>) -> Result<(), FsError
         })
 }
 
+/// Recursively copy the contents of a directory into `dest`.
+pub(crate) async fn copy_dir_all(src: &Path, dest: &Path) -> Result<(), FsError> {
+    Box::pin(async move {
+        create_dir_all(dest).await?;
+        let mut entries = read_dir(src).await?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|source| FsError::ReadDir {
+                path: src.to_path_buf(),
+                source,
+            })?
+        {
+            let entry_path = entry.path();
+            let target = dest.join(entry.file_name());
+            if entry_path.is_dir() {
+                copy_dir_all(&entry_path, &target).await?;
+            } else {
+                copy(&entry_path, &target).await?;
+            }
+        }
+        Ok(())
+    })
+    .await
+}
+
 /// Wrapped [`fs::remove_file`].
 pub(crate) async fn remove_file(path: impl AsRef<Path>) -> Result<(), FsError> {
     let path = path.as_ref();

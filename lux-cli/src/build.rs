@@ -2,7 +2,7 @@ use clap::Args;
 use lux_lib::{
     config::Config,
     lockfile::LockedPackage,
-    operations::pipeline::Pipeline,
+    operations::BuildWorkspace,
     package::PackageName,
     workspace::Workspace,
 };
@@ -26,11 +26,11 @@ pub struct Build {
 /// Returns `Some` if the `only_deps` arg is set to `false`.
 pub async fn build(data: Build, config: Config) -> Result<Vec<LockedPackage>> {
     let workspace = Workspace::current_or_err()?;
-    let result = Pipeline::new(&config, &workspace)
+    let result = BuildWorkspace::new(&workspace, &config)
         .maybe_package(data.package)
         .no_lock(data.no_lock)
-        .build_projects(!data.only_deps)
-        .run()
+        .only_deps(data.only_deps)
+        .build()
         .await?;
     Ok(result)
 }
