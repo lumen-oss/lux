@@ -4,17 +4,52 @@ use std::rc::Rc;
 
 use async_recursion::async_recursion;
 use bon::Builder;
+use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    config::Config, lockfile::{LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec, RemotePackageSourceUrl}, lua_rockspec::RemoteLuaRockspec, operations::{PackageInstallSpec, RemoteRockDownload, resolve::build_dependencies_to_install}, package::{PackageName, PackageReq, RemotePackage}, remote_package_source::RemotePackageSource, rockspec::Rockspec, tree::EntryType,
+    config::Config, lockfile::{LockedPackageId, LockedPackageSpec, RemotePackageSourceUrl}, lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec}, operations::{PackageInstallSpec, RemoteRockDownload}, package::{PackageName, PackageReq, RemotePackage}, remote_package_source::RemotePackageSource, rockspec::Rockspec, tree::EntryType,
 };
 
 use super::{
     discover::{FindPackageFromProvider, DiscoverError, FoundPackage, FoundPackageType},
     download_sources_and_hash::PackageSource,
 };
+
+/// The build dependencies of a rockspec that still need to be installed, with the
+/// LuaRocks build backend (if any) first.
+pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<PackageName> {
+    let mut names = rockspec
+        .build_dependencies()
+        .current_platform()
+        .iter()
+        .filter(|dep| {
+            !matches!(
+                dep.name().to_string().as_str(),
+                "luarocks-build-rust-mlua"
+                    | "luarocks-build-rust-binary"
+                    | "luarocks-build-treesitter-parser"
+            )
+        })
+        .map(|dep| dep.name().clone())
+        .collect_vec();
+
+    if let Some(backend) = luarocks_build_backend_name(rockspec) {
+        names.insert(0, backend);
+    }
+    names
+}
+
+/// The name of the luarocks build backend rock required to build this rockspec (if any).
+pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<PackageName> {
+    match &rockspec.build().current_platform().build_backend {
+        Some(BuildBackendSpec::LuaRock(backend)) => {
+            Some(PackageName::new(format!("luarocks-build-{backend}")))
+        }
+        _ => None,
+    }
+}
 
 pub(crate) struct ResolvedPackage {
     pub(crate) spec: LockedPackageSpec,
@@ -23,21 +58,6 @@ pub(crate) struct ResolvedPackage {
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     pub(crate) entry_type: EntryType,
     pub(crate) artifact: Option<PackageSource>,
-}
-
-impl ResolvedPackage {
-    pub(crate) fn id(&self) -> LockedPackageId {
-        self.spec.id()
-    }
-
-    pub(crate) fn with_hashes(self, hashes: LockedPackageHashes) -> LockedPackage {
-        LockedPackage {
-            spec: self.spec,
-            source: self.source,
-            source_url: self.source_url,
-            hashes,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -55,8 +75,6 @@ pub(crate) enum ResolveError {
     Discover(#[from] DiscoverError),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependency(String),
-    #[error("discovery returned a precomputed closure, which this resolver does not support")]
-    UnsupportedClosure,
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
 }
@@ -118,11 +136,6 @@ where
         self
     }
 
-    pub(crate) fn package(mut self, package: PackageInstallSpec) -> Self {
-        self.packages.push(package);
-        self
-    }
-
     pub(crate) fn build_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
         self.build_packages = packages;
         self
@@ -130,11 +143,6 @@ where
 
     pub(crate) fn test_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
         self.test_packages = packages;
-        self
-    }
-
-    pub(crate) fn test_package(mut self, package: PackageInstallSpec) -> Self {
-        self.test_packages.push(package);
         self
     }
 }
@@ -344,10 +352,9 @@ async fn find_package_from_provider<D: FindPackageFromProvider>(
     // inside this recursive resolver's call chain.
     let discover = discover.clone();
     let package = spec.package.clone();
-    match tokio::spawn(async move { discover.find(&package).await }).await?? {
-        FoundPackageType::Package(package) => Ok(package),
-        FoundPackageType::Closure { .. } => Err(ResolveError::UnsupportedClosure),
-    }
+    let FoundPackageType::Package(package) =
+        tokio::spawn(async move { discover.find(&package).await }).await??;
+    Ok(package)
 }
 
 fn build_dependency_specs(

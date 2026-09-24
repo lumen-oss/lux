@@ -15,7 +15,6 @@ mod install_rockspec;
 mod pack;
 mod pin;
 pub mod pipeline;
-mod resolve;
 mod run;
 mod run_lua;
 mod sync;

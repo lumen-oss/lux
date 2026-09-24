@@ -11,7 +11,7 @@ use crate::{
         WorkspaceLockfile,
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
-    operations::{self, GenLuaRcError},
+    operations::{self, pipeline::resolve::luarocks_build_backend_name, GenLuaRcError},
     package::{PackageName, PackageReq},
     project::{project_toml::LocalProjectTomlValidationError, ProjectError},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
@@ -285,7 +285,7 @@ impl<'a, 'b> SyncPackages<'a, 'b> {
             LockedPackageLockType::Build => {
                 for project in self.args.workspace.members() {
                     let toml = project.toml().into_local()?;
-                    if let Some(backend) = operations::resolve::luarocks_build_backend_name(&toml) {
+                    if let Some(backend) = luarocks_build_backend_name(&toml) {
                         extra_packages.push(backend.into());
                         if cfg!(target_family = "unix") {
                             let luarocks = unsafe {

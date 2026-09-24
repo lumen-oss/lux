@@ -1,19 +1,46 @@
 use crate::{
-    config::Config, lockfile::LockedPackage, operations::pipeline::Pipeline, package::PackageName,
-    workspace::Workspace,
+    config::Config,
+    lockfile::LockedPackage,
+    lua_installation::{LuaInstallation, LuaInstallationError},
+    operations::{
+        GenLuaRc, GenLuaRcError,
+        pipeline::{
+            build_project::{BuildProject, BuildProjectError},
+            install_workspace::{InstallWorkspaceDependencies, InstallWorkspaceDependenciesError},
+        },
+    },
+    package::PackageName,
+    workspace::{Workspace, WorkspaceError},
 };
 use bon::Builder;
-use miette::Diagnostic;
 use thiserror::Error;
 use tracing::{info_span, Instrument};
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, miette::Diagnostic)]
 #[non_exhaustive]
 pub enum BuildWorkspaceError {
     // FIXME(vhyrro): don't use dyn here
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Pipeline(Box<dyn Diagnostic + Send + Sync + 'static>),
+    InstallWorkspaceDependencies(#[from] InstallWorkspaceDependenciesError),
+    #[error("failed to build the workspace")]
+    #[diagnostic(forward(0))]
+    BuildProject(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LuaInstallation(#[from] LuaInstallationError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GenLuaRc(#[from] GenLuaRcError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Workspace(#[from] WorkspaceError),
+}
+
+impl From<BuildProjectError> for BuildWorkspaceError {
+    fn from(source: BuildProjectError) -> Self {
+        Self::BuildProject(Box::new(source))
+    }
 }
 
 #[derive(Builder)]
@@ -45,16 +72,44 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
             None => info_span!("Building workspace"),
         };
         async move {
-            // NOTE: `Pipeline::run`'s future is large, so we box it to avoid inflating this frame.
-            let result = Box::pin(
-                Pipeline::new(build.config, build.workspace)
-                    .maybe_package(build.package)
-                    .no_lock(build.no_lock)
-                    .build_projects(!build.only_deps)
-                    .run(),
-            )
-            .await;
-            result.map_err(|err| BuildWorkspaceError::Pipeline(err.into()))
+            InstallWorkspaceDependencies::new(build.config, build.workspace)
+                .no_lock(build.no_lock)
+                .install()
+                .await?;
+
+            let mut built = Vec::new();
+            if !build.only_deps {
+                let lua = LuaInstallation::new_from_config(build.config).await?;
+                match &build.package {
+                    Some(package) => {
+                        let project = build.workspace.select_member(package)?;
+                        built.push(
+                            BuildProject::new(project, build.workspace, build.config, &lua)
+                                .build()
+                                .await?,
+                        );
+                    }
+                    None => {
+                        for project in build.workspace.members() {
+                            built.push(
+                                BuildProject::new(project, build.workspace, build.config, &lua)
+                                    .build()
+                                    .await?,
+                            );
+                        }
+                    }
+                }
+            }
+
+            if !build.no_lock {
+                GenLuaRc::new()
+                    .config(build.config)
+                    .workspace(build.workspace)
+                    .generate_luarc()
+                    .await?;
+            }
+
+            Ok(built)
         }
         .instrument(span)
         .await

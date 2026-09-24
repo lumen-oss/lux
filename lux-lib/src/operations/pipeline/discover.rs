@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     lua_rockspec::RemoteLuaRockspec,
     operations::{self, Download, FetchVendored, FetchVendoredError, RemoteRockDownload},
-    package::{PackageReq, PackageSpec, RemotePackage},
+    package::{PackageReq, RemotePackage},
     remote_package_db::{RemotePackageDB, SearchError},
 };
 
@@ -22,19 +22,6 @@ pub(crate) struct FoundPackage {
 
 pub(crate) enum FoundPackageType {
     Package(FoundPackage),
-    Closure {
-        root: PackageSpec,
-        nodes: Vec<FoundPackage>,
-    },
-}
-
-impl FoundPackageType {
-    pub(crate) fn root(&self) -> &PackageSpec {
-        match self {
-            Self::Package(artifact) => &artifact.package.package,
-            Self::Closure { root, .. } => root,
-        }
-    }
 }
 
 #[derive(Error, Debug, Diagnostic)]

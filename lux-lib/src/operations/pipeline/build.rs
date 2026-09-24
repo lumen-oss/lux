@@ -68,11 +68,6 @@ where
         self.packages = packages;
         self
     }
-
-    pub(crate) fn package(mut self, package: DownloadedPackage) -> Self {
-        self.packages.push(package);
-        self
-    }
 }
 
 impl<T, State> BuildBuilder<'_, T, State>
