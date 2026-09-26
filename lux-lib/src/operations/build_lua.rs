@@ -30,10 +30,10 @@ const LUA52_VERSION: &str = "5.2.4";
 const LUA52_HASH: &str = "sha256-ueLkqtZ4mztjoFbUQveznw7Pyjrg8fwK5OlhRAG2n0s=";
 const LUA53_VERSION: &str = "5.3.6";
 const LUA53_HASH: &str = "sha256-/F/Wm7hzYyPwJmcrG3I12mE9cXfnJViJOgvc0yBGbWA=";
-const LUA54_VERSION: &str = "5.4.8";
-const LUA54_HASH: &str = "sha256-TxjdrhVOeT5G7qtyfFnvHAwMK3ROe5QhlxDXb1MGKa4=";
-const LUA55_VERSION: &str = "5.5.0";
-const LUA55_HASH: &str = "sha256-V8zDK7vQBcq3W8xSREBSU1r2kXiduiuQFtXFBkDWiz0=";
+const LUA54_VERSION: &str = "5.4.9";
+const LUA54_HASH: &str = "sha256-IzW2xYKlJlT5RhK/ENL0ZygF0FMpqmVosdjNnlxvuOY=";
+const LUA55_VERSION: &str = "5.5.1";
+const LUA55_HASH: &str = "sha256-HEtAaNZwYfKiIxrStUIud6zqFIfqmJD2Mgr2FPQ3Pc4=";
 // XXX: there's no tag with lua 5.2 compatibility, so we have to use the v2.1 branch for now
 // this is unstable and might break the build.
 const LUAJIT_MM_VERSION: &str = "2.1";
