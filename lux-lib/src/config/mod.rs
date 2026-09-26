@@ -399,24 +399,28 @@ pub enum ConfigError {
 /// - Populate the fields from overriding sources (e.g. CLI arguments).
 /// - Finish with [`ConfigBuilder::build`].
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ConfigBuilder {
     #[serde(
         default,
         deserialize_with = "deserialize_url",
         serialize_with = "serialize_url"
     )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     server: Option<Url>,
     #[serde(
         default,
         deserialize_with = "deserialize_url_vec",
         serialize_with = "serialize_url_vec"
     )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     extra_servers: Option<Vec<Url>>,
     #[serde(
         default,
         deserialize_with = "deserialize_url_vec",
         serialize_with = "serialize_url_vec"
     )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     extra_wally_registries: Option<Vec<Url>>,
     namespace: Option<String>,
     lua_version: Option<LuaVersion>,
@@ -430,12 +434,14 @@ pub struct ConfigBuilder {
     verbose: Option<bool>,
     no_progress: Option<bool>,
     no_prompt: Option<bool>,
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u64>"))]
     timeout: Option<Duration>,
     max_jobs: Option<usize>,
     variables: Option<HashMap<String, String>>,
     /// Access tokens for fetching sources from private hosts, mapped by host.
     /// These can also be set via the `LUX_ACCESS_TOKENS` environment variable.
     #[serde(default, skip_serializing)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<HashMap<String, String>>"))]
     access_tokens: Option<HashMap<String, AccessToken>>,
     #[serde(default)]
     external_deps: ExternalDependencySearchConfig,

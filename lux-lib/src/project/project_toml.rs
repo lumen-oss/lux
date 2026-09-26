@@ -268,9 +268,11 @@ pub enum RemoteProjectTomlValidationError {
 /// The only required fields are `package` and `build`, which are required to build a project using `lux build`.
 /// The rest of the fields are optional, but are required to build a rockspec.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PartialProjectToml {
     pub(crate) package: PackageName,
     #[serde(default, rename = "version")]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub(crate) version_template: PackageVersionTemplate,
     #[serde(default)]
     pub(crate) build: BuildSpecInternal,
@@ -278,18 +280,41 @@ pub struct PartialProjectToml {
     #[serde(default)]
     pub(crate) run: Option<RunSpec>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub(crate) lua: Option<PackageVersionReq>,
     #[serde(default)]
     pub(crate) description: Option<RockDescription>,
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<std::collections::BTreeMap<String, bool>>")
+    )]
     pub(crate) supported_platforms: Option<HashMap<PlatformIdentifier, bool>>,
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(
+            with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
+        )
+    )]
     pub(crate) dependencies: Option<Vec<LuaDependencySpec>>,
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(
+            with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
+        )
+    )]
     pub(crate) build_dependencies: Option<Vec<LuaDependencySpec>>,
     #[serde(default)]
     pub(crate) external_dependencies: Option<HashMap<String, ExternalDependencySpec>>,
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(
+            with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
+        )
+    )]
     pub(crate) test_dependencies: Option<Vec<LuaDependencySpec>>,
     #[serde(default, rename = "source")]
     pub(crate) source_template: RockSourceTemplate,
@@ -652,6 +677,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
 ///
 /// This is not part of the rockspec format and is ignored when generating a rockspec.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub(crate) struct ProjectSpec {
     /// The project root directory, relative to the directory containing the `lux.toml`.
     /// Useful for multi-project workspaces, where the build files
@@ -673,10 +699,12 @@ impl Default for ProjectSpec {
 
 // TODO(vhyrro): Move this struct into a different directory.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RunSpec {
     /// The command to execute when running the project
     pub(crate) command: Option<RunCommand>,
     /// Arguments to pass to the command
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub(crate) args: Option<NonEmpty<String>>,
 }
 

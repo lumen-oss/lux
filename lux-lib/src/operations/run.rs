@@ -28,6 +28,8 @@ Consider removing the `command` field and letting Lux choose the default Lua int
 pub struct RunCommandError(String);
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", serde(transparent))]
 pub struct RunCommand(String);
 
 impl RunCommand {
