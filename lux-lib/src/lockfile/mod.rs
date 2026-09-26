@@ -4,7 +4,12 @@ use std::fmt::Display;
 use std::io::{self, Write};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::{collections::HashMap, fs::File, io::ErrorKind, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+};
 
 use itertools::Itertools;
 
@@ -860,15 +865,23 @@ pub enum LockfileError {
         version: String,
         source: semver::Error,
     },
-    #[error("incompatible lockfile version: expected {expected}, found {found}")]
-    // TODO(vhyrro): create a CLI command that does this?
-    // Difficult to find a good name or a consisent behaviour for the command.
-    #[diagnostic(help(
-        r#"this lockfile was created by an incompatible version of Lux.
-remove the `lux.lock` and run `lx sync` to regenerate it.
-"#
-    ))]
-    IncompatibleVersion { found: String, expected: String },
+    #[error("lockfile '{}' has no `version` field", lockfile.display())]
+    #[diagnostic(
+        code(lux_lib::lockfile::missing_version),
+        help("the lockfile is corrupt or was hand-edited")
+    )]
+    MissingVersion { lockfile: PathBuf },
+    #[error(
+        "incompatible lockfile version in '{}': expected {expected}, found {found}",
+        lockfile.display()
+    )]
+    #[diagnostic(code(lux_lib::lockfile::incompatible_version), help("{help}"))]
+    IncompatibleVersion {
+        lockfile: PathBuf,
+        found: String,
+        expected: String,
+        help: String,
+    },
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -1192,7 +1205,13 @@ impl Lockfile<ReadOnly> {
     #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, LockfileError> {
         let content = fs::sync::read_to_string(&filepath)?;
-        let mut lockfile: Lockfile<ReadOnly> = parse_lockfile(&content)?;
+        let tree_dir = filepath.parent().unwrap_or(filepath.as_path());
+        let help = format!(
+            "this install tree was created by an incompatible version of Lux.
+remove the tree at '{}' and reinstall all packages it contained.",
+            tree_dir.display()
+        );
+        let mut lockfile: Lockfile<ReadOnly> = parse_lockfile(&content, &filepath, &help)?;
         lockfile.filepath = filepath;
         Ok(lockfile)
     }
@@ -1292,7 +1311,12 @@ impl WorkspaceLockfile<ReadOnly> {
     #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         let content = fs::sync::read_to_string(&filepath)?;
-        let mut lockfile: WorkspaceLockfile<ReadOnly> = parse_lockfile(&content)?;
+        let mut lockfile: WorkspaceLockfile<ReadOnly> = parse_lockfile(
+            &content,
+            &filepath,
+            "this lockfile was created by an incompatible version of Lux.
+remove the `lux.lock` and run `lx sync` to regenerate it.",
+        )?;
 
         lockfile.filepath = filepath;
 
@@ -1504,7 +1528,7 @@ impl Drop for ProjectLockfileGuard {
     }
 }
 
-fn parse_lockfile<T>(content: &str) -> Result<T, LockfileError>
+fn parse_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, LockfileError>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -1514,9 +1538,8 @@ where
     let version = value
         .get("version")
         .and_then(|version| version.as_str())
-        .ok_or_else(|| LockfileError::IncompatibleVersion {
-            found: "<missing>".into(),
-            expected: LOCKFILE_VERSION_STR.into(),
+        .ok_or_else(|| LockfileError::MissingVersion {
+            lockfile: lockfile.to_path_buf(),
         })?;
 
     let found =
@@ -1527,8 +1550,10 @@ where
 
     if found.major != LOCKFILE_VERSION {
         return Err(LockfileError::IncompatibleVersion {
+            lockfile: lockfile.to_path_buf(),
             found: version.into(),
             expected: LOCKFILE_VERSION_STR.into(),
+            help: help.into(),
         });
     }
 
@@ -1858,7 +1883,12 @@ mod tests {
             "#
             );
 
-            assert!(super::parse_lockfile::<Lockfile<ReadOnly>>(&lockfile).is_err());
+            assert!(super::parse_lockfile::<Lockfile<ReadOnly>>(
+                &lockfile,
+                Path::new("lux.lock"),
+                ""
+            )
+            .is_err());
         }
     }
 }
