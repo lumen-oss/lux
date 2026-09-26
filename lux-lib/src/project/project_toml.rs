@@ -270,26 +270,40 @@ pub enum RemoteProjectTomlValidationError {
 #[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PartialProjectToml {
+    /// The name of the rock.
     pub(crate) package: PackageName,
+    /// The package version. If unset, Lux derives it from the current SemVer
+    /// git tag, falling back to "dev".
     #[serde(default, rename = "version")]
     #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub(crate) version_template: PackageVersionTemplate,
+    /// How to build the project. See the build backend fields below.
     #[serde(default)]
     pub(crate) build: BuildSpecInternal,
+    /// The LuaRocks rockspec format version to write to the generated rockspec ("1.0", "2.0", or "3.0").
+    /// Default: "3.0".
     pub(crate) rockspec_format: Option<RockspecFormat>,
+    /// How to run the project with `lx run`.
     #[serde(default)]
     pub(crate) run: Option<RunSpec>,
+    /// The Lua version requirement, e.g. ">= 5.1". Required to build a rockspec.
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub(crate) lua: Option<PackageVersionReq>,
+    /// Metadata published to LuaRocks.
     #[serde(default)]
     pub(crate) description: Option<RockDescription>,
+    /// Platforms this rock supports, mapping platform identifiers to `true` or
+    /// `false` (e.g. `linux = true`).
     #[serde(default)]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<std::collections::BTreeMap<String, bool>>")
     )]
     pub(crate) supported_platforms: Option<HashMap<PlatformIdentifier, bool>>,
+    /// Runtime Lua dependencies, mapping package names to a version requirement
+    /// (e.g. `foo = "1.0"`) or to a detailed table with `version`, `opt`, `pin`,
+    /// `git`, `rev`, and `path` keys.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
         feature = "schema",
@@ -298,6 +312,7 @@ pub struct PartialProjectToml {
         )
     )]
     pub(crate) dependencies: Option<Vec<LuaDependencySpec>>,
+    /// Dependencies needed at build time. Same syntax as `dependencies`.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
         feature = "schema",
@@ -306,8 +321,11 @@ pub struct PartialProjectToml {
         )
     )]
     pub(crate) build_dependencies: Option<Vec<LuaDependencySpec>>,
+    /// System (C/FFI) dependencies, discovered via pkg-config. Each entry may
+    /// set `header` and/or `library`.
     #[serde(default)]
     pub(crate) external_dependencies: Option<HashMap<String, ExternalDependencySpec>>,
+    /// Dependencies needed when running `lx test`. Same syntax as `dependencies`.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
         feature = "schema",
@@ -316,12 +334,16 @@ pub struct PartialProjectToml {
         )
     )]
     pub(crate) test_dependencies: Option<Vec<LuaDependencySpec>>,
+    /// Templates for generating the source URL of a release.
     #[serde(default, rename = "source")]
     pub(crate) source_template: RockSourceTemplate,
+    /// How to run the test suite with `lx test`.
     #[serde(default)]
     pub(crate) test: Option<TestSpecInternal>,
+    /// Additional install and deployment options.
     #[serde(default)]
     pub(crate) deploy: Option<DeploySpec>,
+    /// Lux-specific project settings, ignored when generating a rockspec.
     #[serde(default)]
     pub(crate) project: ProjectSpec,
 

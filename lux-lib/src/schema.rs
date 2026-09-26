@@ -10,8 +10,8 @@ pub fn config_schema() -> schemars::Schema {
     schema.insert("title".to_string(), "config.toml".into());
     schema.insert(
         "description".to_string(),
-        "Configuration for the Lux package manager. \
-         This file lives at the config path reported by `lx config`."
+        "Configuration for Lux, \
+         located at the path reported by `lx config`."
             .into(),
     );
     schema
@@ -23,8 +23,7 @@ pub fn lux_toml_schema() -> schemars::Schema {
     schema.insert("title".to_string(), "lux.toml".into());
     schema.insert(
         "description".to_string(),
-        "The TOML manifest for a Lux project."
-            .into(),
+        "The TOML manifest for a Lux project.".into(),
     );
     schema
 }
@@ -155,7 +154,7 @@ fn type_summary(value: &Value, defs: &Map<String, Value>) -> Option<String> {
         let vals: Vec<String> = values
             .iter()
             .filter_map(Value::as_str)
-            .map(|s| format!("`{s}`"))
+            .map(|s| format!("\"{s}\""))
             .collect();
         if !vals.is_empty() {
             return Some(format!("one of {}", vals.join(", ")));
@@ -215,18 +214,28 @@ fn type_summary(value: &Value, defs: &Map<String, Value>) -> Option<String> {
 #[derive(JsonSchema)]
 #[serde(untagged)]
 pub(crate) enum DependencyEntry {
+    /// A bare version requirement, e.g. ">= 1.0".
     Simple(String),
+    /// A detailed dependency table.
     Detailed(DependencyTableEntry),
 }
 
 #[allow(dead_code)]
 #[derive(JsonSchema)]
 pub(crate) struct DependencyTableEntry {
+    /// The version requirement, e.g. "1.0".
     pub version: String,
+    /// Whether the dependency is optional.
     pub opt: Option<bool>,
+    /// Whether the dependency should be pinned.
     pub pin: Option<bool>,
+    /// A git source. Supported shorthands: "github:owner/repo" (default if the
+    /// prefix is omitted), "gitlab:owner/repo", "codeberg:owner/repo", and
+    /// "sourcehut:owner/repo". Full HTTPS and SSH URLs are also accepted.
     pub git: Option<String>,
+    /// A local path dependency.
     pub path: Option<String>,
+    /// A commit SHA or tag to check out, separate from `version`.
     pub rev: Option<String>,
 }
 
@@ -236,17 +245,25 @@ pub(crate) struct DependencyTableEntry {
 #[derive(JsonSchema)]
 #[serde(untagged)]
 pub(crate) enum ModuleSpec {
+    /// A path to a Lua or C source file.
     SourcePath(String),
+    /// A list of C source files.
     SourcePaths(Vec<String>),
+    /// A table describing a compiled module.
     ModulePaths(ModulePathsSpec),
 }
 
 #[allow(dead_code)]
 #[derive(JsonSchema)]
 pub(crate) struct ModulePathsSpec {
+    /// Path names of C sources.
     pub sources: Vec<String>,
+    /// External libraries to link.
     pub libraries: Vec<String>,
+    /// C defines, e.g. "FOO=bar".
     pub defines: Vec<String>,
+    /// Directories for header lookup.
     pub incdirs: Vec<String>,
+    /// Directories for library lookup.
     pub libdirs: Vec<String>,
 }

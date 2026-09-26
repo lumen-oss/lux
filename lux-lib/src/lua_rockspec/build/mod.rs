@@ -520,10 +520,17 @@ fn display_include(include: &HashMap<LuaTableKey, PathBuf>) -> DisplayLuaValue {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "build")]
 pub(crate) struct BuildSpecInternal {
+    /// The build backend to use: "builtin", "make", "cmake",
+    /// "command", "none", "rust-mlua", "rust-binary", or "treesitter-parser".
+    /// Any other value is treated as a custom LuaRocks build backend.
+    /// Default: "builtin".
     #[serde(rename = "type", default)]
     #[display_lua(rename = "type")]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub(crate) build_type: Option<BuildType>,
+    /// Modules to build, mapping module names (as used by `require`) to a source
+    /// path, a list of C sources, or a table with `sources`, `libraries`,
+    /// `defines`, `incdirs`, and `libdirs`.
     #[serde(
         rename = "modules",
         default,
@@ -535,38 +542,55 @@ pub(crate) struct BuildSpecInternal {
         schemars(with = "Option<std::collections::BTreeMap<String, crate::schema::ModuleSpec>>")
     )]
     pub(crate) builtin_spec: Option<HashMap<LuaTableKey, ModuleSpecInternal>>,
+    /// Makefile to use. Default: "Makefile" ("Makefile.win" on Windows).
     #[serde(default)]
     pub(crate) makefile: Option<PathBuf>,
+    /// Target passed to `make` during the build pass. Default: empty.
     #[serde(rename = "build_target", default)]
     #[display_lua(rename = "build_target")]
     pub(crate) make_build_target: Option<String>,
+    /// Whether to perform a build pass. Default: `true`.
     #[serde(default)]
     pub(crate) build_pass: Option<bool>,
+    /// Target passed to `make` during the install pass. Default: "install".
     #[serde(rename = "install_target", default)]
     #[display_lua(rename = "install_target")]
     pub(crate) make_install_target: Option<String>,
+    /// Whether to perform an install pass. Default: `true`.
     #[serde(default)]
     pub(crate) install_pass: Option<bool>,
+    /// Make variable assignments for the build pass.
     #[serde(rename = "build_variables", default)]
     #[display_lua(rename = "build_variables")]
     pub(crate) make_build_variables: Option<HashMap<String, String>>,
+    /// Make variable assignments for the install pass.
     #[serde(rename = "install_variables", default)]
     #[display_lua(rename = "install_variables")]
     pub(crate) make_install_variables: Option<HashMap<String, String>>,
+    /// Make or CMake variable assignments applied to both passes.
     #[serde(default)]
     pub(crate) variables: Option<HashMap<String, String>>,
+    /// Contents of the generated "CMakeLists.txt". If unset, the project's own
+    /// file is used.
     #[serde(rename = "cmake", default)]
     #[display_lua(rename = "cmake")]
     pub(crate) cmake_lists_content: Option<String>,
+    /// Command to run to build the package.
     #[serde(default)]
     pub(crate) build_command: Option<String>,
+    /// Command to run to install the package.
     #[serde(default)]
     pub(crate) install_command: Option<String>,
+    /// Files to install, by category ("lua", "lib", "conf", "bin").
     #[serde(default)]
     pub(crate) install: Option<InstallSpec>,
+    /// Directories in the source tree to copy as-is into the rock's "etc" tree.
+    /// Do not use "lua", "lib", "rock_manifest", or the rockspec file name.
     #[serde(default, deserialize_with = "deserialize_copy_directories")]
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub(crate) copy_directories: Option<Vec<PathBuf>>,
+    /// Patches to apply before building, mapping file names to patch contents.
+    /// Lux accepts any format supported by the [`diffy`](https://docs.rs/diffy/latest/diffy/) crate.
     #[serde(default)]
     #[display_lua(convert_with = "display_path_string_map")]
     #[cfg_attr(
@@ -574,17 +598,23 @@ pub(crate) struct BuildSpecInternal {
         schemars(with = "Option<std::collections::BTreeMap<String, String>>")
     )]
     pub(crate) patches: Option<HashMap<PathBuf, String>>,
+    /// The cargo target directory, if it is not `<source>/target`.
     #[serde(default)]
     pub(crate) target_path: Option<PathBuf>,
+    /// Whether to build a cargo package with default features. Default: `true`.
     #[serde(default)]
     pub(crate) default_features: Option<bool>,
+    /// Cargo features to enable.
     #[serde(default)]
     pub(crate) features: Option<Vec<String>>,
+    /// Additional arguments to pass to cargo.
     pub(crate) cargo_extra_args: Option<Vec<String>>,
-    #[serde(default)]
-    pub(crate) binary: Option<String>,
+    /// The cargo package to build.
+    /// Required for "rust-binary" in multi-package workspaces.
     #[serde(default)]
     pub(crate) package: Option<String>,
+    /// Additional files to copy into the rock's "lua" directory, mapping source
+    /// paths to destinations.
     #[serde(default, deserialize_with = "deserialize_map_or_seq")]
     #[display_lua(convert_with = "display_include")]
     #[cfg_attr(
@@ -592,14 +622,22 @@ pub(crate) struct BuildSpecInternal {
         schemars(with = "Option<std::collections::BTreeMap<String, String>>")
     )]
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
+    /// The parser language, e.g. "haskell". Required for "treesitter-parser".
     #[serde(default)]
     pub(crate) lang: Option<String>,
+    /// Whether to build the tree-sitter parser. Set to `false` for query-only packages.
+    /// Default: `false`.
     #[serde(default)]
     pub(crate) parser: Option<bool>,
+    /// Whether to generate the tree-sitter parser sources before building.
+    /// Default: `false`.
     #[serde(default)]
     pub(crate) generate: Option<bool>,
+    /// Location of the tree-sitter grammar, relative to the source root.
     #[serde(default)]
     pub(crate) location: Option<PathBuf>,
+    /// Embedded queries to install into "etc/queries", mapping file names to
+    /// contents.
     #[serde(default)]
     #[display_lua(convert_with = "display_path_string_map")]
     #[cfg_attr(
@@ -705,7 +743,6 @@ fn override_build_spec_internal(
         default_features: override_opt(&override_spec.default_features, &base.default_features),
         features: override_opt(&override_spec.features, &base.features),
         cargo_extra_args: override_opt(&override_spec.cargo_extra_args, &base.cargo_extra_args),
-        binary: override_opt(&override_spec.binary, &base.binary),
         package: override_opt(&override_spec.package, &base.package),
         include: merge_map_opts(&override_spec.include, &base.include),
         lang: override_opt(&override_spec.lang, &base.lang),
