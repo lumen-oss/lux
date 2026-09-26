@@ -11,6 +11,8 @@ use lux_lib::{
     tree::{InstallTree, RockMatches, Tree},
 };
 use miette::{miette, Context, IntoDiagnostic, Result};
+use std::io::Read;
+use std::path::Path;
 use url::Url;
 use walkdir::WalkDir;
 
@@ -67,6 +69,25 @@ fn get_homepage(pkg: &LocalPackage, tree: &Tree) -> Result<Option<Url>> {
     Ok(rockspec.description().homepage.clone())
 }
 
+fn is_plain_text(path: &Path) -> Result<bool> {
+    let mut buf = Vec::with_capacity(1024);
+    std::fs::File::open(path)
+        .into_diagnostic()?
+        .take(1024)
+        .read_to_end(&mut buf)
+        .into_diagnostic()?;
+    Ok(content_inspector::inspect(&buf).is_text())
+}
+
+fn open_doc_file(path: &Path) -> Result<()> {
+    if is_plain_text(path)? {
+        edit::edit_file(path).into_diagnostic()?;
+    } else {
+        open::that(path).into_diagnostic()?;
+    }
+    Ok(())
+}
+
 async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Result<()> {
     let doc_dir = tree.layout_for(&pkg).doc;
     let files: Vec<String> = WalkDir::new(&doc_dir)
@@ -84,7 +105,7 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
         .into_diagnostic()?;
     match files.first() {
         Some(file) if files.len() == 1 => {
-            edit::edit_file(doc_dir.join(file)).into_diagnostic()?;
+            open_doc_file(&doc_dir.join(file))?;
             Ok(())
         }
         Some(_) => {
@@ -95,7 +116,7 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
             .prompt()
             .into_diagnostic()
             .wrap_err("error selecting from multiple files")?;
-            edit::edit_file(doc_dir.join(file)).into_diagnostic()?;
+            open_doc_file(&doc_dir.join(file))?;
             Ok(())
         }
         None => match get_homepage(&pkg, tree)? {
@@ -120,5 +141,30 @@ async fn open_local_docs(pkg: LocalPackage, tree: &Tree, config: &Config) -> Res
                 Ok(())
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert_fs::TempDir;
+    use std::io::Write;
+
+    #[test]
+    fn detects_plain_text() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("README.md");
+        let mut f = std::fs::File::create(&file).unwrap();
+        writeln!(f, "# Hello, world!").unwrap();
+        assert!(is_plain_text(&file).unwrap());
+    }
+
+    #[test]
+    fn detects_binary() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("diagram.png");
+        let mut f = std::fs::File::create(&file).unwrap();
+        f.write_all(b"\x89PNG\r\n\x1a\n").unwrap();
+        assert!(!is_plain_text(&file).unwrap());
     }
 }

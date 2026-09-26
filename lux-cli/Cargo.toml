@@ -49,6 +49,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 tracing-indicatif = "0.3.14"
 indicatif = "0.18"
+content_inspector = "0.2"
 clap_complete = { workspace = true }
 clap_mangen = { workspace = true }
 itertools = { workspace = true }
