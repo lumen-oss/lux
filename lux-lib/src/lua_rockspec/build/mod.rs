@@ -360,13 +360,22 @@ impl LibPathBufTable {
 /// For example, lua = {["foo.bar"] = "src/bar.lua"} will copy src/bar.lua
 /// to the foo directory under the rock's Lua files directory.
 #[derive(Debug, PartialEq, Default, Deserialize, Clone, lux_macros::DisplayAsLuaKV)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "install")]
 pub struct InstallSpec {
     /// Lua modules written in Lua.
     #[serde(default, deserialize_with = "deserialize_module_path_map")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "std::collections::BTreeMap<String, String>")
+    )]
     pub lua: HashMap<LuaModule, PathBuf>,
     /// Dynamic libraries implemented compiled Lua modules.
     #[serde(default, deserialize_with = "deserialize_file_name_path_map")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "std::collections::BTreeMap<String, String>")
+    )]
     pub lib: HashMap<String, PathBuf>,
     /// Configuration files.
     #[serde(default)]
@@ -375,6 +384,10 @@ pub struct InstallSpec {
     // TODO(vhyrro): The String component should be checked to ensure that it consists of a single
     // path component, such that targets like `my.binary` are not allowed.
     #[serde(default, deserialize_with = "deserialize_file_name_path_map")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "std::collections::BTreeMap<String, String>")
+    )]
     pub bin: HashMap<String, PathBuf>,
 }
 
@@ -504,10 +517,12 @@ fn display_include(include: &HashMap<LuaTableKey, PathBuf>) -> DisplayLuaValue {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Default, Clone, lux_macros::DisplayAsLuaKV)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "build")]
 pub(crate) struct BuildSpecInternal {
     #[serde(rename = "type", default)]
     #[display_lua(rename = "type")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub(crate) build_type: Option<BuildType>,
     #[serde(
         rename = "modules",
@@ -515,6 +530,10 @@ pub(crate) struct BuildSpecInternal {
         deserialize_with = "deserialize_map_or_seq"
     )]
     #[display_lua(rename = "modules", convert_with = "display_builtin_spec")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<std::collections::BTreeMap<String, crate::schema::ModuleSpec>>")
+    )]
     pub(crate) builtin_spec: Option<HashMap<LuaTableKey, ModuleSpecInternal>>,
     #[serde(default)]
     pub(crate) makefile: Option<PathBuf>,
@@ -546,9 +565,14 @@ pub(crate) struct BuildSpecInternal {
     #[serde(default)]
     pub(crate) install: Option<InstallSpec>,
     #[serde(default, deserialize_with = "deserialize_copy_directories")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub(crate) copy_directories: Option<Vec<PathBuf>>,
     #[serde(default)]
     #[display_lua(convert_with = "display_path_string_map")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<std::collections::BTreeMap<String, String>>")
+    )]
     pub(crate) patches: Option<HashMap<PathBuf, String>>,
     #[serde(default)]
     pub(crate) target_path: Option<PathBuf>,
@@ -563,6 +587,10 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) package: Option<String>,
     #[serde(default, deserialize_with = "deserialize_map_or_seq")]
     #[display_lua(convert_with = "display_include")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<std::collections::BTreeMap<String, String>>")
+    )]
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
     #[serde(default)]
     pub(crate) lang: Option<String>,
@@ -574,6 +602,10 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) location: Option<PathBuf>,
     #[serde(default)]
     #[display_lua(convert_with = "display_path_string_map")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<std::collections::BTreeMap<String, String>>")
+    )]
     pub(crate) queries: Option<HashMap<PathBuf, String>>,
 }
 

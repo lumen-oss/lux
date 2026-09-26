@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Used as a fallback when searching for external dependencies if they
 /// cannot be found using pkg-config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExternalDependencySearchConfig {
     /// Patterns for binary files
     #[serde(default = "default_bin_patterns")]

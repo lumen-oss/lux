@@ -10,6 +10,7 @@ use super::{
 
 /// Can be defined in a [platform-agnostic](https://github.com/luarocks/luarocks/wiki/platform-agnostic-external-dependencies) manner
 #[derive(Debug, PartialEq, Clone, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ExternalDependencySpec {
     /// A header file, e.g. "foo.h"
     pub header: Option<PathBuf>,

@@ -8,6 +8,7 @@ use super::{PartialOverride, PerPlatform, PlatformOverridable};
 ///
 /// Specifies additional install options
 #[derive(Clone, Debug, PartialEq, Deserialize, lux_macros::DisplayAsLuaKV)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "deploy")]
 pub struct DeploySpec {
     /// Whether to wrap installed Lua bin scripts to be executed with

@@ -300,6 +300,7 @@ impl LuaScriptTestSpec {
 }
 
 #[derive(Debug, Deserialize, Serialize_enum_str, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum TestType {
     Busted,
@@ -309,6 +310,7 @@ pub(crate) enum TestType {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Default, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub(crate) struct TestSpecInternal {
     #[serde(default, rename = "type")]
     pub(crate) test_type: Option<TestType>,
