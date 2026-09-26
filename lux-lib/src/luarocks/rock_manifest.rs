@@ -7,7 +7,7 @@ use miette::Diagnostic;
 use ottavino::{Closure, Executor, Fuel};
 use ottavino_util::serde::from_value;
 use path_slash::PathBufExt;
-use serde::{Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer};
 /// Compatibility layer/adapter for the luarocks client
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
@@ -144,11 +144,30 @@ impl DisplayAsLuaValue for HashMap<PathBuf, String> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum DirOrFileEntry {
     DirEntry(HashMap<PathBuf, DirOrFileEntry>),
     FileEntry(String),
+}
+
+impl<'de> Deserialize<'de> for DirOrFileEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = serde_value::Value::deserialize(deserializer)?;
+        match value {
+            serde_value::Value::String(s) => Ok(Self::FileEntry(s)),
+            serde_value::Value::Seq(seq) if seq.is_empty() => Ok(Self::DirEntry(HashMap::new())),
+            serde_value::Value::Map(_) => value
+                .deserialize_into()
+                .map(Self::DirEntry)
+                .map_err(de::Error::custom),
+            other => Err(de::Error::custom(format!(
+                "expected a string or table for rock_manifest entry, got: {other:?}"
+            ))),
+        }
+    }
 }
 
 impl DisplayAsLuaValue for DirOrFileEntry {
@@ -329,6 +348,67 @@ rock_manifest = {
                             )])),
                         ),
                     ])
+                },
+            }
+        );
+    }
+
+    // https://github.com/lumen-oss/lux/issues/1981
+    #[tokio::test]
+    pub async fn rock_manifest_with_empty_lua_table_entry() {
+        let rock_manifest_content = r#"
+rock_manifest = {
+   tex = {
+      latex = {
+         markdown = {
+            ["markdown.sty"] = "18727b4c07e15a09a1b0f20683d7a06d",
+            ["markdownthemewitiko_markdown_defaults.sty"] = "c7e7b056a685b18c2e83585c06cfbbd7"
+         }
+      },
+      luatex = {
+         markdown = {}
+      }
+   },
+}
+        "#;
+        let rock_manifest = RockManifest::new(rock_manifest_content).unwrap();
+        assert_eq!(
+            rock_manifest,
+            RockManifest {
+                lib: RockManifestLib::default(),
+                lua: RockManifestLua::default(),
+                bin: RockManifestBin::default(),
+                doc: RockManifestDoc::default(),
+                conf: RockManifestConf::default(),
+                root: RockManifestRoot {
+                    entries: HashMap::from_iter(vec![(
+                        "tex".into(),
+                        DirOrFileEntry::DirEntry(HashMap::from_iter(vec![
+                            (
+                                "latex".into(),
+                                DirOrFileEntry::DirEntry(HashMap::from_iter(vec![(
+                                    "markdown".into(),
+                                    DirOrFileEntry::DirEntry(HashMap::from_iter(vec![
+                                        (
+                                            "markdown.sty".into(),
+                                            "18727b4c07e15a09a1b0f20683d7a06d".into(),
+                                        ),
+                                        (
+                                            "markdownthemewitiko_markdown_defaults.sty".into(),
+                                            "c7e7b056a685b18c2e83585c06cfbbd7".into(),
+                                        ),
+                                    ])),
+                                )])),
+                            ),
+                            (
+                                "luatex".into(),
+                                DirOrFileEntry::DirEntry(HashMap::from_iter(vec![(
+                                    "markdown".into(),
+                                    DirOrFileEntry::DirEntry(HashMap::new()),
+                                )])),
+                            ),
+                        ])),
+                    )]),
                 },
             }
         );
