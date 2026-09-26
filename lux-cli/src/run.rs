@@ -8,6 +8,7 @@ use crate::build::{self, Build};
 
 #[derive(Args)]
 pub struct Run {
+    #[arg(trailing_var_arg = true)]
     args: Vec<String>,
 
     /// Do not add `require('lux').loader()` to `LUA_INIT`.{n}
@@ -42,4 +43,29 @@ pub async fn run(run_args: Run, config: Config) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Cli, Commands};
+    use clap::error::ErrorKind;
+    use clap::Parser;
+
+    #[test]
+    fn forwards_arguments_after_first_positional() {
+        let cli = Cli::try_parse_from(["lx", "run", "script.lua", "--help", "-x"]).unwrap();
+        let Commands::Run(run) = cli.command else {
+            unreachable!()
+        };
+        assert_eq!(run.args, ["script.lua", "--help", "-x"]);
+    }
+
+    #[test]
+    fn run_help_is_not_forwarded() {
+        let err = match Cli::try_parse_from(["lx", "run", "--help"]) {
+            Err(err) => err,
+            Ok(_) => unreachable!(),
+        };
+        assert_eq!(err.kind(), ErrorKind::DisplayHelp);
+    }
 }
