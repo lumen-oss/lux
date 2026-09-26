@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.65.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.64.2...lux-lib-v0.65.0) `lux-lib` - 2026-09-26
+
+### Added
+- support semver prerelease versions ([#1976](https://github.com/lumen-oss/lux/pull/1976))
+- [**breaking**] disallow conflicting entrypoints
+- *(cli)* add `--orphans` flag to `lx list`
+
+### Fixed
+- *(lockfile)* name the stale install tree in version errors ([#1986](https://github.com/lumen-oss/lux/pull/1986))
+- *(rock_manifest)* support empty dir entries ([#1985](https://github.com/lumen-oss/lux/pull/1985))
+
 ## [0.64.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.64.1...lux-lib-v0.64.2) `lux-lib` - 2026-09-16
 
 ### Fixed
