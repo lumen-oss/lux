@@ -33,6 +33,8 @@ pub enum RustError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
+    #[error("luau does not support rust-mlua dependencies")]
+    LuauUnsupported,
 }
 
 impl BuildBackend for RustMluaBuildSpec {
@@ -57,6 +59,7 @@ impl BuildBackend for RustMluaBuildSpec {
             LuaVersion::Lua55 => "lua55",
             LuaVersion::LuaJIT => "luajit",
             LuaVersion::LuaJIT52 => "luajit",
+            LuaVersion::Luau => return Err(RustError::LuauUnsupported),
         };
         let features = self
             .features

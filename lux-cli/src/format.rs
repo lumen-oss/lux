@@ -6,7 +6,7 @@ use lux_lib::{
     config::Config, lua_version::LuaVersion, package::PackageName, project::Project,
     workspace::Workspace,
 };
-use miette::{bail, Context, IntoDiagnostic, Result};
+use miette::{bail, miette, Context, IntoDiagnostic, Result};
 use path_slash::PathExt;
 use walkdir::WalkDir;
 
@@ -80,8 +80,9 @@ pub fn format(args: Fmt, config: Config) -> Result<()> {
 struct FmtConfig {
     stylua: stylua_lib::Config,
     luafmt: luafmt::LuaFormatConfig,
-    luafmt_syntax_level: luafmt::LuaSyntaxLevel,
+    luafmt_syntax_level: Option<luafmt::LuaSyntaxLevel>,
     editorconfig: PathBuf,
+    lua_version: Option<LuaVersion>,
 }
 
 impl FmtConfig {
@@ -97,15 +98,17 @@ impl FmtConfig {
         let luafmt = luafmt::resolve_config_for_path(Some(root), None)
             .map(|resolved| resolved.config)
             .unwrap_or_default();
-        let luafmt_syntax_level = lua_version
-            .map(lua_version_to_luafmt_syntax_level)
-            .unwrap_or(luafmt.syntax.level);
+        let luafmt_syntax_level = match &lua_version {
+            Some(version) => lua_version_to_luafmt_syntax_level(version),
+            None => Some(luafmt.syntax.level),
+        };
 
         Self {
             stylua,
             luafmt,
             luafmt_syntax_level,
             editorconfig: root.join(".editorconfig"),
+            lua_version,
         }
     }
 
@@ -120,7 +123,16 @@ impl FmtConfig {
             .into_diagnostic()
             .context(format!("error formatting {} with stylua.", path.display()))?,
             FmtBackend::Luafmt => {
-                luafmt::check_text(code, self.luafmt_syntax_level.into(), &self.luafmt).formatted
+                let syntax_level = self.luafmt_syntax_level.ok_or_else(|| {
+                    miette!(
+                        "unsupported Lua version{} for luafmt",
+                        self.lua_version
+                            .as_ref()
+                            .map(|ver| format!(" '{}'", ver))
+                            .unwrap_or_default()
+                    )
+                })?;
+                luafmt::check_text(code, syntax_level.into(), &self.luafmt).formatted
             }
             FmtBackend::EmmyluaCodestyle => {
                 let uri = path.to_slash_lossy().to_string();
@@ -179,8 +191,10 @@ fn format_project(
 }
 
 fn is_lua_source(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|ext| ext == "lua" || ext == "rockspec")
+    path.extension().is_some_and(|ext| {
+        let ext = ext.to_string_lossy();
+        ext == "lua" || ext == "luau" || ext == "rockspec"
+    })
 }
 
 fn ensure_no_package(args: &Fmt) -> Result<()> {
@@ -207,14 +221,15 @@ fn format_loose(
     format_files(files, &configs, backend)
 }
 
-fn lua_version_to_luafmt_syntax_level(lua_version: LuaVersion) -> luafmt::LuaSyntaxLevel {
+fn lua_version_to_luafmt_syntax_level(lua_version: &LuaVersion) -> Option<luafmt::LuaSyntaxLevel> {
     match lua_version {
-        LuaVersion::Lua51 => luafmt::LuaSyntaxLevel::Lua51,
-        LuaVersion::Lua52 => luafmt::LuaSyntaxLevel::Lua52,
-        LuaVersion::Lua53 => luafmt::LuaSyntaxLevel::Lua53,
-        LuaVersion::Lua54 => luafmt::LuaSyntaxLevel::Lua54,
-        LuaVersion::Lua55 => luafmt::LuaSyntaxLevel::Lua55,
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => luafmt::LuaSyntaxLevel::LuaJIT,
+        LuaVersion::Lua51 => Some(luafmt::LuaSyntaxLevel::Lua51),
+        LuaVersion::Lua52 => Some(luafmt::LuaSyntaxLevel::Lua52),
+        LuaVersion::Lua53 => Some(luafmt::LuaSyntaxLevel::Lua53),
+        LuaVersion::Lua54 => Some(luafmt::LuaSyntaxLevel::Lua54),
+        LuaVersion::Lua55 => Some(luafmt::LuaSyntaxLevel::Lua55),
+        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => Some(luafmt::LuaSyntaxLevel::LuaJIT),
+        LuaVersion::Luau => None,
     }
 }
 

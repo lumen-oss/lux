@@ -3,6 +3,7 @@ use crate::fs;
 use crate::lockfile::{LockfileError, OptState, RemotePackageSourceUrl};
 use crate::lua_installation::LuaInstallationError;
 use crate::lua_rockspec::LuaVersionError;
+use crate::lua_version::LuaVersion;
 use crate::operations::{RemotePackageSourceMetadata, UnpackError};
 use crate::rockspec::{LuaVersionCompatibility, Rockspec};
 use crate::tree::{self, EntryType, InstallTree, TreeError};
@@ -57,6 +58,7 @@ mod treesitter_parser;
 
 pub(crate) mod backend;
 pub(crate) mod utils;
+pub(crate) use builtin::autodetect_modules;
 
 pub mod external_dependency;
 
@@ -147,6 +149,12 @@ pub enum BuildError {
     #[error("building from rock source failed")]
     #[diagnostic(forward(0))]
     SourceBuild(#[from] Box<SourceBuildError>),
+    #[error("unsupported build backend for luau")]
+    #[diagnostic(help("lux can build luau packages with the following build backends: 'builtin', 'source' & 'none'"))]
+    LuauUnsupportedBuildBackend,
+    #[error("luau does not support native dependencies")]
+    #[diagnostic(help("the luau runtime cannot load C libraries. use pure-Luau packages or Lua"))]
+    LuauNativeDepsUnsupported,
     #[error("IO operation failed")]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -223,26 +231,44 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
 ) -> Result<BuildInfo, BuildError> {
-    Ok(
-        match rockspec.build().current_platform().build_backend.to_owned() {
-            Some(BuildBackendSpec::Builtin(build_spec)) => build_spec.run(args).await?,
-            Some(BuildBackendSpec::Make(make_spec)) => make_spec.run(args).await?,
-            Some(BuildBackendSpec::CMake(cmake_spec)) => cmake_spec.run(args).await?,
-            Some(BuildBackendSpec::Command(command_spec)) => command_spec.run(args).await?,
-            Some(BuildBackendSpec::RustMlua(rust_mlua_spec)) => rust_mlua_spec.run(args).await?,
-            Some(BuildBackendSpec::RustBinary(rust_binary_spec)) => {
-                rust_binary_spec.run(args).await?
-            }
-            Some(BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
-                treesitter_parser_spec.run(args).await?
-            }
-            Some(BuildBackendSpec::LuaRock(build_backend_name)) => {
-                luarocks::build(&build_backend_name, rockspec, args).await?
-            }
-            Some(BuildBackendSpec::Source) => source::build(args).await?,
-            None => BuildInfo::default(),
-        },
-    )
+    if args.tree.version() == &LuaVersion::Luau
+        && rockspec
+            .build()
+            .current_platform()
+            .build_backend
+            .as_ref()
+            .is_some_and(|backend| {
+                !matches!(
+                    backend,
+                    BuildBackendSpec::Builtin(_) | BuildBackendSpec::Source
+                )
+            })
+    {
+        Err(BuildError::LuauUnsupportedBuildBackend)
+    } else {
+        Ok(
+            match rockspec.build().current_platform().build_backend.to_owned() {
+                Some(BuildBackendSpec::Builtin(build_spec)) => build_spec.run(args).await?,
+                Some(BuildBackendSpec::Make(make_spec)) => make_spec.run(args).await?,
+                Some(BuildBackendSpec::CMake(cmake_spec)) => cmake_spec.run(args).await?,
+                Some(BuildBackendSpec::Command(command_spec)) => command_spec.run(args).await?,
+                Some(BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
+                    rust_mlua_spec.run(args).await?
+                }
+                Some(BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+                    rust_binary_spec.run(args).await?
+                }
+                Some(BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
+                    treesitter_parser_spec.run(args).await?
+                }
+                Some(BuildBackendSpec::LuaRock(build_backend_name)) => {
+                    luarocks::build(&build_backend_name, rockspec, args).await?
+                }
+                Some(BuildBackendSpec::Source) => source::build(args).await?,
+                None => BuildInfo::default(),
+            },
+        )
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -498,7 +524,10 @@ pub(crate) fn resolve_source_dir(
         .filter(|entry| entry.path().is_file())
         .any(|entry| {
             entry.path().extension().is_some_and(|ext| {
-                matches!(ext.to_string_lossy().to_string().as_str(), "lua" | "c")
+                matches!(
+                    ext.to_string_lossy().to_string().as_str(),
+                    "lua" | "luau" | "c"
+                )
             })
         });
     if has_lua_or_c_sources {

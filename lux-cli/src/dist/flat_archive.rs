@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     io,
     path::{Path, PathBuf},
 };
@@ -85,7 +86,7 @@ pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
         .user_tree(Some(staging_dir.path().to_path_buf()))
         .build()?;
 
-    let (pkg, install_root) = match &args.package_or_rockspec {
+    let (pkg, tree) = match &args.package_or_rockspec {
         None => install_project(None, &staging_dir, &config).await,
         Some(PackageOrRockspec::Package(package_req))
             if exists_matching_workspace_member(package_req)? =>
@@ -99,6 +100,11 @@ pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
             install_rockspec(rockspec_path, &staging_dir, &config).await
         }
     }?;
+    let install_root = tree.root();
+
+    if tree.version() == &LuaVersion::Luau {
+        write_luaurc(&tree).await?;
+    }
 
     let destination = args
         .destination
@@ -132,7 +138,7 @@ async fn install_project(
     package: Option<&PackageName>,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LocalPackage, FlatDistTree)> {
     let workspace = Workspace::current_or_err()?;
     let project = match package {
         Some(package) => workspace.select_member(package)?,
@@ -140,22 +146,20 @@ async fn install_project(
     };
     let lua_version = project.lua_version(config)?;
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
-    Ok((
-        InstallProject::new()
-            .project(project)
-            .config(config)
-            .tree(&tree)
-            .build()
-            .await?,
-        tree.root(),
-    ))
+    let pkg = InstallProject::new()
+        .project(project)
+        .config(config)
+        .tree(&tree)
+        .build()
+        .await?;
+    Ok((pkg, tree))
 }
 
 async fn install_package(
     package: &PackageReq,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LocalPackage, FlatDistTree)> {
     let lua_version = LuaVersion::from(config)?.clone();
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
     let packages = Install::new(config)
@@ -171,14 +175,14 @@ async fn install_package(
         .into_iter()
         .find(|pkg| pkg.name() == package.name())
         .ok_or_else(|| miette!("package was not installed"))?;
-    Ok((package, tree.root()))
+    Ok((package, tree))
 }
 
 async fn install_rockspec(
     rockspec_path: &Path,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LocalPackage, FlatDistTree)> {
     let content = tokio::fs::read_to_string(&rockspec_path)
         .await
         .into_diagnostic()?;
@@ -205,7 +209,21 @@ async fn install_rockspec(
         .config(config)
         .build()
         .await?;
-    Ok((package, tree.root()))
+    Ok((package, tree))
+}
+
+async fn write_luaurc(tree: &FlatDistTree) -> Result<()> {
+    let aliases = tree
+        .list()?
+        .keys()
+        .map(|name| (name.to_string(), "./lua".into()))
+        .collect::<BTreeMap<String, String>>();
+    let content = serde_json::to_string_pretty(&serde_json::json!({ "aliases": aliases }))
+        .into_diagnostic()?;
+    fs::write(tree.root().join(".luaurc"), content)
+        .await
+        .into_diagnostic()?;
+    Ok(())
 }
 
 async fn zip_dir(src_dir: &Path, dest_file: &Path, method: &CompressionMethod) -> Result<()> {
