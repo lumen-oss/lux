@@ -70,7 +70,7 @@ tree-sitter-generate = { version = "0.27", default-features = false, features = 
   "pathdiff",
 ] }
 tree-sitter-loader = "0.26"
-url = "2.5"
+url = { version = "2.5", features = ["serde"] }
 vfs = "0.13"
 
 darklua = { workspace = true }

@@ -4,6 +4,7 @@ use crate::{
         GitSource,
     },
     lua_rockspec::per_platform_from_intermediate,
+    package::wally::PackageReq as WallyPackageReq,
 };
 
 pub use crate::git::GitRef;
@@ -112,6 +113,7 @@ pub enum RockSourceSpec {
     Git(GitSource),
     File(PathBuf),
     Url(Url),
+    Wally(WallyPackageReq),
 }
 
 impl RockSourceSpec {
@@ -130,6 +132,7 @@ impl Display for RockSourceSpec {
             RockSourceSpec::Git(git_source) => git_source.fmt(f),
             RockSourceSpec::File(path_buf) => path_buf.display().fmt(f),
             RockSourceSpec::Url(url) => url.fmt(f),
+            RockSourceSpec::Wally(req) => req.fmt(f),
         }
     }
 }
@@ -172,6 +175,7 @@ impl DisplayAsLuaKV for RockSourceSpec {
                     value: DisplayLuaValue::Table(source_tbl),
                 }
             }
+            RockSourceSpec::Wally(_) => unimplemented!(),
         }
     }
 }
