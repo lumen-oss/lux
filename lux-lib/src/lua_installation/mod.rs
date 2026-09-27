@@ -257,7 +257,11 @@ impl LuaInstallation {
     }
 
     pub(crate) fn define_flags(&self) -> Vec<String> {
-        self.dependency_info.define_flags()
+        let mut defines = self.dependency_info.define_flags();
+        if self.version.is_luajit() {
+            defines.push("-DLUAJIT_VERSION".into());
+        }
+        defines
     }
 
     pub(crate) fn lib_link_args(&self, compiler: &cc::Tool) -> Vec<String> {
