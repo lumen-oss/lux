@@ -273,6 +273,9 @@ async fn move_luajit_includes(install_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
+// NOTE: LuaJIT must be built as a shared library on MSVC.
+// https://luajit.org/install.html: "You may link LuaJIT statically on Windows
+// only if you don't intend to load Lua/C modules at runtime."
 #[tracing::instrument(name = "Compiling LuaJIT", skip_all)]
 async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
     let lua_version = args.lua_version;
@@ -296,7 +299,6 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     if lua_version == &LuaVersion::LuaJIT52 {
         msvcbuild.arg("lua52compat");
     }
-    msvcbuild.arg("static");
     let host = Triple::host();
     let target = host.to_string();
     let cl = cc::windows_registry::find_tool(&target, "cl.exe").ok_or(BuildLuaError::ClNotFound)?;
@@ -329,6 +331,12 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         .await
         .map_err(|err| io::Error::other(err.to_string()))?;
     fs::tokio::copy(src_dir.join("luajit.exe"), bin_dir.join("luajit.exe"))
+        .await
+        .map_err(|err| io::Error::other(err.to_string()))?;
+    fs::tokio::copy(src_dir.join("lua51.dll"), bin_dir.join("lua51.dll"))
+        .await
+        .map_err(|err| io::Error::other(err.to_string()))?;
+    fs::tokio::copy(src_dir.join("lua51.dll"), lib_dir.join("lua51.dll"))
         .await
         .map_err(|err| io::Error::other(err.to_string()))?;
     Ok(())
