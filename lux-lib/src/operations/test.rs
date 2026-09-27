@@ -233,6 +233,34 @@ async fn run_project_tests(
             .arg("--directory")
             .arg(directory.to_slash_lossy().to_string());
     }
+    if matches!(&test_spec, ValidatedTestSpec::BustedNlua { .. }) {
+        if let Some(lua) = test_config.variables().get("LUA") {
+            if let Ok(nvim) = which::which("nvim") {
+                eprintln!(
+                    "=== nvim: {} | lua51.dll next to it: {} ===",
+                    nvim.display(),
+                    nvim.with_file_name("lua51.dll").exists(),
+                );
+            }
+            let script = "local ok,lfs=pcall(require,'lfs'); print('OK',ok); if ok then print('VER',lfs._VERSION); local c=lfs.currentdir(); print('CUR',c); print('CHDIR_DOT',lfs.chdir('.')); if c then print('CHDIR_CUR',lfs.chdir(c)) end else print('LFS',lfs) end; print('SEARCH',package.searchpath('lfs',package.cpath)); print('JIT',jit and jit.version); print('V',_VERSION)";
+            match Command::new(lua)
+                .current_dir(project.root().deref())
+                .arg("-e")
+                .arg(script)
+                .env("PATH", paths.path_prepended().joined())
+                .env("LUA_PATH", paths.package_path().joined())
+                .env("LUA_CPATH", paths.package_cpath().joined())
+                .output()
+            {
+                Ok(o) => eprintln!(
+                    "=== nlua lfs diagnostic ===\nstdout: {}\nstderr: {}\n=== end ===",
+                    String::from_utf8_lossy(&o.stdout),
+                    String::from_utf8_lossy(&o.stderr),
+                ),
+                Err(e) => eprintln!("=== nlua lfs diagnostic spawn error: {e} ==="),
+            }
+        }
+    }
     if let TestEnv::Pure = test_env {
         // isolate the test runner from the user's own config/data files
         // by initialising empty HOME and XDG base directory paths
