@@ -14,9 +14,18 @@ jobs:
       pull-requests: read
     if: github.event.pull_request.draft == false
     runs-on: windows-2025
+    env:
+      OPENSSL_DIR: C:\Program Files\OpenSSL
+      OPENSSL_LIB_DIR: C:\Program Files\OpenSSL\lib\VC\x64\MD
+      CFLAGS: "/NOLOGO /MT /O2"
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Enable cc debug output
+        if: runner.debug == '1'
+        run: echo "CC_ENABLE_DEBUG_OUTPUT=true" >> $env:GITHUB_ENV
 
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1
@@ -55,18 +64,8 @@ jobs:
         uses: taiki-e/install-action@nextest
 
       - name: Build
-        env:
-          OPENSSL_DIR: C:\Program Files\OpenSSL
-          OPENSSL_LIB_DIR: C:\Program Files\OpenSSL\lib\VC\x64\MD
-          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
         run: cargo build --locked --no-default-features --features vendored
 
       - name: Run tests
-        env:
-          OPENSSL_DIR: C:\Program Files\OpenSSL
-          OPENSSL_LIB_DIR: C:\Program Files\OpenSSL\lib\VC\x64\MD
-          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
-          CC_ENABLE_DEBUG_OUTPUT: true
-          CFLAGS: "/NOLOGO /MT /O2"
         run: |
           cargo nextest run --locked --test "*" --no-fail-fast --no-default-features --features vendored
