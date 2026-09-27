@@ -620,12 +620,13 @@ async fn link_c_artifacts(
     let cmd = build.try_get_compiler()?.to_command();
     let mut cmd: tokio::process::Command = cmd.into();
     cmd.current_dir(temp_work_dir.path());
-    add_variable_if_set(config, "LIBFLAG", &mut cmd);
     let output = if is_msvc {
         let def_file = mk_def_file(temp_work_dir.path(), target_file_name, target_module)?;
-        cmd.arg("/NOIMPLIB").arg("/NOEXP").args(&objects).arg("/LD");
+        cmd.args(&objects).arg("/LD");
         add_variable_if_set(config, "LDFLAGS", &mut cmd);
         cmd.arg("/link")
+            .arg("/NOIMPLIB")
+            .arg("/NOEXP")
             .arg(format!("/DEF:{}", def_file.display()))
             .arg(format!("/OUT:{}", output_path.display()))
             .args(lua_lib_link_args(lua, &compiler))
@@ -639,6 +640,7 @@ async fn link_c_artifacts(
             .output()
             .await?
     } else {
+        add_variable_if_set(config, "LIBFLAG", &mut cmd);
         add_variable_if_set(config, "LDFLAGS", &mut cmd);
         cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
             .args(lua_lib_link_args(lua, &build.try_get_compiler()?))
