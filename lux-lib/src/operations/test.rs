@@ -219,6 +219,20 @@ async fn run_project_tests(
         .env("PATH", paths.path_prepended().joined())
         .env("LUA_PATH", paths.package_path().joined())
         .env("LUA_CPATH", paths.package_cpath().joined());
+    if matches!(
+        &test_spec,
+        ValidatedTestSpec::Busted { .. } | ValidatedTestSpec::BustedNlua { .. }
+    ) && !test_spec
+        .args()
+        .iter()
+        .chain(test_args.iter())
+        .any(|arg| arg == "--directory" || arg == "-C" || arg.starts_with("--directory="))
+    {
+        let directory = fs::sync::absolute(project.root())?;
+        command = command
+            .arg("--directory")
+            .arg(directory.to_slash_lossy().to_string());
+    }
     if let TestEnv::Pure = test_env {
         // isolate the test runner from the user's own config/data files
         // by initialising empty HOME and XDG base directory paths
