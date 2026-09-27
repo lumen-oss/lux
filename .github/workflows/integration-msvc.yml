@@ -20,8 +20,19 @@ jobs:
 
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          cache: false
+          components: llvm-tools
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msvc
+          cache-on-failure: true
+          cache-all-crates: true
 
       - name: Install Lua
         uses: luarocks/gh-actions-lua@master
@@ -40,9 +51,6 @@ jobs:
           [Environment]::SetEnvironmentVariable("Path", $env:PATH, "Machine")
           choco install -y --no-progress make cmake
 
-      - name: Install Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v2
-
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
 
@@ -50,12 +58,14 @@ jobs:
         env:
           OPENSSL_DIR: C:\Program Files\OpenSSL
           OPENSSL_LIB_DIR: C:\Program Files\OpenSSL\lib\VC\x64\MD
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
         run: cargo build --locked --no-default-features --features vendored
 
       - name: Run tests
         env:
           OPENSSL_DIR: C:\Program Files\OpenSSL
           OPENSSL_LIB_DIR: C:\Program Files\OpenSSL\lib\VC\x64\MD
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
           CC_ENABLE_DEBUG_OUTPUT: true
           CFLAGS: "/NOLOGO /MT /O2"
         run: |
