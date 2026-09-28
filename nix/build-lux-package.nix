@@ -49,7 +49,7 @@ lib.extendMkDerivation {
       else lua.luaversion;
     luaVersionFlag =
       if nvim
-      then "--nvim"
+      then "--preset=nvim"
       else "--lua-version \"${luxLuaVersion}\"";
 
     deps =
