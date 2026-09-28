@@ -409,7 +409,7 @@ pub fn detect_installed_lua_version() -> Option<LuaVersion> {
         })
 }
 
-/// Determine the Lua version to use with the `--nvim` flag.
+/// Determine the Lua version to use with the `nvim` preset.
 /// Prefers LuaJIT if installed, falling back to Lua 5.1.
 pub fn nvim_lua_version() -> Option<LuaVersion> {
     if LuaInstallation::probe(&LuaVersion::LuaJIT, &Default::default()).is_some() {

@@ -39,7 +39,7 @@ lib.extendMkDerivation {
   }: let
     luaVersionFlag =
       if nvim
-      then "--nvim"
+      then "--preset=nvim"
       else lib.optionalString (luaVersion != null) "--lua-version '${luaVersion}'";
     vendorCmd =
       if rockspecFilename != null || knownRockspec != null

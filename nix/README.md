@@ -203,7 +203,7 @@ It fetches each dependency as a separate fixed-output derivation and does not re
   Auto-discovers lockfiles in local sources.
 - `luxRoot`: a subdirectory of `src` that contains `lux.toml`.
 - `buildAndTestSubdir`: a subdirectory of `src` in which to build and run tests.
-- `nvim`: build the package with the Neovim layout. Equivalent to `lx --nvim`.
+- `nvim`: build the package with the Neovim layout. Equivalent to `lx --preset=nvim`.
 - `rustSupport`: enable support for rust dependencies (the `rust-mlua` build backend). Disabled by default.
 
 It also accepts the standard `stdenv.mkDerivation` attributes, such as `nativeBuildInputs`, `propagatedBuildInputs`, and `doCheck`.

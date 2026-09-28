@@ -48,7 +48,7 @@
       passthru = (old.passthru or {}) // {inherit withPackages;};
     });
 
-  # Convert a lux package (built with `--nvim`) into a Neovim plugin, exposing
+  # Convert a lux package (built with `--preset=nvim`) into a Neovim plugin, exposing
   # the runtime files under site/pack/lux/start/<name> at the plugin root.
   toLuxNeovimPlugin = pkg: let
     nvimPkg = pkg.override {nvim = true;};
