@@ -147,16 +147,30 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         install_command(run.command, run.config).await?
     };
 
-    let user_tree = run.config.user_tree(lua_version)?;
-    let mut paths = Paths::new(&user_tree)?;
+    let user_tree = run.config.user_tree(lua_version.clone())?;
 
-    if let Some(project) = run.workspace {
-        paths.prepend(&Paths::new(&project.tree(run.config)?)?);
-    }
+    let paths = if let Some(project) = run.workspace {
+        let workspace_paths = Paths::new(&project.tree(run.config)?)?;
+        match Paths::new(&user_tree) {
+            Ok(mut user_paths) => {
+                user_paths.prepend(&workspace_paths);
+                user_paths
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "failed to load the user tree at '{}': {err}",
+                    user_tree.root().display()
+                );
+                workspace_paths
+            }
+        }
+    } else {
+        Paths::new(&user_tree)?
+    };
 
     let lua_init = if run.disable_loader.unwrap_or(false) {
         None
-    } else if user_tree.version().lux_lib_dir().is_none() {
+    } else if lua_version.lux_lib_dir().is_none() {
         tracing::warn!(
             r#"lux-lua library not found.
 Cannot use the `lux.loader`.
