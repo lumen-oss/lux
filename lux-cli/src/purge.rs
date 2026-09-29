@@ -9,13 +9,17 @@ use tracing::Instrument;
 pub async fn purge(config: Config) -> Result<()> {
     let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
 
-    let len = tree.list()?.len();
+    let len = tree.list().ok().map(|rocks| rocks.len());
 
     if !config.no_prompt()
-        && Confirm::new(&format!("Are you sure you want to purge all {len} rocks?"))
-            .with_default(false)
-            .prompt()
-            .into_diagnostic()?
+        && Confirm::new(&format!(
+            "Are you sure you want to purge {} rocks?",
+            len.map(|len| format!("all {len}"))
+                .unwrap_or_else(|| "all".into())
+        ))
+        .with_default(false)
+        .prompt()
+        .into_diagnostic()?
     {
         let root_dir = tree.root();
 
