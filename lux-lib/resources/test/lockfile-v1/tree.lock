@@ -1,0 +1,180 @@
+{
+  "version": "1.0.0",
+  "rocks": {
+    "0e7601c45f13611fa5b85cb3ba46a554ad6fb6c4546776b310c9ebfc5581e663": {
+      "name": "say",
+      "version": "1.4.1-3",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "git",
+        "url": "https://github.com/lunarmodules/say.git",
+        "ref": "v1.4.1"
+      },
+      "hashes": {
+        "rockspec": "sha256-WFKt1iWeyjO9A8SG0KUX8tkS9JvMqoVM8CKBUguuK0Y=",
+        "source": "sha256-IjNkK1leVtYgbEjUqguVMjbdW+0BHAOCE0pazrVuF50="
+      }
+    },
+    "3762e98c2b422658125cbb99ab9323b07bd53ee3f278bc5bb94440f43d4a4536": {
+      "name": "nvim-nio",
+      "version": "1.7.0-1",
+      "constraint": ">=1.7.0, <1.8.0",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://github.com/nvim-neotest/nvim-nio/archive/v1.7.0.zip"
+      },
+      "hashes": {
+        "rockspec": "sha256-BeisoicovxazR188FBSEKxr5FBrxpIL0Ss+vCdCQ1Aw=",
+        "source": "sha256-xuO1/iMXJnyKI8DkQO80TCTKMYmqOmc/bhlb9pDx6dY="
+      }
+    },
+    "4e9592a499c9ced4f8ce366db9db7d9c0dd1424ea8d4c8c16c1550ea3a61a696": {
+      "name": "say",
+      "version": "1.4.1-3",
+      "constraint": ">=1.4.0",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "git",
+        "url": "https://github.com/lunarmodules/say.git",
+        "ref": "v1.4.1"
+      },
+      "hashes": {
+        "rockspec": "sha256-WFKt1iWeyjO9A8SG0KUX8tkS9JvMqoVM8CKBUguuK0Y=",
+        "source": "sha256-IjNkK1leVtYgbEjUqguVMjbdW+0BHAOCE0pazrVuF50="
+      }
+    },
+    "53e23ed902788b3579e6c96d44c45c308987012d4e87d00d1b4ba0da88ce29f6": {
+      "name": "nui.nvim",
+      "version": "0.3.0-1",
+      "constraint": "==0.3.0",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "git",
+        "url": "https://github.com/MunifTanjim/nui.nvim.git",
+        "ref": "0.3.0"
+      },
+      "hashes": {
+        "rockspec": "sha256-C33kdZVqHui1mOd+J2/HbvmvYOntTMzfJ3YBtj4v51k=",
+        "source": "sha256-L0ebXtv794357HOAgT17xlEJsmpqIHGqGlYfDB20WTo="
+      }
+    },
+    "633b8427bcfd6db2c9ad5037e6a074a9b872389e4e40ec3b63ba725f3a213a6a": {
+      "name": "pathlib.nvim",
+      "version": "2.2.3-1",
+      "constraint": ">=2.2.0, <2.3.0",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://github.com/pysan3/pathlib.nvim/archive/v2.2.3.zip"
+      },
+      "hashes": {
+        "rockspec": "sha256-kdDMqznWlwP9wIqlzPrZ5qEDp6edhlkaasAcQzWTmmM=",
+        "source": "sha256-fNO24tL8wApI8j3rk2mdLf5wbbjlUzsvCxki3n0xRw8="
+      }
+    },
+    "9e1642247f9208a7e65e1e76461b2adc6f35fe644ce4cdf9f7fa6f5a12c8845e": {
+      "name": "nvim-nio",
+      "version": "1.10.1-1",
+      "constraint": ">=1.8.0",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://github.com/nvim-neotest/nvim-nio/archive/21f5324bfac14e22ba26553caf69ec76ae8a7662.zip"
+      },
+      "hashes": {
+        "rockspec": "sha256-QL5OCZFBGixecdEoriGck4iG83tjM09ewYbWVSbcfa4=",
+        "source": "sha256-5x+iHduNdyVjS6+OrqfDh17g9o2tP2YFFqKEsK6Z5zw="
+      }
+    },
+    "acdfde00d122aac481c18c906d483478bb536741beb025becc11782a075d125b": {
+      "name": "luassert",
+      "version": "1.9.0-1",
+      "dependencies": [
+        "4e9592a499c9ced4f8ce366db9db7d9c0dd1424ea8d4c8c16c1550ea3a61a696"
+      ],
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "git",
+        "url": "https://github.com/lunarmodules/luassert.git",
+        "ref": "v1.9.0"
+      },
+      "hashes": {
+        "rockspec": "sha256-rTPvF/GK/jMnH/q4wbwTCGBFELWh+JcvHeOCFAbIf64=",
+        "source": "sha256-jjdB95Vr5iVsh5T7E84WwZMW6/5H2k2R/ny2VBs2l3I="
+      }
+    },
+    "b7fa2fc76ac7b515ab09c4982a9805528218639fda3b3a86a49825f3cf42bd0b": {
+      "name": "lua-cjson",
+      "version": "2.1.0-1",
+      "constraint": "==2.1.0",
+      "binaries": [
+        "json2lua",
+        "lua2json"
+      ],
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://luarocks.org/lua-cjson-2.1.0-1.src.rock"
+      },
+      "hashes": {
+        "rockspec": "sha256-L/6Yon2ek6NnEeifAy3qsnT2cMCB8IdaCgVeu3+1lvs=",
+        "source": "sha256-23r4ScVV0aR09yn+Sla1Uw6b57JHSet6fEdKfHIHuXI="
+      }
+    },
+    "c00abab54b42135a2957c647032e5487fc18e4171039d79dd48e7d9f84b5759e": {
+      "name": "plenary.nvim",
+      "version": "0.1.4-1",
+      "constraint": "==0.1.4",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://github.com/nvim-lua/plenary.nvim/archive/v0.1.4.zip"
+      },
+      "hashes": {
+        "rockspec": "sha256-0EdepFBCsLc5D7HJKX66yMw/NbIgCmQib/+yqpJ9FFE=",
+        "source": "sha256-cJ2EfkbTOiEJ8IPVnoO77alXynBv+nJ2ql/vfYOTSJI="
+      }
+    },
+    "e991f460b0f85e6e5be982e6cf0d64c345852c389fe225c9facdbebbc9d8a1d8": {
+      "name": "lua-utils.nvim",
+      "version": "1.0.2-1",
+      "constraint": "==1.0.2",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://github.com/nvim-neorg/lua-utils.nvim/archive/v1.0.2.zip"
+      },
+      "hashes": {
+        "rockspec": "sha256-Kc8mdjLRaL063VWYjGAWSYySYKmFgZXF+Qoa0TaRIWg=",
+        "source": "sha256-fpGplQuldzNCYUMISOfGKgD080JKDxbZNb8Rch00Yxs="
+      }
+    },
+    "fdd927c4d96d1063ce66246cfd5ecb1939a8f8e8425f29428894b43586fb72cd": {
+      "name": "neorg",
+      "version": "8.8.1-1",
+      "dependencies": [
+        "3762e98c2b422658125cbb99ab9323b07bd53ee3f278bc5bb94440f43d4a4536",
+        "e991f460b0f85e6e5be982e6cf0d64c345852c389fe225c9facdbebbc9d8a1d8",
+        "c00abab54b42135a2957c647032e5487fc18e4171039d79dd48e7d9f84b5759e",
+        "53e23ed902788b3579e6c96d44c45c308987012d4e87d00d1b4ba0da88ce29f6",
+        "633b8427bcfd6db2c9ad5037e6a074a9b872389e4e40ec3b63ba725f3a213a6a"
+      ],
+      "constraint": "==8.8.1",
+      "source": "luarocks_rockspec+https://luarocks.org/",
+      "source_url": {
+        "type": "url",
+        "url": "https://github.com/nvim-neorg/neorg/archive/v8.8.1.zip"
+      },
+      "hashes": {
+        "rockspec": "sha256-fjnKNY8OIDpq2eZYea3v/uM4vna4OxpO+IA0LCcN+Cc=",
+        "source": "sha256-0sVLXN+aDxmb2lxvhjUGgg8XFyu8DMl2i2RA+TjUbu8="
+      }
+    }
+  },
+  "entrypoints": [
+    "0e7601c45f13611fa5b85cb3ba46a554ad6fb6c4546776b310c9ebfc5581e663",
+    "b7fa2fc76ac7b515ab09c4982a9805528218639fda3b3a86a49825f3cf42bd0b",
+    "fdd927c4d96d1063ce66246cfd5ecb1939a8f8e8425f29428894b43586fb72cd"
+  ]
+}
