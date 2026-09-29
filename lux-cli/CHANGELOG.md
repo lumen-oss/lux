@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.0](https://github.com/lumen-oss/lux/compare/v0.46.0...v0.47.0) `lux-cli` - 2026-09-29
+
+### Added
+- [**breaking**] disallow conflicting entrypoints
+- *(cli)* add `--removable` flag to `lx list` (closes #274)
+- *(cli)* add `--orphans` flag to `lx list`
+
+### Fixed
+- *(purge)* don't error if loading the lockfile fails ([#1997](https://github.com/lumen-oss/lux/pull/1997))
+- *(test)* pass an absolute --directory to busted runners
+- *(exec,run)* [**breaking**] forward args following the command to the child process ([#1988](https://github.com/lumen-oss/lux/pull/1988))
+- *(doc)* don't open non-plaintext files in editor ([#1984](https://github.com/lumen-oss/lux/pull/1984))
+
 ## [0.46.0](https://github.com/lumen-oss/lux/compare/v0.45.2...v0.46.0) `lux-cli` - 2026-09-21
 
 ### Added
