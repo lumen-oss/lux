@@ -596,6 +596,9 @@ impl IntoLua for RockSourceSpecLua {
             RockSourceSpec::Url(url) => {
                 table.set("url", url.to_string())?;
             }
+            RockSourceSpec::Wally(package_req) => {
+                table.set("wally", package_req.to_string())?;
+            }
         };
         Ok(LuaValue::Table(table))
     }
