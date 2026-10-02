@@ -49,6 +49,7 @@ mod builtin;
 mod cmake;
 mod command;
 mod luarocks;
+mod luau;
 mod make;
 mod patch;
 mod rust_binary;

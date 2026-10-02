@@ -73,6 +73,7 @@ tree-sitter-loader = "0.26"
 url = "2.5"
 vfs = "0.13"
 
+darklua = { workspace = true }
 git2 = { workspace = true }
 ignore = { workspace = true }
 tracing = { version = "0.1", features = ["attributes"] }
@@ -106,6 +107,7 @@ auth-git2 = "0.6.0"
 gag = "1.0.0"
 
 [dev-dependencies]
+mlua = { workspace = true, features = ["lua51", "vendored"] }
 httptest = { version = "0.16" }
 serial_test = { version = "4.0" }
 proptest = "1.11"
