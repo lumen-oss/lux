@@ -3,6 +3,7 @@ use strum_macros::Display;
 
 /// Configuration for the build process.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub(super) struct BuildConfig {
     /// The build profile to use when compiling packages.
     /// Default: [`BuildProfile::Release`]
@@ -20,6 +21,7 @@ pub(super) struct BuildConfig {
 /// The build profile to use when compiling packages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Display)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Profile {

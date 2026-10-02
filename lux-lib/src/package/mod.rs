@@ -154,6 +154,7 @@ impl PartialOrd for RemotePackageType {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RemotePackageTypeFilterSpec {
     /// Include Rockspec
     pub rockspec: bool,
@@ -358,6 +359,8 @@ impl<'de> Deserialize<'de> for PackageReq {
 
 /// A luarocks package name, which is always lowercase
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", serde(transparent))]
 pub struct PackageName(String);
 
 impl PackageName {

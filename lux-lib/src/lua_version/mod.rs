@@ -16,6 +16,7 @@ use strum_macros::EnumIter;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumIter)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum LuaVersion {
     #[serde(rename = "5.1")]
     Lua51,

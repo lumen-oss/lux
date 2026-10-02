@@ -15,6 +15,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 /// Template for generating a remote rockspec source
 ///
 /// Variables that can be substituted in each of the fields:
