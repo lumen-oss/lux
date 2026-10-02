@@ -97,6 +97,7 @@
                   cmakeMinimal
                   zlib
                   gnum4
+                  luau
                 ])
                 ++ (lib.optional (!isDarwin) self.checks.${system}.git-hooks-check.enabledPackages)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "lua" pkg.name)) pkgs.lux-cli.buildInputs)

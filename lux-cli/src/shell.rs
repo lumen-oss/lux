@@ -1,5 +1,8 @@
 use clap::Args;
-use lux_lib::{config::Config, lua_installation::LuaInstallation, path::Paths, tree::InstallTree};
+use lux_lib::{
+    config::Config, lua_installation::LuaInstallation, lua_version::LuaVersion, path::Paths,
+    tree::InstallTree,
+};
 
 use miette::{miette, IntoDiagnostic, Result};
 use which::which;
@@ -98,11 +101,15 @@ To suppress this warning, set the `--no-loader` option."#
         bin_path.add_path(lua_bin_path.to_path_buf());
     }
 
-    let _ = Command::new(&shell)
-        .env("PATH", bin_path.joined())
-        .env("LUA_PATH", lua_path.joined())
-        .env("LUA_CPATH", lua_cpath.joined())
-        .env("LUA_INIT", lua_init.unwrap_or_default())
+    let mut shell_cmd = Command::new(&shell);
+    shell_cmd.env("PATH", bin_path.joined());
+    if tree.version() != &LuaVersion::Luau {
+        shell_cmd
+            .env("LUA_PATH", lua_path.joined())
+            .env("LUA_CPATH", lua_cpath.joined())
+            .env("LUA_INIT", lua_init.unwrap_or_default());
+    }
+    let _ = shell_cmd
         .env("LUX_SHELL", "1")
         .spawn()
         .into_diagnostic()?

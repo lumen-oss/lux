@@ -3,12 +3,13 @@ use std::path::PathBuf;
 use clap::Args;
 use lux_lib::{
     config::{Config, ConfigBuilder},
+    lua_version::LuaVersion,
     operations::DistProjectBin,
     package::PackageName,
     tree::FlatDistTree,
     workspace::Workspace,
 };
-use miette::{IntoDiagnostic, Result};
+use miette::{miette, IntoDiagnostic, Result};
 use tempfile::tempdir;
 
 use crate::args::OutputFormat;
@@ -45,6 +46,9 @@ pub async fn bin(data: Bin, config: Config) -> Result<()> {
     };
 
     let lua_version = project.lua_version(&config)?;
+    if lua_version == LuaVersion::Luau {
+        return Err(miette!("Lux cannot distribute binaries for Luau projects"));
+    }
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, &config)?;
 
     let out = DistProjectBin::new()

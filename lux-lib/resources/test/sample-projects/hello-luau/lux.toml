@@ -1,0 +1,9 @@
+package = "hello-luau"
+version = "0.1.0"
+lua = "luau"
+
+[run]
+args = ["src/main.luau"]
+
+[build]
+type = "builtin"
