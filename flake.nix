@@ -67,6 +67,12 @@
             lux-lua55
             lux-luajit
             ;
+          update-luau = writeShellApplication {
+            name = "update-luau";
+            runtimeInputs = [curl jq gnused git coreutils];
+            text = builtins.readFile ./scripts/update-luau.sh;
+            meta.mainProgram = "update-luau";
+          };
         };
 
         legacyPackages = pkgs;
@@ -98,6 +104,8 @@
                   zlib
                   gnum4
                   luau
+                  curl
+                  jq
                 ])
                 ++ (lib.optional (!isDarwin) self.checks.${system}.git-hooks-check.enabledPackages)
                 ++ (lib.filter (pkg: !(lib.hasPrefix "lua" pkg.name)) pkgs.lux-cli.buildInputs)
