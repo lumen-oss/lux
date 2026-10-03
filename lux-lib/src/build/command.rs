@@ -7,7 +7,7 @@ use std::{
 };
 use thiserror::Error;
 
-use tracing::{info_span, Instrument};
+use tracing::{Instrument, info_span};
 use which::which;
 
 use crate::{
@@ -50,7 +50,9 @@ pub enum CommandError {
     ShellNotFoundError(#[from] which::Error),
     #[error("error executing command:\n{command}\n\nerror: {err}")]
     Io { err: io::Error, command: String },
-    #[error("failed to execute command:\n{command}\n\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
+    #[error(
+        "failed to execute command:\n{command}\n\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}"
+    )]
     CommandFailure {
         command: String,
         status: ExitStatus,
@@ -151,7 +153,7 @@ async fn run_command(
             return Err(CommandError::Io {
                 err,
                 command: substituted_cmd,
-            })
+            });
         }
         Ok(child) => match child
             .wait_with_output()
@@ -174,7 +176,7 @@ async fn run_command(
                 return Err(CommandError::Io {
                     err,
                     command: substituted_cmd,
-                })
+                });
             }
         },
     }

@@ -86,7 +86,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
     local_packages
         .into_iter()
         .filter_map(|pkg| {
-            let layout = tree.layout_for(&pkg);
+            let layout = tree.layout_for(&pkg.spec);
             let lib_path = layout.lib.join(which.module.to_lib_path());
             if lib_path.is_file() {
                 return Some(lib_path);

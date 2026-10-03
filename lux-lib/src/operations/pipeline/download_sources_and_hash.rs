@@ -15,12 +15,11 @@ use crate::{
     fs::{self, FsError},
     hash::HasIntegrity,
     lockfile::{
-        LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageId, OptState, PinnedState,
+        LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
         RemotePackageSourceUrl,
     },
     lua_rockspec::RemoteLuaRockspec,
     operations::{FetchSrc, RemotePackageSourceMetadata, unpack_src_rock},
-    package::PackageSpec,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
@@ -118,9 +117,6 @@ async fn download_sources_and_hash(
         artifact,
     } = resolved;
 
-    let constraint = spec.constraint();
-    let pin = spec.pinned();
-    let opt = spec.opt();
     let name = spec.name().to_string();
 
     let (package, artifact) = match artifact {
@@ -139,32 +135,29 @@ async fn download_sources_and_hash(
                     rockspec: rockspec_hash,
                     source: source_hash,
                 };
-                let package = LockedPackage {
+                let package = LockedPackage::new(
                     spec,
                     source,
-                    source_url: Some(RemotePackageSourceUrl::Url { url: binary_url }),
+                    Some(RemotePackageSourceUrl::Url { url: binary_url }),
                     hashes,
-                };
+                );
                 (package, PackageSource::PackedRock(bytes))
             }
             _ => {
                 let source_url = source_url
                     .clone()
                     .ok_or_else(|| DownloadSourcesAndHashError::MissingSourceUrl(name.clone()))?;
-                let (mut package, dir) = fetch_and_hash_source(
+                let (package, dir) = fetch_and_hash_source(
                     &rockspec,
+                    spec,
                     Some(RemotePackageSourceSpec::SrcRock(SrcRockSource {
                         bytes,
                         source_url,
                     })),
                     Some(source),
-                    constraint,
-                    pin,
-                    opt,
                     config,
                 )
                 .await?;
-                package.spec = spec;
                 (package, PackageSource::SourceTree(dir))
             }
         },
@@ -182,26 +175,18 @@ async fn download_sources_and_hash(
                 rockspec: rockspec_hash,
                 source: source_hash,
             };
-            let package = LockedPackage {
-                spec,
-                source,
-                source_url,
-                hashes,
-            };
+            let package = LockedPackage::new(spec, source, source_url, hashes);
             (package, PackageSource::SourceTree(dir))
         }
         None => {
-            let (mut package, dir) = fetch_and_hash_source(
+            let (package, dir) = fetch_and_hash_source(
                 &rockspec,
+                spec,
                 Some(RemotePackageSourceSpec::RockSpec(source_url)),
                 Some(source),
-                constraint,
-                pin,
-                opt,
                 config,
             )
             .await?;
-            package.spec = spec;
             (package, PackageSource::SourceTree(dir))
         }
     };
@@ -216,11 +201,9 @@ async fn download_sources_and_hash(
 
 pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     rockspec: &R,
+    spec: LockedPackageSpec,
     source_spec: Option<RemotePackageSourceSpec>,
     source: Option<RemotePackageSource>,
-    constraint: LockConstraint,
-    pin: PinnedState,
-    opt: OptState,
     config: &Config,
 ) -> Result<(LockedPackage, TempDir), BuildError> {
     let temp_dir = fs::tempfile::tempdir()?;
@@ -254,10 +237,8 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
         source: source_metadata.hash.clone(),
     };
 
-    let mut package = LockedPackage::from(
-        &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
-        constraint,
-        rockspec.binaries(),
+    let package = LockedPackage::new(
+        spec,
         source
             .map(Result::Ok)
             .unwrap_or_else(|| {
@@ -269,11 +250,6 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
         Some(source_metadata.source_url.clone()),
         hashes,
     );
-    // FIXME(vhyrro): We should reconsider our constructors if we have to set
-    // these variants ourselves. Either put these in a different place, or resolve
-    // these in an earlier step.
-    package.spec.pinned = pin;
-    package.spec.opt = opt;
 
     Ok((package, temp_dir))
 }

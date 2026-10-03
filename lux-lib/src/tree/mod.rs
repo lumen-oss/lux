@@ -2,7 +2,9 @@ use crate::{
     build::utils::format_path,
     config::Config,
     fs,
-    lockfile::{LockedPackage, LockedPackageId, Lockfile, LockfileError, ReadOnly},
+    lockfile::{
+        LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, LockfileError, ReadOnly,
+    },
     lua_version::LuaVersion,
     package::{PackageName, PackageReq},
     variables::{GetVariableError, HasVariables},
@@ -42,7 +44,7 @@ pub trait InstallTree {
     /// Where unwrapped package binaries are installed
     fn unwrapped_bin(&self) -> PathBuf;
     /// The standard install layout for a package.
-    fn layout_for(&self, package: &LockedPackage) -> RockLayout;
+    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout;
     /// Create a [`Lockfile`] for this tree.
     fn lockfile(&self) -> Result<Lockfile<ReadOnly>, TreeError>;
     /// Get this tree's lockfile path.
@@ -56,7 +58,7 @@ pub trait InstallTree {
     /// Find installed rocks that match the given [`PackageReq`].
     fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, TreeError>;
     /// Create the standard directories (src, lib, etc.) for a package.
-    fn prepare(&self, package: &LockedPackage) -> Result<(), TreeError>;
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError>;
     /// Apply the custom layout once a package has been fully installed.
     ///
     /// For entrypoints, this creates the symlinks for the custom layout, if one is configured.
@@ -252,7 +254,7 @@ impl InstallTree for Tree {
         self.root_parent.join(self.version.to_string())
     }
 
-    fn prepare(&self, package: &LockedPackage) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError> {
         let layout = self.layout_for(package);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
@@ -265,7 +267,7 @@ impl InstallTree for Tree {
     fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError> {
         if entry_type.is_entrypoint() {
             if let Some(custom_layout) = &self.entrypoint_layout {
-                custom_layout.make_symlinks(self, package)?;
+                custom_layout.make_symlinks(self, &package.spec)?;
             }
         }
 
@@ -275,15 +277,20 @@ impl InstallTree for Tree {
     fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError> {
         if entry_type.is_entrypoint() {
             if let Some(layout) = &self.entrypoint_layout {
-                layout.remove_symlinks(self, package)?;
+                layout.remove_symlinks(self, &package.spec)?;
             }
         }
 
-        let layout = self.layout_for(package);
+        let layout = self.layout_for(&package.spec);
         fs::sync::remove_dir_all(&layout.etc)?;
         fs::sync::remove_dir_all(&layout.root)?;
 
-        for relative_binary_path in package.spec.binaries() {
+        let lockfile = self.lockfile()?;
+        for relative_binary_path in lockfile
+            .binaries(&package.id())
+            .into_iter()
+            .flat_map(|binaries| binaries.iter())
+        {
             if let Some(binary_file_name) = relative_binary_path.file_name() {
                 let binary_path = self.bin().join(binary_file_name);
                 if binary_path.is_file() {
@@ -308,7 +315,7 @@ impl InstallTree for Tree {
         self.root().join(LOCKFILE_NAME)
     }
 
-    fn layout_for(&self, package: &LockedPackage) -> RockLayout {
+    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
         RockLayout::new(
             self.root().join(format!(
                 "{}-{}@{}",
@@ -411,7 +418,6 @@ mod tests {
         lua_version::LuaVersion,
         package::{PackageName, PackageSpec, PackageVersion},
         remote_package_source::RemotePackageSource,
-        rockspec::RockBinaries,
         tree::{InstallTree, RockLayout},
         variables,
     };
@@ -444,17 +450,16 @@ mod tests {
         let package = LockedPackage::from(
             &PackageSpec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes.clone(),
         );
 
         let id = package.id();
-        tree.prepare(&package).unwrap();
+        tree.prepare(&package.spec).unwrap();
 
         assert_eq!(
-            tree.layout_for(&package),
+            tree.layout_for(&package.spec),
             RockLayout {
                 bin: tree_path.join("5.1/bin"),
                 root: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1")),
@@ -492,7 +497,7 @@ mod tests {
                     name,
                     package
                         .into_iter()
-                        .map(|package| package.spec.version)
+                        .map(|package| package.version().clone())
                         .sorted()
                         .collect_vec(),
                 )
@@ -530,12 +535,11 @@ mod tests {
         let package = LockedPackage::from(
             &PackageSpec::parse("neorg".into(), "8.0.0-1-1".into()).unwrap(),
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes.clone(),
         );
-        let layout = tree.layout_for(&package);
+        let layout = tree.layout_for(&package.spec);
         let build_variables = vec![
             "$(PREFIX)",
             "$(LIBDIR)",

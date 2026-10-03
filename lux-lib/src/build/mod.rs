@@ -16,10 +16,10 @@ use tracing::Instrument;
 use crate::{
     config::Config,
     hash::HasIntegrity,
-    lockfile::{LockConstraint, LockedPackage, PinnedState},
+    lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, PinnedState},
     lua_installation::LuaInstallation,
     lua_rockspec::BuildBackendSpec,
-    operations::{pipeline::download_sources_and_hash::fetch_and_hash_source, FetchSrcError},
+    operations::{FetchSrcError, pipeline::download_sources_and_hash::fetch_and_hash_source},
     remote_package_source::RemotePackageSource,
 };
 use bon::Builder;
@@ -40,7 +40,7 @@ use source::SourceBuildError;
 use ssri::Integrity;
 use thiserror::Error;
 use treesitter_parser::TreesitterBuildError;
-use utils::{recursive_copy_dir, CompileCFilesError, InstallBinaryError};
+use utils::{CompileCFilesError, InstallBinaryError, recursive_copy_dir};
 
 mod builtin;
 mod cmake;
@@ -248,7 +248,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
     tree: &T,
-    package: &LockedPackage,
+    package: &LockedPackageSpec,
     lua: &LuaInstallation,
     build_dir: &Path,
     entry_type: &EntryType,
@@ -323,7 +323,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
 pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
     tree: &T,
-    mut package: LockedPackage,
+    package: LockedPackage,
     lua: &LuaInstallation,
     source_root: &Path,
     entry_type: EntryType,
@@ -337,8 +337,8 @@ pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     }
 
     // FIXME(vhyrro): Maybe make prepare/finalize a struct with Drop behaviour? If it makes sense only.
-    tree.prepare(&package)?;
-    let layout = tree.layout_for(&package);
+    tree.prepare(&package.spec)?;
+    let layout = tree.layout_for(&package.spec);
 
     let rock_source = rockspec.source().current_platform();
     let build_dir = resolve_source_dir(
@@ -362,7 +362,7 @@ pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     let output = run_build(
         rockspec,
         RunBuildArgs::new()
-            .package(&package)
+            .package(&package.spec)
             .no_install(false)
             .lua(lua)
             .external_dependencies(&external_dependencies)
@@ -374,13 +374,14 @@ pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     )
     .await?;
 
-    // FIXME(vhyrro): This shouldn't require mutation.
-    package.spec.binaries.extend(output.binaries);
+    let mut binaries = rockspec.binaries();
+    binaries.extend(output.binaries);
+    tree.lockfile()?.write_guard().set_binaries(&package, binaries);
 
     install(
         rockspec,
         tree,
-        &package,
+        &package.spec,
         lua,
         &build_dir,
         &entry_type,
@@ -424,13 +425,20 @@ where
     rockspec.validate_lua_version(&lua.version)?;
 
     // NOTE: these futures are large; boxing them keeps `do_build`'s frame small.
+    let spec = LockedPackageSpec::new(
+        rockspec.package(),
+        rockspec.version(),
+        build.constraint,
+        Vec::new(),
+        Vec::new(),
+        &build.pin,
+        &build.opt,
+    );
     let (package, temp_dir) = Box::pin(fetch_and_hash_source(
         rockspec,
+        spec,
         build.source_spec,
         build.source,
-        build.constraint,
-        build.pin,
-        build.opt,
         build.config,
     ))
     .await?;
@@ -527,12 +535,11 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::LockedPackageHashes,
-        lua_installation::{detect_installed_lua_version, LuaInstallation},
+        lua_installation::{LuaInstallation, detect_installed_lua_version},
         lua_version::LuaVersion,
-        operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        operations::{DownloadedPackedRockBytes, unpack_rockspec},
         package::PackageSpec,
         project::Project,
-        rockspec::RockBinaries,
         tree::Tree,
     };
 
@@ -560,7 +567,6 @@ mod tests {
         let package = LockedPackage::from(
             &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             LockedPackageHashes {
@@ -572,12 +578,12 @@ mod tests {
                     .unwrap(),
             },
         );
-        tree.prepare(&package).unwrap();
-        let src_dir = tree.layout_for(&package).src;
+        tree.prepare(&package.spec).unwrap();
+        let src_dir = tree.layout_for(&package.spec).src;
         run_build(
             &rockspec,
             RunBuildArgs::new()
-                .package(&package)
+                .package(&package.spec)
                 .no_install(false)
                 .lua(&lua)
                 .external_dependencies(&HashMap::default())
@@ -593,21 +599,27 @@ mod tests {
         assert!(foo_dir.is_dir());
         let foo_init = foo_dir.join("init.lua");
         assert!(foo_init.is_file());
-        assert!(std::fs::read_to_string(&foo_init)
-            .unwrap()
-            .contains("return true"));
+        assert!(
+            std::fs::read_to_string(&foo_init)
+                .unwrap()
+                .contains("return true")
+        );
         let foo_bar_dir = foo_dir.join("bar");
         assert!(foo_bar_dir.is_dir());
         let foo_bar_init = foo_bar_dir.join("init.lua");
         assert!(foo_bar_init.is_file());
-        assert!(std::fs::read_to_string(&foo_bar_init)
-            .unwrap()
-            .contains("return true"));
+        assert!(
+            std::fs::read_to_string(&foo_bar_init)
+                .unwrap()
+                .contains("return true")
+        );
         let foo_bar_baz = foo_bar_dir.join("baz.lua");
         assert!(foo_bar_baz.is_file());
-        assert!(std::fs::read_to_string(&foo_bar_baz)
-            .unwrap()
-            .contains("return true"));
+        assert!(
+            std::fs::read_to_string(&foo_bar_baz)
+                .unwrap()
+                .contains("return true")
+        );
         let bin_file = tree_dir
             .child(lua_version.to_string())
             .child("bin")

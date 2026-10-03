@@ -96,9 +96,9 @@ impl RemotePackageDB {
                     .filter_map(|lock| lock.has_rock(package_req, filter.clone()))
                     .map(|local_package| {
                         RemotePackage::new(
-                            PackageSpec::new(local_package.spec.name, local_package.spec.version),
-                            local_package.source,
-                            local_package.source_url,
+                            local_package.to_package(),
+                            local_package.source().clone(),
+                            local_package.source_url().cloned(),
                         )
                     })
                     .next()

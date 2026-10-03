@@ -14,7 +14,7 @@ use std::{
 use itertools::Itertools;
 
 use miette::Diagnostic;
-use serde::{de, Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
 use strum_macros::EnumIter;
@@ -27,8 +27,8 @@ use crate::package::{
     PackageVersionReqError, RemotePackageTypeFilterSpec,
 };
 use crate::remote_package_source::RemotePackageSource;
-use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
+use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::tree::{EntryType, InstallTree, Tree};
 
 /// Bump this whenever an incompatible change is made to the lockfile format.
@@ -56,11 +56,7 @@ impl Display for PinnedState {
 
 impl From<bool> for PinnedState {
     fn from(value: bool) -> Self {
-        if value {
-            Self::Pinned
-        } else {
-            Self::Unpinned
-        }
+        if value { Self::Pinned } else { Self::Unpinned }
     }
 }
 
@@ -161,16 +157,15 @@ impl<'de> Deserialize<'de> for OptState {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct LockedPackageSpec {
-    pub name: PackageName,
-    pub version: PackageVersion,
-    pub pinned: PinnedState,
-    pub opt: OptState,
-    pub dependencies: Vec<LockedPackageId>,
-    pub build_dependencies: Vec<LockedPackageId>,
+pub struct LockedPackageSpec {
+    name: PackageName,
+    version: PackageVersion,
+    pinned: PinnedState,
+    opt: OptState,
+    dependencies: Vec<LockedPackageId>,
+    build_dependencies: Vec<LockedPackageId>,
     // TODO: Deserialize this directly into a `LuaPackageReq`
-    pub constraint: Option<String>,
-    pub binaries: RockBinaries,
+    constraint: Option<String>,
 }
 
 /// ID of a local package, a hash that is comprised of:
@@ -239,7 +234,6 @@ impl LockedPackageSpec {
         build_dependencies: Vec<LockedPackageId>,
         pinned: &PinnedState,
         opt: &OptState,
-        binaries: RockBinaries,
     ) -> Self {
         Self {
             name: name.clone(),
@@ -252,7 +246,6 @@ impl LockedPackageSpec {
                 LockConstraint::Unconstrained => None,
                 LockConstraint::Constrained(version_req) => Some(version_req.to_string()),
             },
-            binaries,
         }
     }
 
@@ -296,10 +289,6 @@ impl LockedPackageSpec {
 
     pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
         self.build_dependencies.iter().collect()
-    }
-
-    pub fn binaries(&self) -> Vec<&PathBuf> {
-        self.binaries.iter().collect()
     }
 
     pub fn to_package(&self) -> PackageSpec {
@@ -362,7 +351,12 @@ impl Display for RemotePackageSourceUrl {
 
 // TODO(vhyrro): Move to `package/local.rs`
 
-/// A locally installed rock
+
+/// A package whose source has been downloaded and hashed, but which has not
+/// yet been installed into a tree.
+///
+/// This is the value produced by the download stage. Installation adds the
+/// binaries discovered during the build, producing a [`LockedPackage`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LockedPackage {
     pub(crate) spec: LockedPackageSpec,
@@ -372,12 +366,116 @@ pub struct LockedPackage {
 }
 
 impl LockedPackage {
+    /// Returns a copy of this package with a different pin state.
+    ///
+    /// Pin state is part of the package id, so the result has a different
+    /// identity and must be re-inserted under its new id.
+    pub(crate) fn rekey_pinned(mut self, pinned: PinnedState) -> Self {
+        self.spec.pinned = pinned;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from(
+        package: &PackageSpec,
+        constraint: LockConstraint,
+        source: RemotePackageSource,
+        source_url: Option<RemotePackageSourceUrl>,
+        hashes: LockedPackageHashes,
+    ) -> Self {
+        Self::new(
+            LockedPackageSpec::new(
+                package.name(),
+                package.version(),
+                constraint,
+                Vec::default(),
+                Vec::default(),
+                &PinnedState::Unpinned,
+                &OptState::Required,
+            ),
+            source,
+            source_url,
+            hashes,
+        )
+    }
+
+
+    pub(crate) fn new(
+        spec: LockedPackageSpec,
+        source: RemotePackageSource,
+        source_url: Option<RemotePackageSourceUrl>,
+        hashes: LockedPackageHashes,
+    ) -> Self {
+        Self {
+            spec,
+            source,
+            source_url,
+            hashes,
+        }
+    }
+
+    pub fn spec(&self) -> &LockedPackageSpec {
+        &self.spec
+    }
+
     pub fn into_package_spec(self) -> PackageSpec {
-        PackageSpec::new(self.spec.name, self.spec.version)
+        self.spec.to_package()
     }
 
     pub fn as_package_spec(&self) -> PackageSpec {
-        PackageSpec::new(self.spec.name.clone(), self.spec.version.clone())
+        self.spec.to_package()
+    }
+
+    pub fn id(&self) -> LockedPackageId {
+        self.spec.id()
+    }
+
+    pub fn name(&self) -> &PackageName {
+        self.spec.name()
+    }
+
+    pub fn version(&self) -> &PackageVersion {
+        self.spec.version()
+    }
+
+    pub fn pinned(&self) -> PinnedState {
+        self.spec.pinned()
+    }
+
+    pub fn opt(&self) -> OptState {
+        self.spec.opt()
+    }
+
+    pub fn dependencies(&self) -> Vec<&LockedPackageId> {
+        self.spec.dependencies()
+    }
+
+    pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
+        self.spec.build_dependencies()
+    }
+
+    pub fn constraint(&self) -> LockConstraint {
+        self.spec.constraint()
+    }
+
+    pub(crate) fn source(&self) -> &RemotePackageSource {
+        &self.source
+    }
+
+    pub(crate) fn source_url(&self) -> Option<&RemotePackageSourceUrl> {
+        self.source_url.as_ref()
+    }
+
+    pub fn hashes(&self) -> &LockedPackageHashes {
+        &self.hashes
+    }
+
+    pub fn to_package(&self) -> PackageSpec {
+        self.spec.to_package()
+    }
+
+    pub fn into_package_req(self) -> PackageReq {
+        self.spec.into_package_req()
     }
 }
 
@@ -395,8 +493,6 @@ struct LockedPackageIntermediate {
     build_dependencies: Vec<LockedPackageId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     constraint: Option<String>,
-    #[serde(default, skip_serializing_if = "RockBinaries::is_default")]
-    binaries: RockBinaries,
     source: RemotePackageSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     source_url: Option<RemotePackageSourceUrl>,
@@ -417,7 +513,6 @@ impl TryFrom<LockedPackageIntermediate> for LockedPackage {
                 value.build_dependencies,
                 &value.pinned,
                 &value.opt,
-                value.binaries,
             ),
             source: value.source,
             source_url: value.source_url,
@@ -436,7 +531,6 @@ impl From<&LockedPackage> for LockedPackageIntermediate {
             dependencies: value.spec.dependencies.clone(),
             build_dependencies: value.spec.build_dependencies.clone(),
             constraint: value.spec.constraint.clone(),
-            binaries: value.spec.binaries.clone(),
             source: value.source.clone(),
             source_url: value.source_url.clone(),
             hashes: value.hashes.clone(),
@@ -460,81 +554,6 @@ impl Serialize for LockedPackage {
         S: serde::Serializer,
     {
         LockedPackageIntermediate::from(self).serialize(serializer)
-    }
-}
-
-impl LockedPackage {
-    pub(crate) fn from(
-        package: &PackageSpec,
-        constraint: LockConstraint,
-        binaries: RockBinaries,
-        source: RemotePackageSource,
-        source_url: Option<RemotePackageSourceUrl>,
-        hashes: LockedPackageHashes,
-    ) -> Self {
-        Self {
-            spec: LockedPackageSpec::new(
-                package.name(),
-                package.version(),
-                constraint,
-                Vec::default(),
-                Vec::default(),
-                &PinnedState::Unpinned,
-                &OptState::Required,
-                binaries,
-            ),
-            source,
-            source_url,
-            hashes,
-        }
-    }
-
-    pub fn id(&self) -> LockedPackageId {
-        self.spec.id()
-    }
-
-    pub fn name(&self) -> &PackageName {
-        self.spec.name()
-    }
-
-    pub fn version(&self) -> &PackageVersion {
-        self.spec.version()
-    }
-
-    pub fn pinned(&self) -> PinnedState {
-        self.spec.pinned()
-    }
-
-    pub fn opt(&self) -> OptState {
-        self.spec.opt()
-    }
-
-    pub(crate) fn source(&self) -> &RemotePackageSource {
-        &self.source
-    }
-
-    pub fn dependencies(&self) -> Vec<&LockedPackageId> {
-        self.spec.dependencies()
-    }
-
-    pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
-        self.spec.build_dependencies()
-    }
-
-    pub fn constraint(&self) -> LockConstraint {
-        self.spec.constraint()
-    }
-
-    pub fn hashes(&self) -> &LockedPackageHashes {
-        &self.hashes
-    }
-
-    pub fn to_package(&self) -> PackageSpec {
-        self.spec.to_package()
-    }
-
-    pub fn into_package_req(self) -> PackageReq {
-        self.spec.into_package_req()
     }
 }
 
@@ -712,7 +731,7 @@ impl LockedPackageLock {
                 packages
                     .iter()
                     .filter(|package| match &filter {
-                        Some(filter_spec) => match package.source {
+                        Some(filter_spec) => match &package.source {
                             RemotePackageSource::LuarocksRockspec(_) => filter_spec.rockspec,
                             RemotePackageSource::LuarocksSrcRock(_) => filter_spec.src,
                             RemotePackageSource::LuarocksBinaryRock(_) => filter_spec.binary,
@@ -754,7 +773,7 @@ impl LockedPackageLock {
     ) -> PackageSyncSpec {
         let pkg_dir_exists = |pkg: &LockedPackage| match strategy {
             SyncStrategy::LockfileOnly => true,
-            SyncStrategy::EnsureInstalled(tree) => tree.layout_for(pkg).root.is_dir(),
+            SyncStrategy::EnsureInstalled(tree) => tree.layout_for(pkg.spec()).root.is_dir(),
         };
 
         let entrypoints_to_keep: HashSet<LockedPackage> = self
@@ -830,6 +849,10 @@ pub struct Lockfile<P: LockfilePermissions> {
     _marker: PhantomData<P>,
     // TODO: Serialize this directly into a `Version`
     version: String,
+    /// Binaries installed into the tree for each package, discovered during
+    /// the build.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    binaries: BTreeMap<LockedPackageId, RockBinaries>,
     #[serde(flatten)]
     lock: LockedPackageLock,
 }
@@ -928,7 +951,9 @@ check the source URL, then rerun the command with `lx --no-lock` to update the h
         expected: Integrity,
         got: Integrity,
     },
-    #[error("package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile.")]
+    #[error(
+        "package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile."
+    )]
     PackageNotFound(PackageName, Box<PackageVersion>, PinnedState, String),
 }
 
@@ -991,6 +1016,11 @@ impl<P: LockfilePermissions> Lockfile<P> {
         } else {
             EntryType::DependencyOnly
         }
+    }
+
+    /// The binaries installed into the tree for `id`, if recorded.
+    pub(crate) fn binaries(&self, id: &LockedPackageId) -> Option<&RockBinaries> {
+        self.binaries.get(id)
     }
 
     pub(crate) fn local_pkg_lock(&self) -> &LockedPackageLock {
@@ -1188,6 +1218,7 @@ impl Lockfile<ReadOnly> {
                     filepath: filepath.clone(),
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
+                    binaries: BTreeMap::new(),
                     lock: LockedPackageLock::default(),
                 };
                 let json_str =
@@ -1202,7 +1233,7 @@ impl Lockfile<ReadOnly> {
                 return Err(LockfileError::Fs(fs::FsError::FileOpen {
                     path: filepath.to_path_buf(),
                     source,
-                }))
+                }));
             }
         }
 
@@ -1230,6 +1261,7 @@ remove the tree at '{}' and reinstall all packages it contained.",
             _marker: PhantomData,
             filepath: self.filepath,
             version: self.version,
+            binaries: self.binaries,
             lock: self.lock,
         }
     }
@@ -1308,7 +1340,7 @@ impl WorkspaceLockfile<ReadOnly> {
                 return Err(LockfileError::Fs(fs::FsError::FileOpen {
                     path: filepath.to_path_buf(),
                     source,
-                }))
+                }));
             }
         }
 
@@ -1412,11 +1444,18 @@ impl Lockfile<ReadWrite> {
             });
     }
 
+    /// Record the binaries installed for `package` into the tree lockfile.
+    pub(crate) fn set_binaries(&mut self, package: &LockedPackage, binaries: RockBinaries) {
+        self.binaries.insert(package.id(), binaries);
+    }
+
     pub(crate) fn remove(&mut self, target: &LockedPackage) {
+        self.binaries.remove(&target.id());
         self.lock.remove(target)
     }
 
     pub(crate) fn remove_by_id(&mut self, target: &LockedPackageId) {
+        self.binaries.remove(target);
         self.lock.remove_by_id(target)
     }
 
@@ -1656,7 +1695,6 @@ mod tests {
         let test_local_package = LockedPackage::from(
             &test_package,
             crate::lockfile::LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes.clone(),
@@ -1668,7 +1706,6 @@ mod tests {
         let mut test_local_dep_package = LockedPackage::from(
             &test_dep_package,
             crate::lockfile::LockConstraint::Constrained(">= 1.0.0".parse().unwrap()),
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes.clone(),
@@ -1721,33 +1758,43 @@ mod tests {
         assert_eq!(sync_spec.to_add.len(), 1);
 
         // Should keep dependencies of neorg 8.8.1-1
-        assert!(!sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "nvim-nio"
-                && pkg.constraint()
-                    == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
-        assert!(!sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap())));
-        assert!(!sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "plenary.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap())));
-        assert!(!sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "nui.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap())));
-        assert!(!sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
-                && pkg.constraint()
-                    == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
+        assert!(
+            !sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "nvim-nio"
+                    && pkg.constraint()
+                        == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap()))
+        );
+        assert!(
+            !sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
+                    && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap()))
+        );
+        assert!(
+            !sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "plenary.nvim"
+                    && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap()))
+        );
+        assert!(
+            !sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "nui.nvim"
+                    && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap()))
+        );
+        assert!(
+            !sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
+                    && pkg.constraint()
+                        == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap()))
+        );
     }
 
     #[test]
@@ -1767,38 +1814,50 @@ mod tests {
         // Should remove:
         // - neorg
         // - dependencies unique to neorg
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "neorg"
-                && pkg.version() == &"8.8.1-1".parse().unwrap()));
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "nvim-nio"
-                && pkg.constraint()
-                    == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap())));
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "plenary.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap())));
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "nui.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap())));
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
-                && pkg.constraint()
-                    == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "neorg"
+                    && pkg.version() == &"8.8.1-1".parse().unwrap())
+        );
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "nvim-nio"
+                    && pkg.constraint()
+                        == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap()))
+        );
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
+                    && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap()))
+        );
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "plenary.nvim"
+                    && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap()))
+        );
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "nui.nvim"
+                    && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap()))
+        );
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
+                    && pkg.constraint()
+                        == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap()))
+        );
     }
 
     #[test]
@@ -1823,15 +1882,19 @@ mod tests {
             .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
         let expected: PackageVersionReq = ">=2.0.0".parse().unwrap();
-        assert!(sync_spec
-            .to_add
-            .iter()
-            .any(|req| req.name().to_string() == "nvim-nio" && req.version_req() == &expected));
+        assert!(
+            sync_spec
+                .to_add
+                .iter()
+                .any(|req| req.name().to_string() == "nvim-nio" && req.version_req() == &expected)
+        );
 
-        assert!(sync_spec
-            .to_remove
-            .iter()
-            .any(|pkg| pkg.name().to_string() == "nvim-nio"));
+        assert!(
+            sync_spec
+                .to_remove
+                .iter()
+                .any(|pkg| pkg.name().to_string() == "nvim-nio")
+        );
     }
 
     #[test]
@@ -1864,20 +1927,26 @@ mod tests {
             .lock
             .package_sync_spec(&packages, &SyncStrategy::EnsureInstalled(&tree));
 
-        assert!(!sync_spec
-            .to_add
-            .iter()
-            .any(|req| req.name().to_string() == "neorg"));
+        assert!(
+            !sync_spec
+                .to_add
+                .iter()
+                .any(|req| req.name().to_string() == "neorg")
+        );
 
-        assert!(sync_spec
-            .to_add
-            .iter()
-            .any(|req| req.name().to_string() == "lua-cjson"));
+        assert!(
+            sync_spec
+                .to_add
+                .iter()
+                .any(|req| req.name().to_string() == "lua-cjson")
+        );
 
-        assert!(sync_spec
-            .to_add
-            .iter()
-            .any(|req| req.name().to_string() == "nonexistent"));
+        assert!(
+            sync_spec
+                .to_add
+                .iter()
+                .any(|req| req.name().to_string() == "nonexistent")
+        );
     }
 
     #[test]
@@ -1891,12 +1960,10 @@ mod tests {
             "#
             );
 
-            assert!(super::parse_lockfile::<Lockfile<ReadOnly>>(
-                &lockfile,
-                Path::new("lux.lock"),
-                ""
-            )
-            .is_err());
+            assert!(
+                super::parse_lockfile::<Lockfile<ReadOnly>>(&lockfile, Path::new("lux.lock"), "")
+                    .is_err()
+            );
         }
     }
 }

@@ -38,7 +38,9 @@ pub enum PinError {
     #[diagnostic(help("make sure Lux has write access to the install directory"))]
     MoveItemsFailure(#[from] fs_extra::error::Error),
     #[error("cannot change pin state of {rock}, because it is not an entrypoint")]
-    #[diagnostic(help("Lux does not allow pinning dependencies, as doing so could break the version requirement in a future update."))]
+    #[diagnostic(help(
+        "Lux does not allow pinning dependencies, as doing so could break the version requirement in a future update."
+    ))]
     NotAnEntrypoint { rock: PackageSpec },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -51,7 +53,7 @@ pub fn set_pinned_state(
     pin: PinnedState,
 ) -> Result<(), PinError> {
     let lockfile = tree.lockfile()?;
-    let mut package = lockfile
+    let package = lockfile
         .get(package_id)
         .ok_or_else(|| PinError::PackageNotFound(package_id.clone()))?
         .clone();
@@ -70,13 +72,13 @@ pub fn set_pinned_state(
     }
 
     let old_package = package.clone();
-    let layout = tree.layout_for(&package);
+    let layout = tree.layout_for(&package.spec);
     let items = fs::sync::read_dir(&layout.root)?
         .filter_map(Result::ok)
         .map(|dir| dir.path())
         .collect_vec();
 
-    package.spec.pinned = pin;
+    let package = package.rekey_pinned(pin);
 
     if lockfile.get(&package.id()).is_some() {
         return Err(PinError::PinStateConflict {
@@ -90,8 +92,12 @@ pub fn set_pinned_state(
     fs_extra::move_items(&items, layout.root, &CopyOptions::new())?;
 
     lockfile.map_then_flush(|lockfile| {
+        let binaries = lockfile.binaries(&old_package.id()).cloned();
         lockfile.remove(&old_package);
         lockfile.add_entrypoint(&package);
+        if let Some(binaries) = binaries {
+            lockfile.set_binaries(&package, binaries);
+        }
 
         Ok::<_, io::Error>(())
     })?;

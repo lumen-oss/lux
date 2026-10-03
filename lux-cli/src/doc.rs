@@ -10,7 +10,7 @@ use lux_lib::{
     rockspec::Rockspec,
     tree::{InstallTree, RockMatches, Tree},
 };
-use miette::{miette, Context, IntoDiagnostic, Result};
+use miette::{Context, IntoDiagnostic, Result, miette};
 use std::io::Read;
 use std::path::Path;
 use url::Url;
@@ -64,7 +64,7 @@ async fn open_homepage(pkg: LockedPackage, tree: &Tree) -> Result<()> {
 
 fn get_homepage(pkg: &LockedPackage, tree: &Tree) -> Result<Option<Url>> {
     let rockspec_content =
-        std::fs::read_to_string(tree.layout_for(pkg).rockspec_path()).into_diagnostic()?;
+        std::fs::read_to_string(tree.layout_for(pkg.spec()).rockspec_path()).into_diagnostic()?;
     let rockspec = RemoteLuaRockspec::new(&rockspec_content)?;
     Ok(rockspec.description().homepage.clone())
 }
@@ -89,7 +89,7 @@ fn open_doc_file(path: &Path) -> Result<()> {
 }
 
 async fn open_local_docs(pkg: LockedPackage, tree: &Tree, config: &Config) -> Result<()> {
-    let doc_dir = tree.layout_for(&pkg).doc;
+    let doc_dir = tree.layout_for(pkg.spec()).doc;
     let files: Vec<String> = WalkDir::new(&doc_dir)
         .into_iter()
         .filter_map_ok(|file| {

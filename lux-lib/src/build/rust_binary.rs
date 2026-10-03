@@ -1,6 +1,6 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::build::utils::{self, InstallBinaryError};
-use crate::config::{build, Config};
+use crate::config::{Config, build};
 use crate::fs;
 use crate::lua_rockspec::RustBinaryBuildSpec;
 use crate::tree::InstallTree;

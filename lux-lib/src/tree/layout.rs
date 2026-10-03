@@ -1,6 +1,6 @@
 use crate::{
     fs::{self, FsError},
-    lockfile::{LockedPackage, OptState},
+    lockfile::{LockedPackageSpec, OptState},
     tree::{InstallTree, Tree},
 };
 use std::path::{Path, PathBuf};
@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 /// A custom layout for entrypoint packages.
 /// Implementations arrange symlinks so external tools can find files at the locations they expect.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
-    fn make_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()>;
+    fn make_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()>;
+    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
 }
 
 /// A [`CustomRockLayout`] for Neovim plugins. Packages are exposed under `<tree>/site/pack/lux/{start,opt}/<package>`
@@ -18,8 +18,8 @@ pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
 pub struct NvimLayout;
 
 impl NvimLayout {
-    fn target_for(tree: &Tree, package: &LockedPackage) -> PathBuf {
-        let subdir = match package.spec.opt {
+    fn target_for(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+        let subdir = match package.opt() {
             OptState::Required => "start",
             OptState::Optional => "opt",
         };
@@ -31,7 +31,7 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn make_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()> {
+    fn make_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
         let custom_dir = Self::target_for(tree, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
@@ -49,7 +49,7 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackage) -> fs::Result<()> {
+    fn remove_symlinks(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
         let target = Self::target_for(tree, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
@@ -97,7 +97,6 @@ mod tests {
         lua_version::LuaVersion,
         package::PackageSpec,
         remote_package_source::RemotePackageSource,
-        rockspec::RockBinaries,
         tree::{EntryType, InstallTree, NvimLayout},
     };
 
@@ -132,7 +131,6 @@ mod tests {
         LockedPackage::from(
             &PackageSpec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes(),
@@ -144,7 +142,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package).unwrap();
+        tree.prepare(&package.spec).unwrap();
         tree.finalize(&package, EntryType::Entrypoint).unwrap();
 
         let custom_dir = tree_path
@@ -161,9 +159,9 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package).unwrap();
+        tree.prepare(&package.spec).unwrap();
 
-        let etc = tree.layout_for(&package).etc;
+        let etc = tree.layout_for(&package.spec).etc;
         std::fs::create_dir_all(etc.join("plugin")).unwrap();
         std::fs::write(etc.join("plugin/foo.vim"), "lua _G.foo = 1\n").unwrap();
 
@@ -180,7 +178,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package).unwrap();
+        tree.prepare(&package.spec).unwrap();
         tree.finalize(&package, EntryType::DependencyOnly).unwrap();
 
         let custom_dir = tree_path
@@ -194,7 +192,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package).unwrap();
+        tree.prepare(&package.spec).unwrap();
         tree.finalize(&package, EntryType::Entrypoint).unwrap();
         let custom_dir = tree_path
             .join("5.1/site/pack/lux/start")

@@ -6,18 +6,18 @@ use std::{
 
 use crate::{
     build::{
+        BuildBehaviour,
         external_dependency::{ExternalDependencyError, ExternalDependencyInfo},
         utils::recursive_copy_dir,
-        BuildBehaviour,
     },
     config::Config,
     hash::HasIntegrity,
     lockfile::{
-        LockConstraint, LockedPackage, LockedPackageHashes, LockfileError, OptState, PinnedState,
+        LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageSpec, LockfileError,
+        OptState, PinnedState,
     },
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::rock_manifest::RockManifest,
-    package::PackageSpec,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
@@ -51,14 +51,14 @@ pub enum InstallBinaryRockError {
     LuaVersionError(#[from] LuaVersionError),
     #[error("failed to unpack packed rock")]
     Zip(#[from] zip::result::ZipError),
-    #[error("rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1")]
+    #[error(
+        "rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1"
+    )]
     RockManifestNotFound,
     #[error(transparent)]
     #[diagnostic(transparent)]
     RockManifestError(#[from] RockManifestError),
-    #[error(
-        "the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}"
-    )]
+    #[error("the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}")]
     NotAFileOrDirectory(String, Box<std::fs::Metadata>),
 }
 
@@ -139,16 +139,16 @@ where
             }
             _ => None,
         };
-        let mut package = LockedPackage::from(
-            &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+        let spec = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
             self.constraint,
-            rockspec.binaries(),
-            self.source,
-            source_url,
-            hashes,
+            Vec::new(),
+            Vec::new(),
+            &self.pin,
+            &self.opt,
         );
-        package.spec.pinned = self.pin;
-        package.spec.opt = self.opt;
+        let package = LockedPackage::new(spec, self.source, source_url, hashes);
         match self.tree.lockfile()?.get(&package.id()) {
             Some(package) if self.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
             _ => {
@@ -166,8 +166,8 @@ where
                     return Err(InstallBinaryRockError::RockManifestNotFound);
                 }
                 let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
-                self.tree.prepare(&package)?;
-                let layout = self.tree.layout_for(&package);
+                self.tree.prepare(&package.spec)?;
+                let layout = self.tree.layout_for(&package.spec);
                 let rock_manifest = RockManifest::new(&rock_manifest_content)?;
                 install_manifest_entries(
                     &rock_manifest.lib.entries,
@@ -209,6 +209,10 @@ where
                     fs::tokio::remove_file(&rockspec_path).await?;
                 }
                 self.tree.finalize(&package, self.entry_type)?;
+                self.tree
+                    .lockfile()?
+                    .write_guard()
+                    .set_binaries(&package, rockspec.binaries());
                 Ok(package)
             }
         }
@@ -249,7 +253,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder,
-        operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        operations::{DownloadedPackedRockBytes, unpack_rockspec},
     };
 
     use super::*;
@@ -305,7 +309,7 @@ mod tests {
                 .unwrap()
         );
         let foo_bar_module = tree
-            .layout_for(&local_package)
+            .layout_for(&local_package.spec)
             .src
             .join("foo")
             .join("bar.lua");

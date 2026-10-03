@@ -13,6 +13,7 @@ use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
 use crate::tree::InstallTree;
 use crate::tree::Tree;
+use crate::tree::TreeError;
 use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
@@ -27,8 +28,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 use walkdir::WalkDir;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -63,6 +64,9 @@ pub enum PackError {
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
     Walkdir(#[from] walkdir::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Tree(#[from] TreeError),
     #[error("expected a `package.rockspec` in the package root.")]
     MissingRockspec,
 }
@@ -70,7 +74,7 @@ pub enum PackError {
 async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let package = args.package;
     let tree = args.tree;
-    let layout = tree.layout_for(&package);
+    let layout = tree.layout_for(&package.spec);
     let suffix = if is_binary_rock(&layout.lib) {
         format!("{}.rock", luarocks::current_platform_luarocks_identifier())
     } else {
@@ -109,7 +113,12 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     fs::tokio::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
     let root_entries = add_rock_entries(&mut zip, temp_root_dir.path(), "".into())?;
     let mut bin_entries = HashMap::new();
-    for relative_binary_path in package.spec.binaries() {
+    let lockfile = tree.lockfile()?;
+    for relative_binary_path in lockfile
+        .binaries(&package.id())
+        .into_iter()
+        .flat_map(|binaries| binaries.iter())
+    {
         if let Some(binary_name) = relative_binary_path.clean().file_name() {
             let binary_path = tree.bin().join(binary_name);
             if binary_path.is_file() {
@@ -171,11 +180,7 @@ fn add_rock_entries(
     if source_dir.is_dir() {
         for file in WalkDir::new(source_dir).into_iter().filter_map_ok(|entry| {
             let file = entry.into_path();
-            if file.is_file() {
-                Some(file)
-            } else {
-                None
-            }
+            if file.is_file() { Some(file) } else { None }
         }) {
             let file = file?;
             let (relative_path, digest) = add_rock_entry(zip, file, source_dir, &zip_dir)?;
