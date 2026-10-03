@@ -19,7 +19,8 @@ use crate::{
 
 use super::{
     build::Build as PipelineBuild, discover::FindPackageFromLuarocks,
-    download_sources_and_hash::DownloadSourcesAndHash, resolve::ResolvePackageDependencies,
+    download_sources_and_hash::DownloadSourcesAndHash, emit_lockfile::LockfileHandle,
+    resolve::ResolvePackageDependencies,
 };
 
 use crate::operations::PackageInstallSpec;
@@ -28,7 +29,9 @@ use crate::operations::PackageInstallSpec;
 ///
 /// This is the composable core of [`Install`](crate::operations::Install): it resolves the
 /// dependency graph, downloads and hashes sources, builds the packages (build dependencies
-/// first) and records the result in the tree's lockfile.
+/// first) into the regular, build and test trees, and records the result in the trees'
+/// lockfiles. It also returns a [`LockfileHandle`] so callers (e.g. a workspace) can commit
+/// the resolved sections to their own lockfile.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallPackages<'a, T>
@@ -39,8 +42,28 @@ where
     config: &'a Config,
     #[builder(start_fn)]
     tree: T,
+    #[builder(field)]
+    build_packages: Vec<PackageInstallSpec>,
+    #[builder(field)]
+    test_packages: Option<Vec<PackageInstallSpec>>,
     packages: Vec<PackageInstallSpec>,
     package_db: Option<RemotePackageDB>,
+}
+
+impl<'a, T, State> InstallPackagesBuilder<'a, T, State>
+where
+    T: InstallTree + Clone + Send + Sync,
+    State: install_packages_builder::State,
+{
+    pub fn build_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
+        self.build_packages = packages;
+        self
+    }
+
+    pub fn test_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
+        self.test_packages = Some(packages);
+        self
+    }
 }
 
 impl<T, State> InstallPackagesBuilder<'_, T, State>
@@ -48,10 +71,15 @@ where
     State: install_packages_builder::State + install_packages_builder::IsComplete,
     T: InstallTree + Clone + Send + Sync + 'static,
 {
-    pub async fn install(self) -> Result<Vec<LockedPackage>, InstallPackagesError> {
+    pub async fn install(
+        self,
+    ) -> Result<(Vec<LockedPackage>, LockfileHandle), InstallPackagesError> {
         let args = self._build();
-        if args.packages.is_empty() {
-            return Ok(Vec::new());
+        if args.packages.is_empty()
+            && args.build_packages.is_empty()
+            && args.test_packages.is_none()
+        {
+            return Ok((Vec::new(), LockfileHandle::default()));
         }
         install_packages(args).await
     }
@@ -59,7 +87,7 @@ where
 
 async fn install_packages<T>(
     install: InstallPackages<'_, T>,
-) -> Result<Vec<LockedPackage>, InstallPackagesError>
+) -> Result<(Vec<LockedPackage>, LockfileHandle), InstallPackagesError>
 where
     T: InstallTree + Clone + Send + Sync + 'static,
 {
@@ -127,8 +155,13 @@ where
 
     let discover =
         FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
-    let resolved = ResolvePackageDependencies::new(&discover, config)
+    let mut resolve = ResolvePackageDependencies::new(&discover, config)
         .packages(packages)
+        .build_packages(install.build_packages);
+    if let Some(test_packages) = install.test_packages {
+        resolve = resolve.test_packages(test_packages);
+    }
+    let resolved = resolve
         .resolve()
         .await
         .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
@@ -137,6 +170,7 @@ where
         .download_sources_and_hash()
         .await
         .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+    let handle = LockfileHandle::from_artifacts(&artifacts);
 
     let build_packages = artifacts
         .build
@@ -164,6 +198,14 @@ where
         .build()
         .await
         .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+    if let Some(test_packages) = artifacts.test {
+        let test_tree = tree.test_tree(config)?;
+        PipelineBuild::new(config, &test_tree)
+            .packages(test_packages.into_values().collect_vec())
+            .build()
+            .await
+            .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+    }
 
     let installed_packages: HashMap<LockedPackageId, LockedPackage> = built
         .iter()
@@ -186,7 +228,7 @@ where
         Ok::<_, io::Error>(())
     })?;
 
-    Ok(built)
+    Ok((built, handle))
 }
 
 #[derive(Error, Debug, Diagnostic)]

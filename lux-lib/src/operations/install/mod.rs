@@ -129,9 +129,7 @@ pub enum InstallError {
 }
 
 impl From<crate::luarocks::luarocks_installation::LuaRocksInstallError> for InstallError {
-    fn from(
-        source: crate::luarocks::luarocks_installation::LuaRocksInstallError,
-    ) -> Self {
+    fn from(source: crate::luarocks::luarocks_installation::LuaRocksInstallError) -> Self {
         Self::LuaRocksInstall(Box::new(source))
     }
 }
@@ -145,10 +143,11 @@ where
         return Ok(Vec::new());
     }
 
-    InstallPackages::new(install.config, install.tree)
+    let (packages, _lockfile) = InstallPackages::new(install.config, install.tree)
         .packages(packages)
         .maybe_package_db(install.package_db)
         .install()
         .await
-        .map_err(InstallError::from)
+        .map_err(InstallError::from)?;
+    Ok(packages)
 }

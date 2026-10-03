@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use bon::Builder;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -9,17 +7,12 @@ use crate::{
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
     project::project_toml::LocalProjectTomlValidationError,
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::EntryType,
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
-use super::{
-    build::Build, discover::FindPackageFromLuarocks,
-    download_sources_and_hash::DownloadSourcesAndHash, emit_lockfile::LockfileHandle,
-    resolve::ResolvePackageDependencies,
-};
+use super::install_packages::InstallPackages;
 
 /// Installs all of a workspace's dependencies into its regular, build and test trees.
 ///
@@ -60,65 +53,27 @@ where
         let args = self._build();
         let config = args.config;
         let workspace = args.workspace;
-        let no_lock = args.no_lock.unwrap_or(false);
-
-        let package_db = RemotePackageDB::from_config(config).await?;
-        let discover =
-            FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
 
         let mut regular = gather_dependencies(workspace, DependencyKind::Regular)?;
         regular.extend(args.packages);
         let build = gather_dependencies(workspace, DependencyKind::Build)?;
 
-        let mut resolve = ResolvePackageDependencies::new(&discover, config)
+        let mut install = InstallPackages::new(config, workspace.tree(config)?)
             .packages(regular)
             .build_packages(build);
         if args.test.unwrap_or(false) {
-            resolve = resolve.test_packages(gather_dependencies(workspace, DependencyKind::Test)?);
-        }
-        let resolved = resolve
-            .resolve()
-            .await
-            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
-
-        let artifacts = DownloadSourcesAndHash::new(config)
-            .resolved(resolved)
-            .download_sources_and_hash()
-            .await
-            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
-
-        if !no_lock {
-            let mut lockfile = workspace.lockfile()?.write_guard();
-            LockfileHandle::from_artifacts(&artifacts).commit(&mut lockfile);
+            install = install.test_packages(gather_dependencies(workspace, DependencyKind::Test)?);
         }
 
-        let regular_tree = workspace.tree(config)?;
-        let build_tree = workspace.build_tree(config)?;
-        let test_tree = workspace.test_tree(config)?;
+        let (built, lockfile) = install
+            .install()
+            .await
+            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
 
-        // TODO(vhyrro): Make parallel
-        // make sure to build build dependencies first
-        Build::new(config, &build_tree)
-            .packages(artifacts.build.unwrap_or_default().into_values().collect())
-            .build()
-            .await
-            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
-        let built = Build::new(config, &regular_tree)
-            .packages(
-                artifacts
-                    .regular
-                    .unwrap_or_default()
-                    .into_values()
-                    .collect(),
-            )
-            .build()
-            .await
-            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
-        Build::new(config, &test_tree)
-            .packages(artifacts.test.unwrap_or_default().into_values().collect())
-            .build()
-            .await
-            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
+        // Commit the workspace lockfile only once installation has succeeded.
+        if !args.no_lock.unwrap_or(false) {
+            lockfile.commit(&mut workspace.lockfile()?.write_guard());
+        }
 
         Ok(built)
     }
@@ -134,9 +89,6 @@ pub enum InstallWorkspaceDependenciesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    RemotePackageDB(#[from] RemotePackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),

@@ -8,7 +8,8 @@ use super::{
 };
 
 /// The lockfile entries resolved by the pipeline, grouped by section.
-pub(crate) struct LockfileHandle(Artifacts<LockedPackageLock>);
+#[derive(Default)]
+pub struct LockfileHandle(Artifacts<LockedPackageLock>);
 
 impl LockfileHandle {
     pub(crate) fn from_artifacts(artifacts: &DownloadSourcesAndHashArtifacts) -> Self {
