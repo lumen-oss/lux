@@ -4,6 +4,7 @@ use std::io::Cursor;
 
 use bon::Builder;
 use bytes::Bytes;
+use futures::{StreamExt, TryStreamExt};
 use miette::Diagnostic;
 use tempfile::TempDir;
 use thiserror::Error;
@@ -25,7 +26,10 @@ use crate::{
     tree::EntryType,
 };
 
-use super::resolve::{ResolvedArtifacts, ResolvedPackage};
+use super::{
+    resolve::{ResolvedArtifacts, ResolvedPackage},
+    Artifacts,
+};
 
 pub(crate) enum PackageSource {
     SourceTree(TempDir),
@@ -39,12 +43,8 @@ pub(crate) struct DownloadedPackage {
     pub(crate) artifact: PackageSource,
 }
 
-#[derive(Default)]
-pub(crate) struct DownloadSourcesAndHashArtifacts {
-    pub(crate) regular: HashMap<LockedPackageId, DownloadedPackage>,
-    pub(crate) build: HashMap<LockedPackageId, DownloadedPackage>,
-    pub(crate) test: HashMap<LockedPackageId, DownloadedPackage>,
-}
+pub(crate) type DownloadSourcesAndHashArtifacts =
+    Artifacts<HashMap<LockedPackageId, DownloadedPackage>>;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -77,22 +77,22 @@ where
         self,
     ) -> Result<DownloadSourcesAndHashArtifacts, DownloadSourcesAndHashError> {
         let args = self._build();
-        let mut out = DownloadSourcesAndHashArtifacts::default();
+        let config = args.config;
 
-        for (id, package) in args.resolved.regular {
-            out.regular
-                .insert(id, download_sources_and_hash(args.config, package).await?);
-        }
-        for (id, package) in args.resolved.build {
-            out.build
-                .insert(id, download_sources_and_hash(args.config, package).await?);
-        }
-        for (id, package) in args.resolved.test {
-            out.test
-                .insert(id, download_sources_and_hash(args.config, package).await?);
-        }
-
-        Ok(out)
+        futures::stream::iter(args.resolved)
+            .then(|(section, packages)| async move {
+                let packages = futures::stream::iter(packages)
+                    .then(|(id, package)| async move {
+                        download_sources_and_hash(config, package)
+                            .await
+                            .map(|package| (id, package))
+                    })
+                    .try_collect::<HashMap<_, _>>()
+                    .await?;
+                Ok((section, packages))
+            })
+            .try_collect()
+            .await
     }
 }
 

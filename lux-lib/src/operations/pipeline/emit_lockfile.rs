@@ -24,18 +24,14 @@ where
     pub(crate) fn emit(self) {
         let args = self._build();
 
-        args.lockfile.sync(
-            &lock_from(&args.artifacts.regular),
-            &LockedPackageLockType::Regular,
-        );
-        args.lockfile.sync(
-            &lock_from(&args.artifacts.build),
-            &LockedPackageLockType::Build,
-        );
-        args.lockfile.sync(
-            &lock_from(&args.artifacts.test),
-            &LockedPackageLockType::Test,
-        );
+        for section in [
+            LockedPackageLockType::Regular,
+            LockedPackageLockType::Build,
+            LockedPackageLockType::Test,
+        ] {
+            args.lockfile
+                .sync(&lock_from(args.artifacts.get(section)), &section);
+        }
     }
 }
 

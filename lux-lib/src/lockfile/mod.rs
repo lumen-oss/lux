@@ -834,7 +834,7 @@ pub struct Lockfile<P: LockfilePermissions> {
     lock: LockedPackageLock,
 }
 
-#[derive(EnumIter, Debug, PartialEq, Eq)]
+#[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LockedPackageLockType {
     Regular,
     Test,
