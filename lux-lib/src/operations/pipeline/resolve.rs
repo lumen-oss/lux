@@ -4,17 +4,19 @@ use std::rc::Rc;
 
 use async_recursion::async_recursion;
 use bon::Builder;
+use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    config::Config, lockfile::{LockedPackageId, LockedPackageSpec, RemotePackageSourceUrl}, lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec}, operations::{PackageInstallSpec, RemoteRockDownload}, package::{PackageName, PackageReq, RemotePackage}, remote_package_source::RemotePackageSource, rockspec::Rockspec, tree::EntryType,
+    config::Config, lockfile::{LockedPackageId, LockedPackageLockType, LockedPackageSpec, RemotePackageSourceUrl}, lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec}, operations::{PackageInstallSpec, RemoteRockDownload}, package::{PackageName, PackageReq, RemotePackage}, remote_package_source::RemotePackageSource, rockspec::Rockspec, tree::EntryType,
 };
 
 use super::{
     discover::{FindPackageFromProvider, DiscoverError, FoundPackage, FoundPackageType},
     download_sources_and_hash::PackageSource,
+    Artifacts,
 };
 
 /// The build dependencies of a rockspec that still need to be installed, with the
@@ -60,12 +62,7 @@ pub(crate) struct ResolvedPackage {
     pub(crate) artifact: Option<PackageSource>,
 }
 
-#[derive(Default)]
-pub(crate) struct ResolvedArtifacts {
-    pub(crate) regular: HashMap<LockedPackageId, ResolvedPackage>,
-    pub(crate) build: HashMap<LockedPackageId, ResolvedPackage>,
-    pub(crate) test: HashMap<LockedPackageId, ResolvedPackage>,
-}
+pub(crate) type ResolvedArtifacts = Artifacts<HashMap<LockedPackageId, ResolvedPackage>>;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -77,38 +74,6 @@ pub(crate) enum ResolveError {
     CyclicDependency(String),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ResolveStateType {
-    Regular,
-    Build,
-    Test,
-}
-
-#[derive(Default)]
-struct ResolveState {
-    regular: HashMap<LockedPackageId, ResolvedPackage>,
-    build: HashMap<LockedPackageId, ResolvedPackage>,
-    test: HashMap<LockedPackageId, ResolvedPackage>,
-}
-
-impl ResolveState {
-    fn select(&mut self, state_type: ResolveStateType) -> &mut HashMap<LockedPackageId, ResolvedPackage> {
-        match state_type {
-            ResolveStateType::Regular => &mut self.regular,
-            ResolveStateType::Build => &mut self.build,
-            ResolveStateType::Test => &mut self.test,
-        }
-    }
-
-    fn contains(&self, state_type: ResolveStateType, id: &LockedPackageId) -> bool {
-        match state_type {
-            ResolveStateType::Regular => self.regular.contains_key(id),
-            ResolveStateType::Build => self.build.contains_key(id),
-            ResolveStateType::Test => self.test.contains_key(id),
-        }
-    }
 }
 
 #[derive(Builder)]
@@ -155,59 +120,48 @@ where
     pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, ResolveError> {
         let args = self._build();
         // TODO(vhyrro): Rewrite to be parallel and no RefCell
-        let state = Rc::new(RefCell::new(ResolveState::default()));
+        let state = Rc::new(RefCell::new(ResolvedArtifacts::default()));
+        let (discover, config) = (args.discover, args.config);
 
-        for package in args.packages {
-            resolve_spec(
-                package,
-                ResolveStateType::Regular,
-                Vec::new(),
-                state.clone(),
-                args.discover,
-                args.config,
-            )
+        let packages = Artifacts {
+            regular: args.packages,
+            build: args.build_packages,
+            test: args.test_packages,
+        };
+
+        futures::stream::iter(packages)
+            .then(|(section, packages)| {
+                let state = state.clone();
+                async move {
+                    futures::stream::iter(packages)
+                        .then(|package| {
+                            resolve_spec(
+                                package,
+                                section,
+                                Vec::new(),
+                                state.clone(),
+                                discover,
+                                config,
+                            )
+                        })
+                        .try_for_each(|_| async { Ok(()) })
+                        .await
+                }
+            })
+            .try_for_each(|_| async { Ok(()) })
             .await?;
-        }
 
-        for package in args.build_packages {
-            resolve_spec(
-                package,
-                ResolveStateType::Build,
-                Vec::new(),
-                state.clone(),
-                args.discover,
-                args.config,
-            )
-            .await?;
-        }
-
-        for package in args.test_packages {
-            resolve_spec(
-                package,
-                ResolveStateType::Test,
-                Vec::new(),
-                state.clone(),
-                args.discover,
-                args.config,
-            )
-            .await?;
-        }
-
-        let mut state = state.borrow_mut();
-        Ok(ResolvedArtifacts {
-            regular: std::mem::take(&mut state.regular),
-            build: std::mem::take(&mut state.build),
-            test: std::mem::take(&mut state.test),
-        })
+        let resolved = std::mem::take(&mut *state.borrow_mut());
+        Ok(resolved)
     }
 }
 
 #[async_recursion(?Send)]
 async fn resolve_spec<D: FindPackageFromProvider>(
     spec: PackageInstallSpec,
-    section: ResolveStateType,
+    section: LockedPackageLockType,
     parents: Vec<PackageName>,
-    state: Rc<RefCell<ResolveState>>,
+    state: Rc<RefCell<ResolvedArtifacts>>,
     discover: &D,
     config: &Config,
 ) -> Result<LockedPackageId, ResolveError> {
@@ -240,7 +194,7 @@ async fn resolve_spec<D: FindPackageFromProvider>(
         constraint.clone(),
     );
 
-    if state.borrow().contains(section, &id) {
+    if state.borrow().get(section).contains_key(&id) {
         return Ok(id);
     }
 
@@ -257,7 +211,7 @@ async fn resolve_spec<D: FindPackageFromProvider>(
             ids.push(
                 resolve_spec(
                     dependency,
-                    ResolveStateType::Build,
+                    LockedPackageLockType::Build,
                     child_parents.clone(),
                     state.clone(),
                     discover,
@@ -313,7 +267,7 @@ async fn resolve_spec<D: FindPackageFromProvider>(
 
     state
         .borrow_mut()
-        .select(section)
+        .get_mut(section)
         .insert(id.clone(), resolved);
 
     Ok(id)
