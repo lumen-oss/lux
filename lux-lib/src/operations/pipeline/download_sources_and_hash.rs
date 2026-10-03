@@ -84,22 +84,41 @@ where
         let args = self._build();
         let config = args.config;
 
-        futures::stream::iter(args.resolved)
-            .then(|(section, packages)| async move {
-                let Some(packages) = packages else {
-                    return Ok((section, None));
-                };
-                let packages = futures::stream::iter(packages)
-                    .then(|(id, package)| async move {
-                        download_sources_and_hash(config, package)
-                            .await
-                            .map(|package| (id, package))
-                    })
-                    .try_collect::<HashMap<_, _>>()
-                    .await?;
-                Ok((section, Some(packages)))
+        // Preserve which sections were requested (even if empty), then run every
+        // download as a single bounded-concurrency stream and fold the results
+        // back into their sections. `buffered` keeps at most `max_jobs`
+        // downloads in flight; hashing is already `spawn_blocking`, so it runs
+        // across the blocking thread pool.
+        let artifacts: DownloadSourcesAndHashArtifacts = args
+            .resolved
+            .iter()
+            .map(|(section, packages)| (section, packages.map(|_| HashMap::new())))
+            .collect();
+
+        let jobs = args.resolved.into_iter().flat_map(|(section, packages)| {
+            packages
+                .into_iter()
+                .flatten()
+                .map(move |(id, package)| (section, id, package))
+        });
+
+        futures::stream::iter(jobs)
+            .map(|(section, id, package)| async move {
+                download_sources_and_hash(config, package)
+                    .await
+                    .map(|package| (section, id, package))
             })
-            .try_collect()
+            .buffered(config.max_jobs())
+            .try_fold(
+                artifacts,
+                |mut artifacts, (section, id, package)| async move {
+                    artifacts
+                        .get_mut(section)
+                        .get_or_insert_with(HashMap::new)
+                        .insert(id, package);
+                    Ok(artifacts)
+                },
+            )
             .await
     }
 }
