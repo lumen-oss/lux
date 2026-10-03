@@ -14,18 +14,17 @@ use crate::{
 };
 use bon::Builder;
 use thiserror::Error;
-use tracing::{info_span, Instrument};
+use tracing::{Instrument, info_span};
 
 #[derive(Debug, Error, miette::Diagnostic)]
 #[non_exhaustive]
 pub enum BuildWorkspaceError {
-    // FIXME(vhyrro): don't use dyn here
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallWorkspaceDependencies(#[from] InstallWorkspaceDependenciesError),
-    #[error("failed to build the workspace")]
-    #[diagnostic(forward(0))]
-    BuildProject(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BuildProject(#[from] BuildProjectError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
@@ -35,12 +34,6 @@ pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
-}
-
-impl From<BuildProjectError> for BuildWorkspaceError {
-    fn from(source: BuildProjectError) -> Self {
-        Self::BuildProject(Box::new(source))
-    }
 }
 
 #[derive(Builder)]

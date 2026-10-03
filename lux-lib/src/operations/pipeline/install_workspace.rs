@@ -12,7 +12,7 @@ use crate::{
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
-use super::install_packages::InstallPackages;
+use super::install_packages::{InstallPackages, InstallPackagesError};
 
 /// Installs all of a workspace's dependencies into its regular, build and test trees.
 ///
@@ -65,10 +65,7 @@ where
             install = install.test_packages(gather_dependencies(workspace, DependencyKind::Test)?);
         }
 
-        let (built, lockfile) = install
-            .install()
-            .await
-            .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
+        let (built, lockfile) = install.install().await?;
 
         // Commit the workspace lockfile only once installation has succeeded.
         if !args.no_lock.unwrap_or(false) {
@@ -92,9 +89,15 @@ pub enum InstallWorkspaceDependenciesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
-    #[error("failed to install workspace dependencies")]
-    #[diagnostic(forward(0))]
-    Pipeline(Box<dyn Diagnostic + Send + Sync + 'static>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InstallPackages(#[from] Box<InstallPackagesError>),
+}
+
+impl From<InstallPackagesError> for InstallWorkspaceDependenciesError {
+    fn from(source: InstallPackagesError) -> Self {
+        Self::InstallPackages(Box::new(source))
+    }
 }
 
 #[derive(Clone, Copy)]

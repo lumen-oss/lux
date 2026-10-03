@@ -1,13 +1,13 @@
 use crate::lockfile::LockedPackageLockType;
 
-pub(crate) mod build;
-pub(crate) mod build_project;
-pub(crate) mod discover;
-pub(crate) mod download_sources_and_hash;
+pub mod build;
+pub mod build_project;
+pub mod discover;
+pub mod download_sources_and_hash;
 pub mod emit_lockfile;
 pub mod install_packages;
 pub mod install_workspace;
-pub(crate) mod resolve;
+pub mod resolve;
 
 /// Packages grouped by the lockfile section they belong to.
 ///
