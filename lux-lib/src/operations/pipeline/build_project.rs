@@ -75,7 +75,7 @@ where
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub(crate) enum BuildProjectError {
+pub enum BuildProjectError {
     #[error("failed to build the project")]
     #[diagnostic(forward(0))]
     Build(#[source] Box<crate::build::BuildError>),

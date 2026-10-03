@@ -48,17 +48,23 @@ pub(crate) type DownloadSourcesAndHashArtifacts =
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub(crate) enum DownloadSourcesAndHashError {
+pub enum DownloadSourcesAndHashError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] FsError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Build(#[from] BuildError),
+    Build(#[from] Box<BuildError>),
     #[error("failed to hash the source for '{0}'")]
     Hash(String, #[source] io::Error),
     #[error("missing source url for '{0}'")]
     MissingSourceUrl(String),
+}
+
+impl From<BuildError> for DownloadSourcesAndHashError {
+    fn from(source: BuildError) -> Self {
+        Self::Build(Box::new(source))
+    }
 }
 
 #[derive(Builder)]

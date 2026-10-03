@@ -22,7 +22,7 @@ use super::download_sources_and_hash::{DownloadedPackage, PackageSource};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub(crate) enum BuildError {
+pub enum BuildError {
     #[error("failed to build '{0}'")]
     Build(String, #[source] Box<crate::build::BuildError>),
     #[error(transparent)]

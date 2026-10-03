@@ -26,8 +26,11 @@ use crate::{
         self, PackageInstallSpec, UnpackError,
         pipeline::{
             discover::FindPackageFromLuarocks,
-            download_sources_and_hash::{DownloadSourcesAndHash, DownloadedPackage, PackageSource},
-            resolve::{ResolvePackageDependencies, luarocks_build_backend_name},
+            download_sources_and_hash::{
+                DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage,
+                PackageSource,
+            },
+            resolve::{ResolveError, ResolvePackageDependencies, luarocks_build_backend_name},
         },
     },
     package::{PackageReq, PackageSpec},
@@ -79,10 +82,12 @@ pub enum VendorError {
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     RemotePackageDB(#[from] RemotePackageDBError),
-    #[error("failed to resolve dependencies")]
-    #[diagnostic(forward(0))]
-    // FIXME(vhyrro): Don't use dyn here
-    Pipeline(Box<dyn Diagnostic + Send + Sync + 'static>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Resolve(#[from] ResolveError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Download(#[from] DownloadSourcesAndHashError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
@@ -215,13 +220,11 @@ impl<'a> ResolveAndDownload<'a> {
         let resolved = ResolvePackageDependencies::new(&discover, self.config)
             .packages(self.install_specs)
             .resolve()
-            .await
-            .map_err(|err| VendorError::Pipeline(Box::new(err)))?;
+            .await?;
         let artifacts = DownloadSourcesAndHash::new(self.config)
             .resolved(resolved)
             .download_sources_and_hash()
-            .await
-            .map_err(|err| VendorError::Pipeline(Box::new(err)))?;
+            .await?;
         Ok(artifacts
             .into_iter()
             .flat_map(|(_, packages)| packages)

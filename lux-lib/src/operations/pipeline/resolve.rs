@@ -73,7 +73,7 @@ pub(crate) type ResolvedArtifacts = Artifacts<HashMap<LockedPackageId, ResolvedP
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub(crate) enum ResolveError {
+pub enum ResolveError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Discover(#[from] DiscoverError),

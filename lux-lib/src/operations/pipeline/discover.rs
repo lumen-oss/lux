@@ -26,7 +26,7 @@ pub(crate) enum FoundPackageType {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub(crate) enum DiscoverError {
+pub enum DiscoverError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Search(#[from] SearchError),

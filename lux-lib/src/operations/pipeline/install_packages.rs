@@ -18,9 +18,11 @@ use crate::{
 };
 
 use super::{
-    build::Build as PipelineBuild, discover::FindPackageFromLuarocks,
-    download_sources_and_hash::DownloadSourcesAndHash, emit_lockfile::LockfileHandle,
-    resolve::ResolvePackageDependencies,
+    build::{Build as PipelineBuild, BuildError as PipelineBuildError},
+    discover::FindPackageFromLuarocks,
+    download_sources_and_hash::{DownloadSourcesAndHash, DownloadSourcesAndHashError},
+    emit_lockfile::LockfileHandle,
+    resolve::{ResolveError, ResolvePackageDependencies},
 };
 
 use crate::operations::PackageInstallSpec;
@@ -161,15 +163,11 @@ where
     if let Some(test_packages) = install.test_packages {
         resolve = resolve.test_packages(test_packages);
     }
-    let resolved = resolve
-        .resolve()
-        .await
-        .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+    let resolved = resolve.resolve().await?;
     let artifacts = DownloadSourcesAndHash::new(config)
         .resolved(resolved)
         .download_sources_and_hash()
-        .await
-        .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+        .await?;
     let handle = LockfileHandle::from_artifacts(&artifacts);
 
     let build_packages = artifacts
@@ -191,20 +189,17 @@ where
     let built_build_deps = PipelineBuild::new(config, &build_tree)
         .packages(build_packages)
         .build()
-        .await
-        .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+        .await?;
     let built = PipelineBuild::new(config, tree)
         .packages(regular_packages)
         .build()
-        .await
-        .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+        .await?;
     if let Some(test_packages) = artifacts.test {
         let test_tree = tree.test_tree(config)?;
         PipelineBuild::new(config, &test_tree)
             .packages(test_packages.into_values().collect_vec())
             .build()
-            .await
-            .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
+            .await?;
     }
 
     let installed_packages: HashMap<LockedPackageId, LockedPackage> = built
@@ -264,9 +259,15 @@ pub enum InstallPackagesError {
         "only a single entrypoint per package is allowed.\nretry with `--force` to overwrite the existing entrypoint"
     ))]
     ConflictingEntrypoints(String),
-    #[error("failed to install packages")]
-    #[diagnostic(forward(0))]
-    Pipeline(Box<dyn Diagnostic + Send + Sync + 'static>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Resolve(#[from] ResolveError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Download(#[from] DownloadSourcesAndHashError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Build(#[from] PipelineBuildError),
 }
 
 impl From<LuaRocksInstallError> for InstallPackagesError {
