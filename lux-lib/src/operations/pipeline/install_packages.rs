@@ -18,10 +18,8 @@ use crate::{
 };
 
 use super::{
-    build::Build as PipelineBuild,
-    discover::FindPackageFromLuarocks,
-    download_sources_and_hash::DownloadSourcesAndHash,
-    resolve::ResolvePackageDependencies,
+    build::Build as PipelineBuild, discover::FindPackageFromLuarocks,
+    download_sources_and_hash::DownloadSourcesAndHash, resolve::ResolvePackageDependencies,
 };
 
 use crate::operations::PackageInstallSpec;
@@ -127,7 +125,8 @@ where
         tree.cleanup(package, tree::EntryType::Entrypoint)?;
     }
 
-    let discover = FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
+    let discover =
+        FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
     let resolved = ResolvePackageDependencies::new(&discover, config)
         .packages(packages)
         .resolve()
@@ -139,8 +138,16 @@ where
         .await
         .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
 
-    let build_packages = artifacts.build.into_values().collect_vec();
-    let regular_packages = artifacts.regular.into_values().collect_vec();
+    let build_packages = artifacts
+        .build
+        .unwrap_or_default()
+        .into_values()
+        .collect_vec();
+    let regular_packages = artifacts
+        .regular
+        .unwrap_or_default()
+        .into_values()
+        .collect_vec();
     let regular_entry_types: HashMap<LockedPackageId, tree::EntryType> = regular_packages
         .iter()
         .map(|pkg| (pkg.package.spec.id(), pkg.entry_type))
@@ -158,8 +165,10 @@ where
         .await
         .map_err(|err| InstallPackagesError::Pipeline(Box::new(err)))?;
 
-    let installed_packages: HashMap<LockedPackageId, LockedPackage> =
-        built.iter().map(|pkg| (pkg.spec.id(), pkg.clone())).collect();
+    let installed_packages: HashMap<LockedPackageId, LockedPackage> = built
+        .iter()
+        .map(|pkg| (pkg.spec.id(), pkg.clone()))
+        .collect();
     let installed_build_deps: HashMap<LockedPackageId, LockedPackage> = built_build_deps
         .iter()
         .map(|pkg| (pkg.spec.id(), pkg.clone()))
@@ -253,15 +262,17 @@ impl LockfileExt for &mut Lockfile<ReadWrite> {
         for dependency_id in pkg.spec.dependencies() {
             self.add_dependency(
                 pkg,
-                installed_packages.get(dependency_id).ok_or(io::Error::other(
-                    r#"
+                installed_packages
+                    .get(dependency_id)
+                    .ok_or(io::Error::other(
+                        r#"
 error writing dependencies to the lockfile.
 A required dependency was not installed correctly.
 This is likely a bug in Lux.
 
 [THIS IS A BUG!]
 "#,
-                ))?,
+                    ))?,
             );
         }
         Ok(())
@@ -275,15 +286,17 @@ This is likely a bug in Lux.
         for dependency_id in pkg.spec.build_dependencies() {
             self.add_build_dependency(
                 pkg,
-                build_dependencies.get(dependency_id).ok_or(io::Error::other(
-                    r#"
+                build_dependencies
+                    .get(dependency_id)
+                    .ok_or(io::Error::other(
+                        r#"
 error writing build dependencies to the lockfile.
 A required build dependency was not installed correctly.
 This is likely a bug in Lux.
 
 [THIS IS A BUG!]
 "#,
-                ))?,
+                    ))?,
             );
         }
         Ok(())

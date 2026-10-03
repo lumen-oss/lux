@@ -10,13 +10,20 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    config::Config, lockfile::{LockedPackageId, LockedPackageLockType, LockedPackageSpec, RemotePackageSourceUrl}, lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec}, operations::{PackageInstallSpec, RemoteRockDownload}, package::{PackageName, PackageReq, RemotePackage}, remote_package_source::RemotePackageSource, rockspec::Rockspec, tree::EntryType,
+    config::Config,
+    lockfile::{LockedPackageId, LockedPackageLockType, LockedPackageSpec, RemotePackageSourceUrl},
+    lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
+    operations::{PackageInstallSpec, RemoteRockDownload},
+    package::{PackageName, PackageReq, RemotePackage},
+    remote_package_source::RemotePackageSource,
+    rockspec::Rockspec,
+    tree::EntryType,
 };
 
 use super::{
-    discover::{FindPackageFromProvider, DiscoverError, FoundPackage, FoundPackageType},
-    download_sources_and_hash::PackageSource,
     Artifacts,
+    discover::{DiscoverError, FindPackageFromProvider, FoundPackage, FoundPackageType},
+    download_sources_and_hash::PackageSource,
 };
 
 /// The build dependencies of a rockspec that still need to be installed, with the
@@ -84,11 +91,7 @@ pub(crate) struct ResolvePackageDependencies<'a, D: FindPackageFromProvider> {
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     #[builder(field)]
-    pub(crate) packages: Vec<PackageInstallSpec>,
-    #[builder(field)]
-    pub(crate) build_packages: Vec<PackageInstallSpec>,
-    #[builder(field)]
-    pub(crate) test_packages: Vec<PackageInstallSpec>,
+    pub(crate) packages: Artifacts<Vec<PackageInstallSpec>>,
 }
 
 impl<D, State> ResolvePackageDependenciesBuilder<'_, D, State>
@@ -96,26 +99,29 @@ where
     D: FindPackageFromProvider,
     State: resolve_package_dependencies_builder::State,
 {
-    pub(crate) fn packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
-        self.packages = packages;
+    fn set(mut self, section: LockedPackageLockType, packages: Vec<PackageInstallSpec>) -> Self {
+        *self.packages.get_mut(section) = Some(packages);
         self
     }
 
-    pub(crate) fn build_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
-        self.build_packages = packages;
-        self
+    pub(crate) fn packages(self, packages: Vec<PackageInstallSpec>) -> Self {
+        self.set(LockedPackageLockType::Regular, packages)
     }
 
-    pub(crate) fn test_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
-        self.test_packages = packages;
-        self
+    pub(crate) fn build_packages(self, packages: Vec<PackageInstallSpec>) -> Self {
+        self.set(LockedPackageLockType::Build, packages)
+    }
+
+    pub(crate) fn test_packages(self, packages: Vec<PackageInstallSpec>) -> Self {
+        self.set(LockedPackageLockType::Test, packages)
     }
 }
 
 impl<D, State> ResolvePackageDependenciesBuilder<'_, D, State>
 where
     D: FindPackageFromProvider,
-    State: resolve_package_dependencies_builder::State + resolve_package_dependencies_builder::IsComplete,
+    State: resolve_package_dependencies_builder::State
+        + resolve_package_dependencies_builder::IsComplete,
 {
     pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, ResolveError> {
         let args = self._build();
@@ -123,16 +129,18 @@ where
         let state = Rc::new(RefCell::new(ResolvedArtifacts::default()));
         let (discover, config) = (args.discover, args.config);
 
-        let packages = Artifacts {
-            regular: args.packages,
-            build: args.build_packages,
-            test: args.test_packages,
-        };
-
-        futures::stream::iter(packages)
+        futures::stream::iter(args.packages)
             .then(|(section, packages)| {
                 let state = state.clone();
                 async move {
+                    let Some(packages) = packages else {
+                        return Ok(());
+                    };
+                    // Mark the section as requested even if it resolves to nothing.
+                    state
+                        .borrow_mut()
+                        .get_mut(section)
+                        .get_or_insert_with(HashMap::new);
                     futures::stream::iter(packages)
                         .then(|package| {
                             resolve_spec(
@@ -194,7 +202,11 @@ async fn resolve_spec<D: FindPackageFromProvider>(
         constraint.clone(),
     );
 
-    if state.borrow().get(section).contains_key(&id) {
+    if state
+        .borrow()
+        .get(section)
+        .is_some_and(|packages| packages.contains_key(&id))
+    {
         return Ok(id);
     }
 
@@ -268,6 +280,7 @@ async fn resolve_spec<D: FindPackageFromProvider>(
     state
         .borrow_mut()
         .get_mut(section)
+        .get_or_insert_with(HashMap::new)
         .insert(id.clone(), resolved);
 
     Ok(id)

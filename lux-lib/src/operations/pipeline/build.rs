@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{deploy, BuildBehaviour},
+    build::{BuildBehaviour, deploy},
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
     lua_installation::{LuaInstallation, LuaInstallationError},
@@ -18,7 +18,7 @@ use crate::{
     tree::{InstallTree, TreeError},
 };
 
-use super::download_sources_and_hash::{PackageSource, DownloadedPackage};
+use super::download_sources_and_hash::{DownloadedPackage, PackageSource};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]

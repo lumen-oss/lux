@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{self, Cursor},
     path::{Path, PathBuf},
     process::ExitStatus,
@@ -22,16 +23,12 @@ use crate::{
     lockfile::LockedPackageLockType,
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{
-        self,
+        self, PackageInstallSpec, UnpackError,
         pipeline::{
             discover::FindPackageFromLuarocks,
-            download_sources_and_hash::{
-                DownloadSourcesAndHash, DownloadSourcesAndHashArtifacts, DownloadedPackage,
-                PackageSource,
-            },
-            resolve::{luarocks_build_backend_name, ResolvePackageDependencies},
+            download_sources_and_hash::{DownloadSourcesAndHash, DownloadedPackage, PackageSource},
+            resolve::{ResolvePackageDependencies, luarocks_build_backend_name},
         },
-        PackageInstallSpec, UnpackError,
     },
     package::{PackageReq, PackageSpec},
     project::project_toml::LocalProjectTomlValidationError,
@@ -147,18 +144,19 @@ impl VendoredPackages {
         // with different constraints.
         let packages = packages
             .into_iter()
-            .unique_by(|pkg| (pkg.package.spec.name().clone(), pkg.package.spec.version().clone()))
+            .unique_by(|pkg| {
+                (
+                    pkg.package.spec.name().clone(),
+                    pkg.package.spec.version().clone(),
+                )
+            })
             .collect();
 
         Ok(Self { packages })
     }
 
     /// Vendors the sources of all packages into `vendor_dir`.
-    async fn vendor_sources(
-        &self,
-        vendor_dir: &Path,
-        config: &Config,
-    ) -> Result<(), VendorError> {
+    async fn vendor_sources(&self, vendor_dir: &Path, config: &Config) -> Result<(), VendorError> {
         futures::stream::iter(
             self.packages
                 .iter()
@@ -176,11 +174,13 @@ impl VendoredPackages {
             .filter_map(|package| {
                 let rockspec = &package.rockspec;
                 match rockspec.build().current_platform().build_backend {
-                    Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => Some((
-                        package.package.spec.to_package(),
-                        rockspec.source().current_platform().unpack_dir.clone(),
-                        rockspec.build().current_platform().copy_directories.clone(),
-                    )),
+                    Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => {
+                        Some((
+                            package.package.spec.to_package(),
+                            rockspec.source().current_platform().unpack_dir.clone(),
+                            rockspec.build().current_platform().copy_directories.clone(),
+                        ))
+                    }
                     _ => None,
                 }
             })
@@ -209,11 +209,9 @@ impl<'a> ResolveAndDownload<'a> {
     }
 
     async fn run(self) -> Result<Vec<DownloadedPackage>, VendorError> {
-        let discover = FindPackageFromLuarocks::new(
-            Arc::new(self.package_db),
-            Arc::new(self.config.clone()),
-        )
-        .build();
+        let discover =
+            FindPackageFromLuarocks::new(Arc::new(self.package_db), Arc::new(self.config.clone()))
+                .build();
         let resolved = ResolvePackageDependencies::new(&discover, self.config)
             .packages(self.install_specs)
             .resolve()
@@ -224,15 +222,10 @@ impl<'a> ResolveAndDownload<'a> {
             .download_sources_and_hash()
             .await
             .map_err(|err| VendorError::Pipeline(Box::new(err)))?;
-        let DownloadSourcesAndHashArtifacts {
-            regular,
-            build,
-            test,
-        } = artifacts;
-        Ok(regular
-            .into_values()
-            .chain(build.into_values())
-            .chain(test.into_values())
+        Ok(artifacts
+            .into_iter()
+            .flat_map(|(_, packages)| packages)
+            .flat_map(HashMap::into_values)
             .collect())
     }
 }
@@ -258,7 +251,8 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     for (dep, unpack_dir, copy_dirs) in cargo_deps {
         vendor_package_cargo_deps(&vendor_dir, &dep, &unpack_dir, &copy_dirs, config).await?;
     }
-    Ok(())}
+    Ok(())
+}
 
 async fn gather_install_specs(
     lock_type: &LockedPackageLockType,
@@ -381,10 +375,12 @@ async fn vendor_package_sources(
         PackageSource::PackedRock(bytes) => {
             let rock_path = vendor_dir.join(format!("{}@{}.rock", name, version));
             let mut file = fs::tokio::create(&rock_path).await?;
-            file.write_all(bytes).await.map_err(|source| fs::FsError::Write {
-                path: rock_path,
-                source,
-            })?;
+            file.write_all(bytes)
+                .await
+                .map_err(|source| fs::FsError::Write {
+                    path: rock_path,
+                    source,
+                })?;
         }
     }
 
