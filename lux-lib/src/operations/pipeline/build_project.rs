@@ -7,7 +7,9 @@ use crate::{
     config::Config,
     lockfile::LockedPackage,
     lua_installation::{LuaInstallation, LuaInstallationError},
+    package::PackageName,
     project::project_toml::LocalProjectTomlValidationError,
+    rockspec::Rockspec,
     tree::{EntryType, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
 };
@@ -48,21 +50,23 @@ where
             .await?;
 
         let lockfile = workspace_tree.lockfile()?;
-        let dependencies = lockfile
-            .rocks()
-            .iter()
-            .filter_map(|(id, package)| lockfile.is_entrypoint(id).then_some(package))
-            .cloned()
-            .collect::<Vec<_>>();
         let build_lockfile = args.workspace.build_tree(args.config)?.lockfile()?;
 
         let mut lockfile = lockfile.write_guard();
         lockfile.add_entrypoint(&package);
-        for dependency in dependencies {
+        for dependency in project_toml.dependencies().current_platform() {
+            let dependency = lockfile
+                .entrypoint(dependency.name())
+                .ok_or_else(|| BuildProjectError::MissingDependency(dependency.name().clone()))?
+                .clone();
             lockfile.add_dependency(&package, &dependency);
         }
-        for dependency in build_lockfile.rocks().values() {
-            lockfile.add_build_dependency(&package, dependency);
+        for dependency in project_toml.build_dependencies().current_platform() {
+            let dependency = build_lockfile
+                .entrypoint(dependency.name())
+                .ok_or_else(|| BuildProjectError::MissingDependency(dependency.name().clone()))?
+                .clone();
+            lockfile.add_build_dependency(&package, &dependency);
         }
 
         Ok(package)
@@ -87,6 +91,8 @@ pub(crate) enum BuildProjectError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
+    #[error("dependency `{0}` was not found in the lockfile")]
+    MissingDependency(PackageName),
 }
 
 impl From<crate::build::BuildError> for BuildProjectError {
