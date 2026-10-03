@@ -30,9 +30,9 @@ where
 }
 
 impl<
-        T: InstallTree + Sync + Send + Clone + 'static,
-        State: install_dependencies_builder::State + install_dependencies_builder::IsComplete,
-    > InstallDependenciesBuilder<'_, T, State>
+    T: InstallTree + Sync + Send + Clone + 'static,
+    State: install_dependencies_builder::State + install_dependencies_builder::IsComplete,
+> InstallDependenciesBuilder<'_, T, State>
 {
     /// Installs the configured dependencies and build dependencies into [`Self::tree`],
     /// returning the installed regular dependencies.
@@ -53,7 +53,7 @@ impl<
                 .await
                 .map_err(InstallError::from)?;
         }
-        let dependencies = InstallPackages::new(config, (*tree).clone())
+        let (dependencies, _lockfile) = InstallPackages::new(config, (*tree).clone())
             .packages(dependencies.into_iter().unique().collect_vec())
             .install()
             .await
