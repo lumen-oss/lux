@@ -1,17 +1,17 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
+use std::collections::{HashMap, HashSet, VecDeque};
 
-use async_recursion::async_recursion;
 use bon::Builder;
-use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
+use tokio::task::JoinSet;
 
 use crate::{
     config::Config,
-    lockfile::{LockedPackageId, LockedPackageLockType, LockedPackageSpec, RemotePackageSourceUrl},
+    lockfile::{
+        LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState, PinnedState,
+        RemotePackageSourceUrl,
+    },
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{PackageInstallSpec, RemoteRockDownload},
     package::{PackageName, PackageReq, RemotePackage},
@@ -125,177 +125,329 @@ where
 {
     pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, ResolveError> {
         let args = self._build();
-        // TODO(vhyrro): Rewrite to be parallel and no RefCell
-        let state = Rc::new(RefCell::new(ResolvedArtifacts::default()));
-        let (discover, config) = (args.discover, args.config);
-
-        futures::stream::iter(args.packages)
-            .then(|(section, packages)| {
-                let state = state.clone();
-                async move {
-                    let Some(packages) = packages else {
-                        return Ok(());
-                    };
-                    // Mark the section as requested even if it resolves to nothing.
-                    state
-                        .borrow_mut()
-                        .get_mut(section)
-                        .get_or_insert_with(HashMap::new);
-                    futures::stream::iter(packages)
-                        .then(|package| {
-                            resolve_spec(
-                                package,
-                                section,
-                                Vec::new(),
-                                state.clone(),
-                                discover,
-                                config,
-                            )
-                        })
-                        .try_for_each(|_| async { Ok(()) })
-                        .await
-                }
-            })
-            .try_for_each(|_| async { Ok(()) })
-            .await?;
-
-        let resolved = std::mem::take(&mut *state.borrow_mut());
-        Ok(resolved)
+        Resolver::new(args.discover, args.config)
+            .run(args.packages)
+            .await
     }
 }
 
-#[async_recursion(?Send)]
-async fn resolve_spec<D: FindPackageFromProvider>(
-    spec: PackageInstallSpec,
+/// Identifies a single discovery request. Two requests with the same key resolve to the
+/// same package, so the diamond problem is solved by only discovering each key once.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct RequestKey {
     section: LockedPackageLockType,
-    parents: Vec<PackageName>,
-    state: Rc<RefCell<ResolvedArtifacts>>,
-    discover: &D,
-    config: &Config,
-) -> Result<LockedPackageId, ResolveError> {
-    let FoundPackage {
-        package,
-        rockspec,
-        artifact,
-    } = find_package_from_provider(&spec, discover, config).await?;
+    package: PackageReq,
+    pin: PinnedState,
+    opt: OptState,
+}
 
-    let package_spec = package.package.clone();
-    if parents.contains(package_spec.name()) {
-        let chain = parents
-            .iter()
-            .map(|name| name.to_string())
-            .chain(std::iter::once(package_spec.name().to_string()))
-            .collect::<Vec<_>>()
-            .join(" -> ");
-        return Err(ResolveError::CyclicDependency(chain));
-    }
-
-    let constraint = spec
-        .constraint
-        .clone()
-        .unwrap_or_else(|| spec.package.version_req().clone().into());
-    let id = LockedPackageId::new(
-        package_spec.name(),
-        package_spec.version(),
-        spec.pin,
-        spec.opt,
-        constraint.clone(),
-    );
-
-    if state
-        .borrow()
-        .get(section)
-        .is_some_and(|packages| packages.contains_key(&id))
-    {
-        return Ok(id);
-    }
-
-    let mut child_parents = parents;
-    child_parents.push(package_spec.name().clone());
-
-    let is_binary = matches!(package.source, RemotePackageSource::LuarocksBinaryRock(_));
-
-    let build_dependencies = if is_binary {
-        Vec::new()
-    } else {
-        let mut ids = Vec::new();
-        for dependency in build_dependency_specs(&rockspec, &spec) {
-            ids.push(
-                resolve_spec(
-                    dependency,
-                    LockedPackageLockType::Build,
-                    child_parents.clone(),
-                    state.clone(),
-                    discover,
-                    config,
-                )
-                .await?,
-            );
+impl RequestKey {
+    fn from_install_spec(section: LockedPackageLockType, spec: &PackageInstallSpec) -> Self {
+        Self {
+            section,
+            package: spec.package.clone(),
+            pin: spec.pin,
+            opt: spec.opt,
         }
-        ids
-    };
+    }
+}
 
-    let mut dependencies = Vec::new();
-    for dependency in rockspec.dependencies().current_platform() {
-        let dependency_spec =
-            PackageInstallSpec::new(dependency.package_req().clone(), EntryType::DependencyOnly)
-                .build_behaviour(spec.build_behaviour)
-                .pin(spec.pin)
-                .opt(spec.opt)
-                .maybe_source(dependency.source().clone())
-                .build();
-        dependencies.push(
-            resolve_spec(
-                dependency_spec,
-                section,
-                child_parents.clone(),
-                state.clone(),
-                discover,
-                config,
-            )
-            .await?,
-        );
+/// A discovered node in the dependency graph.
+struct Node {
+    install_spec: PackageInstallSpec,
+    id: LockedPackageId,
+    found: FoundPackage,
+    /// `(is_build_dependency, child)` in the order the dependencies were declared.
+    children: Vec<(bool, RequestKey)>,
+}
+
+/// Owns the whole resolution graph while it is being discovered. Discovery futures run on
+/// the runtime (bounded by `Config::max_jobs`), but all shared state stays here, owned by a
+/// single task — no `Rc`, `RefCell`, or locks.
+struct Resolver<'a, D: FindPackageFromProvider> {
+    discover: &'a D,
+    max_inflight: usize,
+    joinset: JoinSet<(RequestKey, PackageInstallSpec, Result<FoundPackage, ResolveError>)>,
+    pending: VecDeque<(RequestKey, PackageInstallSpec)>,
+    seen: HashSet<RequestKey>,
+    nodes: HashMap<RequestKey, Node>,
+    resolved: ResolvedArtifacts,
+}
+
+impl<'a, D: FindPackageFromProvider> Resolver<'a, D> {
+    fn new(discover: &'a D, config: &Config) -> Self {
+        Self::with_max_inflight(discover, config.max_jobs())
     }
 
-    let locked_spec = LockedPackageSpec::new(
-        package_spec.name(),
-        package_spec.version(),
-        constraint,
-        dependencies,
-        build_dependencies,
-        &spec.pin,
-        &spec.opt,
-    );
+    /// Builds a resolver with an explicit in-flight bound. Used by tests, which do not
+    /// construct a full [`Config`].
+    fn with_max_inflight(discover: &'a D, max_inflight: usize) -> Self {
+        Self {
+            discover,
+            max_inflight,
+            joinset: JoinSet::new(),
+            pending: VecDeque::new(),
+            seen: HashSet::new(),
+            nodes: HashMap::new(),
+            resolved: ResolvedArtifacts::default(),
+        }
+    }
 
-    let resolved = ResolvedPackage {
-        spec: locked_spec,
-        rockspec,
-        source: package.source,
-        source_url: package.source_url,
-        entry_type: spec.entry_type,
-        artifact,
+    async fn run(
+        mut self,
+        packages: Artifacts<Vec<PackageInstallSpec>>,
+    ) -> Result<ResolvedArtifacts, ResolveError> {
+        for (section, specs) in packages {
+            let Some(specs) = specs else {
+                continue;
+            };
+            // Mark the section as requested even if it resolves to nothing.
+            self.resolved.get_mut(section).get_or_insert_with(HashMap::new);
+            for spec in specs {
+                let key = RequestKey::from_install_spec(section, &spec);
+                self.enqueue(key, spec);
+            }
+        }
+
+        self.spawn_ready();
+        while let Some(joined) = self.joinset.join_next().await {
+            let (key, spec, result) = joined.map_err(ResolveError::Join)?;
+            self.on_discovered(key, spec, result?);
+            self.spawn_ready();
+        }
+
+        detect_cycles(&self.nodes)?;
+        Ok(self.assemble())
+    }
+
+    /// Registers a request for discovery, unless it has already been seen. Seeing the same
+    /// request twice is exactly the diamond problem, so it is only discovered once.
+    fn enqueue(&mut self, key: RequestKey, spec: PackageInstallSpec) {
+        if self.seen.insert(key.clone()) {
+            self.pending.push_back((key, spec));
+        }
+    }
+
+    /// Spawns queued discoveries up to the configured concurrency limit.
+    fn spawn_ready(&mut self) {
+        while self.joinset.len() < self.max_inflight {
+            let Some((key, spec)) = self.pending.pop_front() else {
+                break;
+            };
+            let discover = D::clone(self.discover);
+            let task_spec = spec.clone();
+            self.joinset.spawn(async move {
+                let result = find_package_from_provider(task_spec, discover).await;
+                (key, spec, result)
+            });
+        }
+    }
+
+    /// Records a discovered package and queues any children it introduces.
+    fn on_discovered(&mut self, key: RequestKey, spec: PackageInstallSpec, found: FoundPackage) {
+        let section = key.section;
+        let is_binary = matches!(
+            found.package.source,
+            RemotePackageSource::LuarocksBinaryRock(_)
+        );
+        let constraint = spec
+            .constraint
+            .clone()
+            .unwrap_or_else(|| spec.package.version_req().clone().into());
+        let id = LockedPackageId::new(
+            found.package.package.name(),
+            found.package.package.version(),
+            spec.pin,
+            spec.opt,
+            constraint,
+        );
+
+        let mut child_specs: Vec<(bool, RequestKey, PackageInstallSpec)> = Vec::new();
+        if !is_binary {
+            for child_spec in build_dependency_specs(&found.rockspec, &spec) {
+                push_child(&mut child_specs, true, section, child_spec);
+            }
+        }
+        for dependency in found.rockspec.dependencies().current_platform() {
+            let child_spec =
+                PackageInstallSpec::new(dependency.package_req().clone(), EntryType::DependencyOnly)
+                    .build_behaviour(spec.build_behaviour)
+                    .pin(spec.pin)
+                    .opt(spec.opt)
+                    .maybe_source(dependency.source().clone())
+                    .build();
+            push_child(&mut child_specs, false, section, child_spec);
+        }
+
+        let children = child_specs
+            .iter()
+            .map(|(is_build, child_key, _)| (*is_build, child_key.clone()))
+            .collect();
+        self.resolved.get_mut(section).get_or_insert_with(HashMap::new);
+        self.nodes.insert(
+            key,
+            Node {
+                install_spec: spec,
+                id,
+                found,
+                children,
+            },
+        );
+
+        for (_, child_key, child_spec) in child_specs {
+            self.enqueue(child_key, child_spec);
+        }
+    }
+
+    /// Computes the final specs and assembles the resolved packages now that discovery is
+    /// complete and every child id is known.
+    fn assemble(self) -> ResolvedArtifacts {
+        let Resolver {
+            nodes,
+            mut resolved,
+            ..
+        } = self;
+
+        let ids: HashMap<RequestKey, LockedPackageId> = nodes
+            .iter()
+            .map(|(key, node)| (key.clone(), node.id.clone()))
+            .collect();
+
+        for (key, node) in nodes {
+            let Node {
+                install_spec,
+                id,
+                found,
+                children,
+            } = node;
+            let dependencies = children
+                .iter()
+                .filter(|(is_build, _)| !is_build)
+                .map(|(_, child)| ids[child].clone())
+                .collect_vec();
+            let build_dependencies = children
+                .iter()
+                .filter(|(is_build, _)| *is_build)
+                .map(|(_, child)| ids[child].clone())
+                .collect_vec();
+            let constraint = install_spec
+                .constraint
+                .clone()
+                .unwrap_or_else(|| install_spec.package.version_req().clone().into());
+
+            let spec = LockedPackageSpec::new(
+                found.package.package.name(),
+                found.package.package.version(),
+                constraint,
+                dependencies,
+                build_dependencies,
+                &install_spec.pin,
+                &install_spec.opt,
+            );
+            let package = ResolvedPackage {
+                spec,
+                rockspec: found.rockspec,
+                source: found.package.source,
+                source_url: found.package.source_url,
+                entry_type: install_spec.entry_type,
+                artifact: found.artifact,
+            };
+
+            resolved
+                .get_mut(key.section)
+                .get_or_insert_with(HashMap::new)
+                .entry(id)
+                .or_insert(package);
+        }
+
+        resolved
+    }
+}
+
+/// Adds a child request unless an equivalent request is already present.
+fn push_child(
+    children: &mut Vec<(bool, RequestKey, PackageInstallSpec)>,
+    is_build: bool,
+    section: LockedPackageLockType,
+    spec: PackageInstallSpec,
+) {
+    let child_section = if is_build {
+        LockedPackageLockType::Build
+    } else {
+        section
     };
+    let child_key = RequestKey::from_install_spec(child_section, &spec);
+    if !children.iter().any(|(_, existing, _)| existing == &child_key) {
+        children.push((is_build, child_key, spec));
+    }
+}
 
-    state
-        .borrow_mut()
-        .get_mut(section)
-        .get_or_insert_with(HashMap::new)
-        .insert(id.clone(), resolved);
+/// Depth-first search with white/grey/black colouring over the discovered graph. A grey
+/// back-edge means a cycle, which we render as a `a -> b -> a` chain for the error message.
+fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Color {
+        White,
+        Grey,
+        Black,
+    }
 
-    Ok(id)
+    let mut colors: HashMap<&RequestKey, Color> = HashMap::with_capacity(nodes.len());
+
+    for start in nodes.keys() {
+        if colors.get(start).copied().unwrap_or(Color::White) != Color::White {
+            continue;
+        }
+        colors.insert(start, Color::Grey);
+        let mut stack: Vec<(&RequestKey, usize)> = vec![(start, 0)];
+        let mut path: Vec<&RequestKey> = vec![start];
+
+        while let Some(&(node, index)) = stack.last() {
+            let children = &nodes[node].children;
+            if index < children.len() {
+                if let Some(top) = stack.last_mut() {
+                    top.1 += 1;
+                }
+                let child = &children[index].1;
+                match colors.get(child).copied().unwrap_or(Color::White) {
+                    Color::White => {
+                        colors.insert(child, Color::Grey);
+                        path.push(child);
+                        stack.push((child, 0));
+                    }
+                    Color::Grey => {
+                        let Some(position) = path.iter().position(|key| *key == child) else {
+                            continue;
+                        };
+                        let chain = path[position..]
+                            .iter()
+                            .map(|key| key.package.name().to_string())
+                            .chain(std::iter::once(child.package.name().to_string()))
+                            .collect_vec()
+                            .join(" -> ");
+                        return Err(ResolveError::CyclicDependency(chain));
+                    }
+                    Color::Black => {}
+                }
+            } else {
+                colors.insert(node, Color::Black);
+                stack.pop();
+                path.pop();
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn find_package_from_provider<D: FindPackageFromProvider>(
-    spec: &PackageInstallSpec,
-    discover: &D,
-    _config: &Config,
+    spec: PackageInstallSpec,
+    discover: D,
 ) -> Result<FoundPackage, ResolveError> {
     if let Some(source) = &spec.source {
-        let download = RemoteRockDownload::from_package_req_and_source_spec(
-            spec.package.clone(),
-            source.clone(),
-        )
-        .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
+        let download =
+            RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source.clone())
+                .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
         let rockspec = download.rockspec().clone();
         let package = RemotePackage::new(
             spec.package.clone().try_into().map_err(|err| {
@@ -314,12 +466,7 @@ async fn find_package_from_provider<D: FindPackageFromProvider>(
         });
     }
 
-    // Run discovery on a separate task so that the deep download/HTTP future stack is not nested
-    // inside this recursive resolver's call chain.
-    let discover = discover.clone();
-    let package = spec.package.clone();
-    let FoundPackageType::Package(package) =
-        tokio::spawn(async move { discover.find(&package).await }).await??;
+    let FoundPackageType::Package(package) = discover.find(&spec.package).await?;
     Ok(package)
 }
 
@@ -354,4 +501,141 @@ fn build_dependency_specs(
                 })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::future::Future;
+    use std::sync::{Arc, Mutex};
+
+    use super::*;
+    use crate::package::PackageSpec;
+    use crate::remote_package_db::SearchError;
+
+    #[derive(Clone)]
+    struct MockDiscover {
+        rockspecs: HashMap<String, (String, RemoteLuaRockspec)>,
+        calls: Arc<Mutex<HashMap<String, usize>>>,
+    }
+
+    impl MockDiscover {
+        fn new(rockspecs: &[String]) -> Self {
+            let mut map = HashMap::new();
+            for content in rockspecs {
+                let rockspec = match RemoteLuaRockspec::new(content) {
+                    Ok(rockspec) => rockspec,
+                    Err(err) => panic!("invalid test rockspec: {err}"),
+                };
+                map.insert(rockspec.package().to_string(), (content.clone(), rockspec));
+            }
+            Self {
+                rockspecs: map,
+                calls: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+
+        fn calls(&self, name: &str) -> usize {
+            let calls = self.calls.lock().unwrap_or_else(|err| err.into_inner());
+            calls.get(name).copied().unwrap_or(0)
+        }
+    }
+
+    impl FindPackageFromProvider for MockDiscover {
+        fn find(
+            &self,
+            req: &PackageReq,
+        ) -> impl Future<Output = Result<FoundPackageType, DiscoverError>> + Send {
+            let name = req.name().to_string();
+            {
+                let mut calls = self.calls.lock().unwrap_or_else(|err| err.into_inner());
+                *calls.entry(name.clone()).or_insert(0) += 1;
+            }
+            let result = self.rockspecs.get(&name).map_or_else(
+                || Err(DiscoverError::Search(SearchError::RockNotFound(req.clone()))),
+                |(content, rockspec)| {
+                    let package = RemotePackage::new(
+                        PackageSpec::new(req.name().clone(), rockspec.version().clone()),
+                        RemotePackageSource::RockspecContent(content.clone()),
+                        None,
+                    );
+                    Ok(FoundPackageType::Package(FoundPackage {
+                        package,
+                        rockspec: rockspec.clone(),
+                        artifact: None,
+                    }))
+                },
+            );
+            async move { result }
+        }
+    }
+
+    fn rockspec(package: &str, dependencies: &[&str]) -> String {
+        let dependencies = if dependencies.is_empty() {
+            String::new()
+        } else {
+            let list = dependencies
+                .iter()
+                .map(|dependency| format!("'{dependency}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("\ndependencies = {{ {list} }}")
+        };
+        format!(
+            "rockspec_format = '1.0'\npackage = '{package}'\nversion = '1.0.0-1'\nsource = {{ url = 'https://example.com/{package}.zip' }}{dependencies}"
+        )
+    }
+
+    fn install_spec(name: &str) -> PackageInstallSpec {
+        let package = match name.parse::<PackageReq>() {
+            Ok(package) => package,
+            Err(err) => panic!("invalid package req: {err}"),
+        };
+        PackageInstallSpec::new(package, EntryType::Entrypoint).build()
+    }
+
+    fn roots(spec: PackageInstallSpec) -> Artifacts<Vec<PackageInstallSpec>> {
+        Artifacts {
+            regular: Some(vec![spec]),
+            build: None,
+            test: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn diamond_is_discovered_once_per_package() {
+        let discover = MockDiscover::new(&[
+            rockspec("a", &["b", "c"]),
+            rockspec("b", &["d"]),
+            rockspec("c", &["d"]),
+            rockspec("d", &[]),
+        ]);
+
+        let resolved = match Resolver::with_max_inflight(&discover, 8)
+            .run(roots(install_spec("a")))
+            .await
+        {
+            Ok(resolved) => resolved,
+            Err(err) => panic!("resolution failed: {err}"),
+        };
+
+        assert_eq!(resolved.regular.as_ref().map(|rocks| rocks.len()), Some(4));
+        for name in ["a", "b", "c", "d"] {
+            assert_eq!(discover.calls(name), 1, "{name} should be discovered once");
+        }
+    }
+
+    #[tokio::test]
+    async fn cyclic_dependencies_are_rejected() {
+        let discover = MockDiscover::new(&[
+            rockspec("a", &["b"]),
+            rockspec("b", &["a"]),
+        ]);
+
+        let result = Resolver::with_max_inflight(&discover, 8)
+            .run(roots(install_spec("a")))
+            .await;
+
+        assert!(matches!(result, Err(ResolveError::CyclicDependency(_))));
+    }
 }

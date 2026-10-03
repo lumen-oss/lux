@@ -31,14 +31,6 @@ impl<T> Default for Artifacts<T> {
 }
 
 impl<T> Artifacts<T> {
-    pub(crate) fn get(&self, section: LockedPackageLockType) -> Option<&T> {
-        match section {
-            LockedPackageLockType::Regular => self.regular.as_ref(),
-            LockedPackageLockType::Build => self.build.as_ref(),
-            LockedPackageLockType::Test => self.test.as_ref(),
-        }
-    }
-
     pub(crate) fn get_mut(&mut self, section: LockedPackageLockType) -> &mut Option<T> {
         match section {
             LockedPackageLockType::Regular => &mut self.regular,
