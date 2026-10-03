@@ -16,10 +16,8 @@ use crate::{
 };
 
 use super::{
-    build::Build,
-    discover::FindPackageFromLuarocks,
-    download_sources_and_hash::DownloadSourcesAndHash,
-    emit_lockfile::EmitLockfile,
+    build::Build, discover::FindPackageFromLuarocks,
+    download_sources_and_hash::DownloadSourcesAndHash, emit_lockfile::LockfileHandle,
     resolve::ResolvePackageDependencies,
 };
 
@@ -58,9 +56,7 @@ where
     State: install_workspace_dependencies_builder::State
         + install_workspace_dependencies_builder::IsComplete,
 {
-    pub async fn install(
-        self,
-    ) -> Result<Vec<LockedPackage>, InstallWorkspaceDependenciesError> {
+    pub async fn install(self) -> Result<Vec<LockedPackage>, InstallWorkspaceDependenciesError> {
         let args = self._build();
         let config = args.config;
         let workspace = args.workspace;
@@ -73,16 +69,14 @@ where
         let mut regular = gather_dependencies(workspace, DependencyKind::Regular)?;
         regular.extend(args.packages);
         let build = gather_dependencies(workspace, DependencyKind::Build)?;
-        let test = if args.test.unwrap_or(false) {
-            gather_dependencies(workspace, DependencyKind::Test)?
-        } else {
-            Vec::new()
-        };
 
-        let resolved = ResolvePackageDependencies::new(&discover, config)
+        let mut resolve = ResolvePackageDependencies::new(&discover, config)
             .packages(regular)
-            .build_packages(build)
-            .test_packages(test)
+            .build_packages(build);
+        if args.test.unwrap_or(false) {
+            resolve = resolve.test_packages(gather_dependencies(workspace, DependencyKind::Test)?);
+        }
+        let resolved = resolve
             .resolve()
             .await
             .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
@@ -95,9 +89,7 @@ where
 
         if !no_lock {
             let mut lockfile = workspace.lockfile()?.write_guard();
-            EmitLockfile::new(&mut lockfile)
-                .artifacts(&artifacts)
-                .emit();
+            LockfileHandle::from_artifacts(&artifacts).commit(&mut lockfile);
         }
 
         let regular_tree = workspace.tree(config)?;
@@ -107,17 +99,23 @@ where
         // TODO(vhyrro): Make parallel
         // make sure to build build dependencies first
         Build::new(config, &build_tree)
-            .packages(artifacts.build.into_values().collect())
+            .packages(artifacts.build.unwrap_or_default().into_values().collect())
             .build()
             .await
             .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
         let built = Build::new(config, &regular_tree)
-            .packages(artifacts.regular.into_values().collect())
+            .packages(
+                artifacts
+                    .regular
+                    .unwrap_or_default()
+                    .into_values()
+                    .collect(),
+            )
             .build()
             .await
             .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
         Build::new(config, &test_tree)
-            .packages(artifacts.test.into_values().collect())
+            .packages(artifacts.test.unwrap_or_default().into_values().collect())
             .build()
             .await
             .map_err(|err| InstallWorkspaceDependenciesError::Pipeline(Box::new(err)))?;
@@ -212,11 +210,15 @@ mod tests {
 
         let lockfile = workspace.lockfile().unwrap();
         let rocks = lockfile.rocks(&LockedPackageLockType::Regular);
-        assert!(rocks
-            .values()
-            .any(|pkg| pkg.name().to_string() == "lua-cjson"));
-        assert!(rocks
-            .values()
-            .any(|pkg| pkg.name().to_string() == "plenary.nvim"));
+        assert!(
+            rocks
+                .values()
+                .any(|pkg| pkg.name().to_string() == "lua-cjson")
+        );
+        assert!(
+            rocks
+                .values()
+                .any(|pkg| pkg.name().to_string() == "plenary.nvim")
+        );
     }
 }

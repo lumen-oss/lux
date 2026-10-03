@@ -19,7 +19,7 @@ use crate::{
         RemotePackageSourceUrl,
     },
     lua_rockspec::RemoteLuaRockspec,
-    operations::{unpack_src_rock, FetchSrc, RemotePackageSourceMetadata},
+    operations::{FetchSrc, RemotePackageSourceMetadata, unpack_src_rock},
     package::PackageSpec,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
@@ -27,8 +27,8 @@ use crate::{
 };
 
 use super::{
-    resolve::{ResolvedArtifacts, ResolvedPackage},
     Artifacts,
+    resolve::{ResolvedArtifacts, ResolvedPackage},
 };
 
 pub(crate) enum PackageSource {
@@ -81,6 +81,9 @@ where
 
         futures::stream::iter(args.resolved)
             .then(|(section, packages)| async move {
+                let Some(packages) = packages else {
+                    return Ok((section, None));
+                };
                 let packages = futures::stream::iter(packages)
                     .then(|(id, package)| async move {
                         download_sources_and_hash(config, package)
@@ -89,7 +92,7 @@ where
                     })
                     .try_collect::<HashMap<_, _>>()
                     .await?;
-                Ok((section, packages))
+                Ok((section, Some(packages)))
             })
             .try_collect()
             .await

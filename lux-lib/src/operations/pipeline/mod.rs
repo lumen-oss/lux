@@ -10,40 +10,70 @@ pub mod install_workspace;
 pub(crate) mod resolve;
 
 /// Packages grouped by the lockfile section they belong to.
-#[derive(Default)]
+///
+/// A `None` section was never requested and must be left untouched (e.g. not
+/// written to a lockfile), whereas `Some(empty)` means the section was resolved
+/// and is legitimately empty.
 pub(crate) struct Artifacts<T> {
-    pub(crate) regular: T,
-    pub(crate) build: T,
-    pub(crate) test: T,
+    pub(crate) regular: Option<T>,
+    pub(crate) build: Option<T>,
+    pub(crate) test: Option<T>,
+}
+
+impl<T> Default for Artifacts<T> {
+    fn default() -> Self {
+        Self {
+            regular: None,
+            build: None,
+            test: None,
+        }
+    }
 }
 
 impl<T> Artifacts<T> {
-    pub(crate) fn get(&self, section: LockedPackageLockType) -> &T {
+    pub(crate) fn get(&self, section: LockedPackageLockType) -> Option<&T> {
         match section {
-            LockedPackageLockType::Regular => &self.regular,
-            LockedPackageLockType::Build => &self.build,
-            LockedPackageLockType::Test => &self.test,
+            LockedPackageLockType::Regular => self.regular.as_ref(),
+            LockedPackageLockType::Build => self.build.as_ref(),
+            LockedPackageLockType::Test => self.test.as_ref(),
         }
     }
 
-    pub(crate) fn get_mut(&mut self, section: LockedPackageLockType) -> &mut T {
+    pub(crate) fn get_mut(&mut self, section: LockedPackageLockType) -> &mut Option<T> {
         match section {
             LockedPackageLockType::Regular => &mut self.regular,
             LockedPackageLockType::Build => &mut self.build,
             LockedPackageLockType::Test => &mut self.test,
         }
     }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (LockedPackageLockType, Option<&T>)> {
+        [
+            (LockedPackageLockType::Regular, self.regular.as_ref()),
+            (LockedPackageLockType::Build, self.build.as_ref()),
+            (LockedPackageLockType::Test, self.test.as_ref()),
+        ]
+        .into_iter()
+    }
 }
 
-impl<T: Default> Extend<(LockedPackageLockType, T)> for Artifacts<T> {
-    fn extend<I: IntoIterator<Item = (LockedPackageLockType, T)>>(&mut self, iter: I) {
+impl<T> Extend<(LockedPackageLockType, Option<T>)> for Artifacts<T> {
+    fn extend<I: IntoIterator<Item = (LockedPackageLockType, Option<T>)>>(&mut self, iter: I) {
         iter.into_iter()
             .for_each(|(section, value)| *self.get_mut(section) = value);
     }
 }
 
+impl<T> FromIterator<(LockedPackageLockType, Option<T>)> for Artifacts<T> {
+    fn from_iter<I: IntoIterator<Item = (LockedPackageLockType, Option<T>)>>(iter: I) -> Self {
+        let mut artifacts = Artifacts::default();
+        artifacts.extend(iter);
+        artifacts
+    }
+}
+
 impl<T> IntoIterator for Artifacts<T> {
-    type Item = (LockedPackageLockType, T);
+    type Item = (LockedPackageLockType, Option<T>);
     type IntoIter = std::array::IntoIter<Self::Item, 3>;
 
     fn into_iter(self) -> Self::IntoIter {
