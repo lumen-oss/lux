@@ -6,7 +6,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::process::Command;
-use tracing::{info_span, Instrument};
+use tracing::{Instrument, info_span};
 
 use crate::{
     build::{

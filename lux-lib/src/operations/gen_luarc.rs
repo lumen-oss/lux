@@ -2,10 +2,10 @@ use crate::config::Config;
 use crate::fs;
 use crate::lockfile::LockedPackageLockType;
 use crate::tree::InstallTree;
+use crate::workspace::LUX_DIR_NAME;
 use crate::workspace::Workspace;
 use crate::workspace::WorkspaceError;
 use crate::workspace::WorkspaceTreeError;
-use crate::workspace::LUX_DIR_NAME;
 use bon::Builder;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -87,7 +87,7 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LockedPackageLockType::Regular)
         .rocks()
         .values()
-        .map(|dependency| dependency_tree.layout_for(dependency).src)
+        .map(|dependency| dependency_tree.layout_for(&dependency.spec).src)
         .filter(|dir| dir.is_dir())
         .filter_map(|dependency_dir| diff_paths(dependency_dir, workspace.root()));
 
@@ -96,7 +96,11 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LockedPackageLockType::Test)
         .rocks()
         .values()
-        .map(|dependency| test_dependency_tree.layout_for(dependency).src)
+        .map(|dependency| {
+            test_dependency_tree
+                .layout_for(&dependency.spec)
+                .src
+        })
         .filter(|dir| dir.is_dir())
         .filter_map(|test_dependency_dir| diff_paths(test_dependency_dir, workspace.root()));
 

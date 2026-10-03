@@ -16,7 +16,7 @@ use crate::{
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
-    project::{project_toml::LocalProjectTomlValidationError, Project},
+    project::{Project, project_toml::LocalProjectTomlValidationError},
     rockspec::Rockspec,
     tree::{InstallTree, TreeError},
 };
@@ -154,7 +154,7 @@ where
         std::env::current_dir()?.join(output)
     };
 
-    let lib_root = args.tree.layout_for(&package).lib;
+    let lib_root = args.tree.layout_for(&package.spec).lib;
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
 
     let work_dir = fs::tempfile::tempdir()?;
@@ -173,7 +173,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
     let c_dylib_ext = c_dylib_extension();
 
     for package in tree.list()?.values().flatten() {
-        let layout = tree.layout_for(package);
+        let layout = tree.layout_for(&package.spec);
         if layout.src.is_dir() {
             let src_canonical = layout.src.canonicalize().unwrap_or(layout.src.clone());
             for path in WalkDir::new(&src_canonical)
@@ -539,10 +539,10 @@ local unpack = unpack or table.unpack
 mod tests {
     use super::*;
 
+    use assert_fs::TempDir;
     use assert_fs::fixture::PathCopy;
     #[cfg(target_os = "linux")]
     use assert_fs::prelude::{PathChild, PathCreateDir};
-    use assert_fs::TempDir;
 
     use crate::lua_installation::detect_installed_lua_version;
     use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
@@ -552,7 +552,6 @@ mod tests {
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         package::PackageSpec,
         remote_package_source::RemotePackageSource,
-        rockspec::RockBinaries,
     };
 
     #[cfg(target_os = "linux")]
@@ -568,7 +567,6 @@ mod tests {
         LockedPackage::from(
             &spec,
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             hashes,
@@ -587,8 +585,8 @@ mod tests {
         let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_a).unwrap();
-        let layout_a = tree.layout_for(&pkg_a);
+        tree.prepare(&pkg_a.spec).unwrap();
+        let layout_a = tree.layout_for(&pkg_a.spec);
         staging
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
@@ -598,8 +596,8 @@ mod tests {
             .unwrap();
 
         let pkg_b = mk_dummy_package(PackageSpec::new("bar".into(), "2.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_b).unwrap();
-        let layout_b = tree.layout_for(&pkg_b);
+        tree.prepare(&pkg_b.spec).unwrap();
+        let layout_b = tree.layout_for(&pkg_b.spec);
         staging
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
@@ -629,14 +627,18 @@ mod tests {
         let files = collect_installed_files(&tree).unwrap();
 
         assert_eq!(files.src.len(), 2);
-        assert!(files
-            .src
-            .iter()
-            .all(|(_, p)| p.extension().is_some_and(|e| e == "lua")));
+        assert!(
+            files
+                .src
+                .iter()
+                .all(|(_, p)| p.extension().is_some_and(|e| e == "lua"))
+        );
         assert_eq!(files.lib.len(), 1);
-        assert!(files.lib[0]
-            .extension()
-            .is_some_and(|e| e == c_dylib_extension()));
+        assert!(
+            files.lib[0]
+                .extension()
+                .is_some_and(|e| e == c_dylib_extension())
+        );
     }
 
     #[tokio::test]

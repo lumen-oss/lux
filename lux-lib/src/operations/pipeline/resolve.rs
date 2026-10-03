@@ -265,7 +265,6 @@ async fn resolve_spec<D: FindPackageFromProvider>(
         build_dependencies,
         &spec.pin,
         &spec.opt,
-        rockspec.binaries(),
     );
 
     let resolved = ResolvedPackage {

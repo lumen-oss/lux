@@ -204,11 +204,11 @@ where
 
     let installed_packages: HashMap<LockedPackageId, LockedPackage> = built
         .iter()
-        .map(|pkg| (pkg.spec.id(), pkg.clone()))
+        .map(|pkg| (pkg.spec().id(), pkg.clone()))
         .collect();
     let installed_build_deps: HashMap<LockedPackageId, LockedPackage> = built_build_deps
         .iter()
-        .map(|pkg| (pkg.spec.id(), pkg.clone()))
+        .map(|pkg| (pkg.spec().id(), pkg.clone()))
         .collect();
 
     lockfile.map_then_flush(|lockfile| {
@@ -216,7 +216,7 @@ where
             lockfile.remove_by_id(&package.id());
         }
         for package in &built {
-            let entry_type = regular_entry_types[&package.spec.id()];
+            let entry_type = regular_entry_types[&package.spec().id()];
             lockfile.add_dependencies(package, entry_type, &installed_packages)?;
             lockfile.add_build_dependencies(package, &installed_build_deps)?;
         }
@@ -302,7 +302,7 @@ impl LockfileExt for &mut Lockfile<ReadWrite> {
             self.add_entrypoint(pkg);
         }
 
-        for dependency_id in pkg.spec.dependencies() {
+        for dependency_id in pkg.spec().dependencies() {
             self.add_dependency(
                 pkg,
                 installed_packages
@@ -326,7 +326,7 @@ This is likely a bug in Lux.
         pkg: &LockedPackage,
         build_dependencies: &HashMap<LockedPackageId, LockedPackage>,
     ) -> io::Result<()> {
-        for dependency_id in pkg.spec.build_dependencies() {
+        for dependency_id in pkg.spec().build_dependencies() {
             self.add_build_dependency(
                 pkg,
                 build_dependencies

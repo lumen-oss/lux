@@ -4,7 +4,7 @@ use super::{EntryType, InstallTree, RockLayout, Tree, TreeError};
 use crate::{
     config::Config,
     fs,
-    lockfile::{LockedPackage, Lockfile, ReadOnly},
+    lockfile::{LockedPackage, LockedPackageSpec, Lockfile, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageVersion},
 };
@@ -42,7 +42,7 @@ impl FlatDistTree {
         Ok(Self(tree))
     }
 
-    fn guard_no_conflicting_package(&self, package: &LockedPackage) -> Result<(), io::Error> {
+    fn guard_no_conflicting_package(&self, package: &LockedPackageSpec) -> Result<(), io::Error> {
         let lockfile = self.lockfile().map_err(io::Error::other)?;
         match lockfile.has_rock(&package.clone().into_package_req(), None) {
             Some(existing_package) => {
@@ -91,7 +91,7 @@ impl InstallTree for FlatDistTree {
         self.0.root()
     }
 
-    fn layout_for(&self, _package: &LockedPackage) -> RockLayout {
+    fn layout_for(&self, _package: &LockedPackageSpec) -> RockLayout {
         RockLayout::new(self.0.root(), self.0.bin())
     }
 
@@ -103,7 +103,7 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn prepare(&self, package: &LockedPackage) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError> {
         self.guard_no_conflicting_package(package)
             .map_err(TreeError::Io)?;
         let layout = self.layout_for(package);

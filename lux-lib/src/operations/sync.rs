@@ -6,15 +6,14 @@ use crate::{
     config::Config,
     fs,
     lockfile::{
-        FlushLockfileError, LockedPackage, LockedPackageLockType, Lockfile,
-        LockfileIntegrityError, PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy,
-        WorkspaceLockfile,
+        FlushLockfileError, LockedPackage, LockedPackageLockType, Lockfile, LockfileIntegrityError,
+        PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
-    operations::{self, pipeline::resolve::luarocks_build_backend_name, GenLuaRcError},
+    operations::{self, GenLuaRcError, pipeline::resolve::luarocks_build_backend_name},
     package::{PackageName, PackageReq},
-    project::{project_toml::LocalProjectTomlValidationError, ProjectError},
-    rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
+    project::{ProjectError, project_toml::LocalProjectTomlValidationError},
+    rockspec::{Rockspec, lua_dependency::LuaDependencySpec},
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
@@ -92,7 +91,7 @@ where
                     .flat_map(|rock| rock.build_dependencies())
                     .filter_map(|dep_id| test_build_lockfile.get(dep_id)),
             )
-            .map(|pkg| pkg.spec.as_package_req())
+            .map(|pkg| pkg.spec().as_package_req())
             .collect_vec();
         args.extra_packages.extend(transitive_build_dependencies);
 
@@ -245,8 +244,15 @@ async fn do_sync(
         Ok::<_, io::Error>(())
     })?;
 
-    install_missing_packages(args, &tree, &mut workspace_lockfile, lock_type, &package_sync_spec, &mut report)
-        .await?;
+    install_missing_packages(
+        args,
+        &tree,
+        &mut workspace_lockfile,
+        lock_type,
+        &package_sync_spec,
+        &mut report,
+    )
+    .await?;
 
     Ok(report)
 }
@@ -449,7 +455,7 @@ mod tests {
         config::ConfigBuilder, lockfile::LockedPackageLockType, package::PackageReq,
         workspace::Workspace,
     };
-    use assert_fs::{prelude::PathCopy, TempDir};
+    use assert_fs::{TempDir, prelude::PathCopy};
     use flaky_test::flaky_test;
     use std::path::PathBuf;
 
@@ -470,9 +476,11 @@ mod tests {
         assert!(!report.added.is_empty());
 
         let lockfile_after_sync = workspace.lockfile().unwrap();
-        assert!(!lockfile_after_sync
-            .rocks(&LockedPackageLockType::Regular)
-            .is_empty());
+        assert!(
+            !lockfile_after_sync
+                .rocks(&LockedPackageLockType::Regular)
+                .is_empty()
+        );
     }
 
     #[flaky_test(tokio, times = 5)]
@@ -496,15 +504,19 @@ mod tests {
                 .unwrap();
             assert!(report.removed.is_empty());
             assert!(!report.added.is_empty());
-            assert!(report
-                .added
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "toml-edit"));
+            assert!(
+                report
+                    .added
+                    .iter()
+                    .any(|pkg| pkg.name().to_string() == "toml-edit")
+            );
         }
         let lockfile_after_sync = workspace.lockfile().unwrap();
-        assert!(!lockfile_after_sync
-            .rocks(&LockedPackageLockType::Regular)
-            .is_empty());
+        assert!(
+            !lockfile_after_sync
+                .rocks(&LockedPackageLockType::Regular)
+                .is_empty()
+        );
     }
 
     #[flaky_test(tokio, times = 5)]
@@ -529,15 +541,19 @@ mod tests {
                 .unwrap();
             assert!(report.removed.is_empty());
             assert!(!report.added.is_empty());
-            assert!(report
-                .added
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "toml-edit"));
+            assert!(
+                report
+                    .added
+                    .iter()
+                    .any(|pkg| pkg.name().to_string() == "toml-edit")
+            );
         }
         let lockfile_after_sync = workspace.lockfile().unwrap();
-        assert!(!lockfile_after_sync
-            .rocks(&LockedPackageLockType::Regular)
-            .is_empty());
+        assert!(
+            !lockfile_after_sync
+                .rocks(&LockedPackageLockType::Regular)
+                .is_empty()
+        );
     }
 
     #[flaky_test(tokio, times = 5)]
@@ -563,8 +579,10 @@ mod tests {
         assert!(report.added.is_empty());
 
         let lockfile_after_sync = workspace.lockfile().unwrap();
-        assert!(!lockfile_after_sync
-            .rocks(&LockedPackageLockType::Regular)
-            .is_empty());
+        assert!(
+            !lockfile_after_sync
+                .rocks(&LockedPackageLockType::Regular)
+                .is_empty()
+        );
     }
 }

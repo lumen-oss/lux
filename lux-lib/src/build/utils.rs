@@ -1015,9 +1015,11 @@ mod tests {
         #[cfg(unix)]
         set_executable_permissions(&script_path).await.unwrap();
 
-        assert!(Command::new(script_path.to_string_lossy().to_string())
-            .status()
-            .await
-            .is_ok_and(|status| status.success()));
+        assert!(
+            Command::new(script_path.to_string_lossy().to_string())
+                .status()
+                .await
+                .is_ok_and(|status| status.success())
+        );
     }
 }

@@ -192,7 +192,7 @@ mod tests {
             .unwrap();
         let package = package.first().unwrap();
         let tree = workspace.tree(&config).unwrap();
-        let src_dir = tree.layout_for(package).src;
+        let src_dir = tree.layout_for(&package.spec).src;
         assert!(src_dir.join("init.lua").is_file());
     }
 }

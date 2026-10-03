@@ -540,10 +540,9 @@ mod tests {
     use super::*;
     use crate::{
         config::ConfigBuilder,
-        lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{LockedPackage, LockConstraint, LockedPackageSpec, OptState, PinnedState},
         operations::unpack_rockspec,
         remote_package_source::RemotePackageSource,
-        rockspec::RockBinaries,
     };
     use assert_fs::prelude::PathCopy;
 
@@ -576,13 +575,12 @@ mod tests {
             Vec::new(),
             &PinnedState::Unpinned,
             &OptState::Required,
-            RockBinaries::default(),
         );
-        let package = LockedPackage {
+        let package = LockedPackage::new(
             spec,
             source,
-            source_url: None,
-            hashes: crate::lockfile::LockedPackageHashes {
+            None,
+            crate::lockfile::LockedPackageHashes {
                 rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
                     .parse()
                     .unwrap(),
@@ -590,7 +588,7 @@ mod tests {
                     .parse()
                     .unwrap(),
             },
-        };
+        );
         DownloadedPackage {
             package,
             rockspec,

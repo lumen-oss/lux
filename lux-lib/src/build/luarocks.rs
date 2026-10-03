@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::{
     config::Config,
-    lockfile::LockedPackage,
+    lockfile::LockedPackageSpec,
     luarocks::luarocks_installation::{ExecLuaRocksError, LuaRocksError, LuaRocksInstallation},
 };
 
@@ -82,7 +82,7 @@ async fn install<R: Rockspec, T: InstallTree>(
     rockspec: &R,
     luarocks_tree: &Path,
     tree: &T,
-    package: &LockedPackage,
+    package: &LockedPackageSpec,
     config: &Config,
 ) -> Result<BuildInfo, LuarocksBuildError> {
     let layout = tree.layout_for(package);
