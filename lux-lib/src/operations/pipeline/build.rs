@@ -105,6 +105,7 @@ where
                 rockspec,
                 entry_type,
                 artifact,
+                temp_dir: _temp_dir,
             } = downloaded;
 
             let is_entrypoint = entry_type.is_entrypoint();
@@ -113,12 +114,12 @@ where
             let opt = package.spec.opt();
 
             let pkg = match artifact {
-                PackageSource::SourceTree(dir) => deploy(
+                PackageSource::SourceDir(path) => deploy(
                     &rockspec,
                     args.tree,
                     package,
                     &lua,
-                    dir.path(),
+                    &path,
                     entry_type,
                     args.config,
                     behaviour,

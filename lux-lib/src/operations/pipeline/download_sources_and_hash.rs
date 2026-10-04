@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::io::Cursor;
+use std::path::PathBuf;
 
 use bon::Builder;
 use bytes::Bytes;
@@ -32,7 +33,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub(crate) enum PackageSource {
-    SourceTree(std::sync::Arc<TempDir>),
+    SourceDir(PathBuf),
     PackedRock(Bytes),
 }
 
@@ -41,6 +42,7 @@ pub(crate) struct DownloadedPackage {
     pub(crate) rockspec: RemoteLuaRockspec,
     pub(crate) entry_type: EntryType,
     pub(crate) artifact: PackageSource,
+    pub(crate) temp_dir: Option<TempDir>,
 }
 
 pub(crate) type DownloadSourcesAndHashArtifacts =
@@ -139,7 +141,7 @@ async fn download_sources_and_hash(
 
     let name = spec.name().to_string();
 
-    let (package, artifact) = match artifact {
+    let (package, artifact, temp_dir) = match artifact {
         Some(PackageSource::PackedRock(bytes)) => match &source {
             RemotePackageSource::LuarocksBinaryRock(url) => {
                 let binary_url = url.clone();
@@ -161,7 +163,7 @@ async fn download_sources_and_hash(
                     Some(RemotePackageSourceUrl::Url { url: binary_url }),
                     hashes,
                 );
-                (package, PackageSource::PackedRock(bytes))
+                (package, PackageSource::PackedRock(bytes), None)
             }
             _ => {
                 let source_url = source_url
@@ -178,16 +180,16 @@ async fn download_sources_and_hash(
                     config,
                 )
                 .await?;
-                (package, PackageSource::SourceTree(std::sync::Arc::new(dir)))
+                let artifact = PackageSource::SourceDir(dir.path().to_path_buf());
+                (package, artifact, Some(dir))
             }
         },
-        Some(PackageSource::SourceTree(dir)) => {
+        Some(PackageSource::SourceDir(path)) => {
             let rockspec_hash = rockspec
                 .hash()
                 .await
                 .map_err(|err| DownloadSourcesAndHashError::Hash(name.clone(), err))?;
-            let source_hash = dir
-                .path()
+            let source_hash = path
                 .hash()
                 .await
                 .map_err(|err| DownloadSourcesAndHashError::Hash(name.clone(), err))?;
@@ -196,7 +198,7 @@ async fn download_sources_and_hash(
                 source: source_hash,
             };
             let package = LockedPackage::new(spec, source, source_url, hashes);
-            (package, PackageSource::SourceTree(dir))
+            (package, PackageSource::SourceDir(path), None)
         }
         None => {
             let (package, dir) = fetch_and_hash_source(
@@ -207,7 +209,8 @@ async fn download_sources_and_hash(
                 config,
             )
             .await?;
-            (package, PackageSource::SourceTree(std::sync::Arc::new(dir)))
+            let artifact = PackageSource::SourceDir(dir.path().to_path_buf());
+            (package, artifact, Some(dir))
         }
     };
 
@@ -216,6 +219,7 @@ async fn download_sources_and_hash(
         rockspec,
         entry_type,
         artifact,
+        temp_dir,
     })
 }
 
