@@ -30,8 +30,9 @@ use super::{
     Artifacts,
 };
 
+#[derive(Clone, Debug)]
 pub(crate) enum PackageSource {
-    SourceTree(TempDir),
+    SourceTree(std::sync::Arc<TempDir>),
     PackedRock(Bytes),
 }
 
@@ -177,7 +178,7 @@ async fn download_sources_and_hash(
                     config,
                 )
                 .await?;
-                (package, PackageSource::SourceTree(dir))
+                (package, PackageSource::SourceTree(std::sync::Arc::new(dir)))
             }
         },
         Some(PackageSource::SourceTree(dir)) => {
@@ -206,7 +207,7 @@ async fn download_sources_and_hash(
                 config,
             )
             .await?;
-            (package, PackageSource::SourceTree(dir))
+            (package, PackageSource::SourceTree(std::sync::Arc::new(dir)))
         }
     };
 

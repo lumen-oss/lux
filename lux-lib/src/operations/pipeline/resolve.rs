@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 
 use bon::Builder;
 use itertools::Itertools;
@@ -13,15 +14,16 @@ use crate::{
         RemotePackageSourceUrl,
     },
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
-    operations::{PackageInstallSpec, RemoteRockDownload},
-    package::{PackageName, PackageReq, RemotePackage},
+    operations::PackageInstallSpec,
+    package::{PackageName, PackageReq},
+    remote_package_db::RemotePackageDB,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
 };
 
 use super::{
-    discover::{DiscoverError, FindPackageFromProvider, FoundPackage, FoundPackageType},
+    discover::{DiscoverError, FoundPackage},
     download_sources_and_hash::PackageSource,
     Artifacts,
 };
@@ -85,18 +87,17 @@ pub enum ResolveError {
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct ResolvePackageDependencies<'a, D: FindPackageFromProvider> {
+pub(crate) struct ResolvePackageDependencies<'a> {
     #[builder(start_fn)]
-    pub(crate) discover: &'a D,
+    pub(crate) package_db: RemotePackageDB,
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     #[builder(field)]
     pub(crate) packages: Artifacts<Vec<PackageInstallSpec>>,
 }
 
-impl<D, State> ResolvePackageDependenciesBuilder<'_, D, State>
+impl<State> ResolvePackageDependenciesBuilder<'_, State>
 where
-    D: FindPackageFromProvider,
     State: resolve_package_dependencies_builder::State,
 {
     fn set(mut self, section: LockedPackageLockType, packages: Vec<PackageInstallSpec>) -> Self {
@@ -117,15 +118,14 @@ where
     }
 }
 
-impl<D, State> ResolvePackageDependenciesBuilder<'_, D, State>
+impl<State> ResolvePackageDependenciesBuilder<'_, State>
 where
-    D: FindPackageFromProvider,
     State: resolve_package_dependencies_builder::State
         + resolve_package_dependencies_builder::IsComplete,
 {
     pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, ResolveError> {
         let args = self._build();
-        Resolver::new(args.discover, args.config)
+        Resolver::new(args.package_db, args.config)
             .run(args.packages)
             .await
     }
@@ -164,8 +164,9 @@ struct Node {
 /// Owns the whole resolution graph while it is being discovered. Discovery futures run on
 /// the runtime (bounded by `Config::max_jobs`), but all shared state stays here, owned by a
 /// single task — no `Rc`, `RefCell`, or locks.
-struct Resolver<'a, D: FindPackageFromProvider> {
-    discover: &'a D,
+struct Resolver {
+    package_db: RemotePackageDB,
+    config: Arc<Config>,
     max_inflight: usize,
     joinset: JoinSet<(
         RequestKey,
@@ -178,16 +179,17 @@ struct Resolver<'a, D: FindPackageFromProvider> {
     resolved: ResolvedArtifacts,
 }
 
-impl<'a, D: FindPackageFromProvider> Resolver<'a, D> {
-    fn new(discover: &'a D, config: &Config) -> Self {
-        Self::with_max_inflight(discover, config.max_jobs())
+impl Resolver {
+    fn new(package_db: RemotePackageDB, config: &Config) -> Self {
+        Self::with_max_inflight(package_db, Arc::new(config.clone()), config.max_jobs())
     }
 
     /// Builds a resolver with an explicit in-flight bound. Used by tests, which do not
     /// construct a full [`Config`].
-    fn with_max_inflight(discover: &'a D, max_inflight: usize) -> Self {
+    fn with_max_inflight(package_db: RemotePackageDB, config: Arc<Config>, max_inflight: usize) -> Self {
         Self {
-            discover,
+            package_db,
+            config,
             max_inflight,
             joinset: JoinSet::new(),
             pending: VecDeque::new(),
@@ -240,10 +242,14 @@ impl<'a, D: FindPackageFromProvider> Resolver<'a, D> {
             let Some((key, spec)) = self.pending.pop_front() else {
                 break;
             };
-            let discover = D::clone(self.discover);
+            let package_db = self.package_db.clone();
+            let config = Arc::clone(&self.config);
             let task_spec = spec.clone();
             self.joinset.spawn(async move {
-                let result = find_package_from_provider(task_spec, discover).await;
+                let result = package_db
+                    .resolve(&task_spec, &config)
+                    .await
+                    .map_err(ResolveError::Discover);
                 (key, spec, result)
             });
         }
@@ -453,37 +459,6 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
     Ok(())
 }
 
-async fn find_package_from_provider<D: FindPackageFromProvider>(
-    spec: PackageInstallSpec,
-    discover: D,
-) -> Result<FoundPackage, ResolveError> {
-    if let Some(source) = &spec.source {
-        let download = RemoteRockDownload::from_package_req_and_source_spec(
-            spec.package.clone(),
-            source.clone(),
-        )
-        .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
-        let rockspec = download.rockspec().clone();
-        let package = RemotePackage::new(
-            spec.package.clone().try_into().map_err(|err| {
-                DiscoverError::Download(
-                    spec.package.clone(),
-                    Box::new(crate::operations::SearchAndDownloadError::from(err)),
-                )
-            })?,
-            download.rockspec_download().source.clone(),
-            download.rockspec_download().source_url.clone(),
-        );
-        return Ok(FoundPackage {
-            package,
-            rockspec,
-            artifact: None,
-        });
-    }
-
-    let FoundPackageType::Package(package) = discover.find(&spec.package).await?;
-    Ok(package)
-}
 
 fn build_dependency_specs(
     rockspec: &RemoteLuaRockspec,
@@ -520,74 +495,11 @@ fn build_dependency_specs(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::future::Future;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use super::*;
-    use crate::package::PackageSpec;
-    use crate::remote_package_db::SearchError;
-
-    #[derive(Clone)]
-    struct MockDiscover {
-        rockspecs: HashMap<String, (String, RemoteLuaRockspec)>,
-        calls: Arc<Mutex<HashMap<String, usize>>>,
-    }
-
-    impl MockDiscover {
-        fn new(rockspecs: &[String]) -> Self {
-            let mut map = HashMap::new();
-            for content in rockspecs {
-                let rockspec = match RemoteLuaRockspec::new(content) {
-                    Ok(rockspec) => rockspec,
-                    Err(err) => panic!("invalid test rockspec: {err}"),
-                };
-                map.insert(rockspec.package().to_string(), (content.clone(), rockspec));
-            }
-            Self {
-                rockspecs: map,
-                calls: Arc::new(Mutex::new(HashMap::new())),
-            }
-        }
-
-        fn calls(&self, name: &str) -> usize {
-            let calls = self.calls.lock().unwrap_or_else(|err| err.into_inner());
-            calls.get(name).copied().unwrap_or(0)
-        }
-    }
-
-    impl FindPackageFromProvider for MockDiscover {
-        fn find(
-            &self,
-            req: &PackageReq,
-        ) -> impl Future<Output = Result<FoundPackageType, DiscoverError>> + Send {
-            let name = req.name().to_string();
-            {
-                let mut calls = self.calls.lock().unwrap_or_else(|err| err.into_inner());
-                *calls.entry(name.clone()).or_insert(0) += 1;
-            }
-            let result = self.rockspecs.get(&name).map_or_else(
-                || {
-                    Err(DiscoverError::Search(SearchError::RockNotFound(
-                        req.clone(),
-                    )))
-                },
-                |(content, rockspec)| {
-                    let package = RemotePackage::new(
-                        PackageSpec::new(req.name().clone(), rockspec.version().clone()),
-                        RemotePackageSource::RockspecContent(content.clone()),
-                        None,
-                    );
-                    Ok(FoundPackageType::Package(FoundPackage {
-                        package,
-                        rockspec: rockspec.clone(),
-                        artifact: None,
-                    }))
-                },
-            );
-            async move { result }
-        }
-    }
+    use crate::config::ConfigBuilder;
+    use crate::package::{PackageSpec, RemotePackage};
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
         let dependencies = if dependencies.is_empty() {
@@ -602,6 +514,32 @@ mod tests {
         };
         format!(
             "rockspec_format = '1.0'\npackage = '{package}'\nversion = '1.0.0-1'\nsource = {{ url = 'https://example.com/{package}.zip' }}{dependencies}"
+        )
+    }
+
+    fn local_packages(rockspecs: &[String]) -> RemotePackageDB {
+        RemotePackageDB::from_local(
+            rockspecs
+                .iter()
+                .map(|content| {
+                    let rockspec = match RemoteLuaRockspec::new(content) {
+                        Ok(rockspec) => rockspec,
+                        Err(err) => panic!("invalid test rockspec: {err}"),
+                    };
+                    FoundPackage {
+                        package: RemotePackage::new(
+                            PackageSpec::new(
+                                rockspec.package().clone(),
+                                rockspec.version().clone(),
+                            ),
+                            RemotePackageSource::RockspecContent(content.clone()),
+                            None,
+                        ),
+                        rockspec,
+                        artifact: None,
+                    }
+                })
+                .collect(),
         )
     }
 
@@ -621,16 +559,28 @@ mod tests {
         }
     }
 
+    fn test_config() -> Arc<Config> {
+        let builder = match ConfigBuilder::new() {
+            Ok(builder) => builder,
+            Err(err) => panic!("invalid test config: {err}"),
+        };
+        let config = match builder.build() {
+            Ok(config) => config,
+            Err(err) => panic!("invalid test config: {err}"),
+        };
+        Arc::new(config)
+    }
+
     #[tokio::test]
-    async fn diamond_is_discovered_once_per_package() {
-        let discover = MockDiscover::new(&[
+    async fn diamond_is_resolved_once() {
+        let packages = local_packages(&[
             rockspec("a", &["b", "c"]),
             rockspec("b", &["d"]),
             rockspec("c", &["d"]),
             rockspec("d", &[]),
         ]);
 
-        let resolved = match Resolver::with_max_inflight(&discover, 8)
+        let resolved = match Resolver::with_max_inflight(packages, test_config(), 8)
             .run(roots(install_spec("a")))
             .await
         {
@@ -639,16 +589,13 @@ mod tests {
         };
 
         assert_eq!(resolved.regular.as_ref().map(|rocks| rocks.len()), Some(4));
-        for name in ["a", "b", "c", "d"] {
-            assert_eq!(discover.calls(name), 1, "{name} should be discovered once");
-        }
     }
 
     #[tokio::test]
     async fn cyclic_dependencies_are_rejected() {
-        let discover = MockDiscover::new(&[rockspec("a", &["b"]), rockspec("b", &["a"])]);
+        let packages = local_packages(&[rockspec("a", &["b"]), rockspec("b", &["a"])]);
 
-        let result = Resolver::with_max_inflight(&discover, 8)
+        let result = Resolver::with_max_inflight(packages, test_config(), 8)
             .run(roots(install_spec("a")))
             .await;
 
