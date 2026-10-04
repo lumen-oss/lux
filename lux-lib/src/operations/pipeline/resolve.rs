@@ -500,6 +500,7 @@ mod tests {
     use super::*;
     use crate::config::ConfigBuilder;
     use crate::package::{PackageSpec, RemotePackage};
+    use crate::remote_package_db::RemoteSource;
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
         let dependencies = if dependencies.is_empty() {
@@ -518,7 +519,7 @@ mod tests {
     }
 
     fn local_packages(rockspecs: &[String]) -> RemotePackageDB {
-        RemotePackageDB::from_local(
+        RemotePackageDB(vec![RemoteSource::Local(
             rockspecs
                 .iter()
                 .map(|content| {
@@ -540,7 +541,7 @@ mod tests {
                     }
                 })
                 .collect(),
-        )
+        )])
     }
 
     fn install_spec(name: &str) -> PackageInstallSpec {

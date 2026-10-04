@@ -1,4 +1,5 @@
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lockfile::LockedPackage,
     remote_package_db::RemotePackageDB,
@@ -32,6 +33,7 @@ where
     #[builder(setters(name = "_tree", vis = ""))]
     tree: T,
     package_db: Option<RemotePackageDB>,
+    behaviour: Option<BuildBehaviour>,
 }
 
 impl<'a, State> InstallBuilder<'a, Tree, State>
@@ -146,6 +148,7 @@ where
     let (packages, _lockfile) = InstallPackages::new(install.config, install.tree)
         .packages(packages)
         .maybe_package_db(install.package_db)
+        .maybe_behaviour(install.behaviour)
         .install()
         .await
         .map_err(InstallError::from)?;
