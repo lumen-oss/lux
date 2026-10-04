@@ -25,6 +25,7 @@ use crate::{
     operations::{
         self, PackageInstallSpec, UnpackError,
         pipeline::{
+            Artifacts,
             discover::FindPackageFromLuarocks,
             download_sources_and_hash::{
                 DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage,
@@ -122,115 +123,86 @@ where
 
 const CARGO_VENDOR_SUBDIR: &str = "cargo";
 
-/// The set of packages to vendor, resolved and materialized into sources.
-struct VendoredPackages {
-    packages: Vec<DownloadedPackage>,
-}
-
-impl VendoredPackages {
-    /// Resolves and materializes every dependency of the target, across all lock types.
-    async fn new(
-        target: &VendorTarget,
-        no_lock: bool,
-        config: &Config,
-    ) -> Result<Self, VendorError> {
-        let mut packages = Vec::new();
-        for lock_type in LockedPackageLockType::iter() {
-            let (package_db, install_specs) =
-                gather_install_specs(&lock_type, no_lock, target, config).await?;
-            packages.extend(
-                ResolveAndDownload::new(config, package_db, install_specs)
-                    .run()
-                    .await?,
-            );
-        }
-
-        // The lockfile may contain the same package (name@version) multiple times,
-        // with different constraints.
-        let packages = packages
-            .into_iter()
-            .unique_by(|pkg| {
-                (
-                    pkg.package.spec.name().clone(),
-                    pkg.package.spec.version().clone(),
-                )
-            })
-            .collect();
-
-        Ok(Self { packages })
-    }
-
-    /// Vendors the sources of all packages into `vendor_dir`.
-    async fn vendor_sources(&self, vendor_dir: &Path, config: &Config) -> Result<(), VendorError> {
-        futures::stream::iter(
-            self.packages
-                .iter()
-                .map(|package| vendor_package_sources(vendor_dir, package)),
-        )
-        .buffered(config.max_jobs())
-        .try_collect()
-        .await
-    }
-
-    /// Cargo-based build backends need their Cargo dependencies vendored too.
-    fn cargo_dependencies(&self) -> Vec<(PackageSpec, Option<PathBuf>, Vec<PathBuf>)> {
-        self.packages
-            .iter()
-            .filter_map(|package| {
-                let rockspec = &package.rockspec;
-                match rockspec.build().current_platform().build_backend {
-                    Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => {
-                        Some((
-                            package.package.spec.to_package(),
-                            rockspec.source().current_platform().unpack_dir.clone(),
-                            rockspec.build().current_platform().copy_directories.clone(),
-                        ))
-                    }
-                    _ => None,
-                }
-            })
-            .collect()
-    }
-}
-
-/// Resolves a set of packages and downloads (and hashes) their sources.
-struct ResolveAndDownload<'a> {
-    config: &'a Config,
+/// Resolves the requested packages and downloads (and hashes) their sources.
+async fn resolve_and_download(
+    config: &Config,
     package_db: RemotePackageDB,
-    install_specs: Vec<PackageInstallSpec>,
+    install_specs: Artifacts<Vec<PackageInstallSpec>>,
+) -> Result<Vec<DownloadedPackage>, VendorError> {
+    let discover =
+        FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
+
+    let Artifacts {
+        regular,
+        build,
+        test,
+    } = install_specs;
+    let mut resolve =
+        ResolvePackageDependencies::new(&discover, config).packages(regular.unwrap_or_default());
+    if let Some(build) = build {
+        resolve = resolve.build_packages(build);
+    }
+    if let Some(test) = test {
+        resolve = resolve.test_packages(test);
+    }
+    let resolved = resolve.resolve().await?;
+
+    let artifacts = DownloadSourcesAndHash::new(config)
+        .resolved(resolved)
+        .download_sources_and_hash()
+        .await?;
+
+    // The lockfile may contain the same package (name@version) multiple times,
+    // with different constraints.
+    Ok(artifacts
+        .into_iter()
+        .flat_map(|(_, packages)| packages)
+        .flat_map(HashMap::into_values)
+        .unique_by(|pkg| {
+            (
+                pkg.package.spec.name().clone(),
+                pkg.package.spec.version().clone(),
+            )
+        })
+        .collect())
 }
 
-impl<'a> ResolveAndDownload<'a> {
-    fn new(
-        config: &'a Config,
-        package_db: RemotePackageDB,
-        install_specs: Vec<PackageInstallSpec>,
-    ) -> Self {
-        Self {
-            config,
-            package_db,
-            install_specs,
-        }
-    }
+/// Vendors the sources of all packages into `vendor_dir`.
+async fn vendor_sources(
+    vendor_dir: &Path,
+    packages: &[DownloadedPackage],
+    config: &Config,
+) -> Result<(), VendorError> {
+    futures::stream::iter(
+        packages
+            .iter()
+            .map(|package| vendor_package_sources(vendor_dir, package)),
+    )
+    .buffered(config.max_jobs())
+    .try_collect()
+    .await
+}
 
-    async fn run(self) -> Result<Vec<DownloadedPackage>, VendorError> {
-        let discover =
-            FindPackageFromLuarocks::new(Arc::new(self.package_db), Arc::new(self.config.clone()))
-                .build();
-        let resolved = ResolvePackageDependencies::new(&discover, self.config)
-            .packages(self.install_specs)
-            .resolve()
-            .await?;
-        let artifacts = DownloadSourcesAndHash::new(self.config)
-            .resolved(resolved)
-            .download_sources_and_hash()
-            .await?;
-        Ok(artifacts
-            .into_iter()
-            .flat_map(|(_, packages)| packages)
-            .flat_map(HashMap::into_values)
-            .collect())
-    }
+/// Cargo-based build backends need their Cargo dependencies vendored too.
+fn cargo_dependencies(
+    packages: &[DownloadedPackage],
+) -> Vec<(PackageSpec, Option<PathBuf>, Vec<PathBuf>)> {
+    packages
+        .iter()
+        .filter_map(|package| {
+            let rockspec = &package.rockspec;
+            match rockspec.build().current_platform().build_backend {
+                Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => {
+                    Some((
+                        package.package.spec.to_package(),
+                        rockspec.source().current_platform().unpack_dir.clone(),
+                        rockspec.build().current_platform().copy_directories.clone(),
+                    ))
+                }
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
@@ -240,16 +212,17 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
     let target = args.target;
     let config = args.config;
 
-    let vendored = VendoredPackages::new(&target, no_lock, config).await?;
+    let (package_db, install_specs) = gather_install_specs(no_lock, &target, config).await?;
+    let packages = resolve_and_download(config, package_db, install_specs).await?;
 
-    let cargo_deps = vendored.cargo_dependencies();
+    let cargo_deps = cargo_dependencies(&packages);
 
     if !no_delete && vendor_dir.exists() {
         fs::tokio::remove_dir_all(&vendor_dir).await?;
     }
 
     let vendor_dir = Arc::new(vendor_dir);
-    vendored.vendor_sources(&vendor_dir, config).await?;
+    vendor_sources(&vendor_dir, &packages, config).await?;
     vendor_target_cargo_deps(&vendor_dir, &target, config).await?;
     for (dep, unpack_dir, copy_dirs) in cargo_deps {
         vendor_package_cargo_deps(&vendor_dir, &dep, &unpack_dir, &copy_dirs, config).await?;
@@ -258,47 +231,47 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
 }
 
 async fn gather_install_specs(
-    lock_type: &LockedPackageLockType,
     no_lock: bool,
     target: &VendorTarget,
     config: &Config,
-) -> Result<(RemotePackageDB, Vec<PackageInstallSpec>), VendorError> {
-    match &target {
-        VendorTarget::Workspace(workspace) => {
-            // Resolve against the project's lockfile if present, otherwise fall
-            // back to the remote package DB (e.g. for a project that has not
-            // yet generated a lockfile).
-            let lockfile = workspace.try_lockfile()?;
-            let package_db = match lockfile {
-                Some(lockfile) if !no_lock => lockfile.local_pkg_locks().into(),
-                _ => RemotePackageDB::from_config(config).await?,
-            };
-            let mut install_specs = Vec::new();
-            for project in workspace.members() {
-                let toml = project.toml().into_local()?;
-                push_dependencies(lock_type, &toml, &mut install_specs)?;
-                if *lock_type == LockedPackageLockType::Test {
-                    for test_spec_dependency in toml
-                        .test()
-                        .current_platform()
-                        .test_dependencies(project)
-                        .iter()
-                        .cloned()
-                        .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
-                    {
-                        install_specs.push(test_spec_dependency);
+) -> Result<(RemotePackageDB, Artifacts<Vec<PackageInstallSpec>>), VendorError> {
+    // Resolve against the project's lockfile if present, otherwise fall back to
+    // the remote package DB (e.g. for a project that has not yet generated a lockfile).
+    let package_db = match target {
+        VendorTarget::Workspace(workspace) => match workspace.try_lockfile()? {
+            Some(lockfile) if !no_lock => lockfile.local_pkg_locks().into(),
+            _ => RemotePackageDB::from_config(config).await?,
+        },
+        VendorTarget::Rockspec(_) => RemotePackageDB::from_config(config).await?,
+    };
+
+    let mut install_specs: Artifacts<Vec<PackageInstallSpec>> = Artifacts::default();
+    for lock_type in LockedPackageLockType::iter() {
+        let specs = install_specs.get_mut(lock_type).get_or_insert_with(Vec::new);
+        match target {
+            VendorTarget::Workspace(workspace) => {
+                for project in workspace.members() {
+                    let toml = project.toml().into_local()?;
+                    push_dependencies(&lock_type, &toml, specs)?;
+                    if lock_type == LockedPackageLockType::Test {
+                        specs.extend(
+                            toml.test()
+                                .current_platform()
+                                .test_dependencies(project)
+                                .iter()
+                                .cloned()
+                                .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build()),
+                        );
                     }
                 }
             }
-            Ok((package_db, install_specs))
-        }
-        VendorTarget::Rockspec(remote_lua_rockspec) => {
-            let package_db = RemotePackageDB::from_config(config).await?;
-            let mut install_specs = Vec::new();
-            push_dependencies(lock_type, remote_lua_rockspec, &mut install_specs)?;
-            Ok((package_db, install_specs))
+            VendorTarget::Rockspec(rockspec) => {
+                push_dependencies(&lock_type, rockspec, specs)?;
+            }
         }
     }
+
+    Ok((package_db, install_specs))
 }
 
 fn push_dependencies<R: Rockspec>(
