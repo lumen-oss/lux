@@ -165,15 +165,11 @@ mod tests {
 
         let lockfile = workspace.lockfile().unwrap();
         let rocks = lockfile.rocks(&LockedPackageLockType::Regular);
-        assert!(
-            rocks
-                .values()
-                .any(|pkg| pkg.name().to_string() == "lua-cjson")
-        );
-        assert!(
-            rocks
-                .values()
-                .any(|pkg| pkg.name().to_string() == "plenary.nvim")
-        );
+        assert!(rocks
+            .values()
+            .any(|pkg| pkg.name().to_string() == "lua-cjson"));
+        assert!(rocks
+            .values()
+            .any(|pkg| pkg.name().to_string() == "plenary.nvim"));
     }
 }

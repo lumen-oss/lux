@@ -14,7 +14,7 @@ use std::{
 use itertools::Itertools;
 
 use miette::Diagnostic;
-use serde::{Deserialize, Serialize, Serializer, de};
+use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use ssri::Integrity;
 use strum_macros::EnumIter;
@@ -27,8 +27,8 @@ use crate::package::{
     PackageVersionReqError, RemotePackageTypeFilterSpec,
 };
 use crate::remote_package_source::RemotePackageSource;
-use crate::rockspec::RockBinaries;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
+use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
 
 /// Bump this whenever an incompatible change is made to the lockfile format.
@@ -56,7 +56,11 @@ impl Display for PinnedState {
 
 impl From<bool> for PinnedState {
     fn from(value: bool) -> Self {
-        if value { Self::Pinned } else { Self::Unpinned }
+        if value {
+            Self::Pinned
+        } else {
+            Self::Unpinned
+        }
     }
 }
 
@@ -351,7 +355,6 @@ impl Display for RemotePackageSourceUrl {
 
 // TODO(vhyrro): Move to `package/local.rs`
 
-
 /// A package whose source has been downloaded and hashed, but which has not
 /// yet been installed into a tree.
 ///
@@ -398,7 +401,6 @@ impl LockedPackage {
             hashes,
         )
     }
-
 
     pub(crate) fn new(
         spec: LockedPackageSpec,
@@ -1120,7 +1122,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
             source: io::Error::other(err),
         })?;
 
-        fs::sync::write(&self.filepath, content).map_err(|err| FlushLockfileError {
+        fs::sync::write_atomic(&self.filepath, content).map_err(|err| FlushLockfileError {
             filepath: self.filepath.to_path_buf(),
             source: io::Error::other(err),
         })
@@ -1201,7 +1203,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
     fn flush(&self) -> io::Result<()> {
         let content = serde_json::to_string_pretty(&self)?;
 
-        fs::sync::write(&self.filepath, content).map_err(io::Error::other)?;
+        fs::sync::write_atomic(&self.filepath, content).map_err(io::Error::other)?;
 
         Ok(())
     }
@@ -1758,43 +1760,33 @@ mod tests {
         assert_eq!(sync_spec.to_add.len(), 1);
 
         // Should keep dependencies of neorg 8.8.1-1
-        assert!(
-            !sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "nvim-nio"
-                    && pkg.constraint()
-                        == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap()))
-        );
-        assert!(
-            !sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
-                    && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap()))
-        );
-        assert!(
-            !sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "plenary.nvim"
-                    && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap()))
-        );
-        assert!(
-            !sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "nui.nvim"
-                    && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap()))
-        );
-        assert!(
-            !sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
-                    && pkg.constraint()
-                        == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap()))
-        );
+        assert!(!sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "nvim-nio"
+                && pkg.constraint()
+                    == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
+        assert!(!sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
+                && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap())));
+        assert!(!sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "plenary.nvim"
+                && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap())));
+        assert!(!sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "nui.nvim"
+                && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap())));
+        assert!(!sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
+                && pkg.constraint()
+                    == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
     }
 
     #[test]
@@ -1814,50 +1806,38 @@ mod tests {
         // Should remove:
         // - neorg
         // - dependencies unique to neorg
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "neorg"
-                    && pkg.version() == &"8.8.1-1".parse().unwrap())
-        );
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "nvim-nio"
-                    && pkg.constraint()
-                        == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap()))
-        );
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
-                    && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap()))
-        );
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "plenary.nvim"
-                    && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap()))
-        );
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "nui.nvim"
-                    && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap()))
-        );
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
-                    && pkg.constraint()
-                        == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap()))
-        );
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "neorg"
+                && pkg.version() == &"8.8.1-1".parse().unwrap()));
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "nvim-nio"
+                && pkg.constraint()
+                    == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
+                && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap())));
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "plenary.nvim"
+                && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap())));
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "nui.nvim"
+                && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap())));
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
+                && pkg.constraint()
+                    == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
     }
 
     #[test]
@@ -1882,19 +1862,15 @@ mod tests {
             .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
         let expected: PackageVersionReq = ">=2.0.0".parse().unwrap();
-        assert!(
-            sync_spec
-                .to_add
-                .iter()
-                .any(|req| req.name().to_string() == "nvim-nio" && req.version_req() == &expected)
-        );
+        assert!(sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "nvim-nio" && req.version_req() == &expected));
 
-        assert!(
-            sync_spec
-                .to_remove
-                .iter()
-                .any(|pkg| pkg.name().to_string() == "nvim-nio")
-        );
+        assert!(sync_spec
+            .to_remove
+            .iter()
+            .any(|pkg| pkg.name().to_string() == "nvim-nio"));
     }
 
     #[test]
@@ -1927,26 +1903,20 @@ mod tests {
             .lock
             .package_sync_spec(&packages, &SyncStrategy::EnsureInstalled(&tree));
 
-        assert!(
-            !sync_spec
-                .to_add
-                .iter()
-                .any(|req| req.name().to_string() == "neorg")
-        );
+        assert!(!sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "neorg"));
 
-        assert!(
-            sync_spec
-                .to_add
-                .iter()
-                .any(|req| req.name().to_string() == "lua-cjson")
-        );
+        assert!(sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "lua-cjson"));
 
-        assert!(
-            sync_spec
-                .to_add
-                .iter()
-                .any(|req| req.name().to_string() == "nonexistent")
-        );
+        assert!(sync_spec
+            .to_add
+            .iter()
+            .any(|req| req.name().to_string() == "nonexistent"));
     }
 
     #[test]
@@ -1960,10 +1930,12 @@ mod tests {
             "#
             );
 
-            assert!(
-                super::parse_lockfile::<Lockfile<ReadOnly>>(&lockfile, Path::new("lux.lock"), "")
-                    .is_err()
-            );
+            assert!(super::parse_lockfile::<Lockfile<ReadOnly>>(
+                &lockfile,
+                Path::new("lux.lock"),
+                ""
+            )
+            .is_err());
         }
     }
 }

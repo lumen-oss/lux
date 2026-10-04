@@ -1,7 +1,7 @@
 use clap::Args;
 use lux_lib::{
     config::Config,
-    operations::{GenLuaRc, pipeline::install_workspace::InstallWorkspaceDependencies},
+    operations::{pipeline::install_workspace::InstallWorkspaceDependencies, GenLuaRc},
     workspace::Workspace,
 };
 

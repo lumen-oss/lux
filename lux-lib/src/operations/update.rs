@@ -19,8 +19,8 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use super::{
-    InstallError, PackageInstallSpec, RemoveError, SyncError, Uninstall,
-    pipeline::install_packages::InstallPackages,
+    pipeline::install_packages::InstallPackages, InstallError, PackageInstallSpec, RemoveError,
+    SyncError, Uninstall,
 };
 
 #[derive(Error, Debug, Diagnostic)]

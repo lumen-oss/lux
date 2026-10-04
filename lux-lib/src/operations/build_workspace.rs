@@ -3,18 +3,18 @@ use crate::{
     lockfile::LockedPackage,
     lua_installation::{LuaInstallation, LuaInstallationError},
     operations::{
-        GenLuaRc, GenLuaRcError,
         pipeline::{
             build_project::{BuildProject, BuildProjectError},
             install_workspace::{InstallWorkspaceDependencies, InstallWorkspaceDependenciesError},
         },
+        GenLuaRc, GenLuaRcError,
     },
     package::PackageName,
     workspace::{Workspace, WorkspaceError},
 };
 use bon::Builder;
 use thiserror::Error;
-use tracing::{Instrument, info_span};
+use tracing::{info_span, Instrument};
 
 #[derive(Debug, Error, miette::Diagnostic)]
 #[non_exhaustive]

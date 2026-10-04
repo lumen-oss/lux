@@ -16,7 +16,7 @@ use crate::{
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
-    project::{Project, project_toml::LocalProjectTomlValidationError},
+    project::{project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
     tree::{InstallTree, TreeError},
 };
@@ -539,10 +539,10 @@ local unpack = unpack or table.unpack
 mod tests {
     use super::*;
 
-    use assert_fs::TempDir;
     use assert_fs::fixture::PathCopy;
     #[cfg(target_os = "linux")]
     use assert_fs::prelude::{PathChild, PathCreateDir};
+    use assert_fs::TempDir;
 
     use crate::lua_installation::detect_installed_lua_version;
     use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
@@ -627,18 +627,14 @@ mod tests {
         let files = collect_installed_files(&tree).unwrap();
 
         assert_eq!(files.src.len(), 2);
-        assert!(
-            files
-                .src
-                .iter()
-                .all(|(_, p)| p.extension().is_some_and(|e| e == "lua"))
-        );
+        assert!(files
+            .src
+            .iter()
+            .all(|(_, p)| p.extension().is_some_and(|e| e == "lua")));
         assert_eq!(files.lib.len(), 1);
-        assert!(
-            files.lib[0]
-                .extension()
-                .is_some_and(|e| e == c_dylib_extension())
-        );
+        assert!(files.lib[0]
+            .extension()
+            .is_some_and(|e| e == c_dylib_extension()));
     }
 
     #[tokio::test]

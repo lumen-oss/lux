@@ -10,7 +10,7 @@ use lux_lib::{
     rockspec::Rockspec,
     tree::{InstallTree, RockMatches, Tree},
 };
-use miette::{Context, IntoDiagnostic, Result, miette};
+use miette::{miette, Context, IntoDiagnostic, Result};
 use std::io::Read;
 use std::path::Path;
 use url::Url;

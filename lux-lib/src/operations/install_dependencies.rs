@@ -6,7 +6,7 @@ use crate::{
     lockfile::LockedPackage,
     lua_installation::LuaInstallation,
     luarocks::luarocks_installation::LuaRocksInstallation,
-    operations::{InstallError, pipeline::install_packages::InstallPackages},
+    operations::{pipeline::install_packages::InstallPackages, InstallError},
     project::project_toml::LocalProjectToml,
     rockspec::Rockspec,
     tree::{self, InstallTree},
@@ -30,9 +30,9 @@ where
 }
 
 impl<
-    T: InstallTree + Sync + Send + Clone + 'static,
-    State: install_dependencies_builder::State + install_dependencies_builder::IsComplete,
-> InstallDependenciesBuilder<'_, T, State>
+        T: InstallTree + Sync + Send + Clone + 'static,
+        State: install_dependencies_builder::State + install_dependencies_builder::IsComplete,
+    > InstallDependenciesBuilder<'_, T, State>
 {
     /// Installs the configured dependencies and build dependencies into [`Self::tree`],
     /// returning the installed regular dependencies.

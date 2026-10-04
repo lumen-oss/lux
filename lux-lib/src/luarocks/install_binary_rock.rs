@@ -6,9 +6,9 @@ use std::{
 
 use crate::{
     build::{
-        BuildBehaviour,
         external_dependency::{ExternalDependencyError, ExternalDependencyInfo},
         utils::recursive_copy_dir,
+        BuildBehaviour,
     },
     config::Config,
     hash::HasIntegrity,
@@ -58,7 +58,9 @@ pub enum InstallBinaryRockError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     RockManifestError(#[from] RockManifestError),
-    #[error("the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}")]
+    #[error(
+        "the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}"
+    )]
     NotAFileOrDirectory(String, Box<std::fs::Metadata>),
 }
 
@@ -253,7 +255,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder,
-        operations::{DownloadedPackedRockBytes, unpack_rockspec},
+        operations::{unpack_rockspec, DownloadedPackedRockBytes},
     };
 
     use super::*;

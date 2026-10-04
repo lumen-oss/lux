@@ -19,7 +19,7 @@ use crate::{
     lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, PinnedState},
     lua_installation::LuaInstallation,
     lua_rockspec::BuildBackendSpec,
-    operations::{FetchSrcError, pipeline::download_sources_and_hash::fetch_and_hash_source},
+    operations::{pipeline::download_sources_and_hash::fetch_and_hash_source, FetchSrcError},
     remote_package_source::RemotePackageSource,
 };
 use bon::Builder;
@@ -40,7 +40,7 @@ use source::SourceBuildError;
 use ssri::Integrity;
 use thiserror::Error;
 use treesitter_parser::TreesitterBuildError;
-use utils::{CompileCFilesError, InstallBinaryError, recursive_copy_dir};
+use utils::{recursive_copy_dir, CompileCFilesError, InstallBinaryError};
 
 mod builtin;
 mod cmake;
@@ -376,7 +376,9 @@ pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 
     let mut binaries = rockspec.binaries();
     binaries.extend(output.binaries);
-    tree.lockfile()?.write_guard().set_binaries(&package, binaries);
+    tree.lockfile()?
+        .write_guard()
+        .set_binaries(&package, binaries);
 
     install(
         rockspec,
@@ -535,9 +537,9 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::LockedPackageHashes,
-        lua_installation::{LuaInstallation, detect_installed_lua_version},
+        lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_version::LuaVersion,
-        operations::{DownloadedPackedRockBytes, unpack_rockspec},
+        operations::{unpack_rockspec, DownloadedPackedRockBytes},
         package::PackageSpec,
         project::Project,
         tree::Tree,
@@ -599,27 +601,21 @@ mod tests {
         assert!(foo_dir.is_dir());
         let foo_init = foo_dir.join("init.lua");
         assert!(foo_init.is_file());
-        assert!(
-            std::fs::read_to_string(&foo_init)
-                .unwrap()
-                .contains("return true")
-        );
+        assert!(std::fs::read_to_string(&foo_init)
+            .unwrap()
+            .contains("return true"));
         let foo_bar_dir = foo_dir.join("bar");
         assert!(foo_bar_dir.is_dir());
         let foo_bar_init = foo_bar_dir.join("init.lua");
         assert!(foo_bar_init.is_file());
-        assert!(
-            std::fs::read_to_string(&foo_bar_init)
-                .unwrap()
-                .contains("return true")
-        );
+        assert!(std::fs::read_to_string(&foo_bar_init)
+            .unwrap()
+            .contains("return true"));
         let foo_bar_baz = foo_bar_dir.join("baz.lua");
         assert!(foo_bar_baz.is_file());
-        assert!(
-            std::fs::read_to_string(&foo_bar_baz)
-                .unwrap()
-                .contains("return true")
-        );
+        assert!(std::fs::read_to_string(&foo_bar_baz)
+            .unwrap()
+            .contains("return true"));
         let bin_file = tree_dir
             .child(lua_version.to_string())
             .child("bin")

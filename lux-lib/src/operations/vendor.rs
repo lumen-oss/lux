@@ -23,16 +23,17 @@ use crate::{
     lockfile::LockedPackageLockType,
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{
-        self, PackageInstallSpec, UnpackError,
+        self,
         pipeline::{
-            Artifacts,
             discover::FindPackageFromLuarocks,
             download_sources_and_hash::{
                 DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage,
                 PackageSource,
             },
-            resolve::{ResolveError, ResolvePackageDependencies, luarocks_build_backend_name},
+            resolve::{luarocks_build_backend_name, ResolveError, ResolvePackageDependencies},
+            Artifacts,
         },
+        PackageInstallSpec, UnpackError,
     },
     package::{PackageReq, PackageSpec},
     project::project_toml::LocalProjectTomlValidationError,
@@ -192,13 +193,11 @@ fn cargo_dependencies(
         .filter_map(|package| {
             let rockspec = &package.rockspec;
             match rockspec.build().current_platform().build_backend {
-                Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => {
-                    Some((
-                        package.package.spec.to_package(),
-                        rockspec.source().current_platform().unpack_dir.clone(),
-                        rockspec.build().current_platform().copy_directories.clone(),
-                    ))
-                }
+                Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => Some((
+                    package.package.spec.to_package(),
+                    rockspec.source().current_platform().unpack_dir.clone(),
+                    rockspec.build().current_platform().copy_directories.clone(),
+                )),
                 _ => None,
             }
         })
@@ -247,7 +246,9 @@ async fn gather_install_specs(
 
     let mut install_specs: Artifacts<Vec<PackageInstallSpec>> = Artifacts::default();
     for lock_type in LockedPackageLockType::iter() {
-        let specs = install_specs.get_mut(lock_type).get_or_insert_with(Vec::new);
+        let specs = install_specs
+            .get_mut(lock_type)
+            .get_or_insert_with(Vec::new);
         match target {
             VendorTarget::Workspace(workspace) => {
                 for project in workspace.members() {
@@ -260,7 +261,9 @@ async fn gather_install_specs(
                                 .test_dependencies(project)
                                 .iter()
                                 .cloned()
-                                .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build()),
+                                .map(|dep| {
+                                    PackageInstallSpec::new(dep, EntryType::Entrypoint).build()
+                                }),
                         );
                     }
                 }
@@ -513,7 +516,7 @@ mod tests {
     use super::*;
     use crate::{
         config::ConfigBuilder,
-        lockfile::{LockedPackage, LockConstraint, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
         operations::unpack_rockspec,
         remote_package_source::RemotePackageSource,
     };
