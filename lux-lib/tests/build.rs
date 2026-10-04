@@ -1,17 +1,18 @@
 use std::path::PathBuf;
 
-use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
+use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{
-    build::{Build, BuildBehaviour::Force},
+    build::BuildBehaviour::Force,
     config::ConfigBuilder,
-    lua_installation::{detect_installed_lua_version, LuaInstallation},
+    lua_installation::{LuaInstallation, detect_installed_lua_version},
     lua_rockspec::RemoteLuaRockspec,
+    operations::pipeline::build_local::Build,
     tree,
 };
 use tokio::runtime::Builder;

@@ -4,18 +4,18 @@ use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    build::{Build, BuildBehaviour},
+    build::BuildBehaviour,
     config::Config,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{self, Install, PackageInstallSpec},
+    operations::{self, Install, PackageInstallSpec, pipeline::build_local::Build},
     package::PackageName,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
     workspace::Workspace,
 };
-use miette::{miette, IntoDiagnostic, Result};
+use miette::{IntoDiagnostic, Result, miette};
 use path_slash::PathBufExt;
 use tempfile::tempdir;
 

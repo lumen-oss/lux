@@ -5,8 +5,8 @@ use crate::{
     lua_rockspec::RemoteLuaRockspec,
     operations,
     package::{PackageReq, PackageSpec, RemotePackage},
-    remote_package_source::RemotePackageSource,
     remote_package_db::SearchError,
+    remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
 };
 

@@ -1,6 +1,7 @@
 use crate::lockfile::LockedPackageLockType;
 
 pub mod build;
+pub mod build_local;
 pub mod build_project;
 pub mod discover;
 pub mod download_sources_and_hash;

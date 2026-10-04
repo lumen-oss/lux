@@ -5,24 +5,24 @@ use std::{
 
 use clap::Args;
 use lux_lib::{
-    build::{Build, BuildBehaviour},
+    build::BuildBehaviour,
     config::{Config, ConfigBuilder},
     lockfile::LockedPackage,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{Install, InstallProject, PackageInstallSpec},
+    operations::{Install, InstallProject, PackageInstallSpec, pipeline::build_local::Build},
     package::{PackageName, PackageReq},
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
 };
 
-use miette::{miette, IntoDiagnostic, Result, WrapErr};
+use miette::{IntoDiagnostic, Result, WrapErr, miette};
 use path_slash::PathExt;
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use tokio::fs::{self, File};
 use walkdir::WalkDir;
-use zip::{write::SimpleFileOptions, ZipWriter};
+use zip::{ZipWriter, write::SimpleFileOptions};
 
 use crate::{
     args::{OutputFormat, PackageOrRockspec},
