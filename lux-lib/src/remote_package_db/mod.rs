@@ -21,7 +21,7 @@ use thiserror::Error;
 
 /// Package database, used to look up remote rocks
 #[derive(Clone, Debug)]
-pub struct RemotePackageDB(Vec<RemoteSource>);
+pub struct RemotePackageDB(pub(crate) Vec<RemoteSource>);
 
 #[derive(Clone, Debug)]
 pub(crate) enum RemoteSource {
@@ -76,14 +76,10 @@ impl RemotePackageDB {
         Ok(Self(vec![RemoteSource::LuarocksManifests(manifests)]))
     }
 
-    /// Builds a package database backed solely by local packages.
-    pub(crate) fn from_local(packages: Vec<FoundPackage>) -> Self {
-        Self(vec![RemoteSource::Local(packages)])
-    }
-
     /// Prepends local packages to the lookup order.
-    pub(crate) fn add_local(&mut self, packages: Vec<FoundPackage>) {
+    pub(crate) fn with_local(mut self, packages: Vec<FoundPackage>) -> Self {
         self.0.insert(0, RemoteSource::Local(packages));
+        self
     }
 
     fn find_in_source(

@@ -49,6 +49,7 @@ where
     test_packages: Option<Vec<PackageInstallSpec>>,
     packages: Vec<PackageInstallSpec>,
     package_db: Option<RemotePackageDB>,
+    behaviour: Option<BuildBehaviour>,
 }
 
 impl<'a, T, State> InstallPackagesBuilder<'a, T, State>
@@ -185,16 +186,19 @@ where
     // Build dependencies first, then the packages themselves.
     let built_build_deps = PipelineBuild::new(config, &build_tree)
         .packages(build_packages)
+        .maybe_behaviour(install.behaviour)
         .build()
         .await?;
     let built = PipelineBuild::new(config, tree)
         .packages(regular_packages)
+        .maybe_behaviour(install.behaviour)
         .build()
         .await?;
     if let Some(test_packages) = artifacts.test {
         let test_tree = tree.test_tree(config)?;
         PipelineBuild::new(config, &test_tree)
             .packages(test_packages.into_values().collect_vec())
+            .maybe_behaviour(install.behaviour)
             .build()
             .await?;
     }
