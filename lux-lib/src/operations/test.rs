@@ -1,7 +1,8 @@
 use std::{io, ops::Deref, path::PathBuf, process::Command};
 
 use super::{
-    BuildWorkspace, BuildWorkspaceError, Install, InstallError, PackageInstallSpec, Sync, SyncError,
+    pipeline::install_packages::{InstallPackages, InstallPackagesError},
+    BuildWorkspace, BuildWorkspaceError, PackageInstallSpec, Sync, SyncError,
 };
 use crate::fs;
 use crate::tree::InstallTree;
@@ -292,12 +293,12 @@ async fn run_project_tests(
 pub enum InstallTestDependenciesError {
     WorkspaceTree(#[from] WorkspaceTreeError),
     Tree(#[from] TreeError),
-    Install(#[from] Box<InstallError>),
+    Install(#[from] Box<InstallPackagesError>),
     PackageVersionReq(#[from] PackageVersionReqError),
 }
 
-impl From<InstallError> for InstallTestDependenciesError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for InstallTestDependenciesError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -365,9 +366,8 @@ async fn ensure_test_dependencies(
         )
         .collect();
 
-    Install::new(config)
+    InstallPackages::new(config, &test_tree)
         .packages(test_dependencies)
-        .tree(&test_tree)
         .install()
         .await?;
 

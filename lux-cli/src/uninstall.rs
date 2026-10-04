@@ -152,9 +152,8 @@ Reinstall?
                 .packages(dependencies)
                 .remove()
                 .await?;
-            operations::Install::new(&config)
+            operations::pipeline::install_packages::InstallPackages::new(&config, &tree)
                 .packages(reinstall_specs)
-                .tree(&tree)
                 .install()
                 .await?;
         } else {

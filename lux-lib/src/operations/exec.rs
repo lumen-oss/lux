@@ -5,7 +5,10 @@ use crate::{
     config::Config,
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
-    operations::{BuildWorkspace, BuildWorkspaceError, Install},
+    operations::{
+        pipeline::install_packages::{InstallPackages, InstallPackagesError},
+        BuildWorkspace, BuildWorkspaceError,
+    },
     package::{PackageReq, PackageVersionReqError},
     path::{Paths, PathsError},
     remote_package_db::RemotePackageDBError,
@@ -18,7 +21,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use which::which;
 
-use super::{InstallError, PackageInstallSpec};
+use super::PackageInstallSpec;
 
 /// Rocks package runner, providing fine-grained control
 /// over how a package should be run.
@@ -117,15 +120,15 @@ impl From<InstallCommandError> for ExecError {
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum InstallCommandError {
-    InstallError(#[from] Box<InstallError>),
+    InstallError(#[from] Box<InstallPackagesError>),
     PackageVersionReqError(#[from] PackageVersionReqError),
     RemotePackageDBError(#[from] RemotePackageDBError),
     Tree(#[from] TreeError),
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
 
-impl From<InstallError> for InstallCommandError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for InstallCommandError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::InstallError(Box::new(source))
     }
 }
@@ -226,9 +229,8 @@ async fn install_command(command: &str, config: &Config) -> Result<(), InstallCo
     )
     .build();
     let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
-    Install::new(config)
+    InstallPackages::new(config, &tree)
         .package(install_spec)
-        .tree(&tree)
         .install()
         .await?;
     Ok(())

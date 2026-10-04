@@ -355,11 +355,7 @@ impl Display for RemotePackageSourceUrl {
 
 // TODO(vhyrro): Move to `package/local.rs`
 
-/// A package whose source has been downloaded and hashed, but which has not
-/// yet been installed into a tree.
-///
-/// This is the value produced by the download stage. Installation adds the
-/// binaries discovered during the build, producing a [`LockedPackage`].
+/// A package whose source has been downloaded, hashed and which is installed in a tree.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LockedPackage {
     pub(crate) spec: LockedPackageSpec,
@@ -369,11 +365,7 @@ pub struct LockedPackage {
 }
 
 impl LockedPackage {
-    /// Returns a copy of this package with a different pin state.
-    ///
-    /// Pin state is part of the package id, so the result has a different
-    /// identity and must be re-inserted under its new id.
-    pub(crate) fn rekey_pinned(mut self, pinned: PinnedState) -> Self {
+    pub(crate) fn repin(mut self, pinned: PinnedState) -> Self {
         self.spec.pinned = pinned;
         self
     }
@@ -659,7 +651,7 @@ impl LockfilePermissions for ReadOnly {}
 impl LockfilePermissions for ReadWrite {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub(crate) struct LockedPackageLock {
+pub(crate) struct PackageLock {
     // NOTE: We cannot directly serialize to a `Sha256` object as they don't implement serde traits.
     // NOTE: We want to retain ordering of rocks when de/serializing.
     rocks: BTreeMap<LockedPackageId, LockedPackage>,
@@ -668,13 +660,21 @@ pub(crate) struct LockedPackageLock {
     entrypoints: BTreeMap<PackageName, LockedPackageId>,
 }
 
-impl LockedPackageLock {
-    pub(crate) fn insert(&mut self, package: LockedPackage, entrypoint: bool) {
-        if entrypoint {
-            self.entrypoints
-                .insert(package.name().clone(), package.id());
+impl PackageLock {
+    pub(crate) fn from_packages(
+        packages: impl Iterator<Item = (LockedPackage, EntryType)>,
+    ) -> Self {
+        let mut lock = Self::default();
+
+        for (package, entry_type) in packages {
+            if matches!(entry_type, EntryType::Entrypoint) {
+                lock.entrypoints
+                    .insert(package.name().clone(), package.id());
+            }
+            lock.rocks.insert(package.id(), package);
         }
-        self.rocks.insert(package.id(), package);
+
+        lock
     }
 
     fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
@@ -856,7 +856,7 @@ pub struct Lockfile<P: LockfilePermissions> {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     binaries: BTreeMap<LockedPackageId, RockBinaries>,
     #[serde(flatten)]
-    lock: LockedPackageLock,
+    lock: PackageLock,
 }
 
 #[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -874,12 +874,12 @@ pub struct WorkspaceLockfile<P: LockfilePermissions> {
     #[serde(skip)]
     _marker: PhantomData<P>,
     version: String,
-    #[serde(default, skip_serializing_if = "LockedPackageLock::is_empty")]
-    dependencies: LockedPackageLock,
-    #[serde(default, skip_serializing_if = "LockedPackageLock::is_empty")]
-    test_dependencies: LockedPackageLock,
-    #[serde(default, skip_serializing_if = "LockedPackageLock::is_empty")]
-    build_dependencies: LockedPackageLock,
+    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
+    dependencies: PackageLock,
+    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
+    test_dependencies: PackageLock,
+    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
+    build_dependencies: PackageLock,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -1025,7 +1025,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
         self.binaries.get(id)
     }
 
-    pub(crate) fn local_pkg_lock(&self) -> &LockedPackageLock {
+    pub(crate) fn local_pkg_lock(&self) -> &PackageLock {
         &self.lock
     }
 
@@ -1184,7 +1184,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
         }
     }
 
-    pub(crate) fn local_pkg_lock(&self, deps: &LockedPackageLockType) -> &LockedPackageLock {
+    pub(crate) fn local_pkg_lock(&self, deps: &LockedPackageLockType) -> &PackageLock {
         match deps {
             LockedPackageLockType::Regular => &self.dependencies,
             LockedPackageLockType::Test => &self.test_dependencies,
@@ -1192,7 +1192,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
         }
     }
 
-    pub(crate) fn local_pkg_locks(&self) -> Vec<LockedPackageLock> {
+    pub(crate) fn local_pkg_locks(&self) -> Vec<PackageLock> {
         vec![
             self.dependencies.clone(),
             self.test_dependencies.clone(),
@@ -1221,7 +1221,7 @@ impl Lockfile<ReadOnly> {
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
                     binaries: BTreeMap::new(),
-                    lock: LockedPackageLock::default(),
+                    lock: PackageLock::default(),
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
@@ -1326,9 +1326,9 @@ impl WorkspaceLockfile<ReadOnly> {
                     filepath: filepath.clone(),
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
-                    dependencies: LockedPackageLock::default(),
-                    test_dependencies: LockedPackageLock::default(),
-                    build_dependencies: LockedPackageLock::default(),
+                    dependencies: PackageLock::default(),
+                    test_dependencies: PackageLock::default(),
+                    build_dependencies: PackageLock::default(),
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
@@ -1461,7 +1461,7 @@ impl Lockfile<ReadWrite> {
         self.lock.remove_by_id(target)
     }
 
-    pub(crate) fn sync(&mut self, lock: &LockedPackageLock) {
+    pub(crate) fn sync(&mut self, lock: &PackageLock) {
         self.lock = lock.clone();
     }
 
@@ -1477,7 +1477,7 @@ impl WorkspaceLockfile<ReadWrite> {
         }
     }
 
-    pub(crate) fn sync(&mut self, lock: &LockedPackageLock, deps: &LockedPackageLockType) {
+    pub(crate) fn sync(&mut self, lock: &PackageLock, deps: &LockedPackageLockType) {
         match deps {
             LockedPackageLockType::Regular => {
                 self.dependencies = lock.clone();

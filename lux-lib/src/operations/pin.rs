@@ -78,7 +78,7 @@ pub fn set_pinned_state(
         .map(|dir| dir.path())
         .collect_vec();
 
-    let package = package.rekey_pinned(pin);
+    let package = package.repin(pin);
 
     if lockfile.get(&package.id()).is_some() {
         return Err(PinError::PinStateConflict {

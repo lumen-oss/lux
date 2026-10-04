@@ -77,9 +77,8 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
     let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree, &config)?;
 
     // TODO(vhyrro): If the tree doesn't exist then error out.
-    operations::Install::new(&config)
+    operations::pipeline::install_packages::InstallPackages::new(&config, &tree)
         .packages(packages)
-        .tree(&tree)
         .install()
         .await?;
 

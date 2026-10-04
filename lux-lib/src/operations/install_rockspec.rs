@@ -9,7 +9,13 @@ use crate::{
     lua_installation::LuaInstallationError,
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
-    operations::{pipeline::discover::FoundPackage, Install, InstallError, PackageInstallSpec},
+    operations::{
+        pipeline::{
+            discover::FoundPackage,
+            install_packages::{InstallPackages, InstallPackagesError},
+        },
+        PackageInstallSpec,
+    },
     package::{PackageName, PackageReq},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::{LuaVersionCompatibility, Rockspec},
@@ -29,7 +35,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[diagnostic(transparent)]
-    Install(#[from] Box<InstallError>),
+    Install(#[from] Box<InstallPackagesError>),
     #[diagnostic(transparent)]
     LuaRocks(#[from] LuaRocksError),
     #[diagnostic(transparent)]
@@ -40,8 +46,8 @@ pub enum InstallRockspecError {
     PackageNotInstalled(PackageName),
 }
 
-impl From<InstallError> for InstallRockspecError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for InstallRockspecError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -101,12 +107,12 @@ impl<
                 .opt(OptState::Required)
                 .build();
 
-        Install::new(config)
+        InstallPackages::new(config, tree)
             .package_db(package_db)
             .package(install_spec)
-            .tree(tree)
             .install()
             .await?
+            .0
             .into_iter()
             .find(|package| package.name() == &name)
             .ok_or(InstallRockspecError::PackageNotInstalled(name))

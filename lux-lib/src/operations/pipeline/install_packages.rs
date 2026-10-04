@@ -4,6 +4,7 @@ use bon::Builder;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
+use tracing::Instrument;
 
 use crate::{
     build::BuildBehaviour,
@@ -28,7 +29,7 @@ use crate::operations::PackageInstallSpec;
 
 /// Installs a set of [`PackageInstallSpec`]s into an install tree.
 ///
-/// This is the composable core of [`Install`](crate::operations::Install): it resolves the
+/// This is the composable core of package installation: it resolves the
 /// dependency graph, downloads and hashes sources, builds the packages (build dependencies
 /// first) into the regular, build and test trees, and records the result in the trees'
 /// lockfiles. It also returns a [`LockfileHandle`] so callers (e.g. a workspace) can commit
@@ -47,6 +48,7 @@ where
     build_packages: Vec<PackageInstallSpec>,
     #[builder(field)]
     test_packages: Option<Vec<PackageInstallSpec>>,
+    #[builder(field)]
     packages: Vec<PackageInstallSpec>,
     package_db: Option<RemotePackageDB>,
 }
@@ -56,6 +58,16 @@ where
     T: InstallTree + Send + Sync,
     State: install_packages_builder::State,
 {
+    pub fn packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
+        self.packages = packages;
+        self
+    }
+
+    pub fn package(mut self, package: PackageInstallSpec) -> Self {
+        self.packages.push(package);
+        self
+    }
+
     pub fn build_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
         self.build_packages = packages;
         self
@@ -82,7 +94,14 @@ where
         {
             return Ok((Vec::new(), LockfileHandle::default()));
         }
-        install_packages(args).await
+        let span = match args.packages.as_slice() {
+            [] => tracing::info_span!("Installing"),
+            [install_spec] => {
+                tracing::info_span!("Installing", package = install_spec.package.to_string())
+            }
+            packages => tracing::info_span!("Installing", count = packages.len()),
+        };
+        install_packages(args).instrument(span).await
     }
 }
 

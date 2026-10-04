@@ -68,7 +68,6 @@ where
 
     rockspec.validate_lua_version(&lua.version)?;
 
-    // NOTE: these futures are large; boxing them keeps `do_build`'s frame small.
     let spec = LockedPackageSpec::new(
         rockspec.package(),
         rockspec.version(),
@@ -78,6 +77,7 @@ where
         &build.pin,
         &build.opt,
     );
+    // Pin the futures otherwise they fill up the stack quite a bit
     let (package, temp_dir) = Box::pin(fetch_and_hash_source(
         rockspec,
         spec,
