@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io, sync::Arc};
+use std::{collections::HashMap, io};
 
 use bon::Builder;
 use itertools::Itertools;
@@ -19,7 +19,6 @@ use crate::{
 
 use super::{
     build::{Build as PipelineBuild, BuildError as PipelineBuildError},
-    discover::FindPackageFromLuarocks,
     download_sources_and_hash::{DownloadSourcesAndHash, DownloadSourcesAndHashError},
     emit_lockfile::LockfileHandle,
     resolve::{ResolveError, ResolvePackageDependencies},
@@ -155,9 +154,7 @@ where
         tree.cleanup(package, tree::EntryType::Entrypoint)?;
     }
 
-    let discover =
-        FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
-    let mut resolve = ResolvePackageDependencies::new(&discover, config)
+    let mut resolve = ResolvePackageDependencies::new(package_db, config)
         .packages(packages)
         .build_packages(install.build_packages);
     if let Some(test_packages) = install.test_packages {

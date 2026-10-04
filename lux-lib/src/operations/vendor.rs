@@ -25,7 +25,6 @@ use crate::{
     operations::{
         self,
         pipeline::{
-            discover::FindPackageFromLuarocks,
             download_sources_and_hash::{
                 DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage,
                 PackageSource,
@@ -130,16 +129,13 @@ async fn resolve_and_download(
     package_db: RemotePackageDB,
     install_specs: Artifacts<Vec<PackageInstallSpec>>,
 ) -> Result<Vec<DownloadedPackage>, VendorError> {
-    let discover =
-        FindPackageFromLuarocks::new(Arc::new(package_db), Arc::new(config.clone())).build();
-
     let Artifacts {
         regular,
         build,
         test,
     } = install_specs;
     let mut resolve =
-        ResolvePackageDependencies::new(&discover, config).packages(regular.unwrap_or_default());
+        ResolvePackageDependencies::new(package_db, config).packages(regular.unwrap_or_default());
     if let Some(build) = build {
         resolve = resolve.build_packages(build);
     }
@@ -589,7 +585,7 @@ mod tests {
         let package = make_downloaded_package(
             rockspec,
             RemotePackageSource::RockspecContent(String::new()),
-            PackageSource::SourceTree(src_dir),
+            PackageSource::SourceTree(std::sync::Arc::new(src_dir)),
         );
 
         vendor_package_sources(vendor_dir.path(), &package)
@@ -668,7 +664,7 @@ mod tests {
         let package = make_downloaded_package(
             rockspec,
             RemotePackageSource::RockspecContent(String::new()),
-            PackageSource::SourceTree(src_dir),
+            PackageSource::SourceTree(std::sync::Arc::new(src_dir)),
         );
 
         vendor_package_sources(vendor_dir.path(), &package)

@@ -2,6 +2,13 @@ use crate::{
     config::{Config, ConfigError},
     lockfile::{LockedPackageLock, LockfileIntegrityError},
     manifest::{Manifest, ManifestError},
+    operations::{
+        Download, FetchVendored, PackageInstallSpec, RemoteRockDownload,
+        pipeline::{
+            discover::{DiscoverError, FoundPackage},
+            download_sources_and_hash::PackageSource,
+        },
+    },
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
         RemotePackageTypeFilterSpec,
@@ -14,12 +21,13 @@ use thiserror::Error;
 
 /// Package database, used to look up remote rocks
 #[derive(Clone, Debug)]
-pub struct RemotePackageDB(Impl);
+pub struct RemotePackageDB(Vec<RemoteSource>);
 
 #[derive(Clone, Debug)]
-enum Impl {
+pub(crate) enum RemoteSource {
     LuarocksManifests(Vec<Manifest>),
     LockedPackageLocks(Vec<LockedPackageLock>),
+    Local(Vec<FoundPackage>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -65,7 +73,44 @@ impl RemotePackageDB {
             manifests.push(manifest);
         }
         manifests.push(Manifest::from_config(config.server().clone(), config).await?);
-        Ok(Self(Impl::LuarocksManifests(manifests)))
+        Ok(Self(vec![RemoteSource::LuarocksManifests(manifests)]))
+    }
+
+    /// Builds a package database backed solely by local packages.
+    pub(crate) fn from_local(packages: Vec<FoundPackage>) -> Self {
+        Self(vec![RemoteSource::Local(packages)])
+    }
+
+    /// Prepends local packages to the lookup order.
+    pub(crate) fn add_local(&mut self, packages: Vec<FoundPackage>) {
+        self.0.insert(0, RemoteSource::Local(packages));
+    }
+
+    fn find_in_source(
+        source: &RemoteSource,
+        package_req: &PackageReq,
+        filter: Option<RemotePackageTypeFilterSpec>,
+    ) -> Result<Option<RemotePackage>, SearchError> {
+        match source {
+            RemoteSource::LuarocksManifests(manifests) => Ok(manifests
+                .iter()
+                .find_map(|manifest| manifest.find(package_req, filter.clone()))),
+            RemoteSource::LockedPackageLocks(locks) => Ok(locks
+                .iter()
+                .filter_map(|lock| lock.has_rock(package_req, filter.clone()))
+                .map(|local_package| {
+                    RemotePackage::new(
+                        local_package.to_package(),
+                        local_package.source().clone(),
+                        local_package.source_url().cloned(),
+                    )
+                })
+                .next()),
+            RemoteSource::Local(packages) => Ok(packages
+                .iter()
+                .find(|package| package.package.package.name() == package_req.name())
+                .map(|package| package.package.clone())),
+        }
     }
 
     /// Find a remote package that matches the requirement, returning the latest match.
@@ -80,79 +125,177 @@ impl RemotePackageDB {
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Result<RemotePackage, SearchError> {
-        match &self.0 {
-            Impl::LuarocksManifests(manifests) => {
-                match manifests
-                    .iter()
-                    .find_map(|manifest| manifest.find(package_req, filter.clone()))
-                {
-                    Some(package) => Ok(package),
-                    None => Err(SearchError::RockNotFound(package_req.clone())),
-                }
+        for source in &self.0 {
+            if let Some(package) = Self::find_in_source(source, package_req, filter.clone())? {
+                return Ok(package);
             }
-            Impl::LockedPackageLocks(locks) => {
-                match locks
-                    .iter()
-                    .filter_map(|lock| lock.has_rock(package_req, filter.clone()))
-                    .map(|local_package| {
-                        RemotePackage::new(
-                            local_package.to_package(),
-                            local_package.source().clone(),
-                            local_package.source_url().cloned(),
-                        )
-                    })
-                    .next()
-                {
-                    Some(package) => Ok(package),
-                    None => Err(SearchError::RockNotFoundInLockfile(package_req.clone())),
+        }
+        if self
+            .0
+            .iter()
+            .any(|source| matches!(source, RemoteSource::LuarocksManifests(_)))
+        {
+            Err(SearchError::RockNotFound(package_req.clone()))
+        } else if self
+            .0
+            .iter()
+            .any(|source| matches!(source, RemoteSource::LockedPackageLocks(_)))
+        {
+            Err(SearchError::RockNotFoundInLockfile(package_req.clone()))
+        } else {
+            Err(SearchError::RockNotFound(package_req.clone()))
+        }
+    }
+
+    /// Resolves a package install spec into a fully discovered package.
+    pub(crate) async fn resolve(
+        &self,
+        spec: &PackageInstallSpec,
+        config: &Config,
+    ) -> Result<FoundPackage, DiscoverError> {
+        if let Some(source) = &spec.source {
+            let download =
+                RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source.clone())
+                    .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
+            let rockspec = download.rockspec().clone();
+            let package = RemotePackage::new(
+                spec.package.clone().try_into().map_err(|err| {
+                    DiscoverError::Download(
+                        spec.package.clone(),
+                        Box::new(crate::operations::SearchAndDownloadError::from(err)),
+                    )
+                })?,
+                download.rockspec_download().source.clone(),
+                download.rockspec_download().source_url.clone(),
+            );
+            return Ok(FoundPackage {
+                package,
+                rockspec,
+                artifact: None,
+            });
+        }
+
+        for source in &self.0 {
+            match source {
+                RemoteSource::Local(packages) => {
+                    if let Some(package) = packages
+                        .iter()
+                        .find(|package| package.package.package.name() == spec.package.name())
+                    {
+                        return Ok(package.clone());
+                    }
+                }
+                RemoteSource::LuarocksManifests(_) | RemoteSource::LockedPackageLocks(_) => {
+                    let mut package = self.find(&spec.package, None)?;
+                    let download = if let Some(vendor_dir) = config.vendor_dir() {
+                        FetchVendored::new()
+                            .vendor_dir(vendor_dir)
+                            .package(&spec.package)
+                            .package_db(self)
+                            .fetch_vendored_rock()
+                            .await
+                            .map_err(|err| {
+                                DiscoverError::FetchVendored(spec.package.clone(), Box::new(err))
+                            })?
+                    } else {
+                        Download::new(&spec.package, config)
+                            .package_db(self)
+                            .download_remote_rock()
+                            .await
+                            .map_err(|err| {
+                                DiscoverError::Download(spec.package.clone(), Box::new(err))
+                            })?
+                    };
+                    let rockspec = download.rockspec().clone();
+                    let artifact = match &download {
+                        RemoteRockDownload::SrcRock {
+                            src_rock,
+                            source_url,
+                            ..
+                        } => {
+                            package.source_url = Some(source_url.clone());
+                            Some(PackageSource::PackedRock(src_rock.clone()))
+                        }
+                        RemoteRockDownload::BinaryRock { packed_rock, .. } => {
+                            Some(PackageSource::PackedRock(packed_rock.clone()))
+                        }
+                        RemoteRockDownload::RockspecOnly { .. } => None,
+                    };
+                    return Ok(FoundPackage {
+                        package,
+                        rockspec,
+                        artifact,
+                    });
                 }
             }
         }
+
+        Err(DiscoverError::Search(SearchError::RockNotFound(
+            spec.package.clone(),
+        )))
     }
 
     /// Search for all packages that match the requirement.
     pub fn search(&self, package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
-        match &self.0 {
-            Impl::LuarocksManifests(manifests) => manifests
-                .iter()
-                .flat_map(|manifest| {
-                    manifest
-                        .metadata()
-                        .repository
-                        .iter()
-                        .filter_map(|(name, elements)| {
-                            if name.to_string().contains(&package_req.name().to_string()) {
-                                Some((
-                                    name,
-                                    elements
-                                        .keys()
-                                        .filter(|version| {
-                                            package_req.version_req().matches(version)
-                                        })
-                                        .sorted_by(|a, b| Ord::cmp(b, a))
-                                        .collect_vec(),
-                                ))
-                            } else {
-                                None
-                            }
-                        })
-                })
-                .collect(),
-            Impl::LockedPackageLocks(locks) => locks
-                .iter()
-                .flat_map(|lock| lock.rocks().values())
-                .filter_map(|package| {
-                    // NOTE: This doesn't group packages by name, but we don't care for now,
-                    // as we shouldn't need to use this function with a lockfile.
-                    let name = package.name();
-                    if name.to_string().contains(&package_req.name().to_string()) {
-                        Some((name, vec![package.version()]))
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec(),
-        }
+        self.0
+            .iter()
+            .flat_map(|source| match source {
+                RemoteSource::LuarocksManifests(manifests) => manifests
+                    .iter()
+                    .flat_map(|manifest| {
+                        manifest
+                            .metadata()
+                            .repository
+                            .iter()
+                            .filter_map(|(name, elements)| {
+                                if name.to_string().contains(&package_req.name().to_string()) {
+                                    Some((
+                                        name,
+                                        elements
+                                            .keys()
+                                            .filter(|version| {
+                                                package_req.version_req().matches(version)
+                                            })
+                                            .sorted_by(|a, b| Ord::cmp(b, a))
+                                            .collect_vec(),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            })
+                    })
+                    .collect_vec(),
+                RemoteSource::LockedPackageLocks(locks) => locks
+                    .iter()
+                    .flat_map(|lock| lock.rocks().values())
+                    .filter_map(|package| {
+                        // NOTE: This doesn't group packages by name, but we don't care for now,
+                        // as we shouldn't need to use this function with a lockfile.
+                        let name = package.name();
+                        if name.to_string().contains(&package_req.name().to_string()) {
+                            Some((name, vec![package.version()]))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec(),
+                RemoteSource::Local(packages) => packages
+                    .iter()
+                    .filter_map(|package| {
+                        let name = package.package.package.name();
+                        if name.to_string().contains(&package_req.name().to_string())
+                            && package_req
+                                .version_req()
+                                .matches(package.package.package.version())
+                        {
+                            Some((name, vec![package.package.package.version()]))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec(),
+            })
+            .collect()
     }
 
     /// Find the latest version for a package by name.
@@ -176,12 +319,12 @@ impl RemotePackageDB {
 
 impl From<Manifest> for RemotePackageDB {
     fn from(manifest: Manifest) -> Self {
-        Self(Impl::LuarocksManifests(vec![manifest]))
+        Self(vec![RemoteSource::LuarocksManifests(vec![manifest])])
     }
 }
 
 impl From<Vec<LockedPackageLock>> for RemotePackageDB {
     fn from(locks: Vec<LockedPackageLock>) -> Self {
-        Self(Impl::LockedPackageLocks(locks))
+        Self(vec![RemoteSource::LockedPackageLocks(locks)])
     }
 }
