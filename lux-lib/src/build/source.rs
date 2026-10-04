@@ -5,8 +5,8 @@ use crate::{
     build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
     lua_rockspec::{BuildBackendSpec, BuildSpec, LocalLuaRockspec, LuaRockspecError},
     project::{
-        PROJECT_TOML, ProjectRoot, TomlDeError,
         project_toml::{LocalProjectTomlValidationError, PartialProjectToml},
+        ProjectRoot, TomlDeError, PROJECT_TOML,
     },
     rockspec::Rockspec,
     tree::InstallTree,

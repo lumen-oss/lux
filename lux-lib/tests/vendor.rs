@@ -73,7 +73,10 @@ async fn vendor_dependencies() {
     let busted_dir = vendor_dir.child("busted@2.3.0-1");
     busted_dir.assert(predicate::path::is_dir());
     assert!(
-        std::fs::read_dir(busted_dir.path()).unwrap().next().is_some(),
+        std::fs::read_dir(busted_dir.path())
+            .unwrap()
+            .next()
+            .is_some(),
         "vendored source tree for busted is empty"
     );
 }

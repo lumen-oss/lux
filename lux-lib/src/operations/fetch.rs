@@ -277,11 +277,9 @@ async fn fetch_src_impl<R: Rockspec>(
                     GitAuthenticator::default()
                 };
                 if let Some(access_token) = access_token {
-                    auth = auth.add_plaintext_credentials(
-                        &host,
-                        access_token.username(),
-                        unsafe { access_token.password() },
-                    );
+                    auth = auth.add_plaintext_credentials(&host, access_token.username(), unsafe {
+                        access_token.password()
+                    });
                 }
                 let git_config = git2::Config::open_default()?;
                 let mut callbacks = RemoteCallbacks::new();

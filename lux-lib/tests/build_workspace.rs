@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use assert_fs::TempDir;
 use assert_fs::prelude::PathCopy;
+use assert_fs::TempDir;
 use flaky_test::flaky_test;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::operations::BuildWorkspace;

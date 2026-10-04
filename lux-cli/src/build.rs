@@ -1,9 +1,6 @@
 use clap::Args;
 use lux_lib::{
-    config::Config,
-    lockfile::LockedPackage,
-    operations::BuildWorkspace,
-    package::PackageName,
+    config::Config, lockfile::LockedPackage, operations::BuildWorkspace, package::PackageName,
     workspace::Workspace,
 };
 use miette::Result;

@@ -23,6 +23,40 @@ pub(crate) fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Resul
     })
 }
 
+pub(crate) fn write_atomic(
+    path: impl AsRef<Path>,
+    contents: impl AsRef<[u8]>,
+) -> Result<(), FsError> {
+    use std::io::Write;
+
+    let path = path.as_ref();
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+
+    let mut file =
+        tempfile::NamedTempFile::new_in(parent).map_err(|source| FsError::FileCreate {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.write_all(contents.as_ref())
+        .map_err(|source| FsError::Write {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.as_file().sync_all().map_err(|source| FsError::Write {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    file.persist(path)
+        .map_err(|err| FsError::Write {
+            path: path.to_path_buf(),
+            source: err.error,
+        })
+        .map(|_| ())
+}
+
 /// Wrapped [`fs::copy`].
 pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, FsError> {
     let from = from.as_ref();

@@ -21,9 +21,9 @@ use crate::{
 };
 
 use super::{
-    Artifacts,
     discover::{DiscoverError, FindPackageFromProvider, FoundPackage, FoundPackageType},
     download_sources_and_hash::PackageSource,
+    Artifacts,
 };
 
 /// The build dependencies of a rockspec that still need to be installed, with the
@@ -167,7 +167,11 @@ struct Node {
 struct Resolver<'a, D: FindPackageFromProvider> {
     discover: &'a D,
     max_inflight: usize,
-    joinset: JoinSet<(RequestKey, PackageInstallSpec, Result<FoundPackage, ResolveError>)>,
+    joinset: JoinSet<(
+        RequestKey,
+        PackageInstallSpec,
+        Result<FoundPackage, ResolveError>,
+    )>,
     pending: VecDeque<(RequestKey, PackageInstallSpec)>,
     seen: HashSet<RequestKey>,
     nodes: HashMap<RequestKey, Node>,
@@ -202,7 +206,9 @@ impl<'a, D: FindPackageFromProvider> Resolver<'a, D> {
                 continue;
             };
             // Mark the section as requested even if it resolves to nothing.
-            self.resolved.get_mut(section).get_or_insert_with(HashMap::new);
+            self.resolved
+                .get_mut(section)
+                .get_or_insert_with(HashMap::new);
             for spec in specs {
                 let key = RequestKey::from_install_spec(section, &spec);
                 self.enqueue(key, spec);
@@ -269,13 +275,15 @@ impl<'a, D: FindPackageFromProvider> Resolver<'a, D> {
             }
         }
         for dependency in found.rockspec.dependencies().current_platform() {
-            let child_spec =
-                PackageInstallSpec::new(dependency.package_req().clone(), EntryType::DependencyOnly)
-                    .build_behaviour(spec.build_behaviour)
-                    .pin(spec.pin)
-                    .opt(spec.opt)
-                    .maybe_source(dependency.source().clone())
-                    .build();
+            let child_spec = PackageInstallSpec::new(
+                dependency.package_req().clone(),
+                EntryType::DependencyOnly,
+            )
+            .build_behaviour(spec.build_behaviour)
+            .pin(spec.pin)
+            .opt(spec.opt)
+            .maybe_source(dependency.source().clone())
+            .build();
             push_child(&mut child_specs, false, section, child_spec);
         }
 
@@ -283,7 +291,9 @@ impl<'a, D: FindPackageFromProvider> Resolver<'a, D> {
             .iter()
             .map(|(is_build, child_key, _)| (*is_build, child_key.clone()))
             .collect();
-        self.resolved.get_mut(section).get_or_insert_with(HashMap::new);
+        self.resolved
+            .get_mut(section)
+            .get_or_insert_with(HashMap::new);
         self.nodes.insert(
             key,
             Node {
@@ -377,7 +387,10 @@ fn push_child(
         section
     };
     let child_key = RequestKey::from_install_spec(child_section, &spec);
-    if !children.iter().any(|(_, existing, _)| existing == &child_key) {
+    if !children
+        .iter()
+        .any(|(_, existing, _)| existing == &child_key)
+    {
         children.push((is_build, child_key, spec));
     }
 }
@@ -445,9 +458,11 @@ async fn find_package_from_provider<D: FindPackageFromProvider>(
     discover: D,
 ) -> Result<FoundPackage, ResolveError> {
     if let Some(source) = &spec.source {
-        let download =
-            RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source.clone())
-                .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
+        let download = RemoteRockDownload::from_package_req_and_source_spec(
+            spec.package.clone(),
+            source.clone(),
+        )
+        .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
         let rockspec = download.rockspec().clone();
         let package = RemotePackage::new(
             spec.package.clone().try_into().map_err(|err| {
@@ -552,7 +567,11 @@ mod tests {
                 *calls.entry(name.clone()).or_insert(0) += 1;
             }
             let result = self.rockspecs.get(&name).map_or_else(
-                || Err(DiscoverError::Search(SearchError::RockNotFound(req.clone()))),
+                || {
+                    Err(DiscoverError::Search(SearchError::RockNotFound(
+                        req.clone(),
+                    )))
+                },
                 |(content, rockspec)| {
                     let package = RemotePackage::new(
                         PackageSpec::new(req.name().clone(), rockspec.version().clone()),
@@ -627,10 +646,7 @@ mod tests {
 
     #[tokio::test]
     async fn cyclic_dependencies_are_rejected() {
-        let discover = MockDiscover::new(&[
-            rockspec("a", &["b"]),
-            rockspec("b", &["a"]),
-        ]);
+        let discover = MockDiscover::new(&[rockspec("a", &["b"]), rockspec("b", &["a"])]);
 
         let result = Resolver::with_max_inflight(&discover, 8)
             .run(roots(install_spec("a")))

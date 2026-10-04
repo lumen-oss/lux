@@ -19,15 +19,15 @@ use crate::{
         RemotePackageSourceUrl,
     },
     lua_rockspec::RemoteLuaRockspec,
-    operations::{FetchSrc, RemotePackageSourceMetadata, unpack_src_rock},
+    operations::{unpack_src_rock, FetchSrc, RemotePackageSourceMetadata},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
 };
 
 use super::{
-    Artifacts,
     resolve::{ResolvedArtifacts, ResolvedPackage},
+    Artifacts,
 };
 
 pub(crate) enum PackageSource {

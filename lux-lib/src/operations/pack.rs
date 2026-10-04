@@ -28,8 +28,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 use walkdir::WalkDir;
-use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
+use zip::ZipWriter;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -180,7 +180,11 @@ fn add_rock_entries(
     if source_dir.is_dir() {
         for file in WalkDir::new(source_dir).into_iter().filter_map_ok(|entry| {
             let file = entry.into_path();
-            if file.is_file() { Some(file) } else { None }
+            if file.is_file() {
+                Some(file)
+            } else {
+                None
+            }
         }) {
             let file = file?;
             let (relative_path, digest) = add_rock_entry(zip, file, source_dir, &zip_dir)?;
