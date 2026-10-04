@@ -342,9 +342,9 @@ async fn vendor_package_sources(
     let source_path = vendor_dir.join(format!("{}@{}", name, version));
     match &package.artifact {
         // A fully materialized source tree.
-        PackageSource::SourceTree(dir) => {
+        PackageSource::SourceDir(path) => {
             fs::tokio::remove_dir_all(&source_path).await.ok();
-            fs::tokio::copy_dir_all(dir.path(), &source_path).await?;
+            fs::tokio::copy_dir_all(path, &source_path).await?;
         }
         // A pre-built binary rock.
         PackageSource::PackedRock(bytes) => {
@@ -538,6 +538,7 @@ mod tests {
         rockspec: RemoteLuaRockspec,
         source: RemotePackageSource,
         artifact: PackageSource,
+        temp_dir: Option<TempDir>,
     ) -> DownloadedPackage {
         let spec = LockedPackageSpec::new(
             rockspec.package(),
@@ -566,6 +567,7 @@ mod tests {
             rockspec,
             entry_type: EntryType::Entrypoint,
             artifact,
+            temp_dir,
         }
     }
 
@@ -582,10 +584,12 @@ mod tests {
             "rockspec-only-url@1.0.0".parse().unwrap(),
             crate::lua_rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
         );
+        let artifact = PackageSource::SourceDir(src_dir.path().to_path_buf());
         let package = make_downloaded_package(
             rockspec,
             RemotePackageSource::RockspecContent(String::new()),
-            PackageSource::SourceTree(std::sync::Arc::new(src_dir)),
+            artifact,
+            Some(src_dir),
         );
 
         vendor_package_sources(vendor_dir.path(), &package)
@@ -628,6 +632,7 @@ mod tests {
             rockspec,
             RemotePackageSource::LuarocksBinaryRock("https://example.org/".parse().unwrap()),
             PackageSource::PackedRock(bytes),
+            None,
         );
 
         vendor_package_sources(vendor_dir.path(), &package)
@@ -661,10 +666,12 @@ mod tests {
             "rockspec-only-url@1.0.0".parse().unwrap(),
             crate::lua_rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
         );
+        let artifact = PackageSource::SourceDir(src_dir.path().to_path_buf());
         let package = make_downloaded_package(
             rockspec,
             RemotePackageSource::RockspecContent(String::new()),
-            PackageSource::SourceTree(std::sync::Arc::new(src_dir)),
+            artifact,
+            Some(src_dir),
         );
 
         vendor_package_sources(vendor_dir.path(), &package)
