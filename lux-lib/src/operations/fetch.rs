@@ -117,6 +117,9 @@ pub enum FetchSrcError {
     #[error("failed to clone rock source")]
     #[diagnostic(help("check your network connection and verify the git URL is correct."))]
     GitClone(#[from] git2::Error),
+    #[error("git operation failed")]
+    #[diagnostic(help("this is a bug; please report it."))]
+    GitJoin(#[from] tokio::task::JoinError),
     #[error("failed to parse git URL")]
     #[diagnostic(forward(0))]
     GitUrlParse(#[from] RemoteGitUrlParseError),
@@ -257,8 +260,15 @@ async fn fetch_src_impl<R: Rockspec>(
             let url = git.url.to_string();
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
-            let (checkout_ref, has_submodules) = {
-                let mut auth = if config.no_prompt() {
+            let clone_url = url.clone();
+            let clone_dir = dest_dir.to_path_buf();
+            let host = git.url.host().to_string();
+            let no_prompt = config.no_prompt();
+            let access_token = config.access_token(&host);
+            let git_ref = git.git_ref.clone();
+
+            let (checkout_ref, has_submodules) = tokio::task::spawn_blocking(move || {
+                let mut auth = if no_prompt {
                     GitAuthenticator::default()
                         .try_password_prompt(0)
                         .prompt_ssh_key_password(false)
@@ -266,9 +276,9 @@ async fn fetch_src_impl<R: Rockspec>(
                 } else {
                     GitAuthenticator::default()
                 };
-                if let Some(access_token) = config.access_token(git.url.host()) {
+                if let Some(access_token) = access_token {
                     auth = auth.add_plaintext_credentials(
-                        git.url.host(),
+                        &host,
                         access_token.username(),
                         unsafe { access_token.password() },
                     );
@@ -279,7 +289,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 let mut fetch_options = FetchOptions::new();
                 fetch_options.update_fetchhead(false);
                 fetch_options.remote_callbacks(callbacks);
-                let checkout_ref = match &git.git_ref {
+                let checkout_ref = match &git_ref {
                     Some(GitRef::Tag(tag)) => Some(tag.as_str()),
                     Some(GitRef::Branch(branch)) => Some(branch.as_str()),
                     None => None,
@@ -289,11 +299,11 @@ async fn fetch_src_impl<R: Rockspec>(
                 };
                 let mut repo_builder = RepoBuilder::new();
                 repo_builder.fetch_options(fetch_options);
-                let repo = repo_builder.clone(&url, dest_dir)?;
+                let repo = repo_builder.clone(&clone_url, &clone_dir)?;
 
                 let checkout_ref = match checkout_ref {
                     Some(checkout_ref) => {
-                        let ref_name = if let Some(GitRef::Branch(branch)) = &git.git_ref {
+                        let ref_name = if let Some(GitRef::Branch(branch)) = &git_ref {
                             format!("origin/{branch}")
                         } else {
                             checkout_ref.to_string()
@@ -311,8 +321,10 @@ async fn fetch_src_impl<R: Rockspec>(
 
                 let submodule_paths = init_submodules(&repo, &auth, &git_config)?;
 
-                (checkout_ref, !submodule_paths.is_empty())
-            };
+                Ok::<_, FetchSrcError>((checkout_ref, !submodule_paths.is_empty()))
+            })
+            .await??;
+
             // The .git directory is not deterministic
             remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
             let hash = dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
