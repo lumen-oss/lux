@@ -1,57 +1,46 @@
+use bon::Builder;
+use miette::Diagnostic;
+use thiserror::Error;
+
 use crate::{
     build::{BuildBehaviour, BuildError},
     config::Config,
     lockfile::LockedPackage,
-    lua_installation::{LuaInstallation, LuaInstallationError},
-    luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
-    operations::{
-        InstallDependencies, install_dependencies::prepare_dependencies_for_build,
-        pipeline::build_local::Build,
-    },
-    project::{Project, ProjectError, project_toml::LocalProjectTomlValidationError},
+    operations::{pipeline::discover::FoundPackage, Install, InstallError, PackageInstallSpec},
+    package::{PackageName, PackageReq},
+    project::{IntoLocalRockspecError, Project, ProjectError},
+    remote_package_db::{RemotePackageDB, RemotePackageDBError},
+    rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
 };
-use bon::Builder;
-use itertools::Itertools;
-use miette::Diagnostic;
-use thiserror::Error;
-
-use super::InstallError;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallProjectError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
     Project(#[from] ProjectError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LocalRockspec(#[from] IntoLocalRockspecError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RemotePackageDB(#[from] RemotePackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRocks(#[from] LuaRocksError),
+    Install(#[from] Box<InstallError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
-    #[error("error installind dependencies")]
-    #[diagnostic(forward(0))]
-    InstallDependencies(Box<InstallError>),
-    #[error("error installind build dependencies")]
-    #[diagnostic(forward(0))]
-    InstallBuildDependencies(Box<InstallError>),
-    #[error("error building project")]
-    #[diagnostic(forward(0))]
     Build(#[from] Box<BuildError>),
+    #[error("package '{0}' was not installed")]
+    PackageNotInstalled(PackageName),
 }
 
-impl From<LuaRocksInstallError> for InstallProjectError {
-    fn from(source: LuaRocksInstallError) -> Self {
-        Self::LuaRocksInstall(Box::new(source))
+impl From<InstallError> for InstallProjectError {
+    fn from(source: InstallError) -> Self {
+        Self::Install(Box::new(source))
     }
 }
 
@@ -78,67 +67,38 @@ where
 }
 
 impl<
-    T: InstallTree + Sync + Send + Clone + 'static,
-    State: install_project_builder::State + install_project_builder::IsComplete,
-> InstallProjectBuilder<'_, T, State>
+        T: InstallTree + Sync + Send,
+        State: install_project_builder::State + install_project_builder::IsComplete,
+    > InstallProjectBuilder<'_, T, State>
 {
-    /// Returns `Some` if the `only_deps` option is set to `false`.
+    /// Builds the project's root package, installing its dependencies through
+    /// the pipeline. Returns the installed root package.
     pub async fn build(self) -> Result<LockedPackage, InstallProjectError> {
         let args = self._build();
         let config = args.config;
         let project = args.project;
         let tree = args.tree;
-        let build_tree = tree.build_tree(config)?;
-        let lua = LuaInstallation::new_from_config(config).await?;
-        let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
-        let mut dependencies_to_install = Vec::new();
-        let mut build_dependencies_to_install = Vec::new();
-        let project_toml = project.toml().into_local()?;
-        prepare_dependencies_for_build(
-            &project_toml,
-            tree,
-            &mut dependencies_to_install,
-            &mut build_dependencies_to_install,
-            tree::EntryType::DependencyOnly,
-        );
 
-        let dependencies = InstallDependencies::new()
-            .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
-            .build_dependencies(
-                build_dependencies_to_install
-                    .into_iter()
-                    .unique()
-                    .collect_vec(),
-            )
+        let rockspec = project.local_remote_rockspec()?;
+        let name = rockspec.package().clone();
+        let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
+        let package_db = RemotePackageDB::from_config(config)
+            .await?
+            .with_local(vec![root]);
+
+        let install_spec =
+            PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)
+                .build_behaviour(BuildBehaviour::Force)
+                .build();
+
+        Install::new(config)
+            .package_db(package_db)
+            .package(install_spec)
             .tree(tree)
-            .lua(&lua)
-            .luarocks(&luarocks)
-            .config(config)
-            .build()
-            .await
-            .map_err(|err| InstallProjectError::InstallBuildDependencies(Box::new(err)))?;
-
-        let package = Build::new()
-            .rockspec(&project_toml)
-            .lua(&lua)
-            .tree(tree)
-            .entry_type(tree::EntryType::Entrypoint)
-            .config(config)
-            .behaviour(BuildBehaviour::Force)
-            .build()
-            .await?;
-
-        let lockfile = tree.lockfile()?;
-        let mut lockfile = lockfile.write_guard();
-        let build_lockfile = tree.build_tree(config)?.lockfile()?;
-
-        lockfile.add_entrypoint(&package);
-        for dep in dependencies {
-            lockfile.add_dependency(&package, &dep);
-        }
-        for dep in build_lockfile.rocks().values() {
-            lockfile.add_build_dependency(&package, dep);
-        }
-        Ok(package)
+            .install()
+            .await?
+            .into_iter()
+            .find(|package| package.name() == &name)
+            .ok_or(InstallProjectError::PackageNotInstalled(name))
     }
 }

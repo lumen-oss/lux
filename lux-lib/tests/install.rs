@@ -74,7 +74,7 @@ async fn install_and_use(package: PackageReq, module_name: &str) {
         .unwrap();
     let installed = Install::new(&config)
         .package(install_spec)
-        .tree(tree)
+        .tree(&tree)
         .install()
         .await
         .unwrap();
@@ -126,7 +126,7 @@ async fn test_install(install_spec: PackageInstallSpec) {
         .unwrap();
     let installed = Install::new(&config)
         .package(install_spec)
-        .tree(tree)
+        .tree(&tree)
         .install()
         .await
         .unwrap();
@@ -156,7 +156,7 @@ async fn install_records_dependency_edges_in_tree_lockfile() {
         PackageInstallSpec::new("luassert@1.9.0-1".parse().unwrap(), EntryType::Entrypoint).build();
     Install::new(&config)
         .package(install_spec)
-        .tree(tree.clone())
+        .tree(&tree)
         .install()
         .await
         .unwrap();

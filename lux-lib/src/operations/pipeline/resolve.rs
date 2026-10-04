@@ -23,9 +23,9 @@ use crate::{
 };
 
 use super::{
-    Artifacts,
     discover::{DiscoverError, FoundPackage},
     download_sources_and_hash::PackageSource,
+    Artifacts,
 };
 
 /// The build dependencies of a rockspec that still need to be installed, with the
@@ -68,6 +68,7 @@ pub(crate) struct ResolvedPackage {
     pub(crate) source: RemotePackageSource,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     pub(crate) entry_type: EntryType,
+    pub(crate) build_behaviour: crate::build::BuildBehaviour,
     pub(crate) artifact: Option<PackageSource>,
 }
 
@@ -370,6 +371,7 @@ impl Resolver {
                 source: found.package.source,
                 source_url: found.package.source_url,
                 entry_type: install_spec.entry_type,
+                build_behaviour: install_spec.build_behaviour,
                 artifact: found.artifact,
             };
 

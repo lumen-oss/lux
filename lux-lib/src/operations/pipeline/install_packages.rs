@@ -37,24 +37,23 @@ use crate::operations::PackageInstallSpec;
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallPackages<'a, T>
 where
-    T: InstallTree + Clone + Send + Sync,
+    T: InstallTree + Send + Sync,
 {
     #[builder(start_fn)]
     config: &'a Config,
     #[builder(start_fn)]
-    tree: T,
+    tree: &'a T,
     #[builder(field)]
     build_packages: Vec<PackageInstallSpec>,
     #[builder(field)]
     test_packages: Option<Vec<PackageInstallSpec>>,
     packages: Vec<PackageInstallSpec>,
     package_db: Option<RemotePackageDB>,
-    behaviour: Option<BuildBehaviour>,
 }
 
 impl<'a, T, State> InstallPackagesBuilder<'a, T, State>
 where
-    T: InstallTree + Clone + Send + Sync,
+    T: InstallTree + Send + Sync,
     State: install_packages_builder::State,
 {
     pub fn build_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
@@ -71,7 +70,7 @@ where
 impl<T, State> InstallPackagesBuilder<'_, T, State>
 where
     State: install_packages_builder::State + install_packages_builder::IsComplete,
-    T: InstallTree + Clone + Send + Sync + 'static,
+    T: InstallTree + Send + Sync,
 {
     pub async fn install(
         self,
@@ -91,7 +90,7 @@ async fn install_packages<T>(
     install: InstallPackages<'_, T>,
 ) -> Result<(Vec<LockedPackage>, LockfileHandle), InstallPackagesError>
 where
-    T: InstallTree + Clone + Send + Sync + 'static,
+    T: InstallTree + Send + Sync,
 {
     let package_db = match install.package_db {
         Some(db) => db,
@@ -115,7 +114,7 @@ where
 
     let packages = install.packages;
     let config = install.config;
-    let tree = &install.tree;
+    let tree = install.tree;
 
     let lockfile = tree.lockfile()?;
     let build_tree = tree.build_tree(config)?;
@@ -186,19 +185,16 @@ where
     // Build dependencies first, then the packages themselves.
     let built_build_deps = PipelineBuild::new(config, &build_tree)
         .packages(build_packages)
-        .maybe_behaviour(install.behaviour)
         .build()
         .await?;
     let built = PipelineBuild::new(config, tree)
         .packages(regular_packages)
-        .maybe_behaviour(install.behaviour)
         .build()
         .await?;
     if let Some(test_packages) = artifacts.test {
         let test_tree = tree.test_tree(config)?;
         PipelineBuild::new(config, &test_tree)
             .packages(test_packages.into_values().collect_vec())
-            .maybe_behaviour(install.behaviour)
             .build()
             .await?;
     }

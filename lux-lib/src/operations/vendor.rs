@@ -511,6 +511,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        build::BuildBehaviour,
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
         operations::unpack_rockspec,
@@ -566,6 +567,7 @@ mod tests {
             package,
             rockspec,
             entry_type: EntryType::Entrypoint,
+            build_behaviour: BuildBehaviour::default(),
             artifact,
             temp_dir,
         }

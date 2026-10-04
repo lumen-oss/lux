@@ -154,7 +154,7 @@ Reinstall?
                 .await?;
             operations::Install::new(&config)
                 .packages(reinstall_specs)
-                .tree(tree)
+                .tree(&tree)
                 .install()
                 .await?;
         } else {

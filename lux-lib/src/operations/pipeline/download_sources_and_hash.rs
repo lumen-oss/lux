@@ -20,15 +20,15 @@ use crate::{
         RemotePackageSourceUrl,
     },
     lua_rockspec::RemoteLuaRockspec,
-    operations::{FetchSrc, RemotePackageSourceMetadata, unpack_src_rock},
+    operations::{unpack_src_rock, FetchSrc, RemotePackageSourceMetadata},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
 };
 
 use super::{
-    Artifacts,
     resolve::{ResolvedArtifacts, ResolvedPackage},
+    Artifacts,
 };
 
 #[derive(Clone, Debug)]
@@ -41,6 +41,7 @@ pub(crate) struct DownloadedPackage {
     pub(crate) package: LockedPackage,
     pub(crate) rockspec: RemoteLuaRockspec,
     pub(crate) entry_type: EntryType,
+    pub(crate) build_behaviour: crate::build::BuildBehaviour,
     pub(crate) artifact: PackageSource,
     pub(crate) temp_dir: Option<TempDir>,
 }
@@ -136,6 +137,7 @@ async fn download_sources_and_hash(
         source,
         source_url,
         entry_type,
+        build_behaviour,
         artifact,
     } = resolved;
 
@@ -218,6 +220,7 @@ async fn download_sources_and_hash(
         package,
         rockspec,
         entry_type,
+        build_behaviour,
         artifact,
         temp_dir,
     })

@@ -58,7 +58,8 @@ where
         regular.extend(args.packages);
         let build = gather_dependencies(workspace, DependencyKind::Build)?;
 
-        let mut install = InstallPackages::new(config, workspace.tree(config)?)
+        let tree = workspace.tree(config)?;
+        let mut install = InstallPackages::new(config, &tree)
             .packages(regular)
             .build_packages(build);
         if args.test.unwrap_or(false) {
@@ -165,15 +166,11 @@ mod tests {
 
         let lockfile = workspace.lockfile().unwrap();
         let rocks = lockfile.rocks(&LockedPackageLockType::Regular);
-        assert!(
-            rocks
-                .values()
-                .any(|pkg| pkg.name().to_string() == "lua-cjson")
-        );
-        assert!(
-            rocks
-                .values()
-                .any(|pkg| pkg.name().to_string() == "plenary.nvim")
-        );
+        assert!(rocks
+            .values()
+            .any(|pkg| pkg.name().to_string() == "lua-cjson"));
+        assert!(rocks
+            .values()
+            .any(|pkg| pkg.name().to_string() == "plenary.nvim"));
     }
 }

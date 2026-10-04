@@ -91,7 +91,7 @@ pub enum ExecError {
     LuaVersionError(#[from] LuaVersionError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildProject(#[from] Box<BuildWorkspaceError>),
+    BuildWorkspace(#[from] Box<BuildWorkspaceError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallCommand(#[from] Box<InstallCommandError>),
@@ -104,7 +104,7 @@ pub enum ExecError {
 
 impl From<BuildWorkspaceError> for ExecError {
     fn from(source: BuildWorkspaceError) -> Self {
-        Self::BuildProject(Box::new(source))
+        Self::BuildWorkspace(Box::new(source))
     }
 }
 
@@ -228,7 +228,7 @@ async fn install_command(command: &str, config: &Config) -> Result<(), InstallCo
     let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
     Install::new(config)
         .package(install_spec)
-        .tree(tree)
+        .tree(&tree)
         .install()
         .await?;
     Ok(())

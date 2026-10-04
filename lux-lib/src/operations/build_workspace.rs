@@ -1,16 +1,15 @@
 use crate::{
     config::Config,
     lockfile::LockedPackage,
-    lua_installation::{LuaInstallation, LuaInstallationError},
+    lua_installation::LuaInstallationError,
     operations::{
-        pipeline::{
-            build_project::{BuildProject, BuildProjectError},
-            install_workspace::{InstallWorkspaceDependencies, InstallWorkspaceDependenciesError},
+        pipeline::install_workspace::{
+            InstallWorkspaceDependencies, InstallWorkspaceDependenciesError,
         },
-        GenLuaRc, GenLuaRcError,
+        GenLuaRc, GenLuaRcError, InstallProject, InstallProjectError,
     },
     package::PackageName,
-    workspace::{Workspace, WorkspaceError},
+    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 use bon::Builder;
 use thiserror::Error;
@@ -24,7 +23,10 @@ pub enum BuildWorkspaceError {
     InstallWorkspaceDependencies(#[from] InstallWorkspaceDependenciesError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildProject(#[from] BuildProjectError),
+    InstallProject(#[from] InstallProjectError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    WorkspaceTree(#[from] WorkspaceTreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaInstallation(#[from] LuaInstallationError),
@@ -72,12 +74,15 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
 
             let mut built = Vec::new();
             if !build.only_deps {
-                let lua = LuaInstallation::new_from_config(build.config).await?;
+                let workspace_tree = build.workspace.tree(build.config)?;
                 match &build.package {
                     Some(package) => {
                         let project = build.workspace.select_member(package)?;
                         built.push(
-                            BuildProject::new(project, build.workspace, build.config, &lua)
+                            InstallProject::new()
+                                .project(project)
+                                .config(build.config)
+                                .tree(&workspace_tree)
                                 .build()
                                 .await?,
                         );
@@ -85,7 +90,10 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                     None => {
                         for project in build.workspace.members() {
                             built.push(
-                                BuildProject::new(project, build.workspace, build.config, &lua)
+                                InstallProject::new()
+                                    .project(project)
+                                    .config(build.config)
+                                    .tree(&workspace_tree)
                                     .build()
                                     .await?,
                             );

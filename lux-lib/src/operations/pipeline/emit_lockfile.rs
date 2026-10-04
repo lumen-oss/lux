@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::lockfile::{LockedPackageId, LockedPackageLock, ReadWrite, WorkspaceLockfile};
 
 use super::{
-    Artifacts,
     download_sources_and_hash::{DownloadSourcesAndHashArtifacts, DownloadedPackage},
+    Artifacts,
 };
 
 /// The lockfile entries resolved by the pipeline, grouped by section.

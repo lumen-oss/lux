@@ -9,7 +9,7 @@ use crate::{
     lua_installation::LuaInstallationError,
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
-    operations::{Install, InstallError, PackageInstallSpec, pipeline::discover::FoundPackage},
+    operations::{pipeline::discover::FoundPackage, Install, InstallError, PackageInstallSpec},
     package::{PackageName, PackageReq},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::{LuaVersionCompatibility, Rockspec},
@@ -104,8 +104,7 @@ impl<
         Install::new(config)
             .package_db(package_db)
             .package(install_spec)
-            .behaviour(BuildBehaviour::Force)
-            .tree(tree.clone())
+            .tree(tree)
             .install()
             .await?
             .into_iter()
