@@ -3,11 +3,11 @@ use crate::{
     lockfile::{LockedPackageLock, LockfileIntegrityError},
     manifest::{Manifest, ManifestError},
     operations::{
-        Download, FetchVendored, PackageInstallSpec, RemoteRockDownload,
         pipeline::{
             discover::{DiscoverError, FoundPackage},
             download_sources_and_hash::PackageSource,
         },
+        Download, FetchVendored, PackageInstallSpec, RemoteRockDownload,
     },
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
@@ -150,9 +150,11 @@ impl RemotePackageDB {
         config: &Config,
     ) -> Result<FoundPackage, DiscoverError> {
         if let Some(source) = &spec.source {
-            let download =
-                RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source.clone())
-                    .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
+            let download = RemoteRockDownload::from_package_req_and_source_spec(
+                spec.package.clone(),
+                source.clone(),
+            )
+            .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
             let rockspec = download.rockspec().clone();
             let package = RemotePackage::new(
                 spec.package.clone().try_into().map_err(|err| {

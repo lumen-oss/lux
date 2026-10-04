@@ -285,7 +285,7 @@ async fn update(
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .remove()
             .await?;
-        let (updated_packages, _lockfile) = InstallPackages::new(config, tree)
+        let (updated_packages, _lockfile) = InstallPackages::new(config, &tree)
             .packages(
                 updatable
                     .iter()

@@ -367,7 +367,7 @@ async fn ensure_test_dependencies(
 
     Install::new(config)
         .packages(test_dependencies)
-        .tree(test_tree)
+        .tree(&test_tree)
         .install()
         .await?;
 

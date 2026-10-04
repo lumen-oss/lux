@@ -1,10 +1,5 @@
 use crate::{
-    build::BuildBehaviour,
-    config::Config,
-    lockfile::LockedPackage,
-    remote_package_db::RemotePackageDB,
-    tree::{InstallTree, Tree},
-    workspace::{Workspace, WorkspaceTreeError},
+    config::Config, lockfile::LockedPackage, remote_package_db::RemotePackageDB, tree::InstallTree,
 };
 
 pub use crate::operations::install::spec::PackageInstallSpec;
@@ -24,40 +19,23 @@ pub mod spec;
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Install<'a, T>
 where
-    T: InstallTree + Clone + Send + Sync,
+    T: InstallTree + Send + Sync,
 {
     #[builder(start_fn)]
     config: &'a Config,
     #[builder(field)]
     packages: Vec<PackageInstallSpec>,
     #[builder(setters(name = "_tree", vis = ""))]
-    tree: T,
+    tree: &'a T,
     package_db: Option<RemotePackageDB>,
-    behaviour: Option<BuildBehaviour>,
-}
-
-impl<'a, State> InstallBuilder<'a, Tree, State>
-where
-    State: install_builder::State,
-{
-    pub fn workspace(
-        self,
-        workspace: &'a Workspace,
-    ) -> Result<InstallBuilder<'a, Tree, install_builder::SetTree<State>>, WorkspaceTreeError>
-    where
-        State::Tree: install_builder::IsUnset,
-    {
-        let config = self.config;
-        Ok(self._tree(workspace.tree(config)?))
-    }
 }
 
 impl<'a, T, State> InstallBuilder<'a, T, State>
 where
     State: install_builder::State,
-    T: InstallTree + Clone + Send + Sync,
+    T: InstallTree + Send + Sync,
 {
-    pub fn tree(self, tree: T) -> InstallBuilder<'a, T, install_builder::SetTree<State>>
+    pub fn tree(self, tree: &'a T) -> InstallBuilder<'a, T, install_builder::SetTree<State>>
     where
         State::Tree: install_builder::IsUnset,
     {
@@ -83,7 +61,7 @@ where
 impl<State, T> InstallBuilder<'_, T, State>
 where
     State: install_builder::State + install_builder::IsComplete,
-    T: InstallTree + Clone + Send + Sync + 'static,
+    T: InstallTree + Send + Sync,
 {
     /// Install the packages.
     pub async fn install(self) -> Result<Vec<LockedPackage>, InstallError> {
@@ -116,9 +94,6 @@ pub enum InstallError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] crate::tree::TreeError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("error instantiating LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocks(#[from] crate::luarocks::luarocks_installation::LuaRocksError),
@@ -138,7 +113,7 @@ impl From<crate::luarocks::luarocks_installation::LuaRocksInstallError> for Inst
 
 async fn install_impl<T>(install: Install<'_, T>) -> Result<Vec<LockedPackage>, InstallError>
 where
-    T: InstallTree + Clone + Send + Sync + 'static,
+    T: InstallTree + Send + Sync,
 {
     let packages = install.packages;
     if packages.is_empty() {
@@ -148,7 +123,6 @@ where
     let (packages, _lockfile) = InstallPackages::new(install.config, install.tree)
         .packages(packages)
         .maybe_package_db(install.package_db)
-        .maybe_behaviour(install.behaviour)
         .install()
         .await
         .map_err(InstallError::from)?;

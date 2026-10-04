@@ -11,18 +11,18 @@ use lux_lib::{
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{Install, InstallProject, PackageInstallSpec, pipeline::build_local::Build},
+    operations::{pipeline::build_local::Build, Install, InstallProject, PackageInstallSpec},
     package::{PackageName, PackageReq},
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
 };
 
-use miette::{IntoDiagnostic, Result, WrapErr, miette};
+use miette::{miette, IntoDiagnostic, Result, WrapErr};
 use path_slash::PathExt;
-use tempfile::{TempDir, tempdir};
+use tempfile::{tempdir, TempDir};
 use tokio::fs::{self, File};
 use walkdir::WalkDir;
-use zip::{ZipWriter, write::SimpleFileOptions};
+use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::{
     args::{OutputFormat, PackageOrRockspec},
@@ -164,7 +164,7 @@ async fn install_package(
                 .build_behaviour(BuildBehaviour::Force)
                 .build(),
         )
-        .tree(tree.clone())
+        .tree(&tree)
         .install()
         .await?;
     let package = packages

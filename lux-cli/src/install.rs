@@ -79,7 +79,7 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
     // TODO(vhyrro): If the tree doesn't exist then error out.
     operations::Install::new(&config)
         .packages(packages)
-        .tree(tree)
+        .tree(&tree)
         .install()
         .await?;
 

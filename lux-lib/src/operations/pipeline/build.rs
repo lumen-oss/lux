@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{BuildBehaviour, deploy},
+    build::deploy,
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
     lua_installation::{LuaInstallation, LuaInstallationError},
@@ -49,19 +49,18 @@ impl From<LuaRocksInstallError> for BuildError {
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct Build<'a, T: InstallTree + Clone + Send + Sync> {
+pub(crate) struct Build<'a, T: InstallTree + Send + Sync> {
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     #[builder(start_fn)]
     pub(crate) tree: &'a T,
     #[builder(field)]
     pub(crate) packages: Vec<DownloadedPackage>,
-    pub(crate) behaviour: Option<BuildBehaviour>,
 }
 
 impl<T, State> BuildBuilder<'_, T, State>
 where
-    T: InstallTree + Clone + Send + Sync,
+    T: InstallTree + Send + Sync,
     State: build_builder::State,
 {
     pub(crate) fn packages(mut self, packages: Vec<DownloadedPackage>) -> Self {
@@ -72,7 +71,7 @@ where
 
 impl<T, State> BuildBuilder<'_, T, State>
 where
-    T: InstallTree + Clone + Send + Sync,
+    T: InstallTree + Send + Sync,
     State: build_builder::State + build_builder::IsComplete,
 {
     // INVESTIGATE(vhyrro): Is there a benefit of having a `LocalPackage` type which
@@ -82,7 +81,6 @@ where
     // or a `LocalPackage` type.
     pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, BuildError> {
         let args = self._build();
-        let behaviour = args.behaviour.unwrap_or_default();
         let lua = LuaInstallation::new_from_config(args.config).await?;
 
         let needs_luarocks = args.packages.iter().any(|package| {
@@ -104,6 +102,7 @@ where
                 package,
                 rockspec,
                 entry_type,
+                build_behaviour: package_behaviour,
                 artifact,
                 temp_dir: _temp_dir,
             } = downloaded;
@@ -122,7 +121,7 @@ where
                     &path,
                     entry_type,
                     args.config,
-                    behaviour,
+                    package_behaviour,
                 )
                 .await
                 .map_err(|err| BuildError::Build(rockspec.package().to_string(), Box::new(err)))?,
@@ -137,7 +136,7 @@ where
                 .pin(pin)
                 .opt(opt)
                 .constraint(constraint)
-                .behaviour(behaviour)
+                .behaviour(package_behaviour)
                 .install()
                 .await
                 .map_err(|err| {

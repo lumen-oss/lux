@@ -9,13 +9,13 @@ use lux_lib::{
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{self, Install, PackageInstallSpec, pipeline::build_local::Build},
+    operations::{self, pipeline::build_local::Build, Install, PackageInstallSpec},
     package::PackageName,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
     workspace::Workspace,
 };
-use miette::{IntoDiagnostic, Result, miette};
+use miette::{miette, IntoDiagnostic, Result};
 use path_slash::PathBufExt;
 use tempfile::tempdir;
 
@@ -113,7 +113,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                                 .build_behaviour(BuildBehaviour::Force)
                                 .build(),
                         )
-                        .tree(tree.clone())
+                        .tree(&tree)
                         .install()
                         .await?;
                     let package = packages

@@ -7,7 +7,7 @@ use std::{
 };
 use thiserror::Error;
 
-use tracing::{Instrument, info_span};
+use tracing::{info_span, Instrument};
 use which::which;
 
 use crate::{

@@ -2,7 +2,7 @@ use bon::Builder;
 use tracing::Instrument;
 
 use crate::{
-    build::{BuildBehaviour, BuildError, RemotePackageSourceSpec, deploy},
+    build::{deploy, BuildBehaviour, BuildError, RemotePackageSourceSpec},
     config::Config,
     hash::HasIntegrity,
     lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},

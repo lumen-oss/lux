@@ -9,6 +9,7 @@ use crate::{
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
 };
+use std::path::PathBuf;
 
 use super::download_sources_and_hash::PackageSource;
 
@@ -36,6 +37,22 @@ impl FoundPackage {
             package,
             rockspec,
             artifact: None,
+        }
+    }
+
+    /// Builds a discovered package from a project root rockspec, using the
+    /// project's own directory as the source. The source is hashed and built in
+    /// place, so no download happens.
+    pub(crate) fn from_project_root(rockspec: RemoteLuaRockspec, root_dir: PathBuf) -> Self {
+        let package = RemotePackage::new(
+            PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+            RemotePackageSource::Local,
+            None,
+        );
+        Self {
+            package,
+            rockspec,
+            artifact: Some(PackageSource::SourceDir(root_dir)),
         }
     }
 }

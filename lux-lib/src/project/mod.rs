@@ -285,6 +285,17 @@ impl Project {
             .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
     }
 
+    /// Returns this project's rockspec as a [`RemoteLuaRockspec`] whose source
+    /// points at the project's own directory, so it can be built through the
+    /// pipeline like any other package.
+    pub fn local_remote_rockspec(&self) -> Result<RemoteLuaRockspec, IntoLocalRockspecError> {
+        self.toml()
+            .into_local()
+            .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
+            .to_local_rockspec()
+            .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
+    }
+
     pub fn remote_rockspec(
         &self,
         specrev: Option<SpecRev>,

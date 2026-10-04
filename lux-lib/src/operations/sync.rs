@@ -221,7 +221,7 @@ async fn do_sync(
     Install::new(args.config)
         .package_db(package_db)
         .packages(packages_to_install)
-        .tree(tree.clone())
+        .tree(&tree)
         .install()
         .await?;
 
@@ -435,7 +435,7 @@ where
 
     let added = Install::new(args.config)
         .packages(missing_packages)
-        .tree(tree.clone())
+        .tree(tree)
         .install()
         .await?;
 
