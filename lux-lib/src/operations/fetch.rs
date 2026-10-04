@@ -118,7 +118,7 @@ pub enum FetchSrcError {
     #[diagnostic(help("check your network connection and verify the git URL is correct."))]
     GitClone(#[from] git2::Error),
     #[error("git operation failed")]
-    #[diagnostic(help("this is a bug; please report it."))]
+    #[diagnostic(help("this is a bug, please report it."))]
     GitJoin(#[from] tokio::task::JoinError),
     #[error("failed to parse git URL")]
     #[diagnostic(forward(0))]

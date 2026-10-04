@@ -237,8 +237,6 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
 
     let source_metadata = match source_spec {
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
-            // FIXME(vhyrro): This shouldn't be in this function, or the function should be named differently.
-            // "fetching" has nothing to do with unpacking.
             let hash = bytes.hash().await?;
             let cursor = Cursor::new(bytes);
             unpack_src_rock(cursor, temp_dir.path().to_path_buf())

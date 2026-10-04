@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, ConfigError},
-    lockfile::{LockedPackageLock, LockfileIntegrityError},
+    lockfile::{LockfileIntegrityError, PackageLock},
     manifest::{Manifest, ManifestError},
     operations::{
         pipeline::{
@@ -26,7 +26,7 @@ pub struct RemotePackageDB(pub(crate) Vec<RemoteSource>);
 #[derive(Clone, Debug)]
 pub(crate) enum RemoteSource {
     LuarocksManifests(Vec<Manifest>),
-    LockedPackageLocks(Vec<LockedPackageLock>),
+    LockedPackageLocks(Vec<PackageLock>),
     Local(Vec<FoundPackage>),
 }
 
@@ -321,8 +321,8 @@ impl From<Manifest> for RemotePackageDB {
     }
 }
 
-impl From<Vec<LockedPackageLock>> for RemotePackageDB {
-    fn from(locks: Vec<LockedPackageLock>) -> Self {
+impl From<Vec<PackageLock>> for RemotePackageDB {
+    fn from(locks: Vec<PackageLock>) -> Self {
         Self(vec![RemoteSource::LockedPackageLocks(locks)])
     }
 }

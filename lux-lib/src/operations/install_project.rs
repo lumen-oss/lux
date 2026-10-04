@@ -6,7 +6,13 @@ use crate::{
     build::{BuildBehaviour, BuildError},
     config::Config,
     lockfile::LockedPackage,
-    operations::{pipeline::discover::FoundPackage, Install, InstallError, PackageInstallSpec},
+    operations::{
+        pipeline::{
+            discover::FoundPackage,
+            install_packages::{InstallPackages, InstallPackagesError},
+        },
+        PackageInstallSpec,
+    },
     package::{PackageName, PackageReq},
     project::{IntoLocalRockspecError, Project, ProjectError},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
@@ -30,7 +36,7 @@ pub enum InstallProjectError {
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] Box<InstallError>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Build(#[from] Box<BuildError>),
@@ -38,8 +44,8 @@ pub enum InstallProjectError {
     PackageNotInstalled(PackageName),
 }
 
-impl From<InstallError> for InstallProjectError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for InstallProjectError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -91,12 +97,12 @@ impl<
                 .build_behaviour(BuildBehaviour::Force)
                 .build();
 
-        Install::new(config)
+        InstallPackages::new(config, tree)
             .package_db(package_db)
             .package(install_spec)
-            .tree(tree)
             .install()
             .await?
+            .0
             .into_iter()
             .find(|package| package.name() == &name)
             .ok_or(InstallProjectError::PackageNotInstalled(name))

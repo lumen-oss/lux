@@ -1,22 +1,28 @@
-use std::collections::HashMap;
+use crate::lockfile::{PackageLock, ReadWrite, WorkspaceLockfile};
 
-use crate::lockfile::{LockedPackageId, LockedPackageLock, ReadWrite, WorkspaceLockfile};
-
-use super::{
-    download_sources_and_hash::{DownloadSourcesAndHashArtifacts, DownloadedPackage},
-    Artifacts,
-};
+use super::{download_sources_and_hash::DownloadSourcesAndHashArtifacts, Artifacts};
 
 /// The lockfile entries resolved by the pipeline, grouped by section.
 #[derive(Default)]
-pub struct LockfileHandle(Artifacts<LockedPackageLock>);
+pub struct LockfileHandle(Artifacts<PackageLock>);
 
 impl LockfileHandle {
     pub(crate) fn from_artifacts(artifacts: &DownloadSourcesAndHashArtifacts) -> Self {
         Self(
             artifacts
                 .iter()
-                .map(|(section, packages)| (section, packages.map(lock_from)))
+                .map(|(section, packages)| {
+                    (
+                        section,
+                        packages.map(|packages| {
+                            PackageLock::from_packages(
+                                packages
+                                    .values()
+                                    .map(|pkg| (pkg.package.clone(), pkg.entry_type)),
+                            )
+                        }),
+                    )
+                })
                 .collect(),
         )
     }
@@ -28,13 +34,4 @@ impl LockfileHandle {
             }
         });
     }
-}
-
-fn lock_from(packages: &HashMap<LockedPackageId, DownloadedPackage>) -> LockedPackageLock {
-    // FIXME(vhyrro): Create a constructor here instead of mut overrides.
-    let mut lock = LockedPackageLock::default();
-    for package in packages.values() {
-        lock.insert(package.package.clone(), package.entry_type.is_entrypoint());
-    }
-    lock
 }

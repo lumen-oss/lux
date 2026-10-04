@@ -9,8 +9,8 @@ use lux_lib::{
     lockfile::LockedPackageId,
     lua::lua_runtime,
     operations::{
-        set_pinned_state, BuildWorkspace, DistProjectBin, Download, Install, PackageInstallSpec,
-        Sync, Uninstall, Update,
+        pipeline::install_packages::InstallPackages, set_pinned_state, BuildWorkspace,
+        DistProjectBin, Download, PackageInstallSpec, Sync, Uninstall, Update,
     },
     package::{PackageName, PackageReq},
     remote_package_db::RemotePackageDB,
@@ -61,13 +61,12 @@ impl TypedUserData for OperationsModule {
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
-                Install::new(&config.0)
+                InstallPackages::new(&config.0, &tree.0)
                     .packages(specs)
-                    .tree(tree.0)
                     .install()
                     .await
                     .into_lua_err()
-                    .map(|pkgs| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
+                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
             },
         );
 
@@ -157,13 +156,13 @@ impl TypedUserData for OperationsModule {
                     .await
                     .into_lua_err()?;
 
-                Install::new(&config.0)
+                let tree = workspace.0.tree(&config.0).into_lua_err()?;
+                InstallPackages::new(&config.0, &tree)
                     .packages(install_specs)
-                    .tree(workspace.0.tree(&config.0).into_lua_err()?)
                     .install()
                     .await
                     .into_lua_err()
-                    .map(|pkgs| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
+                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
             },
         );
 

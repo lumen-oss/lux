@@ -11,7 +11,10 @@ use lux_lib::{
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{pipeline::build_local::Build, Install, InstallProject, PackageInstallSpec},
+    operations::{
+        pipeline::{build_local::Build, install_packages::InstallPackages},
+        InstallProject, PackageInstallSpec,
+    },
     package::{PackageName, PackageReq},
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
@@ -158,15 +161,15 @@ async fn install_package(
 ) -> Result<(LockedPackage, PathBuf)> {
     let lua_version = LuaVersion::from(config)?.clone();
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
-    let packages = Install::new(config)
+    let packages = InstallPackages::new(config, &tree)
         .package(
             PackageInstallSpec::new(package.clone(), tree::EntryType::Entrypoint)
                 .build_behaviour(BuildBehaviour::Force)
                 .build(),
         )
-        .tree(&tree)
         .install()
-        .await?;
+        .await?
+        .0;
     let package = packages
         .into_iter()
         .find(|pkg| pkg.name() == package.name())

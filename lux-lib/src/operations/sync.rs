@@ -1,6 +1,9 @@
 use std::io;
 
-use super::{Install, InstallError, PackageInstallSpec, RemoveError, Uninstall};
+use super::{
+    pipeline::install_packages::{InstallPackages, InstallPackagesError},
+    PackageInstallSpec, RemoveError, Uninstall,
+};
 use crate::{
     build::BuildBehaviour,
     config::Config,
@@ -145,7 +148,7 @@ pub enum SyncError {
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] Box<InstallError>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Remove(#[from] RemoveError),
@@ -172,8 +175,8 @@ pub enum SyncError {
     GenLuaRc(#[from] GenLuaRcError),
 }
 
-impl From<InstallError> for SyncError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for SyncError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -218,10 +221,9 @@ async fn do_sync(
         .added
         .extend(to_add.iter().map(|(_, pkg)| pkg).cloned());
 
-    Install::new(args.config)
+    InstallPackages::new(args.config, &tree)
         .package_db(package_db)
         .packages(packages_to_install)
-        .tree(&tree)
         .install()
         .await?;
 
@@ -433,11 +435,11 @@ where
         .unique()
         .collect();
 
-    let added = Install::new(args.config)
+    let added = InstallPackages::new(args.config, tree)
         .packages(missing_packages)
-        .tree(tree)
         .install()
-        .await?;
+        .await?
+        .0;
 
     report.added.extend(added);
 

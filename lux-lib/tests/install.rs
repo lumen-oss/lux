@@ -7,7 +7,7 @@ use lux_lib::{
     lua_installation::detect_installed_lua_version,
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
-    operations::{Exec, Install, PackageInstallSpec},
+    operations::{pipeline::install_packages::InstallPackages, Exec, PackageInstallSpec},
     package::{PackageName, PackageReq},
     tree::{EntryType, InstallTree},
 };
@@ -71,12 +71,12 @@ async fn install_and_use(package: PackageReq, module_name: &str) {
     let tree = config
         .user_tree(LuaVersion::from(&config).unwrap().clone())
         .unwrap();
-    let installed = Install::new(&config)
+    let installed = InstallPackages::new(&config, &tree)
         .package(install_spec)
-        .tree(&tree)
         .install()
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(!installed.is_empty());
 
     Exec::new("lua", None, &config)
@@ -123,12 +123,12 @@ async fn test_install(install_spec: PackageInstallSpec) {
     let tree = config
         .user_tree(LuaVersion::from(&config).unwrap().clone())
         .unwrap();
-    let installed = Install::new(&config)
+    let installed = InstallPackages::new(&config, &tree)
         .package(install_spec)
-        .tree(&tree)
         .install()
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(!installed.is_empty());
 }
 
@@ -153,9 +153,8 @@ async fn install_records_dependency_edges_in_tree_lockfile() {
     // `luassert` depends on `say`.
     let install_spec =
         PackageInstallSpec::new("luassert@1.9.0-1".parse().unwrap(), EntryType::Entrypoint).build();
-    Install::new(&config)
+    InstallPackages::new(&config, &tree)
         .package(install_spec)
-        .tree(&tree)
         .install()
         .await
         .unwrap();

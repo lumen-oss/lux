@@ -9,7 +9,11 @@ use lux_lib::{
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{self, pipeline::build_local::Build, Install, PackageInstallSpec},
+    operations::{
+        self,
+        pipeline::{build_local::Build, install_packages::InstallPackages},
+        PackageInstallSpec,
+    },
     package::PackageName,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
@@ -107,15 +111,15 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let temp_dir = tempdir().into_diagnostic()?;
                     let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
-                    let packages = Install::new(&temp_config)
+                    let packages = InstallPackages::new(&temp_config, &tree)
                         .package(
                             PackageInstallSpec::new(package_req, tree::EntryType::Entrypoint)
                                 .build_behaviour(BuildBehaviour::Force)
                                 .build(),
                         )
-                        .tree(&tree)
                         .install()
-                        .await?;
+                        .await?
+                        .0;
                     let package = packages
                         .first()
                         .ok_or_else(|| miette!("no packages installed"))?;

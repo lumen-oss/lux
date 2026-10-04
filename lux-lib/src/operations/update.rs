@@ -19,8 +19,8 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use super::{
-    pipeline::install_packages::InstallPackages, InstallError, PackageInstallSpec, RemoveError,
-    SyncError, Uninstall,
+    pipeline::install_packages::{InstallPackages, InstallPackagesError},
+    PackageInstallSpec, RemoveError, SyncError, Uninstall,
 };
 
 #[derive(Error, Debug, Diagnostic)]
@@ -30,7 +30,7 @@ pub enum UpdateError {
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
     #[error("failed to update rock")]
     #[diagnostic(forward(0))]
-    Install(#[from] Box<InstallError>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
@@ -56,8 +56,8 @@ pub enum UpdateError {
     Sync(#[from] Box<SyncError>),
 }
 
-impl From<InstallError> for UpdateError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for UpdateError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -294,9 +294,7 @@ async fn update(
             )
             .maybe_package_db(Some(package_db))
             .install()
-            .await
-            .map_err(InstallError::from)
-            .map_err(UpdateError::from)?;
+            .await?;
         Ok(updated_packages)
     }
 }
