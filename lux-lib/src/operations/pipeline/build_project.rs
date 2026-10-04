@@ -39,7 +39,7 @@ where
         let workspace_tree = args.workspace.tree(args.config)?;
         let project_toml = args.project.toml().into_local()?;
 
-        let package = crate::build::Build::new()
+        let package = super::build_local::Build::new()
             .rockspec(&project_toml)
             .lua(args.lua)
             .tree(&workspace_tree)

@@ -23,9 +23,9 @@ use crate::{
 };
 
 use super::{
+    Artifacts,
     discover::{DiscoverError, FoundPackage},
     download_sources_and_hash::PackageSource,
-    Artifacts,
 };
 
 /// The build dependencies of a rockspec that still need to be installed, with the
@@ -186,7 +186,11 @@ impl Resolver {
 
     /// Builds a resolver with an explicit in-flight bound. Used by tests, which do not
     /// construct a full [`Config`].
-    fn with_max_inflight(package_db: RemotePackageDB, config: Arc<Config>, max_inflight: usize) -> Self {
+    fn with_max_inflight(
+        package_db: RemotePackageDB,
+        config: Arc<Config>,
+        max_inflight: usize,
+    ) -> Self {
         Self {
             package_db,
             config,
@@ -458,7 +462,6 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
 
     Ok(())
 }
-
 
 fn build_dependency_specs(
     rockspec: &RemoteLuaRockspec,

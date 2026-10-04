@@ -422,7 +422,7 @@ fn is_lib_name(file_name: &str, prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_fs::{prelude::*, TempDir};
+    use assert_fs::{TempDir, prelude::*};
 
     #[tokio::test]
     async fn test_detect_zlib_pkg_config_header() {

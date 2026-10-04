@@ -20,15 +20,15 @@ use crate::{
         RemotePackageSourceUrl,
     },
     lua_rockspec::RemoteLuaRockspec,
-    operations::{unpack_src_rock, FetchSrc, RemotePackageSourceMetadata},
+    operations::{FetchSrc, RemotePackageSourceMetadata, unpack_src_rock},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
 };
 
 use super::{
-    resolve::{ResolvedArtifacts, ResolvedPackage},
     Artifacts,
+    resolve::{ResolvedArtifacts, ResolvedPackage},
 };
 
 #[derive(Clone, Debug)]

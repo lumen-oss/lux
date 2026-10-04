@@ -8,7 +8,7 @@ use std::{
 };
 use thiserror::Error;
 
-use tracing::{info_span, Instrument};
+use tracing::{Instrument, info_span};
 
 use crate::{
     build::{

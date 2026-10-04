@@ -1,11 +1,14 @@
 use crate::{
-    build::{Build, BuildBehaviour, BuildError},
+    build::{BuildBehaviour, BuildError},
     config::Config,
     lockfile::LockedPackage,
     lua_installation::{LuaInstallation, LuaInstallationError},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
-    operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
-    project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
+    operations::{
+        InstallDependencies, install_dependencies::prepare_dependencies_for_build,
+        pipeline::build_local::Build,
+    },
+    project::{Project, ProjectError, project_toml::LocalProjectTomlValidationError},
     tree::{self, InstallTree, TreeError},
 };
 use bon::Builder;
@@ -75,9 +78,9 @@ where
 }
 
 impl<
-        T: InstallTree + Sync + Send + Clone + 'static,
-        State: install_project_builder::State + install_project_builder::IsComplete,
-    > InstallProjectBuilder<'_, T, State>
+    T: InstallTree + Sync + Send + Clone + 'static,
+    State: install_project_builder::State + install_project_builder::IsComplete,
+> InstallProjectBuilder<'_, T, State>
 {
     /// Returns `Some` if the `only_deps` option is set to `false`.
     pub async fn build(self) -> Result<LockedPackage, InstallProjectError> {

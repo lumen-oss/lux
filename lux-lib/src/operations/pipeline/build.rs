@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{deploy, BuildBehaviour},
+    build::{BuildBehaviour, deploy},
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
     lua_installation::{LuaInstallation, LuaInstallationError},
