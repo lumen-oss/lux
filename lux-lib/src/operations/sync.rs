@@ -215,7 +215,7 @@ async fn do_sync(
 
     let package_db = workspace_lockfile.local_pkg_locks().into();
 
-    let (to_add, mut report) = reconcile_locks(&*workspace_lockfile, &dest_lockfile, lock_type);
+    let (to_add, mut report) = reconcile_locks(&workspace_lockfile, &dest_lockfile, lock_type);
     let packages_to_install = install_specs_to_force(&to_add);
     report
         .added

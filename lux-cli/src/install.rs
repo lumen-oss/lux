@@ -4,7 +4,7 @@ use lux_lib::{
     config::Config,
     lockfile::PinnedState,
     lua_version::LuaVersion,
-    operations,
+    operations::{self, pipeline::install_packages::InstallPackages},
     package::{PackageName, PackageReq},
     workspace::{Workspace, WorkspaceError},
 };
@@ -77,7 +77,7 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
     let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree, &config)?;
 
     // TODO(vhyrro): If the tree doesn't exist then error out.
-    operations::pipeline::install_packages::InstallPackages::new(&config, &tree)
+    InstallPackages::new(&config, &tree)
         .packages(packages)
         .install()
         .await?;

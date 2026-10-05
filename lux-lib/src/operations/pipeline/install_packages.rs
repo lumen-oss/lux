@@ -27,13 +27,10 @@ use super::{
 
 use crate::operations::PackageInstallSpec;
 
-/// Installs a set of [`PackageInstallSpec`]s into an install tree.
+/// Installs a set of [`PackageInstallSpec`]s into a tree.
 ///
-/// This is the composable core of package installation: it resolves the
-/// dependency graph, downloads and hashes sources, builds the packages (build dependencies
-/// first) into the regular, build and test trees, and records the result in the trees'
-/// lockfiles. It also returns a [`LockfileHandle`] so callers (e.g. a workspace) can commit
-/// the resolved sections to their own lockfile.
+/// Returns a [`LockfileHandle`] so changes can be committed into
+/// the correct lockfile.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallPackages<'a, T>
@@ -95,7 +92,6 @@ where
             return Ok((Vec::new(), LockfileHandle::default()));
         }
         let span = match args.packages.as_slice() {
-            [] => tracing::info_span!("Installing"),
             [install_spec] => {
                 tracing::info_span!("Installing", package = install_spec.package.to_string())
             }
@@ -165,9 +161,8 @@ where
         ));
     }
 
-    // Forced overwrites: remove the conflicting entrypoints from the tree.
-    // NOTE: non-transactional. If an error occurs, this removes the conflicting package without
-    // installing the substitute. Fix when transactions are implemented.
+    // FIXME(vhyrro): non-transactional. If an error occurs this removes the conflicting package
+    // without installing the substitute. Implement transactions at some point.
     let conflicting_entrypoints = conflicting_entrypoints.into_values().collect_vec();
     for package in &conflicting_entrypoints {
         tree.cleanup(package, tree::EntryType::Entrypoint)?;

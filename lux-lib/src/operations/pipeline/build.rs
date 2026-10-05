@@ -74,11 +74,6 @@ where
     T: InstallTree + Send + Sync,
     State: build_builder::State + build_builder::IsComplete,
 {
-    // INVESTIGATE(vhyrro): Is there a benefit of having a `LocalPackage` type which
-    // contains a LockedPackage as well as Layout information and installation path?
-    // LockedPackages are emitted by DownloadSourcesAndHash, and they represent packages ready for
-    // the lockfile but not installed to the tree yet. Either we create an intermediate type
-    // or a `LocalPackage` type.
     pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, BuildError> {
         let args = self._build();
         let lua = LuaInstallation::new_from_config(args.config).await?;
@@ -146,13 +141,14 @@ where
 
             // Record the installed package in the tree lockfile so that its paths are visible to
             // the packages built after it (e.g. LuaRocks build backends), as well as future builds.
-            let mut lockfile = args.tree.lockfile()?.write_guard();
-            if is_entrypoint {
-                lockfile.add_entrypoint(&pkg);
-            } else {
-                lockfile.add(&pkg);
+            {
+                let mut lockfile = args.tree.lockfile()?.write_guard();
+                if is_entrypoint {
+                    lockfile.add_entrypoint(&pkg);
+                } else {
+                    lockfile.add(&pkg);
+                }
             }
-            drop(lockfile);
 
             installed.push(pkg);
         }

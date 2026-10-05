@@ -3,6 +3,7 @@ use crate::lockfile::{PackageLock, ReadWrite, WorkspaceLockfile};
 use super::{download_sources_and_hash::DownloadSourcesAndHashArtifacts, Artifacts};
 
 /// The lockfile entries resolved by the pipeline, grouped by section.
+/// Allows for transactionality when committing to the lockfile.
 #[derive(Default)]
 pub struct LockfileHandle(Artifacts<PackageLock>);
 

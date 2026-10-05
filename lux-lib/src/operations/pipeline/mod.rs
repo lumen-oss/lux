@@ -10,10 +10,7 @@ pub mod install_workspace;
 pub mod resolve;
 
 /// Packages grouped by the lockfile section they belong to.
-///
-/// A `None` section was never requested and must be left untouched (e.g. not
-/// written to a lockfile), whereas `Some(empty)` means the section was resolved
-/// and is legitimately empty.
+/// `None` means that that section shouldn't be modified.
 pub(crate) struct Artifacts<T> {
     pub(crate) regular: Option<T>,
     pub(crate) build: Option<T>,

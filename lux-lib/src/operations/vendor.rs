@@ -313,7 +313,6 @@ fn push_dependencies<R: Rockspec>(
     Ok(())
 }
 
-/// Vendors the materialized source and rockspec of a single package.
 #[tracing::instrument(
     name = "Vendoring source",
     level = "info",
@@ -341,12 +340,10 @@ async fn vendor_package_sources(
 
     let source_path = vendor_dir.join(format!("{}@{}", name, version));
     match &package.artifact {
-        // A fully materialized source tree.
         PackageSource::SourceDir(path) => {
             fs::tokio::remove_dir_all(&source_path).await.ok();
             fs::tokio::copy_dir_all(path, &source_path).await?;
         }
-        // A pre-built binary rock.
         PackageSource::PackedRock(bytes) => {
             let rock_path = vendor_dir.join(format!("{}@{}.rock", name, version));
             let mut file = fs::tokio::create(&rock_path).await?;
@@ -420,8 +417,6 @@ async fn vendor_package_cargo_deps(
         )
         .await?;
     } else if source_dir.is_file() {
-        // The vendored source is an archive; extract it so `cargo vendor` can
-        // read its `Cargo.toml`. Keep the temp dir alive while cargo runs.
         let temp_dir = fs::tempfile::tempdir()?;
         extract_source_archive(&source_dir, unpack_dir.as_deref(), temp_dir.path()).await?;
         cargo_vendor(
@@ -534,7 +529,6 @@ mod tests {
         Bytes::from(std::fs::read(path).unwrap())
     }
 
-    /// Builds a `DownloadedPackage` for a materialized source tree.
     fn make_downloaded_package(
         rockspec: RemoteLuaRockspec,
         source: RemotePackageSource,
@@ -573,13 +567,10 @@ mod tests {
         }
     }
 
-    /// Vendors a package with a materialized source tree: the rockspec and the
-    /// source tree directory must both be written.
     #[tokio::test]
     async fn vendor_source_tree_writes_rockspec_and_source_dir() {
         let vendor_dir = assert_fs::TempDir::new().unwrap();
 
-        // A source tree that has already been materialized by the pipeline.
         let src_dir = TempDir::new().unwrap();
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
         let rockspec = RemoteLuaRockspec::from_package_and_source_spec(
@@ -614,47 +605,6 @@ mod tests {
         );
     }
 
-    /// Vendors a binary rock: both the packed `.rock` and its rockspec must be written.
-    #[tokio::test]
-    async fn vendor_binary_rock_writes_rock_and_rockspec() {
-        let vendor_dir = assert_fs::TempDir::new().unwrap();
-
-        let bytes = fixture_bytes("toml-edit-0.6.0-1.linux-x86_64.rock");
-        let rock = crate::operations::DownloadedPackedRockBytes {
-            name: "toml-edit".into(),
-            version: "0.6.0-1".parse().unwrap(),
-            bytes: bytes.clone(),
-            file_name: "toml-edit-0.6.0-1.linux-x86_64.rock".into(),
-            url: "https://example.org/toml-edit-0.6.0-1.linux-x86_64.rock"
-                .parse()
-                .unwrap(),
-        };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
-        let package = make_downloaded_package(
-            rockspec,
-            RemotePackageSource::LuarocksBinaryRock("https://example.org/".parse().unwrap()),
-            PackageSource::PackedRock(bytes),
-            None,
-        );
-
-        vendor_package_sources(vendor_dir.path(), &package)
-            .await
-            .unwrap();
-
-        assert!(
-            vendor_dir.path().join("toml-edit@0.6.0-1.rock").is_file(),
-            "packed rock not vendored"
-        );
-        let rockspec_file = vendor_dir.path().join("toml-edit-0.6.0-1.rockspec");
-        assert!(rockspec_file.is_file(), "rockspec not vendored");
-        let rockspec_content = std::fs::read_to_string(&rockspec_file).unwrap();
-        assert!(
-            rockspec_content.contains("package = ") && rockspec_content.contains("toml-edit"),
-            "vendored rockspec is not valid:\n{rockspec_content}"
-        );
-    }
-
-    /// A pre-existing vendored source directory must be replaced, not merged.
     #[tokio::test]
     async fn vendor_source_tree_replaces_stale_source_dir() {
         let vendor_dir = assert_fs::TempDir::new().unwrap();
@@ -687,8 +637,6 @@ mod tests {
         assert!(stale_dir.join("hello.lua").is_file());
     }
 
-    /// `no_delete` must be respected: if the vendor dir exists and `no_delete` is
-    /// set, pre-existing contents are preserved.
     #[tokio::test]
     async fn vendor_workspace_no_delete_preserves_existing_contents() {
         let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

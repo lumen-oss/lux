@@ -224,11 +224,8 @@ mod tests {
         assert!(metadata.latest_match(&package_req, &filter).is_none());
     }
 
-    /// Lux prefers binary rocks over rockspecs over `.src.rock` archives
-    /// (`RemotePackageType` ordering). `Discover` relies on this to pick a source.
     #[tokio::test]
     pub async fn latest_match_prefers_binary_then_rockspec_then_src() {
-        // `arch = "all"` is treated as a binary rock on every platform.
         let manifest = r#"
             commands = {}
             modules = {}
