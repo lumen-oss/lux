@@ -2,9 +2,10 @@ use std::path::PathBuf;
 
 use lux_lib::{
     config::Config,
+    drivers::install_packages::InstallPackages,
     lockfile::PinnedState,
     lua_version::LuaVersion,
-    operations::{self, pipeline::install_packages::InstallPackages},
+    operations,
     package::{PackageName, PackageReq},
     workspace::{Workspace, WorkspaceError},
 };
@@ -62,6 +63,7 @@ async fn install_from_path(
         .project(project)
         .config(&config)
         .tree(&tree)
+        .workspace(&workspace)
         .build()
         .await?;
 

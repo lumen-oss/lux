@@ -152,7 +152,8 @@ Reinstall?
                 .packages(dependencies)
                 .remove()
                 .await?;
-            operations::pipeline::install_packages::InstallPackages::new(&config, &tree)
+            InstallPackages::new(&config, &tree)
+                .package_db(PackageDB::from_config(&config).await?)
                 .packages(reinstall_specs)
                 .install()
                 .await?;

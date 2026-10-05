@@ -15,7 +15,7 @@ use super::download_sources_and_hash::PackageSource;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FoundPackage {
-    pub(crate) package: RemotePackage,
+    pub(crate) remote: RemotePackage,
     pub(crate) rockspec: RemoteLuaRockspec,
     pub(crate) artifact: Option<PackageSource>,
 }
@@ -28,13 +28,13 @@ impl FoundPackage {
             .to_lua_remote_rockspec_string()
             .map(RemotePackageSource::RockspecContent)
             .unwrap_or(RemotePackageSource::Local);
-        let package = RemotePackage::new(
+        let remote = RemotePackage::new(
             PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
             source,
             None,
         );
         Self {
-            package,
+            remote,
             rockspec,
             artifact: None,
         }
@@ -44,13 +44,13 @@ impl FoundPackage {
     /// project's own directory as the source. The source is hashed and built in
     /// place, so no download happens.
     pub(crate) fn from_project_root(rockspec: RemoteLuaRockspec, root_dir: PathBuf) -> Self {
-        let package = RemotePackage::new(
+        let remote = RemotePackage::new(
             PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
             RemotePackageSource::Local,
             None,
         );
         Self {
-            package,
+            remote,
             rockspec,
             artifact: Some(PackageSource::SourceDir(root_dir)),
         }
@@ -79,15 +79,15 @@ mod tests {
     fn from_rockspec_builds_local_found_package() {
         let content = "rockspec_format = '1.0'\npackage = 'foo'\nversion = '1.0.0-1'\nsource = { url = 'https://example.com/foo.zip' }";
         let Ok(rockspec) = RemoteLuaRockspec::new(content) else {
-            panic!("invalid test rockspec");
+            unreachable!("invalid test rockspec");
         };
 
         let found = FoundPackage::from_rockspec(rockspec);
 
-        assert_eq!(found.package.package.name().to_string(), "foo");
-        assert_eq!(found.package.package.version().to_string(), "1.0.0-1");
+        assert_eq!(found.remote.spec.name().to_string(), "foo");
+        assert_eq!(found.remote.spec.version().to_string(), "1.0.0-1");
         assert!(matches!(
-            found.package.source,
+            found.remote.source,
             RemotePackageSource::RockspecContent(_)
         ));
         assert!(found.artifact.is_none());

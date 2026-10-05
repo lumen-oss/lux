@@ -43,13 +43,14 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let rock_list = tree.as_rock_list()?;
     let rock_list = rock_list
         .iter()
-        .map(|rock| {
+        .filter_map(|rock| {
             rock.to_package()
                 .has_update(&package_db)
-                .map(|mb_version| mb_version.map(|version| (rock, version)))
+                .ok()
+                .flatten()
+                .map(|version| (rock, version))
         })
-        .filter_map_ok(|mb_tuple| mb_tuple)
-        .try_collect::<_, Vec<(&LockedPackage, PackageVersion)>, _>()?;
+        .collect::<Vec<(&LockedPackage, PackageVersion)>>();
 
     let rock_list = rock_list
         .iter()

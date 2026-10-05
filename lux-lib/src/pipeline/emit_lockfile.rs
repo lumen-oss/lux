@@ -31,7 +31,7 @@ impl LockfileHandle {
     pub(crate) fn commit(&self, lockfile: &mut WorkspaceLockfile<ReadWrite>) {
         self.0.iter().for_each(|(section, lock)| {
             if let Some(lock) = lock {
-                lockfile.sync(lock, &section);
+                lockfile.merge(lock, &section);
             }
         });
     }

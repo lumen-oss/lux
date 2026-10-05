@@ -274,7 +274,7 @@ impl Resolver {
     fn on_discovered(&mut self, key: RequestKey, spec: PackageInstallSpec, found: FoundPackage) {
         let section = key.section;
         let is_binary = matches!(
-            found.package.source,
+            found.remote.source,
             RemotePackageSource::LuarocksBinaryRock(_)
         );
         let constraint = spec
@@ -282,8 +282,8 @@ impl Resolver {
             .clone()
             .unwrap_or_else(|| spec.package.version_req().clone().into());
         let id = LockedPackageId::new(
-            found.package.package.name(),
-            found.package.package.version(),
+            found.remote.spec.name(),
+            found.remote.spec.version(),
             spec.pin,
             spec.opt,
             constraint,
@@ -399,8 +399,8 @@ impl Resolver {
                 .unwrap_or_else(|| install_spec.package.version_req().clone().into());
 
             let spec = LockedPackageSpec::new(
-                found.package.package.name(),
-                found.package.package.version(),
+                found.remote.spec.name(),
+                found.remote.spec.version(),
                 constraint,
                 dependencies,
                 build_dependencies,
@@ -410,8 +410,8 @@ impl Resolver {
             let package = ResolvedPackage {
                 spec,
                 rockspec: found.rockspec,
-                source: found.package.source,
-                source_url: found.package.source_url,
+                source: found.remote.source,
+                source_url: found.remote.source_url,
                 entry_type: install_spec.entry_type,
                 build_behaviour: install_spec.build_behaviour,
                 artifact: found.artifact,
@@ -577,7 +577,7 @@ mod tests {
                         Err(err) => panic!("invalid test rockspec: {err}"),
                     };
                     FoundPackage {
-                        package: RemotePackage::new(
+                        remote: RemotePackage::new(
                             PackageSpec::new(
                                 rockspec.package().clone(),
                                 rockspec.version().clone(),

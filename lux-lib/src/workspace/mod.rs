@@ -159,6 +159,14 @@ impl Workspace {
         &mut self.members
     }
 
+    /// The package names of all workspace members.
+    pub fn member_names(&self) -> Vec<PackageName> {
+        self.members()
+            .iter()
+            .map(|project| project.toml().package.clone())
+            .collect()
+    }
+
     /// Get a workspace member, defaulting to the first one if none is specified.
     /// Fails if a package name is specified, but not found.
     pub fn single_member_or_select(

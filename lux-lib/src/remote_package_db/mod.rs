@@ -2,16 +2,14 @@ use crate::{
     config::{Config, ConfigError},
     lockfile::{LockfileIntegrityError, PackageLock},
     manifest::{Manifest, ManifestError},
-    operations::{
-        pipeline::{
-            discover::{DiscoverError, FoundPackage},
-            download_sources_and_hash::PackageSource,
-        },
-        Download, FetchVendored, PackageInstallSpec, RemoteRockDownload,
-    },
+    operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
         RemotePackageTypeFilterSpec,
+    },
+    pipeline::{
+        discover::{DiscoverError, FoundPackage},
+        download_sources_and_hash::PackageSource,
     },
 };
 use itertools::Itertools;
@@ -79,6 +77,12 @@ impl RemotePackageDB {
     /// Prepends local packages to the lookup order.
     pub(crate) fn with_local(mut self, packages: Vec<FoundPackage>) -> Self {
         self.0.insert(0, RemoteSource::Local(packages));
+        self
+    }
+
+    /// Prepends locked packages to the lookup order, ahead of manifests.
+    pub(crate) fn with_locks(mut self, locks: Vec<PackageLock>) -> Self {
+        self.0.insert(0, RemoteSource::LockedPackageLocks(locks));
         self
     }
 

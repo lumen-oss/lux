@@ -1,5 +1,6 @@
 pub mod build;
 pub mod config;
+pub mod drivers;
 pub mod fs;
 pub mod git;
 pub mod hash;
@@ -13,6 +14,7 @@ pub mod manifest;
 pub mod operations;
 pub mod package;
 pub mod path;
+pub mod pipeline;
 pub mod progress;
 pub mod project;
 pub mod remote_package_db;

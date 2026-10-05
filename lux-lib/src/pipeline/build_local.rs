@@ -15,7 +15,7 @@ use crate::{
 use super::download_sources_and_hash::fetch_and_hash_source;
 
 /// A rocks package builder, providing fine-grained control
-/// over how a package should be built.
+/// over how a local package should be built.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {

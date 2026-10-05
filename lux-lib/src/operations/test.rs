@@ -1,9 +1,6 @@
 use std::{io, ops::Deref, path::PathBuf, process::Command};
 
-use super::{
-    pipeline::install_packages::{InstallPackages, InstallPackagesError},
-    BuildWorkspace, BuildWorkspaceError, PackageInstallSpec, Sync, SyncError,
-};
+use crate::drivers::sync::{Sync, SyncError, SyncMode, TargetSet};
 use crate::fs;
 use crate::tree::InstallTree;
 use crate::workspace::{WorkspaceError, WorkspaceTreeError};
@@ -12,11 +9,10 @@ use crate::{
     config::{Config, ConfigError},
     lua_installation::{LuaBinary, LuaBinaryError},
     lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
-    package::{PackageName, PackageVersionReqError},
+    package::PackageName,
     path::{Paths, PathsError},
     project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
     rockspec::Rockspec,
-    tree::{self, TreeError},
     workspace::Workspace,
 };
 use bon::Builder;
@@ -84,12 +80,9 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] ConfigError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    InstallTestDependencies(#[from] Box<InstallTestDependenciesError>),
     #[error("build failed")]
     #[diagnostic(forward(0))]
-    BuildWorkspace(#[from] Box<BuildWorkspaceError>),
+    Sync(#[from] Box<SyncError>),
     #[error("tests failed!")]
     #[diagnostic(help("see the test runner's output for details"))]
     TestFailure,
@@ -118,9 +111,6 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ProjectTomlValidation(#[from] LocalProjectTomlValidationError),
-    #[error("failed to sync dependencies")]
-    #[diagnostic(forward(0))]
-    Sync(#[from] Box<SyncError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     TestSpec(#[from] TestSpecError),
@@ -130,18 +120,6 @@ pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaBinary(#[from] LuaBinaryError),
-}
-
-impl From<InstallTestDependenciesError> for RunTestsError {
-    fn from(source: InstallTestDependenciesError) -> Self {
-        Self::InstallTestDependencies(Box::new(source))
-    }
-}
-
-impl From<BuildWorkspaceError> for RunTestsError {
-    fn from(source: BuildWorkspaceError) -> Self {
-        Self::BuildWorkspace(Box::new(source))
-    }
 }
 
 impl From<SyncError> for RunTestsError {
@@ -186,19 +164,16 @@ async fn run_project_tests(
     let test_spec = rocks.test().current_platform().to_validated(project)?;
     let test_config = test_spec.test_config(config)?;
 
-    if no_lock {
-        let rockspec = project.toml().into_local()?;
-        ensure_test_dependencies(workspace, project, rockspec, &test_config).await?;
-    } else {
-        Sync::new(workspace, &test_config).test(true).sync().await?;
-    }
-
     Box::pin(
-        BuildWorkspace::new(workspace, &test_config)
-            .package(project.toml().package().clone())
+        Sync::new(workspace, &test_config)
+            .mode(SyncMode::Open)
+            .targets(TargetSet {
+                test: true,
+                members: Some(vec![project.toml().package().clone()]),
+            })
             .no_lock(no_lock)
-            .only_deps(false)
-            .build(),
+            .behaviour(BuildBehaviour::Ignore)
+            .sync(),
     )
     .await?;
 
@@ -283,93 +258,6 @@ async fn run_project_tests(
     } else {
         Ok(())
     }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[error("error installing test dependencies")]
-#[diagnostic(forward(0))]
-pub enum InstallTestDependenciesError {
-    WorkspaceTree(#[from] WorkspaceTreeError),
-    Tree(#[from] TreeError),
-    Install(#[from] Box<InstallPackagesError>),
-    PackageVersionReq(#[from] PackageVersionReqError),
-}
-
-impl From<InstallPackagesError> for InstallTestDependenciesError {
-    fn from(source: InstallPackagesError) -> Self {
-        Self::Install(Box::new(source))
-    }
-}
-
-/// Ensure test dependencies are installed
-/// This defaults to the local project tree if cwd is a project root.
-async fn ensure_test_dependencies(
-    workspace: &Workspace,
-    project: &Project,
-    rockspec: impl Rockspec,
-    config: &Config,
-) -> Result<(), InstallTestDependenciesError> {
-    let test_tree = workspace.test_tree(config)?;
-    let rockspec_dependencies = rockspec.test_dependencies().current_platform();
-    let test_dependencies = rockspec
-        .test()
-        .current_platform()
-        .test_dependencies(project)
-        .iter()
-        .filter(|test_dep| {
-            !rockspec_dependencies
-                .iter()
-                .any(|dep| dep.name() == test_dep.name())
-        })
-        .filter_map(|dep| {
-            let build_behaviour = if test_tree
-                .match_rocks(dep)
-                .is_ok_and(|matches| matches.is_found())
-            {
-                Some(BuildBehaviour::Ignore)
-            } else {
-                Some(BuildBehaviour::Force)
-            };
-            build_behaviour.map(|build_behaviour| {
-                PackageInstallSpec::new(dep.clone(), tree::EntryType::Entrypoint)
-                    .build_behaviour(build_behaviour)
-                    .build()
-            })
-        })
-        .chain(
-            rockspec_dependencies
-                .iter()
-                .filter(|req| !req.name().eq(&PackageName::new("lua".into())))
-                .filter_map(|dep| {
-                    let build_behaviour = if test_tree
-                        .match_rocks(dep.package_req())
-                        .is_ok_and(|matches| matches.is_found())
-                    {
-                        Some(BuildBehaviour::Ignore)
-                    } else {
-                        Some(BuildBehaviour::Force)
-                    };
-                    build_behaviour.map(|build_behaviour| {
-                        PackageInstallSpec::new(
-                            dep.package_req().clone(),
-                            tree::EntryType::Entrypoint,
-                        )
-                        .build_behaviour(build_behaviour)
-                        .pin(*dep.pin())
-                        .opt(*dep.opt())
-                        .maybe_source(dep.source.clone())
-                        .build()
-                    })
-                }),
-        )
-        .collect();
-
-    InstallPackages::new(config, &test_tree)
-        .packages(test_dependencies)
-        .install()
-        .await?;
-
-    Ok(())
 }
 
 #[cfg(test)]

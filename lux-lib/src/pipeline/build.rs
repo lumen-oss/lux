@@ -47,6 +47,8 @@ impl From<LuaRocksInstallError> for BuildError {
     }
 }
 
+/// A rocks package builder, providing fine-grained control
+/// over how a package should be built.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub(crate) struct Build<'a, T: InstallTree + Send + Sync> {

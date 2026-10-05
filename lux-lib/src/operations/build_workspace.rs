@@ -1,16 +1,10 @@
 use crate::{
     build::BuildBehaviour,
     config::Config,
+    drivers::sync::{Sync, SyncError, SyncMode, TargetSet},
     lockfile::LockedPackage,
-    lua_installation::LuaInstallationError,
-    operations::{
-        pipeline::install_workspace::{
-            InstallWorkspaceDependencies, InstallWorkspaceDependenciesError,
-        },
-        GenLuaRc, GenLuaRcError, InstallProject, InstallProjectError,
-    },
     package::PackageName,
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
+    workspace::Workspace,
 };
 use bon::Builder;
 use thiserror::Error;
@@ -21,22 +15,7 @@ use tracing::{info_span, Instrument};
 pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallWorkspaceDependencies(#[from] InstallWorkspaceDependenciesError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    InstallProject(#[from] InstallProjectError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    GenLuaRc(#[from] GenLuaRcError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Sync(#[from] SyncError),
 }
 
 #[derive(Builder)]
@@ -71,52 +50,18 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
             None => info_span!("Building workspace"),
         };
         async move {
-            InstallWorkspaceDependencies::new(build.config, build.workspace)
+            let report = Sync::new(build.workspace, build.config)
+                .mode(SyncMode::Open)
+                .targets(TargetSet {
+                    test: false,
+                    members: build.package.map(|package| vec![package]),
+                })
+                .behaviour(build.behaviour)
+                .only_deps(build.only_deps)
                 .no_lock(build.no_lock)
-                .install()
+                .sync()
                 .await?;
-
-            let mut built = Vec::new();
-            if !build.only_deps {
-                let workspace_tree = build.workspace.tree(build.config)?;
-                match &build.package {
-                    Some(package) => {
-                        let project = build.workspace.select_member(package)?;
-                        built.push(
-                            InstallProject::new()
-                                .project(project)
-                                .config(build.config)
-                                .tree(&workspace_tree)
-                                .behaviour(build.behaviour)
-                                .build()
-                                .await?,
-                        );
-                    }
-                    None => {
-                        for project in build.workspace.members() {
-                            built.push(
-                                InstallProject::new()
-                                    .project(project)
-                                    .config(build.config)
-                                    .tree(&workspace_tree)
-                                    .behaviour(build.behaviour)
-                                    .build()
-                                    .await?,
-                            );
-                        }
-                    }
-                }
-            }
-
-            if !build.no_lock {
-                GenLuaRc::new()
-                    .config(build.config)
-                    .workspace(build.workspace)
-                    .generate_luarc()
-                    .await?;
-            }
-
-            Ok(built)
+            Ok(report.added().to_vec())
         }
         .instrument(span)
         .await

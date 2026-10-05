@@ -1,6 +1,7 @@
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::config::Config;
+use lux_lib::drivers::sync::{Sync, SyncMode, TargetSet};
 use lux_lib::lockfile::PinnedState;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::operations;
@@ -82,8 +83,12 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                     )
                     .await?;
             }
-            operations::Sync::new(&workspace, &config)
-                .test(!test_packages.is_empty())
+            Sync::new(&workspace, &config)
+                .mode(SyncMode::Frozen)
+                .targets(TargetSet {
+                    test: !test_packages.is_empty(),
+                    members: None,
+                })
                 .sync()
                 .await
                 .wrap_err("syncing dependencies with the workspace lockfile failed.")?;

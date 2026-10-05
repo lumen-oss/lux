@@ -1,7 +1,11 @@
 use clap::Args;
 use lux_lib::{
-    build::BuildBehaviour, config::Config, lockfile::LockedPackage, operations::BuildWorkspace,
-    package::PackageName, workspace::Workspace,
+    build::BuildBehaviour,
+    config::Config,
+    drivers::sync::{Sync, SyncMode, TargetSet},
+    lockfile::LockedPackage,
+    package::PackageName,
+    workspace::Workspace,
 };
 use miette::Result;
 
@@ -31,14 +35,18 @@ pub async fn build_with_behaviour(
     behaviour: BuildBehaviour,
 ) -> Result<Vec<LockedPackage>> {
     let workspace = Workspace::current_or_err()?;
-    let result = BuildWorkspace::new(&workspace, &config)
-        .maybe_package(data.package)
-        .no_lock(data.no_lock)
-        .only_deps(data.only_deps)
+    let report = Sync::new(&workspace, &config)
+        .mode(SyncMode::Open)
+        .targets(TargetSet {
+            test: false,
+            members: data.package.map(|package| vec![package]),
+        })
         .behaviour(behaviour)
-        .build()
+        .only_deps(data.only_deps)
+        .no_lock(data.no_lock)
+        .sync()
         .await?;
-    Ok(result)
+    Ok(report.added().to_vec())
 }
 
 #[cfg(test)]
