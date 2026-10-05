@@ -167,6 +167,7 @@ impl LuaRocksInstallation {
                 .tree(&self.tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&self.config)
+                .behaviour(build::BuildBehaviour::Ignore)
                 .constraint(luarocks_req.version_req().clone().into())
                 .build()
                 .await?;

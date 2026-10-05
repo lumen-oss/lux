@@ -2,6 +2,7 @@ use std::io;
 use tokio::process::Command;
 
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
@@ -227,6 +228,7 @@ async fn install_command(command: &str, config: &Config) -> Result<(), InstallCo
         PackageReq::new(command.into(), None)?,
         tree::EntryType::Entrypoint,
     )
+    .build_behaviour(BuildBehaviour::Force)
     .build();
     let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
     InstallPackages::new(config, &tree)

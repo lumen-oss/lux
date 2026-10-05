@@ -8,6 +8,7 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lockfile::{
         LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState, PinnedState,
@@ -283,7 +284,7 @@ impl Resolver {
                 dependency.package_req().clone(),
                 EntryType::DependencyOnly,
             )
-            .build_behaviour(spec.build_behaviour)
+            .build_behaviour(BuildBehaviour::Ignore)
             .pin(spec.pin)
             .opt(spec.opt)
             .maybe_source(dependency.source().clone())
@@ -470,7 +471,7 @@ fn build_dependency_specs(
                 .find(|dep| dep.name() == &name)
                 .map(|dep| {
                     PackageInstallSpec::new(dep.package_req().clone(), EntryType::Entrypoint)
-                        .build_behaviour(parent.build_behaviour)
+                        .build_behaviour(BuildBehaviour::Ignore)
                         .pin(parent.pin)
                         .opt(parent.opt)
                         .maybe_source(dep.source().clone())
@@ -479,7 +480,7 @@ fn build_dependency_specs(
                 .or_else(|| {
                     Some(
                         PackageInstallSpec::new(PackageReq::from(name), EntryType::Entrypoint)
-                            .build_behaviour(parent.build_behaviour)
+                            .build_behaviour(BuildBehaviour::Ignore)
                             .pin(parent.pin)
                             .opt(parent.opt)
                             .build(),
@@ -545,7 +546,9 @@ mod tests {
             Ok(package) => package,
             Err(err) => panic!("invalid package req: {err}"),
         };
-        PackageInstallSpec::new(package, EntryType::Entrypoint).build()
+        PackageInstallSpec::new(package, EntryType::Entrypoint)
+            .build_behaviour(BuildBehaviour::Ignore)
+            .build()
     }
 
     fn roots(spec: PackageInstallSpec) -> Artifacts<Vec<PackageInstallSpec>> {

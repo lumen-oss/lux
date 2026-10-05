@@ -1,6 +1,7 @@
 use std::io;
 
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lockfile::{
         LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
@@ -331,6 +332,7 @@ fn mk_install_spec(
         tree::EntryType::DependencyOnly
     };
     PackageInstallSpec::new(req.clone(), entry_type)
+        .build_behaviour(BuildBehaviour::Force)
         .pin(PinnedState::Unpinned)
         .opt(package.opt())
         .build()

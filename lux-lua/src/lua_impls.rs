@@ -3329,14 +3329,16 @@ impl From<EntryTypeLua> for EntryType {
 #[serde(rename_all = "snake_case")]
 enum BuildBehaviourLua {
     #[default]
-    NoForce,
+    Ignore,
+    Conflict,
     Force,
 }
 
 impl From<BuildBehaviourLua> for BuildBehaviour {
     fn from(val: BuildBehaviourLua) -> Self {
         match val {
-            BuildBehaviourLua::NoForce => Self::NoForce,
+            BuildBehaviourLua::Ignore => Self::Ignore,
+            BuildBehaviourLua::Conflict => Self::Conflict,
             BuildBehaviourLua::Force => Self::Force,
         }
     }
@@ -3346,7 +3348,7 @@ impl From<BuildBehaviourLua> for BuildBehaviour {
 /// ```lua
 /// "say >= 1.3"
 ///
-/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "no_force" }
+/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "ignore" }
 /// ```
 #[derive(Deserialize)]
 #[serde(untagged)]

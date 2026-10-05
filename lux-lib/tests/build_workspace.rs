@@ -32,6 +32,14 @@ async fn test_build_multi_workspace_local_dependencies() {
         .await
         .unwrap();
 
+    // Building an already-built workspace must be idempotent
+    BuildWorkspace::new(&workspace, &config)
+        .no_lock(false)
+        .only_deps(false)
+        .build()
+        .await
+        .unwrap();
+
     let lockfile = workspace.tree(&config).unwrap().lockfile().unwrap();
 
     let foo = lockfile
