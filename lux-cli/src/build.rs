@@ -1,7 +1,7 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, lockfile::LockedPackage, operations::BuildWorkspace, package::PackageName,
-    workspace::Workspace,
+    build::BuildBehaviour, config::Config, lockfile::LockedPackage, operations::BuildWorkspace,
+    package::PackageName, workspace::Workspace,
 };
 use miette::Result;
 
@@ -22,11 +22,20 @@ pub struct Build {
 
 /// Returns `Some` if the `only_deps` arg is set to `false`.
 pub async fn build(data: Build, config: Config) -> Result<Vec<LockedPackage>> {
+    build_with_behaviour(data, config, BuildBehaviour::Force).await
+}
+
+pub async fn build_with_behaviour(
+    data: Build,
+    config: Config,
+    behaviour: BuildBehaviour,
+) -> Result<Vec<LockedPackage>> {
     let workspace = Workspace::current_or_err()?;
     let result = BuildWorkspace::new(&workspace, &config)
         .maybe_package(data.package)
         .no_lock(data.no_lock)
         .only_deps(data.only_deps)
+        .behaviour(behaviour)
         .build()
         .await?;
     Ok(result)

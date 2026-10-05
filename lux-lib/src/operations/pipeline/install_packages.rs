@@ -9,7 +9,10 @@ use tracing::Instrument;
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    lockfile::{FlushLockfileError, LockedPackage, LockedPackageId, Lockfile, ReadWrite},
+    lockfile::{
+        FlushLockfileError, LockedPackage, LockedPackageId, LockedPackageLockType, Lockfile,
+        ReadWrite,
+    },
     lua_installation::LuaInstallationError,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     package::PackageNameList,
@@ -133,8 +136,31 @@ where
 
     let lockfile = tree.lockfile()?;
     let build_tree = tree.build_tree(config)?;
+    let build_lockfile = build_tree.lockfile()?;
+
+    let mut installed: HashMap<LockedPackageLockType, Vec<LockedPackage>> = HashMap::new();
+    installed.insert(
+        LockedPackageLockType::Regular,
+        lockfile.rocks().values().cloned().collect_vec(),
+    );
+    installed.insert(
+        LockedPackageLockType::Build,
+        build_lockfile.rocks().values().cloned().collect_vec(),
+    );
+    if install.test_packages.is_some() {
+        installed.insert(
+            LockedPackageLockType::Test,
+            tree.test_tree(config)?
+                .lockfile()?
+                .rocks()
+                .values()
+                .cloned()
+                .collect_vec(),
+        );
+    }
 
     let mut resolve = ResolvePackageDependencies::new(package_db, config)
+        .installed(installed)
         .packages(packages)
         .build_packages(install.build_packages);
     if let Some(test_packages) = install.test_packages {
@@ -218,14 +244,22 @@ where
             .await?;
     }
 
-    let installed_packages: HashMap<LockedPackageId, LockedPackage> = built
+    let mut installed_packages: HashMap<LockedPackageId, LockedPackage> = lockfile
+        .rocks()
         .iter()
-        .map(|pkg| (pkg.spec().id(), pkg.clone()))
+        .map(|(id, package)| (id.clone(), package.clone()))
         .collect();
-    let installed_build_deps: HashMap<LockedPackageId, LockedPackage> = built_build_deps
+    installed_packages.extend(built.iter().map(|pkg| (pkg.spec().id(), pkg.clone())));
+    let mut installed_build_deps: HashMap<LockedPackageId, LockedPackage> = build_lockfile
+        .rocks()
         .iter()
-        .map(|pkg| (pkg.spec().id(), pkg.clone()))
+        .map(|(id, package)| (id.clone(), package.clone()))
         .collect();
+    installed_build_deps.extend(
+        built_build_deps
+            .iter()
+            .map(|pkg| (pkg.spec().id(), pkg.clone())),
+    );
 
     lockfile.map_then_flush(|lockfile| {
         for package in &conflicting_entrypoints {

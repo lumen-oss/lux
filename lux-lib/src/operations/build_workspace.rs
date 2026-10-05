@@ -1,4 +1,5 @@
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lockfile::LockedPackage,
     lua_installation::LuaInstallationError,
@@ -55,6 +56,9 @@ pub struct BuildWorkspace<'a> {
 
     /// Build only the dependencies
     only_deps: bool,
+
+    #[builder(default = BuildBehaviour::Force)]
+    behaviour: BuildBehaviour,
 }
 
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>
@@ -83,6 +87,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                                 .project(project)
                                 .config(build.config)
                                 .tree(&workspace_tree)
+                                .behaviour(build.behaviour)
                                 .build()
                                 .await?,
                         );
@@ -94,6 +99,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
                                     .project(project)
                                     .config(build.config)
                                     .tree(&workspace_tree)
+                                    .behaviour(build.behaviour)
                                     .build()
                                     .await?,
                             );

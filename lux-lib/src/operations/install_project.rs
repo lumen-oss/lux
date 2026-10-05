@@ -5,6 +5,7 @@ use thiserror::Error;
 use crate::{
     build::{BuildBehaviour, BuildError},
     config::Config,
+    hash::HasIntegrity,
     lockfile::LockedPackage,
     operations::{
         pipeline::{
@@ -42,6 +43,8 @@ pub enum InstallProjectError {
     Build(#[from] Box<BuildError>),
     #[error("package '{0}' was not installed")]
     PackageNotInstalled(PackageName),
+    #[error("failed to hash the project's sources")]
+    Hash(#[source] std::io::Error),
 }
 
 impl From<InstallPackagesError> for InstallProjectError {
@@ -70,6 +73,9 @@ where
     config: &'a Config,
 
     tree: &'a T,
+
+    #[builder(default = BuildBehaviour::Force)]
+    behaviour: BuildBehaviour,
 }
 
 impl<
@@ -87,6 +93,28 @@ impl<
 
         let rockspec = project.local_remote_rockspec()?;
         let name = rockspec.package().clone();
+
+        let behaviour = if matches!(args.behaviour, BuildBehaviour::Ignore) {
+            match tree.lockfile()?.entrypoint(&name) {
+                Some(existing) => {
+                    let source_hash = project
+                        .root()
+                        .hash()
+                        .await
+                        .map_err(InstallProjectError::Hash)?;
+                    if existing.version() == rockspec.version()
+                        && existing.hashes().source == source_hash
+                    {
+                        return Ok(existing.clone());
+                    }
+                    BuildBehaviour::Force
+                }
+                None => args.behaviour,
+            }
+        } else {
+            args.behaviour
+        };
+
         let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
         let package_db = RemotePackageDB::from_config(config)
             .await?
@@ -94,7 +122,7 @@ impl<
 
         let install_spec =
             PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)
-                .build_behaviour(BuildBehaviour::Force)
+                .build_behaviour(behaviour)
                 .build();
 
         InstallPackages::new(config, tree)

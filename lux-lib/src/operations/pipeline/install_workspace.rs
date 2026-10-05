@@ -9,7 +9,7 @@ use crate::{
     operations::PackageInstallSpec,
     project::project_toml::LocalProjectTomlValidationError,
     rockspec::Rockspec,
-    tree::EntryType,
+    tree::{EntryType, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
@@ -52,11 +52,22 @@ where
         let config = args.config;
         let workspace = args.workspace;
 
+        let tree = workspace.tree(config)?;
+        let build_tree = tree.build_tree(config)?;
+
         let mut regular = gather_dependencies(workspace, DependencyKind::Regular)?;
+        regular.retain(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()));
         regular.extend(args.packages);
         let build = gather_dependencies(workspace, DependencyKind::Build)?;
+        let build = build
+            .into_iter()
+            .filter(|spec| {
+                !build_tree
+                    .match_rocks(&spec.package)
+                    .is_ok_and(|m| m.is_found())
+            })
+            .collect();
 
-        let tree = workspace.tree(config)?;
         let mut install = InstallPackages::new(config, &tree)
             .packages(regular)
             .build_packages(build);
@@ -85,6 +96,9 @@ pub enum InstallWorkspaceDependenciesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),

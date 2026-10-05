@@ -99,7 +99,7 @@ impl FileSystem for VcsExcludingFileSystem {
     fn read_dir(&self, path: &Utf8Path) -> io::Result<Vec<String>> {
         Ok(FileSystem::read_dir(&NativeFileSystem {}, path)?
             .into_iter()
-            .filter(|name| !is_vcs_dir(name))
+            .filter(|name| !is_vcs_dir(name) && name != crate::workspace::LUX_DIR_NAME)
             .filter(|name| {
                 let full = path.join(name);
                 let is_dir = full.as_std_path().is_dir();
@@ -252,6 +252,8 @@ mod tests {
         write(temp.child(".git/config").path(), "nondeterministic").unwrap();
         temp.child(".jj").create_dir_all().unwrap();
         write(temp.child(".jj/repo").path(), "nondeterministic").unwrap();
+        temp.child(".lux").create_dir_all().unwrap();
+        write(temp.child(".lux/tree").path(), "nondeterministic").unwrap();
 
         let hash_with_vcs = temp.path().to_path_buf().hash().await.unwrap();
 
