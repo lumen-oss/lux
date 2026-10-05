@@ -882,6 +882,9 @@ pub enum LockfileError {
         expected: String,
         help: String,
     },
+    #[error("cannot migrate lockfile '{}'", lockfile.display())]
+    #[diagnostic(code(lux_lib::lockfile::conflicting_entrypoints), help("{help}"))]
+    ConflictingEntrypoints { lockfile: PathBuf, help: String },
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -1211,7 +1214,7 @@ impl Lockfile<ReadOnly> {
 remove the tree at '{}' and reinstall all packages it contained.",
             tree_dir.display()
         );
-        let mut lockfile: Lockfile<ReadOnly> = parse_lockfile(&content, &filepath, &help)?;
+        let mut lockfile: Lockfile<ReadOnly> = load_lockfile(&content, &filepath, &help)?;
         lockfile.filepath = filepath;
         Ok(lockfile)
     }
@@ -1311,7 +1314,7 @@ impl WorkspaceLockfile<ReadOnly> {
     #[tracing::instrument(level = "trace")]
     pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
         let content = fs::sync::read_to_string(&filepath)?;
-        let mut lockfile: WorkspaceLockfile<ReadOnly> = parse_lockfile(
+        let mut lockfile: WorkspaceLockfile<ReadOnly> = load_lockfile(
             &content,
             &filepath,
             "this lockfile was created by an incompatible version of Lux.
@@ -1528,36 +1531,133 @@ impl Drop for ProjectLockfileGuard {
     }
 }
 
-fn parse_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, LockfileError>
+fn load_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, LockfileError>
 where
     T: serde::de::DeserializeOwned,
 {
-    let value: serde_json::Value =
-        serde_json::from_str(content).map_err(LockfileError::ParseJson)?;
+    let mut value = parse_lockfile_json(content)?;
+    if lockfile_version(&value, lockfile)?.major == 1 {
+        migrate_v1_lockfile(&mut value, lockfile)?;
+    }
+    deserialize_lockfile(value, lockfile, help)
+}
 
+fn parse_lockfile_json(
+    content: &str,
+) -> Result<serde_json::Map<String, serde_json::Value>, LockfileError> {
+    serde_json::from_str(content).map_err(LockfileError::ParseJson)
+}
+
+fn lockfile_version(
+    value: &serde_json::Map<String, serde_json::Value>,
+    lockfile: &Path,
+) -> Result<semver::Version, LockfileError> {
     let version = value
         .get("version")
         .and_then(|version| version.as_str())
-        .ok_or_else(|| LockfileError::MissingVersion {
+        .ok_or(LockfileError::MissingVersion {
             lockfile: lockfile.to_path_buf(),
         })?;
+    semver::Version::parse(version).map_err(|source| LockfileError::InvalidVersion {
+        version: version.to_string(),
+        source,
+    })
+}
 
-    let found =
-        semver::Version::parse(version).map_err(|source| LockfileError::InvalidVersion {
-            version: version.to_string(),
-            source,
-        })?;
-
+fn deserialize_lockfile<T>(
+    value: serde_json::Map<String, serde_json::Value>,
+    lockfile: &Path,
+    help: &str,
+) -> Result<T, LockfileError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let found = lockfile_version(&value, lockfile)?;
     if found.major != LOCKFILE_VERSION {
         return Err(LockfileError::IncompatibleVersion {
             lockfile: lockfile.to_path_buf(),
-            found: version.into(),
+            found: found.to_string(),
             expected: LOCKFILE_VERSION_STR.into(),
             help: help.into(),
         });
     }
+    serde_json::from_value(serde_json::Value::Object(value)).map_err(LockfileError::ParseJson)
+}
 
-    serde_json::from_value(value).map_err(LockfileError::ParseJson)
+fn migrate_v1_lockfile(
+    value: &mut serde_json::Map<String, serde_json::Value>,
+    lockfile: &Path,
+) -> Result<(), LockfileError> {
+    let tree_dir = lockfile.parent().unwrap_or(lockfile);
+    let found = lockfile_version(value, lockfile)?;
+    if value.contains_key("entrypoint_layout") {
+        return Err(LockfileError::IncompatibleVersion {
+            lockfile: lockfile.to_path_buf(),
+            found: found.to_string(),
+            expected: LOCKFILE_VERSION_STR.into(),
+            help: format!(
+                "this install tree uses a custom entrypoint layout that cannot be migrated automatically.
+remove the tree at '{}' and reinstall all packages it contained.",
+                tree_dir.display()
+            ),
+        });
+    }
+
+    let conflict_help = format!(
+        "this lockfile contains entrypoints that cannot be represented in the current format.
+remove the tree at '{}' and reinstall all packages it contained.",
+        tree_dir.display()
+    );
+
+    if value.contains_key("entrypoints") {
+        migrate_entrypoints(value, lockfile, &conflict_help)?;
+    }
+    for section in ["dependencies", "test_dependencies", "build_dependencies"] {
+        if let Some(section) = value
+            .get_mut(section)
+            .and_then(|section| section.as_object_mut())
+        {
+            migrate_entrypoints(section, lockfile, &conflict_help)?;
+        }
+    }
+    value.insert(
+        "version".into(),
+        serde_json::Value::String(LOCKFILE_VERSION_STR.into()),
+    );
+    Ok(())
+}
+
+fn migrate_entrypoints(
+    section: &mut serde_json::Map<String, serde_json::Value>,
+    lockfile: &Path,
+    help: &str,
+) -> Result<(), LockfileError> {
+    let conflicting_entrypoints = || LockfileError::ConflictingEntrypoints {
+        lockfile: lockfile.to_path_buf(),
+        help: help.to_string(),
+    };
+
+    let rocks = section.get("rocks").and_then(|rocks| rocks.as_object());
+    let mut entrypoints = serde_json::Map::new();
+    if let Some(old_entrypoints) = section.get("entrypoints") {
+        for id in old_entrypoints
+            .as_array()
+            .ok_or_else(&conflicting_entrypoints)?
+        {
+            let id = id.as_str().ok_or_else(&conflicting_entrypoints)?;
+            let name = rocks
+                .and_then(|rocks| rocks.get(id))
+                .and_then(|package| package.get("name"))
+                .and_then(|name| name.as_str())
+                .ok_or_else(&conflicting_entrypoints)?;
+            if entrypoints.contains_key(name) {
+                return Err(conflicting_entrypoints());
+            }
+            entrypoints.insert(name.to_string(), serde_json::Value::String(id.to_string()));
+        }
+    }
+    section.insert("entrypoints".into(), serde_json::Value::Object(entrypoints));
+    Ok(())
 }
 
 fn integrity_err_not_found(package: &LocalPackage) -> LockfileIntegrityError {
@@ -1874,21 +1974,85 @@ mod tests {
 
     #[test]
     fn verify_lockfile_version() {
-        for version in ["1.0.0", "9999.0.0", "not-a-version"] {
-            let lockfile = format!(
-                r#"
-                {{
-                    "version": {version}
-                }}
-            "#
-            );
+        let deserialize = |version: &str| {
+            let content = format!(r#"{{"version": "{version}"}}"#);
+            parse_lockfile_json(&content).and_then(|value| {
+                deserialize_lockfile::<Lockfile<ReadOnly>>(value, Path::new("lux.lock"), "")
+            })
+        };
 
-            assert!(super::parse_lockfile::<Lockfile<ReadOnly>>(
-                &lockfile,
-                Path::new("lux.lock"),
-                ""
-            )
-            .is_err());
-        }
+        assert!(matches!(
+            deserialize("3.0.0"),
+            Err(LockfileError::IncompatibleVersion { .. })
+        ));
+        assert!(matches!(
+            deserialize("not-a-version"),
+            Err(LockfileError::InvalidVersion { .. })
+        ));
+    }
+
+    #[test]
+    fn migrate_v1_tree_lockfile() {
+        let sample =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/lockfile-v1/tree.lock");
+
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lockfile_path = temp.path().join("lux.lock");
+        std::fs::copy(&sample, &lockfile_path).unwrap();
+
+        let lockfile = Lockfile::load(lockfile_path.clone()).unwrap();
+
+        let on_disk: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&lockfile_path).unwrap()).unwrap();
+        assert_eq!(on_disk["version"], "1.0.0");
+        assert!(on_disk["entrypoints"].is_array());
+
+        assert_eq!(lockfile.version, "2.0.0");
+        assert_eq!(lockfile.lock.entrypoints.len(), 3);
+    }
+
+    #[test]
+    fn refuse_migration_for_custom_layout() {
+        let lockfile = r#"{"version":"1.0.0","entrypoint_layout":{"root":"site/pack/lux"}}"#;
+        assert!(matches!(
+            load_lockfile::<Lockfile<ReadOnly>>(lockfile, Path::new("lux.lock"), ""),
+            Err(LockfileError::IncompatibleVersion { .. })
+        ));
+    }
+
+    #[test]
+    fn refuse_migration_for_conflicting_entrypoints() {
+        let lockfile = r#"{
+            "version": "1.0.0",
+            "rocks": {
+                "a": { "name": "foo" },
+                "b": { "name": "foo" }
+            },
+            "entrypoints": ["a", "b"]
+        }"#;
+        assert!(matches!(
+            load_lockfile::<Lockfile<ReadOnly>>(lockfile, Path::new("lux.lock"), ""),
+            Err(LockfileError::ConflictingEntrypoints { .. })
+        ));
+    }
+
+    #[test]
+    fn migrate_v1_workspace_lockfile() {
+        let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/lockfile-v1/workspace.lock");
+
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lockfile_path = temp.path().join("lux.lock");
+        std::fs::copy(&sample, &lockfile_path).unwrap();
+
+        let lockfile = WorkspaceLockfile::load(lockfile_path.clone()).unwrap();
+
+        let on_disk: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&lockfile_path).unwrap()).unwrap();
+        assert_eq!(on_disk["version"], "1.0.0");
+        assert!(on_disk["dependencies"]["entrypoints"].is_array());
+
+        assert_eq!(lockfile.version, "2.0.0");
+        assert_eq!(lockfile.dependencies.entrypoints.len(), 3);
     }
 }
