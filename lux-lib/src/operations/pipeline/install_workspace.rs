@@ -3,6 +3,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
@@ -121,6 +122,7 @@ fn gather_dependencies(
             // From the perspective of a project, dependencies are entrypoints.
             packages.push(
                 PackageInstallSpec::new(dependency.package_req().clone(), EntryType::Entrypoint)
+                    .build_behaviour(BuildBehaviour::Ignore)
                     .maybe_source(dependency.source().clone())
                     .build(),
             );

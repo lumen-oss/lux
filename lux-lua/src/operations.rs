@@ -6,6 +6,7 @@ use std::{collections::HashMap, path::PathBuf};
 use itertools::Itertools;
 use lux_lib::tree::InstallTree;
 use lux_lib::{
+    build::BuildBehaviour,
     lockfile::LockedPackageId,
     lua::lua_runtime,
     operations::{
@@ -373,7 +374,11 @@ fn deps_to_specs(deps: &DependencyType<PackageReq>) -> Vec<PackageInstallSpec> {
     };
 
     reqs.iter()
-        .map(|r| PackageInstallSpec::new(r.clone(), EntryType::Entrypoint).build())
+        .map(|r| {
+            PackageInstallSpec::new(r.clone(), EntryType::Entrypoint)
+                .build_behaviour(BuildBehaviour::Force)
+                .build()
+        })
         .collect()
 }
 
@@ -476,7 +481,7 @@ type = "builtin"
     fn test_package_install_spec_from_full_table() {
         let lua = Lua::new();
         let value = lua
-            .load(r#"{ package = "busted >= 2.0", entry_type = "dependency_only", pin = true, opt = true, build_behaviour = "no_force" }"#)
+            .load(r#"{ package = "busted >= 2.0", entry_type = "dependency_only", pin = true, opt = true, build_behaviour = "ignore" }"#)
             .eval()
             .unwrap();
         PackageInstallSpecLua::from_lua(value, &lua).unwrap();

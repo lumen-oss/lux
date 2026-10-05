@@ -206,6 +206,7 @@ async fn install_rockspec(
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
+        .behaviour(BuildBehaviour::Force)
         .build()
         .await?;
     Ok((package, tree.root()))

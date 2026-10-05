@@ -178,6 +178,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .tree(&tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&config)
+                .behaviour(BuildBehaviour::Force)
                 .build()
                 .await?;
             let rock_path = operations::Pack::new(dest_dir, tree, package)

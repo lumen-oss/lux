@@ -2,6 +2,7 @@ use assert_fs::TempDir;
 use flaky_test::flaky_test;
 use itertools::Itertools;
 use lux_lib::{
+    build::BuildBehaviour,
     config::ConfigBuilder,
     git::{GitRef, GitSource},
     lua_installation::detect_installed_lua_version,
@@ -27,6 +28,7 @@ async fn install_git_package() {
                     .unwrap(),
                 git_ref: Some(GitRef::Tag("v6.0.3".into())),
             }))
+            .build_behaviour(BuildBehaviour::Force)
             .build();
     test_install(install_spec).await
 }
@@ -40,7 +42,9 @@ async fn install_http_package() {
     // See https://github.com/wahern/luaossl/issues/220#issuecomment-3401472124
     std::env::set_var("CFLAGS", "-Wno-error=incompatible-pointer-types");
     let install_spec =
-        PackageInstallSpec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint).build();
+        PackageInstallSpec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint)
+            .build_behaviour(BuildBehaviour::Force)
+            .build();
     test_install(install_spec).await;
     std::env::set_var("CFLAGS", cflags);
 }
@@ -57,7 +61,9 @@ async fn install_and_use_toml_edit() {
 
 #[cfg(test)]
 async fn install_and_use(package: PackageReq, module_name: &str) {
-    let install_spec = PackageInstallSpec::new(package, EntryType::Entrypoint).build();
+    let install_spec = PackageInstallSpec::new(package, EntryType::Entrypoint)
+        .build_behaviour(BuildBehaviour::Force)
+        .build();
     let dir = TempDir::new().unwrap();
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -97,7 +103,9 @@ async fn no_build_artifacts_in_cwd() {
         .map(|entry| entry.into_path())
         .collect_vec();
     let install_spec =
-        PackageInstallSpec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint).build();
+        PackageInstallSpec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint)
+            .build_behaviour(BuildBehaviour::Force)
+            .build();
     test_install(install_spec).await;
     let build_artifacts = WalkDir::new(&cwd)
         .into_iter()

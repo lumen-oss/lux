@@ -31,7 +31,6 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     opt: OptState,
     #[builder(default)]
     constraint: LockConstraint,
-    #[builder(default)]
     behaviour: BuildBehaviour,
 
     #[builder(setters(vis = "pub(crate)"))]

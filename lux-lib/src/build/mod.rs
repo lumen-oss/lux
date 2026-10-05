@@ -161,12 +161,15 @@ impl From<SourceBuildError> for BuildError {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BuildBehaviour {
-    /// Don't force a rebuild if the package is already installed
-    #[default]
-    NoForce,
-    /// Force a rebuild if the package is already installed
+    /// If a package with the same version is already installed, do nothing.
+    /// Otherwise, behave like [`BuildBehaviour::Conflict`].
+    Ignore,
+    /// Error if an entrypoint with the same name is already installed, even if
+    /// it is the same version.
+    Conflict,
+    /// Remove any installed entrypoint with the same name and rebuild.
     Force,
 }
 
@@ -284,7 +287,7 @@ pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     config: &Config,
     behaviour: BuildBehaviour,
 ) -> Result<LockedPackage, BuildError> {
-    if behaviour == BuildBehaviour::NoForce {
+    if matches!(behaviour, BuildBehaviour::Ignore | BuildBehaviour::Conflict) {
         if let Some(existing) = tree.lockfile()?.get(&package.id()) {
             return Ok(existing.clone());
         }
@@ -673,7 +676,7 @@ mod tests {
             &config,
             &tree,
             EntryType::Entrypoint,
-            BuildBehaviour::NoForce,
+            BuildBehaviour::Ignore,
         )
         .await;
         assert_eq!(skipped.id(), package.id());

@@ -326,7 +326,7 @@ async fn ensure_test_dependencies(
                 .match_rocks(dep)
                 .is_ok_and(|matches| matches.is_found())
             {
-                Some(BuildBehaviour::NoForce)
+                Some(BuildBehaviour::Ignore)
             } else {
                 Some(BuildBehaviour::Force)
             };
@@ -345,7 +345,7 @@ async fn ensure_test_dependencies(
                         .match_rocks(dep.package_req())
                         .is_ok_and(|matches| matches.is_found())
                     {
-                        Some(BuildBehaviour::NoForce)
+                        Some(BuildBehaviour::Ignore)
                     } else {
                         Some(BuildBehaviour::Force)
                     };

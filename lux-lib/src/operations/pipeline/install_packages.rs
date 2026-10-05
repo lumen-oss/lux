@@ -12,7 +12,7 @@ use crate::{
     lockfile::{FlushLockfileError, LockedPackage, LockedPackageId, Lockfile, ReadWrite},
     lua_installation::LuaInstallationError,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
-    package::{PackageName, PackageNameList},
+    package::PackageNameList,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     tree::{self, InstallTree, TreeError},
     workspace::WorkspaceTreeError,
@@ -134,40 +134,6 @@ where
     let lockfile = tree.lockfile()?;
     let build_tree = tree.build_tree(config)?;
 
-    let entrypoint_specs = packages
-        .iter()
-        .filter(|spec| spec.entry_type == tree::EntryType::Entrypoint)
-        .collect_vec();
-
-    // Entrypoints already installed that conflict with another entrypoint. This enumerates both
-    // packages that are planned to be removed (`--force`), as well as those which are
-    // unintentionally causing conflicts.
-    let conflicting_entrypoints: HashMap<PackageName, LockedPackage> = entrypoint_specs
-        .iter()
-        .filter_map(|spec| lockfile.entrypoint(spec.package.name()).cloned())
-        .map(|package| (package.name().clone(), package))
-        .collect();
-
-    let unforced_conflicts = entrypoint_specs
-        .iter()
-        .filter(|spec| spec.build_behaviour != BuildBehaviour::Force)
-        .filter_map(|spec| conflicting_entrypoints.get(spec.package.name()))
-        .map(|existing| format!("{}@{}", existing.name(), existing.version()))
-        .collect_vec();
-
-    if !unforced_conflicts.is_empty() {
-        return Err(InstallPackagesError::ConflictingEntrypoints(
-            unforced_conflicts.join("\n"),
-        ));
-    }
-
-    // FIXME(vhyrro): non-transactional. If an error occurs this removes the conflicting package
-    // without installing the substitute. Implement transactions at some point.
-    let conflicting_entrypoints = conflicting_entrypoints.into_values().collect_vec();
-    for package in &conflicting_entrypoints {
-        tree.cleanup(package, tree::EntryType::Entrypoint)?;
-    }
-
     let mut resolve = ResolvePackageDependencies::new(package_db, config)
         .packages(packages)
         .build_packages(install.build_packages);
@@ -191,6 +157,45 @@ where
         .unwrap_or_default()
         .into_values()
         .collect_vec();
+
+    // Entrypoints that are already installed. The requested build behaviour decides how to
+    // react to them.
+    let mut conflicting_entrypoints: HashMap<LockedPackageId, LockedPackage> = HashMap::new();
+    let mut unforced_conflicts = Vec::new();
+    for package in regular_packages
+        .iter()
+        .filter(|package| package.entry_type == tree::EntryType::Entrypoint)
+    {
+        let Some(existing) = lockfile.entrypoint(package.package.name()) else {
+            continue;
+        };
+        match package.build_behaviour {
+            // Forced installs replace the existing entrypoint.
+            BuildBehaviour::Force => {
+                conflicting_entrypoints.insert(existing.id(), existing.clone());
+            }
+            // `Ignore` tolerates re-installing the exact same version.
+            BuildBehaviour::Ignore if existing.version() == package.package.version() => {}
+            // Any other existing entrypoint is a conflict.
+            BuildBehaviour::Ignore | BuildBehaviour::Conflict => {
+                unforced_conflicts.push(format!("{}@{}", existing.name(), existing.version()));
+            }
+        }
+    }
+
+    if !unforced_conflicts.is_empty() {
+        return Err(InstallPackagesError::ConflictingEntrypoints(
+            unforced_conflicts.join("\n"),
+        ));
+    }
+
+    // FIXME(vhyrro): non-transactional. If an error occurs this removes the conflicting package
+    // without installing the substitute. Implement transactions at some point.
+    let conflicting_entrypoints = conflicting_entrypoints.into_values().collect_vec();
+    for package in &conflicting_entrypoints {
+        tree.cleanup(package, tree::EntryType::Entrypoint)?;
+    }
+
     let regular_entry_types: HashMap<LockedPackageId, tree::EntryType> = regular_packages
         .iter()
         .map(|pkg| (pkg.package.spec.id(), pkg.entry_type))

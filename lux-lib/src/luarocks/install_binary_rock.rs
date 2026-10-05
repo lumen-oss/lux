@@ -99,7 +99,7 @@ where
             config,
             tree,
             constraint: LockConstraint::default(),
-            behaviour: BuildBehaviour::default(),
+            behaviour: BuildBehaviour::Ignore,
             pin: PinnedState::default(),
             opt: OptState::default(),
             entry_type,
@@ -152,7 +152,14 @@ where
         );
         let package = LockedPackage::new(spec, self.source, source_url, hashes);
         match self.tree.lockfile()?.get(&package.id()) {
-            Some(package) if self.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
+            Some(package)
+                if matches!(
+                    self.behaviour,
+                    BuildBehaviour::Ignore | BuildBehaviour::Conflict
+                ) =>
+            {
+                Ok(package.clone())
+            }
             _ => {
                 let unpack_dir = fs::tempfile::tempdir()?;
                 let cursor = Cursor::new(self.rock_bytes);

@@ -17,7 +17,7 @@ use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
-    build::resolve_source_dir,
+    build::{resolve_source_dir, BuildBehaviour},
     config::Config,
     fs,
     lockfile::LockedPackageLockType,
@@ -258,7 +258,9 @@ async fn gather_install_specs(
                                 .iter()
                                 .cloned()
                                 .map(|dep| {
-                                    PackageInstallSpec::new(dep, EntryType::Entrypoint).build()
+                                    PackageInstallSpec::new(dep, EntryType::Entrypoint)
+                                        .build_behaviour(BuildBehaviour::Ignore)
+                                        .build()
                                 }),
                         );
                     }
@@ -307,7 +309,11 @@ fn push_dependencies<R: Rockspec>(
         dependencies
             .into_iter()
             .unique()
-            .map(|dep| PackageInstallSpec::new(dep, EntryType::Entrypoint).build())
+            .map(|dep| {
+                PackageInstallSpec::new(dep, EntryType::Entrypoint)
+                    .build_behaviour(BuildBehaviour::Ignore)
+                    .build()
+            })
             .collect_vec(),
     );
     Ok(())
@@ -561,7 +567,7 @@ mod tests {
             package,
             rockspec,
             entry_type: EntryType::Entrypoint,
-            build_behaviour: BuildBehaviour::default(),
+            build_behaviour: BuildBehaviour::Ignore,
             artifact,
             temp_dir,
         }

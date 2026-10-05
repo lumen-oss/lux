@@ -103,7 +103,7 @@ multiple packages satisfying your version requirements were found:
             format!(
                 "
             Package {} can be removed from the entrypoints, but it is also a dependency, so it will have to be reinstalled.
-Reinstall?
+Overwrite?
             ",
                 package_names[0]
             )
