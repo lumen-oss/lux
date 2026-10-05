@@ -677,6 +677,21 @@ impl PackageLock {
         lock
     }
 
+    pub(crate) fn merge(&mut self, other: &PackageLock) {
+        self.entrypoints.extend(
+            other
+                .entrypoints
+                .iter()
+                .map(|(name, id)| (name.clone(), id.clone())),
+        );
+        self.rocks.extend(
+            other
+                .rocks
+                .iter()
+                .map(|(id, package)| (id.clone(), package.clone())),
+        );
+    }
+
     fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
         self.rocks.get(id)
     }
@@ -1486,6 +1501,14 @@ impl WorkspaceLockfile<ReadWrite> {
             LockedPackageLockType::Build => {
                 self.build_dependencies = lock.clone();
             }
+        }
+    }
+
+    pub(crate) fn merge(&mut self, lock: &PackageLock, deps: &LockedPackageLockType) {
+        match deps {
+            LockedPackageLockType::Regular => self.dependencies.merge(lock),
+            LockedPackageLockType::Test => self.test_dependencies.merge(lock),
+            LockedPackageLockType::Build => self.build_dependencies.merge(lock),
         }
     }
 }

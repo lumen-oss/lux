@@ -5,20 +5,17 @@ use thiserror::Error;
 use crate::{
     build::{BuildBehaviour, BuildError},
     config::Config,
+    drivers::install_packages::{InstallPackages, InstallPackagesError},
     hash::HasIntegrity,
     lockfile::LockedPackage,
-    operations::{
-        pipeline::{
-            discover::FoundPackage,
-            install_packages::{InstallPackages, InstallPackagesError},
-        },
-        PackageInstallSpec,
-    },
+    operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
+    pipeline::discover::FoundPackage,
     project::{IntoLocalRockspecError, Project, ProjectError},
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
+    workspace::{Workspace, WorkspaceError},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -45,6 +42,9 @@ pub enum InstallProjectError {
     PackageNotInstalled(PackageName),
     #[error("failed to hash the project's sources")]
     Hash(#[source] std::io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Workspace(#[from] WorkspaceError),
 }
 
 impl From<InstallPackagesError> for InstallProjectError {
@@ -76,6 +76,9 @@ where
 
     #[builder(default = BuildBehaviour::Force)]
     behaviour: BuildBehaviour,
+
+    /// Workspace whose lockfile is preferred during dependency resolution.
+    workspace: Option<&'a Workspace>,
 }
 
 impl<
@@ -116,8 +119,13 @@ impl<
         };
 
         let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
+        let locks = match args.workspace {
+            Some(workspace) => workspace.lockfile()?.local_pkg_locks(),
+            None => Vec::new(),
+        };
         let package_db = RemotePackageDB::from_config(config)
             .await?
+            .with_locks(locks)
             .with_local(vec![root]);
 
         let install_spec =

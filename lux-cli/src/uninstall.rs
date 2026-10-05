@@ -151,7 +151,7 @@ Reinstall?
                 .packages(dependencies)
                 .remove()
                 .await?;
-            operations::pipeline::install_packages::InstallPackages::new(&config, &tree)
+            lux_lib::drivers::install_packages::InstallPackages::new(&config, &tree)
                 .packages(reinstall_specs)
                 .install()
                 .await?;

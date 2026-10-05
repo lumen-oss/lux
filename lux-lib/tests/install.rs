@@ -4,11 +4,12 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::ConfigBuilder,
+    drivers::install_packages::InstallPackages,
     git::{GitRef, GitSource},
     lua_installation::detect_installed_lua_version,
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
-    operations::{pipeline::install_packages::InstallPackages, Exec, PackageInstallSpec},
+    operations::{Exec, PackageInstallSpec},
     package::{PackageName, PackageReq},
     tree::{EntryType, InstallTree},
 };

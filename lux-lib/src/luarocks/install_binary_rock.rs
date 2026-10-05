@@ -379,7 +379,7 @@ mod tests {
         .install()
         .await
         .unwrap();
-        let layout = tree.layout_for(&local_package);
+        let layout = tree.layout_for(local_package.spec());
         assert!(layout.lib.join("toml_edit.so").is_file());
 
         let orig_install_tree_integrity = layout.root.hash().await.unwrap();
@@ -438,7 +438,7 @@ mod tests {
         .install()
         .await
         .unwrap();
-        let layout = tree.layout_for(&local_package);
+        let layout = tree.layout_for(local_package.spec());
         assert!(layout.rockspec_path().is_file());
         let new_install_tree_integrity = layout.root.hash().await.unwrap();
         assert_eq!(orig_install_tree_integrity, new_install_tree_integrity);

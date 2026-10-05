@@ -5,8 +5,6 @@ pub mod build_local;
 pub mod discover;
 pub mod download_sources_and_hash;
 pub mod emit_lockfile;
-pub mod install_packages;
-pub mod install_workspace;
 pub mod resolve;
 
 /// Packages grouped by the lockfile section they belong to.

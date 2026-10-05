@@ -1,9 +1,10 @@
 use std::io;
 
-use super::{
-    pipeline::install_packages::{InstallPackages, InstallPackagesError},
-    PackageInstallSpec, RemoveError, Uninstall,
-};
+use crate::operations::{PackageInstallSpec, RemoveError, Uninstall};
+
+pub use crate::drivers::sync::SyncReport;
+
+use crate::drivers::install_packages::{InstallPackages, InstallPackagesError};
 use crate::{
     build::BuildBehaviour,
     config::Config,
@@ -13,8 +14,9 @@ use crate::{
         PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
-    operations::{self, pipeline::resolve::luarocks_build_backend_name, GenLuaRcError},
+    operations::{self, GenLuaRcError},
     package::{PackageName, PackageReq},
+    pipeline::resolve::luarocks_build_backend_name,
     project::{project_toml::LocalProjectTomlValidationError, ProjectError},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
     tree::{self, InstallTree, TreeError},
@@ -115,26 +117,6 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct SyncReport {
-    pub(crate) added: Vec<LockedPackage>,
-    pub(crate) removed: Vec<LockedPackage>,
-}
-
-impl SyncReport {
-    pub fn added(&self) -> &[LockedPackage] {
-        &self.added
-    }
-    pub fn removed(&self) -> &[LockedPackage] {
-        &self.removed
-    }
-
-    fn merge(&mut self, other: SyncReport) {
-        self.added.extend(other.added);
-        self.removed.extend(other.removed);
-    }
-}
-
 #[derive(Error, Debug, Diagnostic)]
 pub enum SyncError {
     #[error(transparent)]
@@ -216,6 +198,10 @@ async fn do_sync(
     let package_db = workspace_lockfile.local_pkg_locks().into();
 
     let (to_add, mut report) = reconcile_locks(&workspace_lockfile, &dest_lockfile, lock_type);
+    let member_names = args.workspace.member_names();
+    report
+        .removed
+        .retain(|package| !member_names.contains(package.name()));
     let packages_to_install = install_specs_to_force(&to_add);
     report
         .added
@@ -241,8 +227,18 @@ async fn do_sync(
         .remove()
         .await?;
 
+    let member_packages = install_tree_lockfile
+        .rocks()
+        .values()
+        .filter(|package| member_names.contains(package.name()))
+        .cloned()
+        .collect_vec();
+
     install_tree_lockfile.map_then_flush(|lockfile| {
         lockfile.sync(workspace_lockfile.local_pkg_lock(lock_type));
+        for package in &member_packages {
+            lockfile.add_entrypoint(package);
+        }
         Ok::<_, io::Error>(())
     })?;
 

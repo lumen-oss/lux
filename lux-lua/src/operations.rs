@@ -7,11 +7,13 @@ use itertools::Itertools;
 use lux_lib::tree::InstallTree;
 use lux_lib::{
     build::BuildBehaviour,
+    drivers::install_packages::InstallPackages,
+    drivers::sync::{Sync, SyncMode, TargetSet},
     lockfile::LockedPackageId,
     lua::lua_runtime,
     operations::{
-        pipeline::install_packages::InstallPackages, set_pinned_state, BuildWorkspace,
-        DistProjectBin, Download, PackageInstallSpec, Sync, Uninstall, Update,
+        set_pinned_state, BuildWorkspace, DistProjectBin, Download, PackageInstallSpec, Uninstall,
+        Update,
     },
     package::{PackageName, PackageReq},
     remote_package_db::RemotePackageDB,
@@ -219,7 +221,11 @@ impl TypedUserData for OperationsModule {
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
-                    .test(true)
+                    .mode(SyncMode::Frozen)
+                    .targets(TargetSet {
+                        test: true,
+                        members: None,
+                    })
                     .sync()
                     .await
                     .into_lua_err()
@@ -235,6 +241,11 @@ impl TypedUserData for OperationsModule {
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
+                    .mode(SyncMode::Frozen)
+                    .targets(TargetSet {
+                        test: false,
+                        members: None,
+                    })
                     .sync()
                     .await
                     .into_lua_err()

@@ -22,19 +22,15 @@ use crate::{
     fs,
     lockfile::LockedPackageLockType,
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
-    operations::{
-        self,
-        pipeline::{
-            download_sources_and_hash::{
-                DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage,
-                PackageSource,
-            },
-            resolve::{luarocks_build_backend_name, ResolveError, ResolvePackageDependencies},
-            Artifacts,
-        },
-        PackageInstallSpec, UnpackError,
-    },
+    operations::{self, PackageInstallSpec, UnpackError},
     package::{PackageReq, PackageSpec},
+    pipeline::{
+        download_sources_and_hash::{
+            DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage, PackageSource,
+        },
+        resolve::{luarocks_build_backend_name, ResolveError, ResolvePackageDependencies},
+        Artifacts,
+    },
     project::project_toml::LocalProjectTomlValidationError,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,

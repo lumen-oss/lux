@@ -12,7 +12,7 @@ use lux_lib::{
     config::ConfigBuilder,
     lua_installation::{detect_installed_lua_version, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
-    operations::pipeline::build_local::Build,
+    pipeline::build_local::Build,
     tree,
 };
 use tokio::runtime::Builder;

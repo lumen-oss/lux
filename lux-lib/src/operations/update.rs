@@ -19,10 +19,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{
-    pipeline::install_packages::{InstallPackages, InstallPackagesError},
-    PackageInstallSpec, RemoveError, SyncError, Uninstall,
-};
+use super::{PackageInstallSpec, RemoveError, Uninstall};
+
+use crate::drivers::install_packages::{InstallPackages, InstallPackagesError};
+use crate::drivers::sync::{Sync, SyncError, SyncMode, TargetSet};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UpdateError {
@@ -159,9 +159,13 @@ async fn update_workspace(
     let mut project_lockfile = workspace.lockfile()?.write_guard();
     let tree = workspace.tree(args.config)?;
 
-    let sync_report = super::Sync::new(&workspace, args.config)
+    let sync_report = Sync::new(&workspace, args.config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet {
+            test: true,
+            members: None,
+        })
         .validate_integrity(args.validate_integrity.unwrap_or(false))
-        .test(true)
         .sync()
         .await?;
 

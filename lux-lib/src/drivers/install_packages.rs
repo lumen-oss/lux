@@ -21,7 +21,7 @@ use crate::{
     workspace::WorkspaceTreeError,
 };
 
-use super::{
+use crate::pipeline::{
     build::{Build as PipelineBuild, BuildError as PipelineBuildError},
     download_sources_and_hash::{DownloadSourcesAndHash, DownloadSourcesAndHashError},
     emit_lockfile::LockfileHandle,

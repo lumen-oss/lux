@@ -7,15 +7,14 @@ use clap::Args;
 use lux_lib::{
     build::BuildBehaviour,
     config::{Config, ConfigBuilder},
+    drivers::install_packages::InstallPackages,
     lockfile::LockedPackage,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{
-        pipeline::{build_local::Build, install_packages::InstallPackages},
-        InstallProject, PackageInstallSpec,
-    },
+    operations::{InstallProject, PackageInstallSpec},
     package::{PackageName, PackageReq},
+    pipeline::build_local::Build,
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
 };

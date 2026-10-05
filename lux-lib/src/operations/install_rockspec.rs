@@ -5,18 +5,14 @@ use thiserror::Error;
 use crate::{
     build::{BuildBehaviour, BuildError},
     config::Config,
+    drivers::install_packages::{InstallPackages, InstallPackagesError},
     lockfile::{LockedPackage, OptState, PinnedState},
     lua_installation::LuaInstallationError,
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
-    operations::{
-        pipeline::{
-            discover::FoundPackage,
-            install_packages::{InstallPackages, InstallPackagesError},
-        },
-        PackageInstallSpec,
-    },
+    operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
+    pipeline::discover::FoundPackage,
     remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{self, InstallTree, TreeError},

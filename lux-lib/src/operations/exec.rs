@@ -4,12 +4,10 @@ use tokio::process::Command;
 use crate::{
     build::BuildBehaviour,
     config::Config,
+    drivers::install_packages::{InstallPackages, InstallPackagesError},
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
-    operations::{
-        pipeline::install_packages::{InstallPackages, InstallPackagesError},
-        BuildWorkspace, BuildWorkspaceError,
-    },
+    operations::{BuildWorkspace, BuildWorkspaceError},
     package::{PackageReq, PackageVersionReqError},
     path::{Paths, PathsError},
     remote_package_db::RemotePackageDBError,

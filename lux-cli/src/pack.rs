@@ -6,15 +6,13 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
+    drivers::install_packages::InstallPackages,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{
-        self,
-        pipeline::{build_local::Build, install_packages::InstallPackages},
-        PackageInstallSpec,
-    },
+    operations::{self, PackageInstallSpec},
     package::PackageName,
+    pipeline::build_local::Build,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
     workspace::Workspace,

@@ -26,7 +26,7 @@ use crate::tree::{self, Tree, TreeError};
 use crate::tree::{Tree, TreeError};
 
 #[cfg(target_family = "unix")]
-use crate::operations::pipeline::build_local::Build;
+use crate::pipeline::build_local::Build;
 
 #[cfg(target_family = "unix")]
 const LUAROCKS_EXE: &str = "luarocks";
