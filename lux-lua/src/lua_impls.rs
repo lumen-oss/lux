@@ -1067,7 +1067,7 @@ impl TypedUserData for TreeLua {
         methods.add_method("root_for", |_, this, package: LockedPackageLua| {
             Ok(this
                 .0
-                .layout_for(&package.0)
+                .layout_for(package.0.spec())
                 .root
                 .to_slash_lossy()
                 .into_owned())
@@ -1079,7 +1079,7 @@ impl TypedUserData for TreeLua {
         methods.document("Get the `RockLayout` for an installed package.");
         methods.param("package", "");
         methods.add_method("rock_layout", |_, this, package: LockedPackageLua| {
-            Ok(RockLayoutLua(this.0.layout_for(&package.0)))
+            Ok(RockLayoutLua(this.0.layout_for(package.0.spec())))
         });
         methods.document("Find installed rocks that match the given `PackageReq`");
         methods.param("req", "");
