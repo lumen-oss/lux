@@ -15,9 +15,6 @@ use crate::{
 use super::install_packages::{InstallPackages, InstallPackagesError};
 
 /// Installs all of a workspace's dependencies into its regular, build and test trees.
-///
-/// This resolves the workspace's dependency graph, downloads and hashes the sources,
-/// writes the workspace lockfile, and builds the packages into the appropriate trees.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallWorkspaceDependencies<'a> {

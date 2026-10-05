@@ -88,11 +88,6 @@ where
         let args = self._build();
         let config = args.config;
 
-        // Preserve which sections were requested (even if empty), then run every
-        // download as a single bounded-concurrency stream and fold the results
-        // back into their sections. `buffered` keeps at most `max_jobs`
-        // downloads in flight; hashing is already `spawn_blocking`, so it runs
-        // across the blocking thread pool.
         let artifacts: DownloadSourcesAndHashArtifacts = args
             .resolved
             .iter()

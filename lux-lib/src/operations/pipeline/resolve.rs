@@ -158,17 +158,13 @@ struct Node {
     install_spec: PackageInstallSpec,
     id: LockedPackageId,
     found: FoundPackage,
-    /// `(is_build_dependency, child)` in the order the dependencies were declared.
     children: Vec<(bool, RequestKey)>,
 }
 
-/// Owns the whole resolution graph while it is being discovered. Discovery futures run on
-/// the runtime (bounded by `Config::max_jobs`), but all shared state stays here, owned by a
-/// single task — no `Rc`, `RefCell`, or locks.
 struct Resolver {
     package_db: RemotePackageDB,
     config: Arc<Config>,
-    max_inflight: usize,
+    max_concurrent: usize,
     joinset: JoinSet<(
         RequestKey,
         PackageInstallSpec,
@@ -182,20 +178,18 @@ struct Resolver {
 
 impl Resolver {
     fn new(package_db: RemotePackageDB, config: &Config) -> Self {
-        Self::with_max_inflight(package_db, Arc::new(config.clone()), config.max_jobs())
+        Self::with_max_concurrent(package_db, Arc::new(config.clone()), config.max_jobs())
     }
 
-    /// Builds a resolver with an explicit in-flight bound. Used by tests, which do not
-    /// construct a full [`Config`].
-    fn with_max_inflight(
+    fn with_max_concurrent(
         package_db: RemotePackageDB,
         config: Arc<Config>,
-        max_inflight: usize,
+        max_concurrent: usize,
     ) -> Self {
         Self {
             package_db,
             config,
-            max_inflight,
+            max_concurrent,
             joinset: JoinSet::new(),
             pending: VecDeque::new(),
             seen: HashSet::new(),
@@ -233,8 +227,7 @@ impl Resolver {
         Ok(self.assemble())
     }
 
-    /// Registers a request for discovery, unless it has already been seen. Seeing the same
-    /// request twice is exactly the diamond problem, so it is only discovered once.
+    /// Registers a request for discovery, unless it has already been seen.
     fn enqueue(&mut self, key: RequestKey, spec: PackageInstallSpec) {
         if self.seen.insert(key.clone()) {
             self.pending.push_back((key, spec));
@@ -243,7 +236,7 @@ impl Resolver {
 
     /// Spawns queued discoveries up to the configured concurrency limit.
     fn spawn_ready(&mut self) {
-        while self.joinset.len() < self.max_inflight {
+        while self.joinset.len() < self.max_concurrent {
             let Some((key, spec)) = self.pending.pop_front() else {
                 break;
             };
@@ -407,8 +400,6 @@ fn push_child(
     }
 }
 
-/// Depth-first search with white/grey/black colouring over the discovered graph. A grey
-/// back-edge means a cycle, which we render as a `a -> b -> a` chain for the error message.
 fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Color {
@@ -578,7 +569,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn diamond_is_resolved_once() {
+    async fn diamond_problem() {
         let packages = local_packages(&[
             rockspec("a", &["b", "c"]),
             rockspec("b", &["d"]),
@@ -586,7 +577,7 @@ mod tests {
             rockspec("d", &[]),
         ]);
 
-        let resolved = match Resolver::with_max_inflight(packages, test_config(), 8)
+        let resolved = match Resolver::with_max_concurrent(packages, test_config(), 8)
             .run(roots(install_spec("a")))
             .await
         {
@@ -601,7 +592,7 @@ mod tests {
     async fn cyclic_dependencies_are_rejected() {
         let packages = local_packages(&[rockspec("a", &["b"]), rockspec("b", &["a"])]);
 
-        let result = Resolver::with_max_inflight(packages, test_config(), 8)
+        let result = Resolver::with_max_concurrent(packages, test_config(), 8)
             .run(roots(install_spec("a")))
             .await;
 

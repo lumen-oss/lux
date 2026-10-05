@@ -851,8 +851,6 @@ pub struct Lockfile<P: LockfilePermissions> {
     _marker: PhantomData<P>,
     // TODO: Serialize this directly into a `Version`
     version: String,
-    /// Binaries installed into the tree for each package, discovered during
-    /// the build.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     binaries: BTreeMap<LockedPackageId, RockBinaries>,
     #[serde(flatten)]
@@ -1020,7 +1018,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
         }
     }
 
-    /// The binaries installed into the tree for `id`, if recorded.
+    /// The binaries installed in the tree for a given package.
     pub(crate) fn binaries(&self, id: &LockedPackageId) -> Option<&RockBinaries> {
         self.binaries.get(id)
     }

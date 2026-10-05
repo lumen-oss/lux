@@ -7,6 +7,7 @@ use assert_fs::{
 use flaky_test::flaky_test;
 use lux_lib::{
     config::ConfigBuilder,
+    lua_rockspec::RemoteLuaRockspec,
     operations::{Vendor, VendorTarget},
     workspace::Workspace,
 };
@@ -56,11 +57,9 @@ async fn vendor_dependencies() {
             .join(format!("{name}-{version}.rockspec"));
         assert!(rockspec_file.is_file(), "missing rockspec for {package}");
         let rockspec_content = std::fs::read_to_string(&rockspec_file).unwrap();
-        lux_lib::lua_rockspec::RemoteLuaRockspec::new(&rockspec_content)
+        RemoteLuaRockspec::new(&rockspec_content)
             .unwrap_or_else(|err| panic!("vendored rockspec for {package} failed to parse: {err}"));
 
-        // A source must be vendored alongside the rockspec (either a directory
-        // for `rockspec` sources or a file for `binary rock` sources).
         let source_path = vendor_dir.to_path_buf().join(package);
         assert!(
             source_path.is_dir() || source_path.is_file(),

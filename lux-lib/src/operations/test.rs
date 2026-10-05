@@ -159,7 +159,6 @@ async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
 
     if let Some(package) = test.package {
         let project = workspace.select_member(&package)?;
-        // NOTE: `run_project_tests`' future is large, so we box it to avoid inflating this frame.
         Box::pin(run_project_tests(
             &workspace, project, no_lock, &test.args, &test.env, config,
         ))
@@ -194,7 +193,6 @@ async fn run_project_tests(
         Sync::new(workspace, &test_config).test(true).sync().await?;
     }
 
-    // NOTE: `BuildWorkspace::build`'s future is large, so we box it to avoid inflating this frame.
     Box::pin(
         BuildWorkspace::new(workspace, &test_config)
             .package(project.toml().package().clone())
