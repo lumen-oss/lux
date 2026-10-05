@@ -102,7 +102,8 @@ async fn main() -> Result<()> {
             cli.no_prompt.unwrap_or(!std::io::stderr().is_terminal()),
         ))
         .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())))
-        .no_tfa(Some(cli.no_tfa));
+        .no_tfa(Some(cli.no_tfa))
+        .build_profile(cli.profile);
 
     if let Some(preset) = preset {
         config_builder = preset.apply(config_builder);
