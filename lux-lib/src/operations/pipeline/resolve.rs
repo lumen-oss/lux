@@ -11,8 +11,8 @@ use crate::{
     build::BuildBehaviour,
     config::Config,
     lockfile::{
-        LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState, PinnedState,
-        RemotePackageSourceUrl,
+        LockedPackage, LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState,
+        PinnedState, RemotePackageSourceUrl,
     },
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::PackageInstallSpec,
@@ -96,6 +96,8 @@ pub(crate) struct ResolvePackageDependencies<'a> {
     pub(crate) config: &'a Config,
     #[builder(field)]
     pub(crate) packages: Artifacts<Vec<PackageInstallSpec>>,
+    #[builder(default)]
+    pub(crate) installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
 }
 
 impl<State> ResolvePackageDependenciesBuilder<'_, State>
@@ -127,7 +129,7 @@ where
 {
     pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, ResolveError> {
         let args = self._build();
-        Resolver::new(args.package_db, args.config)
+        Resolver::new(args.package_db, args.config, args.installed)
             .run(args.packages)
             .await
     }
@@ -175,17 +177,29 @@ struct Resolver {
     seen: HashSet<RequestKey>,
     nodes: HashMap<RequestKey, Node>,
     resolved: ResolvedArtifacts,
+    installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
+    installed_ids: HashMap<RequestKey, LockedPackageId>,
 }
 
 impl Resolver {
-    fn new(package_db: RemotePackageDB, config: &Config) -> Self {
-        Self::with_max_concurrent(package_db, Arc::new(config.clone()), config.max_jobs())
+    fn new(
+        package_db: RemotePackageDB,
+        config: &Config,
+        installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
+    ) -> Self {
+        Self::with_max_concurrent(
+            package_db,
+            Arc::new(config.clone()),
+            config.max_jobs(),
+            installed,
+        )
     }
 
     fn with_max_concurrent(
         package_db: RemotePackageDB,
         config: Arc<Config>,
         max_concurrent: usize,
+        installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
     ) -> Self {
         Self {
             package_db,
@@ -196,6 +210,8 @@ impl Resolver {
             seen: HashSet::new(),
             nodes: HashMap::new(),
             resolved: ResolvedArtifacts::default(),
+            installed,
+            installed_ids: HashMap::new(),
         }
     }
 
@@ -309,9 +325,37 @@ impl Resolver {
             },
         );
 
-        for (_, child_key, child_spec) in child_specs {
-            self.enqueue(child_key, child_spec);
+        for (is_build, child_key, child_spec) in child_specs {
+            let child_section = if is_build {
+                LockedPackageLockType::Build
+            } else {
+                section
+            };
+            if let Some(installed_id) = self.installed_match(child_section, &child_spec) {
+                self.installed_ids.insert(child_key, installed_id);
+            } else {
+                self.enqueue(child_key, child_spec);
+            }
         }
+    }
+
+    fn installed_match(
+        &self,
+        section: LockedPackageLockType,
+        spec: &PackageInstallSpec,
+    ) -> Option<LockedPackageId> {
+        if !matches!(spec.build_behaviour, BuildBehaviour::Ignore) || spec.source.is_some() {
+            return None;
+        }
+        self.installed
+            .get(&section)?
+            .iter()
+            .rev()
+            .find(|package| {
+                package.name() == spec.package.name()
+                    && spec.package.version_req().matches(package.version())
+            })
+            .map(|package| package.id())
     }
 
     /// Computes the final specs and assembles the resolved packages now that discovery is
@@ -320,13 +364,17 @@ impl Resolver {
         let Resolver {
             nodes,
             mut resolved,
+            installed_ids,
             ..
         } = self;
 
-        let ids: HashMap<RequestKey, LockedPackageId> = nodes
+        let mut ids: HashMap<RequestKey, LockedPackageId> = nodes
             .iter()
             .map(|(key, node)| (key.clone(), node.id.clone()))
             .collect();
+        for (key, id) in installed_ids {
+            ids.entry(key).or_insert(id);
+        }
 
         for (key, node) in nodes {
             let Node {
@@ -426,6 +474,9 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
                     top.1 += 1;
                 }
                 let child = &children[index].1;
+                if !nodes.contains_key(child) {
+                    continue;
+                }
                 match colors.get(child).copied().unwrap_or(Color::White) {
                     Color::White => {
                         colors.insert(child, Color::Grey);
@@ -496,6 +547,7 @@ mod tests {
 
     use super::*;
     use crate::config::ConfigBuilder;
+    use crate::lockfile::{LockConstraint, LockedPackageHashes};
     use crate::package::{PackageSpec, RemotePackage};
     use crate::remote_package_db::RemoteSource;
 
@@ -551,6 +603,24 @@ mod tests {
             .build()
     }
 
+    fn installed_package(name: &str) -> LockedPackage {
+        let spec = PackageSpec::parse(name.to_string(), "1.0.0-1".to_string()).unwrap();
+        LockedPackage::from(
+            &spec,
+            LockConstraint::Unconstrained,
+            RemotePackageSource::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    .parse()
+                    .unwrap(),
+                source: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    .parse()
+                    .unwrap(),
+            },
+        )
+    }
+
     fn roots(spec: PackageInstallSpec) -> Artifacts<Vec<PackageInstallSpec>> {
         Artifacts {
             regular: Some(vec![spec]),
@@ -580,22 +650,37 @@ mod tests {
             rockspec("d", &[]),
         ]);
 
-        let resolved = match Resolver::with_max_concurrent(packages, test_config(), 8)
-            .run(roots(install_spec("a")))
-            .await
-        {
-            Ok(resolved) => resolved,
-            Err(err) => panic!("resolution failed: {err}"),
-        };
+        let resolved =
+            match Resolver::with_max_concurrent(packages, test_config(), 8, HashMap::new())
+                .run(roots(install_spec("a")))
+                .await
+            {
+                Ok(resolved) => resolved,
+                Err(err) => panic!("resolution failed: {err}"),
+            };
 
         assert_eq!(resolved.regular.as_ref().map(|rocks| rocks.len()), Some(4));
+    }
+
+    #[tokio::test]
+    async fn installed_dependency_is_reused() {
+        let packages = local_packages(&[rockspec("a", &["d"])]);
+        let installed =
+            HashMap::from([(LockedPackageLockType::Regular, vec![installed_package("d")])]);
+
+        let resolved = Resolver::with_max_concurrent(packages, test_config(), 8, installed)
+            .run(roots(install_spec("a")))
+            .await
+            .unwrap();
+
+        assert_eq!(resolved.regular.as_ref().map(|rocks| rocks.len()), Some(1));
     }
 
     #[tokio::test]
     async fn cyclic_dependencies_are_rejected() {
         let packages = local_packages(&[rockspec("a", &["b"]), rockspec("b", &["a"])]);
 
-        let result = Resolver::with_max_concurrent(packages, test_config(), 8)
+        let result = Resolver::with_max_concurrent(packages, test_config(), 8, HashMap::new())
             .run(roots(install_spec("a")))
             .await;
 
