@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.47.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.46.0...lux-lsp-v0.47.0) `lux-lsp` - 2026-10-05
+
+### Other
+- update Cargo.lock dependencies
+
+## [0.65.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.64.2...lux-lib-v0.65.0) `lux-lib` - 2026-10-05
+
+### Added
+- *(lockfile)* auto-migrate lockfiles with default layout ([#1998](https://github.com/lumen-oss/lux/pull/1998))
+- *(exec)* warn, don't fail if loading user tree fails in workspace ([#1996](https://github.com/lumen-oss/lux/pull/1996))
+- support semver prerelease versions ([#1976](https://github.com/lumen-oss/lux/pull/1976))
+- [**breaking**] disallow conflicting entrypoints
+- *(cli)* add `--orphans` flag to `lx list`
+
+### Fixed
+- *(build)* build LuaJIT as a shared library on MSVC
+- *(test)* pass an absolute --directory to busted runners
+- *(build)* move /NOIMPLIB /NOEXP after /link on MSVC
+- *(build)* pass -DLUAJIT_VERSION to LuaJIT C module compiles
+- *(lockfile)* name the stale install tree in version errors ([#1986](https://github.com/lumen-oss/lux/pull/1986))
+- *(rock_manifest)* support empty dir entries ([#1985](https://github.com/lumen-oss/lux/pull/1985))
+
+## [0.47.0](https://github.com/lumen-oss/lux/compare/v0.46.0...v0.47.0) `lux-cli` - 2026-10-05
+
+### Added
+- [**breaking**] disallow conflicting entrypoints
+- *(cli)* add `--removable` flag to `lx list` (closes #274)
+- *(cli)* add `--orphans` flag to `lx list`
+
+### Fixed
+- don't ignore `--profile` flag ([#2001](https://github.com/lumen-oss/lux/pull/2001))
+- *(purge)* don't error if loading the lockfile fails ([#1997](https://github.com/lumen-oss/lux/pull/1997))
+- *(test)* pass an absolute --directory to busted runners
+- *(exec,run)* [**breaking**] forward args following the command to the child process ([#1988](https://github.com/lumen-oss/lux/pull/1988))
+- *(doc)* don't open non-plaintext files in editor ([#1984](https://github.com/lumen-oss/lux/pull/1984))
+
 ## [0.46.0](https://github.com/lumen-oss/lux/compare/v0.45.2...v0.46.0) `lux-cli` - 2026-09-21
 
 ### Added
