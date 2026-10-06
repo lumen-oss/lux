@@ -52,16 +52,6 @@ pub struct Sync<'a> {
 
 impl<State> SyncBuilder<'_, State>
 where
-    State: sync_builder::State,
-{
-    pub fn add_package(mut self, package: PackageReq) -> Self {
-        self.extra_packages.push(package);
-        self
-    }
-}
-
-impl<State> SyncBuilder<'_, State>
-where
     State: sync_builder::State + sync_builder::IsComplete,
 {
     pub async fn sync(self) -> Result<SyncReport, SyncError> {
