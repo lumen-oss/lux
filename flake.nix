@@ -79,6 +79,12 @@
             text = builtins.readFile ./scripts/update-tiniest.sh;
             meta.mainProgram = "update-tiniest";
           };
+          update-lua = writeShellApplication {
+            name = "update-lua";
+            runtimeInputs = [curl openssl gnused gnugrep coreutils git];
+            text = builtins.readFile ./scripts/update-lua.sh;
+            meta.mainProgram = "update-lua";
+          };
         };
 
         legacyPackages = pkgs;
