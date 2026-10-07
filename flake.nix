@@ -73,6 +73,12 @@
             text = builtins.readFile ./scripts/update-luau.sh;
             meta.mainProgram = "update-luau";
           };
+          update-tiniest = writeShellApplication {
+            name = "update-tiniest";
+            runtimeInputs = [curl jq gnused git coreutils gawk];
+            text = builtins.readFile ./scripts/update-tiniest.sh;
+            meta.mainProgram = "update-tiniest";
+          };
         };
 
         legacyPackages = pkgs;
