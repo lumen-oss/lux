@@ -6,6 +6,7 @@ use std::{cmp::Ordering, fmt::Display, str::FromStr};
 use thiserror::Error;
 mod outdated;
 mod version;
+pub(crate) mod wally;
 
 pub use outdated::*;
 pub use version::{
