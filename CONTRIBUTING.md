@@ -208,3 +208,34 @@ We instrument Lux with the [`tracing`](https://docs.rs/tracing/) crate.
 When adding traces, be sure to [instrument async code properly](https://docs.rs/tracing/latest/tracing/struct.Span.html#in-asynchronous-code).
 In general, prefer the [`#[instrument]` attribute macro](https://docs.rs/tracing/latest/tracing/attr.instrument.html),
 as it automatically generates correct code when used on an async function.
+
+### Schema generation
+
+We generate JSON Schema for `config.toml` and `lux.toml` from their Rust types
+using [`schemars`](https://github.com/GREsau/schemars).
+The generated schemas are [published on the documentation site](https://lux.lumen-labs.org/reference).
+
+The schema's `description` fields are populated from the doc comments on the
+TOML-facing structs, e.g. `ConfigBuilder` in
+[`lux-lib/src/config/mod.rs`](./lux-lib/src/config/mod.rs) and
+`PartialProjectToml` in
+[`lux-lib/src/project/project_toml.rs`](./lux-lib/src/project/project_toml.rs),
+as well as the build/test/source structs they nest.
+
+> [!IMPORTANT]
+>
+> Doc comments on these fields are user-facing documentation.
+> Write them with that in mind:
+>
+> - Describe the TOML option, not the Rust implementation.
+> - Keep them concise, and mention the default (`Default: ...`) where one exists.
+> - Use double quotes for string values (e.g. `">= 5.1"`).
+> - Use backticks for identifiers, field names, commands and crates
+>   (e.g. `version`, `make`, `diffy`).
+
+To preview the generated documentation:
+
+```console
+cargo lx util schema --kind lux-toml --output-format text
+cargo lx util schema --kind config --output-format text
+```

@@ -300,6 +300,7 @@ impl LuaScriptTestSpec {
 }
 
 #[derive(Debug, Deserialize, Serialize_enum_str, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum TestType {
     Busted,
@@ -309,13 +310,20 @@ pub(crate) enum TestType {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Default, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub(crate) struct TestSpecInternal {
+    /// The test backend: "busted", "busted-nlua", "tiniest", or "command".
+    /// If unset, Lux auto-detects a backend (e.g. "busted" when a ".busted"
+    /// file or the "busted" dependency is present).
     #[serde(default, rename = "type")]
     pub(crate) test_type: Option<TestType>,
+    /// Extra CLI flags to pass to the test backend.
     #[serde(default)]
     pub(crate) flags: Option<Vec<String>>,
+    /// Shell command to run as the test suite. Mutually exclusive with `script`.
     #[serde(default)]
     pub(crate) command: Option<String>,
+    /// Lua script to run as the test suite. Mutually exclusive with `command`.
     #[serde(default, rename = "script", alias = "lua_script")]
     pub(crate) lua_script: Option<PathBuf>,
 }
