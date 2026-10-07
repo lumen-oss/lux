@@ -293,7 +293,8 @@ pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
         }
     }
 
-    // FIXME(vhyrro): Maybe make prepare/finalize a struct with Drop behaviour? If it makes sense only.
+    // TODO(vhyrro): When we implement transactionality make this a Drop guard
+    // or something else.
     tree.prepare(&package.spec)?;
     let layout = tree.layout_for(&package.spec);
 

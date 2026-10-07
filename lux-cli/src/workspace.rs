@@ -86,10 +86,7 @@ pub async fn sync_dependencies_if_locked(workspace: &Workspace, config: &Config)
     // Otherwise, the next `lx build` will remove the packages.
     Sync::new(workspace, config)
         .mode(SyncMode::Frozen)
-        .targets(TargetSet {
-            test: true,
-            members: None,
-        })
+        .targets(TargetSet::all(workspace, true))
         .sync()
         .await
         .wrap_err("syncing dependencies with the workspace lockfile failed.")?;

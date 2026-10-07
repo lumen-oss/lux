@@ -23,10 +23,7 @@ async fn sync_test_dependencies_empty_project() {
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
-        .targets(TargetSet {
-            test: true,
-            members: None,
-        })
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -75,10 +72,7 @@ async fn sync_multi_projects_same_dependencies() {
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
-        .targets(TargetSet {
-            test: true,
-            members: None,
-        })
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -128,6 +122,7 @@ fallo = "2.2.0"
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -141,6 +136,7 @@ fallo = "2.2.0"
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -167,6 +163,7 @@ async fn sync_dependencies_adds_luarocks_build_backend() {
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -195,6 +192,7 @@ async fn sync_dependencies_adds_transitive_build_dependencies() {
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await

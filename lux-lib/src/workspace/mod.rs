@@ -160,11 +160,14 @@ impl Workspace {
     }
 
     /// The package names of all workspace members.
-    pub fn member_names(&self) -> Vec<PackageName> {
-        self.members()
-            .iter()
-            .map(|project| project.toml().package.clone())
-            .collect()
+    pub fn member_names(&self) -> NonEmpty<PackageName> {
+        NonEmpty::from_vec(
+            self.members()
+                .iter()
+                .map(|project| project.toml().package.clone())
+                .collect(),
+        )
+        .expect("workspace has at least one member")
     }
 
     /// Get a workspace member, defaulting to the first one if none is specified.

@@ -222,10 +222,7 @@ impl TypedUserData for OperationsModule {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
                     .mode(SyncMode::Frozen)
-                    .targets(TargetSet {
-                        test: true,
-                        members: None,
-                    })
+                    .targets(TargetSet::all(&workspace.0, true))
                     .sync()
                     .await
                     .into_lua_err()
@@ -242,10 +239,7 @@ impl TypedUserData for OperationsModule {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
                     .mode(SyncMode::Frozen)
-                    .targets(TargetSet {
-                        test: false,
-                        members: None,
-                    })
+                    .targets(TargetSet::all(&workspace.0, false))
                     .sync()
                     .await
                     .into_lua_err()
