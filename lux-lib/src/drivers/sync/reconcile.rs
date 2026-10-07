@@ -50,6 +50,17 @@ pub struct Sync<'a> {
     fast: Option<bool>,
 }
 
+#[cfg(all(test, feature = "impure_tests"))]
+impl<State> SyncBuilder<'_, State>
+where
+    State: sync_builder::State,
+{
+    pub fn add_package(mut self, package: PackageReq) -> Self {
+        self.extra_packages.push(package);
+        self
+    }
+}
+
 impl<State> SyncBuilder<'_, State>
 where
     State: sync_builder::State + sync_builder::IsComplete,

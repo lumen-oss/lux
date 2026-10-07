@@ -155,33 +155,49 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     let tree = workspace.tree(config)?;
     let build_tree = tree.build_tree(config)?;
 
-    let mut regular = gather_dependencies(workspace, DependencyKind::Regular, None)?;
-    regular.retain(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()));
-    let build = gather_dependencies(workspace, DependencyKind::Build, None)?;
-    let build: Vec<_> = build
+    let regular = gather_dependencies(workspace, DependencyKind::Regular, None)?
+        .into_iter()
+        .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
+        .map(|spec| PackageInstallSpec {
+            build_behaviour: BuildBehaviour::Force,
+            ..spec
+        })
+        .collect::<Vec<_>>();
+
+    let build = gather_dependencies(workspace, DependencyKind::Build, None)?
         .into_iter()
         .filter(|spec| {
             !build_tree
                 .match_rocks(&spec.package)
                 .is_ok_and(|m| m.is_found())
         })
-        .collect();
+        .map(|spec| PackageInstallSpec {
+            build_behaviour: BuildBehaviour::Force,
+            ..spec
+        })
+        .collect::<Vec<_>>();
 
     let test_tree = tree.test_tree(config)?;
-    let mut test = if args.targets.test {
+    let test = if args.targets.test {
         gather_dependencies(
             workspace,
             DependencyKind::Test,
             args.targets.members.as_deref(),
         )?
+        .into_iter()
+        .filter(|spec| {
+            !test_tree
+                .match_rocks(&spec.package)
+                .is_ok_and(|m| m.is_found())
+        })
+        .map(|spec| PackageInstallSpec {
+            build_behaviour: BuildBehaviour::Force,
+            ..spec
+        })
+        .collect::<Vec<_>>()
     } else {
         Vec::new()
     };
-    test.retain(|spec| {
-        !test_tree
-            .match_rocks(&spec.package)
-            .is_ok_and(|m| m.is_found())
-    });
 
     let package_db = if !test.is_empty() || !regular.is_empty() || !build.is_empty() {
         Some(
@@ -499,6 +515,84 @@ mod tests {
             .unwrap();
         assert_eq!(installed, latest);
         assert_ne!(installed.to_string(), "0.7.1-1");
+    }
+
+    #[tokio::test]
+    async fn replaces_dependency_on_version_change() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let toml = temp.child("lux.toml");
+        toml.write_str(
+            r#"
+            package = "versionchange"
+            version = "0.1.0"
+            lua = ">=5.1"
+
+            [build]
+            type = "builtin"
+
+            [dependencies]
+            argparse = "==0.7.1-1"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(Some(LuaVersion::Lua51))
+            .build()
+            .unwrap();
+        let name = PackageName::from("argparse");
+
+        let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
+        Sync::new(&workspace, &config)
+            .mode(SyncMode::Open)
+            .targets(no_members())
+            .sync()
+            .await
+            .unwrap();
+        let tree = workspace.tree(&config).unwrap();
+        assert_eq!(
+            tree.lockfile()
+                .unwrap()
+                .entrypoint(&name)
+                .unwrap()
+                .version()
+                .to_string(),
+            "0.7.1-1"
+        );
+
+        toml.write_str(
+            r#"
+            package = "versionchange"
+            version = "0.1.0"
+            lua = ">=5.1"
+
+            [build]
+            type = "builtin"
+
+            [dependencies]
+            argparse = "==0.7.2-1"
+            "#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
+        Sync::new(&workspace, &config)
+            .mode(SyncMode::Open)
+            .targets(no_members())
+            .sync()
+            .await
+            .unwrap();
+        let tree = workspace.tree(&config).unwrap();
+        assert_eq!(
+            tree.lockfile()
+                .unwrap()
+                .entrypoint(&name)
+                .unwrap()
+                .version()
+                .to_string(),
+            "0.7.2-1"
+        );
     }
 }
 
