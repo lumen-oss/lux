@@ -20,10 +20,7 @@ pub async fn sync(args: SyncProject, config: Config) -> Result<()> {
 
     let report = Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
-        .targets(TargetSet {
-            test: true,
-            members: None,
-        })
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(!args.no_integrity_check)
         .sync()
         .await?;

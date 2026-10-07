@@ -161,10 +161,7 @@ async fn update_workspace(
 
     let sync_report = Sync::new(&workspace, args.config)
         .mode(SyncMode::Frozen)
-        .targets(TargetSet {
-            test: true,
-            members: None,
-        })
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(args.validate_integrity.unwrap_or(false))
         .sync()
         .await?;

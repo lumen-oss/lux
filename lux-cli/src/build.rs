@@ -37,9 +37,9 @@ pub async fn build_with_behaviour(
     let workspace = Workspace::current_or_err()?;
     let report = Sync::new(&workspace, &config)
         .mode(SyncMode::Open)
-        .targets(TargetSet {
-            test: false,
-            members: data.package.map(|package| vec![package]),
+        .targets(match data.package {
+            Some(package) => TargetSet::member(package, false),
+            None => TargetSet::all(&workspace, false),
         })
         .behaviour(behaviour)
         .only_deps(data.only_deps)

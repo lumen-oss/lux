@@ -85,10 +85,7 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
             }
             Sync::new(&workspace, &config)
                 .mode(SyncMode::Frozen)
-                .targets(TargetSet {
-                    test: !test_packages.is_empty(),
-                    members: None,
-                })
+                .targets(TargetSet::all(&workspace, !test_packages.is_empty()))
                 .sync()
                 .await
                 .wrap_err("syncing dependencies with the workspace lockfile failed.")?;

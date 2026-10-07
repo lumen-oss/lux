@@ -167,10 +167,7 @@ async fn run_project_tests(
     Box::pin(
         Sync::new(workspace, &test_config)
             .mode(SyncMode::Open)
-            .targets(TargetSet {
-                test: true,
-                members: Some(vec![project.toml().package().clone()]),
-            })
+            .targets(TargetSet::member(project.toml().package().clone(), true))
             .no_lock(no_lock)
             .behaviour(BuildBehaviour::Ignore)
             .sync(),

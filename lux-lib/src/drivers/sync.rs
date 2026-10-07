@@ -1,5 +1,6 @@
 use bon::Builder;
 use miette::Diagnostic;
+use nonempty::NonEmpty;
 use thiserror::Error;
 
 mod reconcile;
@@ -20,7 +21,6 @@ use crate::{
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
 };
 
-/// How a [`Sync`] reconciles the workspace's install trees with its lockfile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyncMode {
     /// The lockfile may be rewritten. Missing dependencies are resolved from
@@ -30,21 +30,24 @@ pub enum SyncMode {
     Frozen,
 }
 
-/// The set of targets a [`Sync`] should realize.
 #[derive(Clone, Debug)]
 pub struct TargetSet {
-    /// Also install test dependencies.
     pub test: bool,
-    /// Members to build. `None` builds every workspace member, `Some(vec![])`
-    /// builds none.
-    pub members: Option<Vec<PackageName>>,
+    pub members: NonEmpty<PackageName>,
 }
 
-impl Default for TargetSet {
-    fn default() -> Self {
+impl TargetSet {
+    pub fn all(workspace: &Workspace, test: bool) -> Self {
         Self {
-            test: false,
-            members: None,
+            test,
+            members: workspace.member_names(),
+        }
+    }
+
+    pub fn member(member: PackageName, test: bool) -> Self {
+        Self {
+            test,
+            members: NonEmpty::new(member),
         }
     }
 }
@@ -117,7 +120,6 @@ pub struct Sync<'a> {
 
     mode: SyncMode,
 
-    #[builder(default = TargetSet::default())]
     targets: TargetSet,
 
     #[builder(default = BuildBehaviour::Force)]
@@ -155,16 +157,20 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     let tree = workspace.tree(config)?;
     let build_tree = tree.build_tree(config)?;
 
-    let regular = gather_dependencies(workspace, DependencyKind::Regular, None)?
-        .into_iter()
-        .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
-        .map(|spec| PackageInstallSpec {
-            build_behaviour: BuildBehaviour::Force,
-            ..spec
-        })
-        .collect::<Vec<_>>();
+    let regular = gather_dependencies(
+        workspace,
+        DependencyKind::Regular,
+        &workspace.member_names(),
+    )?
+    .into_iter()
+    .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
+    .map(|spec| PackageInstallSpec {
+        build_behaviour: BuildBehaviour::Force,
+        ..spec
+    })
+    .collect::<Vec<_>>();
 
-    let build = gather_dependencies(workspace, DependencyKind::Build, None)?
+    let build = gather_dependencies(workspace, DependencyKind::Build, &workspace.member_names())?
         .into_iter()
         .filter(|spec| {
             !build_tree
@@ -179,22 +185,18 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
 
     let test_tree = tree.test_tree(config)?;
     let test = if args.targets.test {
-        gather_dependencies(
-            workspace,
-            DependencyKind::Test,
-            args.targets.members.as_deref(),
-        )?
-        .into_iter()
-        .filter(|spec| {
-            !test_tree
-                .match_rocks(&spec.package)
-                .is_ok_and(|m| m.is_found())
-        })
-        .map(|spec| PackageInstallSpec {
-            build_behaviour: BuildBehaviour::Force,
-            ..spec
-        })
-        .collect::<Vec<_>>()
+        gather_dependencies(workspace, DependencyKind::Test, &args.targets.members)?
+            .into_iter()
+            .filter(|spec| {
+                !test_tree
+                    .match_rocks(&spec.package)
+                    .is_ok_and(|m| m.is_found())
+            })
+            .map(|spec| PackageInstallSpec {
+                build_behaviour: BuildBehaviour::Force,
+                ..spec
+            })
+            .collect::<Vec<_>>()
     } else {
         Vec::new()
     };
@@ -231,13 +233,12 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     }
 
     if !args.only_deps {
-        let projects = match &args.targets.members {
-            Some(members) => members
-                .iter()
-                .map(|name| workspace.select_member(name))
-                .collect::<Result<Vec<_>, _>>()?,
-            None => workspace.members().iter().collect(),
-        };
+        let projects = args
+            .targets
+            .members
+            .iter()
+            .map(|name| workspace.select_member(name))
+            .collect::<Result<Vec<_>, _>>()?;
         for project in projects {
             added.push(
                 InstallProject::new()
@@ -276,14 +277,12 @@ enum DependencyKind {
 fn gather_dependencies(
     workspace: &Workspace,
     kind: DependencyKind,
-    members: Option<&[PackageName]>,
+    members: &NonEmpty<PackageName>,
 ) -> Result<Vec<PackageInstallSpec>, SyncError> {
     let mut packages = Vec::new();
     for project in workspace.members() {
-        if let Some(members) = members {
-            if !members.contains(project.toml().package()) {
-                continue;
-            }
+        if !members.contains(project.toml().package()) {
+            continue;
         }
         let toml = project.toml().into_local()?;
         if let DependencyKind::Test = kind {
@@ -350,13 +349,6 @@ mod tests {
 
     use super::{Sync, SyncMode, TargetSet};
 
-    fn no_members() -> TargetSet {
-        TargetSet {
-            test: false,
-            members: Some(Vec::new()),
-        }
-    }
-
     #[tokio::test]
     async fn installs_workspace_dependencies() {
         let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -373,7 +365,8 @@ mod tests {
 
         Sync::new(&workspace, &config)
             .mode(SyncMode::Open)
-            .targets(no_members())
+            .targets(TargetSet::all(&workspace, false))
+            .only_deps(true)
             .sync()
             .await
             .unwrap();
@@ -417,7 +410,8 @@ mod tests {
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
             .mode(SyncMode::Open)
-            .targets(no_members())
+            .targets(TargetSet::all(&workspace, false))
+            .only_deps(true)
             .sync()
             .await
             .unwrap();
@@ -451,7 +445,8 @@ mod tests {
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
             .mode(SyncMode::Open)
-            .targets(no_members())
+            .targets(TargetSet::all(&workspace, false))
+            .only_deps(true)
             .sync()
             .await
             .unwrap();
@@ -496,7 +491,8 @@ mod tests {
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
             .mode(SyncMode::Open)
-            .targets(no_members())
+            .targets(TargetSet::all(&workspace, false))
+            .only_deps(true)
             .sync()
             .await
             .unwrap();
@@ -546,7 +542,8 @@ mod tests {
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
             .mode(SyncMode::Open)
-            .targets(no_members())
+            .targets(TargetSet::all(&workspace, false))
+            .only_deps(true)
             .sync()
             .await
             .unwrap();
@@ -579,7 +576,8 @@ mod tests {
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
             .mode(SyncMode::Open)
-            .targets(no_members())
+            .targets(TargetSet::all(&workspace, false))
+            .only_deps(true)
             .sync()
             .await
             .unwrap();

@@ -52,9 +52,9 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
         async move {
             let report = Sync::new(build.workspace, build.config)
                 .mode(SyncMode::Open)
-                .targets(TargetSet {
-                    test: false,
-                    members: build.package.map(|package| vec![package]),
+                .targets(match build.package {
+                    Some(package) => TargetSet::member(package, false),
+                    None => TargetSet::all(build.workspace, false),
                 })
                 .behaviour(build.behaviour)
                 .only_deps(build.only_deps)
