@@ -168,7 +168,7 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         Paths::new(&user_tree)?
     };
 
-    let lua_init = if run.disable_loader.unwrap_or(false) {
+    let lua_init = if user_tree.version().is_luau() || run.disable_loader.unwrap_or(false) {
         None
     } else if lua_version.lux_lib_dir().is_none() {
         tracing::warn!(

@@ -128,6 +128,8 @@ stderr:
         stdout: String,
         stderr: String,
     },
+    #[error("luau does not support LuaRocks build backends")]
+    LuauUnsupported,
 }
 
 pub struct LuaRocksInstallation {
@@ -250,6 +252,7 @@ impl LuaRocksInstallation {
             LuaVersion::Lua53 => "5.3",
             LuaVersion::Lua54 => "5.4",
             LuaVersion::Lua55 => "5.5",
+            LuaVersion::Luau => return Err(ExecLuaRocksError::LuauUnsupported),
         };
         let luarocks_config_content = format!(
             r#"

@@ -32,6 +32,14 @@ impl LuaModule {
         self.to_path_buf().join("init.lua")
     }
 
+    pub fn to_luau_path(&self) -> PathBuf {
+        self.to_file_path(".luau")
+    }
+
+    pub fn to_luau_init_path(&self) -> PathBuf {
+        self.to_path_buf().join("init.luau")
+    }
+
     pub fn to_lib_path(&self) -> PathBuf {
         self.to_file_path(&format!(".{}", c_dylib_extension()))
     }
