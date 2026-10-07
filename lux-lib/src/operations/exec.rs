@@ -222,13 +222,19 @@ To suppress this warning, set the `--no-loader` option."#
 /// Ensure that a command is installed.
 /// This defaults to the local project tree if cwd is a project root.
 async fn install_command(command: &str, config: &Config) -> Result<(), InstallCommandError> {
-    let install_spec = PackageInstallSpec::new(
-        PackageReq::new(command.into(), None)?,
-        tree::EntryType::Entrypoint,
-    )
-    .build_behaviour(BuildBehaviour::Force)
-    .build();
+    let package = PackageReq::new(command.into(), None)?;
     let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
+    // INVESTIGATE(vhyrro): maybe InstallPackages should do this for us, just ensure
+    // that it doesn't pull down the manifest each time.
+    if tree
+        .match_rocks(&package)
+        .is_ok_and(|matches| matches.is_found())
+    {
+        return Ok(());
+    }
+    let install_spec = PackageInstallSpec::new(package, tree::EntryType::Entrypoint)
+        .build_behaviour(BuildBehaviour::Force)
+        .build();
     InstallPackages::new(config, &tree)
         .package(install_spec)
         .install()
