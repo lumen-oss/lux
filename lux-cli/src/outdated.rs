@@ -10,7 +10,7 @@ use lux_lib::{
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
-use crate::{args::OutputFormat, workspace::sync_dependencies_if_locked};
+use crate::args::OutputFormat;
 
 #[derive(Args)]
 pub struct Outdated {
@@ -23,11 +23,7 @@ pub struct Outdated {
 pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let workspace = Workspace::current()?;
     let tree = match &workspace {
-        Some(project) => {
-            // Make sure dependencies are synced if in a project
-            sync_dependencies_if_locked(project, &config).await?;
-            project.tree(&config)?
-        }
+        Some(project) => project.tree(&config)?,
         None => {
             let lua_version = LuaVersion::from(&config)?.clone();
             config.user_tree(lua_version)?
@@ -94,6 +90,8 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
             }
         }
     }
+
+    println!("\nRun `lx update` to update all outdated rocks.");
 
     Ok(())
 }
