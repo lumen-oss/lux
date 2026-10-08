@@ -3,7 +3,7 @@ use miette::Diagnostic;
 use nonempty::NonEmpty;
 use thiserror::Error;
 
-mod reconcile;
+mod frozen;
 
 use crate::{
     build::BuildBehaviour,
@@ -40,7 +40,10 @@ impl TargetSet {
     pub fn all(workspace: &Workspace, test: bool) -> Self {
         Self {
             test,
-            members: workspace.member_names(),
+            members: workspace
+                .members()
+                .clone()
+                .map(|project| project.toml().package.clone()),
         }
     }
 
@@ -100,7 +103,7 @@ pub enum SyncError {
     GenLuaRc(#[from] GenLuaRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Frozen(#[from] reconcile::SyncError),
+    Frozen(#[from] frozen::SyncError),
 }
 
 impl From<InstallPackagesError> for SyncError {
@@ -160,7 +163,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     let regular = gather_dependencies(
         workspace,
         DependencyKind::Regular,
-        &workspace.member_names(),
+        &workspace.member_names()?,
     )?
     .into_iter()
     .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
@@ -170,7 +173,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     })
     .collect::<Vec<_>>();
 
-    let build = gather_dependencies(workspace, DependencyKind::Build, &workspace.member_names())?
+    let build = gather_dependencies(workspace, DependencyKind::Build, &workspace.member_names()?)?
         .into_iter()
         .filter(|spec| {
             !build_tree
@@ -214,7 +217,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     let mut install = InstallPackages::new(config, &tree)
         .packages(regular)
         .build_packages(build)
-        .maybe_package_db(package_db);
+        .package_db(package_db);
     if !test.is_empty() {
         install = install.test_packages(test);
     }
@@ -333,6 +336,15 @@ fn gather_dependencies(
         }
     }
     Ok(packages)
+}
+
+async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
+    let report = frozen::Sync::new(args.workspace, args.config)
+        .validate_integrity(args.validate_integrity.unwrap_or(true))
+        .test(args.targets.test)
+        .sync()
+        .await?;
+    Ok(report)
 }
 
 #[cfg(all(test, feature = "impure_tests"))]
@@ -592,13 +604,4 @@ mod tests {
             "0.7.2-1"
         );
     }
-}
-
-async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
-    let report = reconcile::Sync::new(args.workspace, args.config)
-        .validate_integrity(args.validate_integrity.unwrap_or(true))
-        .test(args.targets.test)
-        .sync()
-        .await?;
-    Ok(report)
 }
