@@ -2,8 +2,8 @@ use std::{env, io};
 
 use crate::operations::SearchAndDownloadError;
 use crate::package::SpecRevIterator;
+use crate::package_db::PackageDB;
 use crate::project::project_toml::{ProjectTomlError, RemoteProjectTomlValidationError};
-use crate::remote_package_db::RemotePackageDB;
 use crate::rockspec::Rockspec;
 use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
@@ -36,7 +36,7 @@ pub struct ProjectUpload<'a> {
     #[cfg(feature = "gpgme")]
     sign_protocol: SignatureProtocol,
     config: &'a Config,
-    package_db: &'a RemotePackageDB,
+    package_db: &'a PackageDB,
 }
 
 impl<State> ProjectUploadBuilder<'_, State>
@@ -510,7 +510,7 @@ mod helpers {
         client: &Client,
         api_key: &ApiKey,
         config: &Config,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<(RemoteProjectToml, String), UploadError> {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;

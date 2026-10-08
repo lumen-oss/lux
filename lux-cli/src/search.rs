@@ -8,7 +8,7 @@ use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 use lux_lib::{
     config::Config,
     package::{PackageName, PackageReq, PackageVersion},
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
 };
 
 use crate::args::OutputFormat;
@@ -24,7 +24,7 @@ pub struct Search {
 pub async fn search(data: Search, config: Config) -> Result<()> {
     let formatting = TreeFormatting::dir_tree(FormatCharacters::box_chars());
 
-    let package_db = RemotePackageDB::from_config(&config).await?;
+    let package_db = PackageDB::from_config(&config).await?;
 
     let lua_package_req = data.lua_package_req;
 

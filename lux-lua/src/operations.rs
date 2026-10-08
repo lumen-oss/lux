@@ -16,7 +16,7 @@ use lux_lib::{
         Update,
     },
     package::{PackageName, PackageReq},
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
     rockspec::lua_dependency::DependencyType,
     tree::{EntryType, RockMatches, Tree},
 };
@@ -142,9 +142,7 @@ impl TypedUserData for OperationsModule {
             )| async move {
                 let _runtime = lua_runtime().enter();
                 let deps = lua_impls::map_dependency_type(deps.0);
-                let package_db = RemotePackageDB::from_config(&config.0)
-                    .await
-                    .into_lua_err()?;
+                let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
 
                 let install_specs = deps_to_specs(&deps);
 
@@ -356,9 +354,7 @@ mod definitions_registry {
 }
 
 async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String, Vec<String>>> {
-    let remote_db = RemotePackageDB::from_config(&config.0)
-        .await
-        .into_lua_err()?;
+    let remote_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
 
     Ok(remote_db
         .search(&query.parse().into_lua_err()?)

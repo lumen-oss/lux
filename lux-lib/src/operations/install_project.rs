@@ -10,9 +10,9 @@ use crate::{
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
+    package_db::{PackageDB, PackageDBError},
     pipeline::discover::FoundPackage,
     project::{IntoLocalRockspecError, Project, ProjectError},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError},
@@ -28,7 +28,7 @@ pub enum InstallProjectError {
     LocalRockspec(#[from] IntoLocalRockspecError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
@@ -119,14 +119,11 @@ impl<
         };
 
         let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
-        let locks = match args.workspace {
-            Some(workspace) => workspace.lockfile()?.local_pkg_locks(),
-            None => Vec::new(),
-        };
-        let package_db = RemotePackageDB::from_config(config)
-            .await?
-            .with_locks(locks)
-            .with_local(vec![root]);
+        let package_db = match args.workspace {
+            Some(workspace) => PackageDB::for_open(config, workspace).await?,
+            None => PackageDB::from_config(config).await?,
+        }
+        .with_local(vec![root]);
 
         let install_spec =
             PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)

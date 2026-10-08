@@ -2,7 +2,7 @@ use itertools::{Either, Itertools};
 use lux_lib::{
     config::Config,
     package::PackageName,
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
     rockspec::lua_dependency::{self},
     workspace::Workspace,
 };
@@ -45,7 +45,7 @@ pub struct Add {
 pub async fn add(data: Add, config: Config) -> Result<()> {
     let mut workspace = Workspace::current_or_err()?;
     let project = workspace.single_member_or_select_mut(&data.package)?;
-    let db = RemotePackageDB::from_config(&config).await?;
+    let db = PackageDB::from_config(&config).await?;
 
     let (dependencies, git_dependencies): (Vec<_>, Vec<_>) =
         data.package_req.iter().partition_map(|req| match req {

@@ -9,7 +9,7 @@ use crate::{
     },
     lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageReq, RockConstraintUnsatisfied},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
+    package_db::{PackageDB, PackageDBError},
     remote_package_source::RemotePackageSource,
     tree::{self, InstallTree, Tree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
@@ -37,7 +37,7 @@ pub enum UpdateError {
     Remove(#[from] RemoveError),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error("error loading the workspace")]
     #[diagnostic(forward(0))]
     Workspace(#[from] WorkspaceError),
@@ -97,7 +97,7 @@ pub struct Update<'a> {
     /// Whether to validate the integrity when syncing the project lockfile.
     validate_integrity: Option<bool>,
 
-    package_db: Option<RemotePackageDB>,
+    package_db: Option<PackageDB>,
 }
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
@@ -134,7 +134,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
         let package_db = match &args.package_db {
             Some(db) => db.clone(),
             None => {
-                let db = RemotePackageDB::from_config(args.config).await?;
+                let db = PackageDB::from_config(args.config).await?;
                 db
             }
         };
@@ -154,7 +154,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 async fn update_workspace(
     workspace: Workspace,
     args: Update<'_>,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
     let mut project_lockfile = workspace.lockfile()?.write_guard();
     let tree = workspace.tree(args.config)?;
@@ -213,7 +213,7 @@ async fn update_dependency_tree(
     tree: Tree,
     project_lockfile: &mut WorkspaceLockfile<ReadWrite>,
     lock_type: LockedPackageLockType,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     config: &Config,
     packages: &Option<Vec<PackageReq>>,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
@@ -244,7 +244,7 @@ fn is_included(
 
 async fn update_install_tree(
     args: Update<'_>,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
     let tree = args
         .config
@@ -259,7 +259,7 @@ async fn update_install_tree(
 
 async fn update(
     packages: Vec<(LockedPackage, PackageReq)>,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     tree: Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,

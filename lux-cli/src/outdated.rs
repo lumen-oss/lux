@@ -4,7 +4,7 @@ use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
     config::Config, lockfile::LockedPackage, lua_version::LuaVersion, package::PackageVersion,
-    remote_package_db::RemotePackageDB, workspace::Workspace,
+    package_db::PackageDB, workspace::Workspace,
 };
 
 use miette::{IntoDiagnostic, Result};
@@ -30,7 +30,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         }
     };
 
-    let package_db = RemotePackageDB::from_config(&config).await?;
+    let package_db = PackageDB::from_config(&config).await?;
 
     // NOTE: This will display all installed versions and each possible upgrade.
     // However, this should also take into account dependency constraints made by other rocks.

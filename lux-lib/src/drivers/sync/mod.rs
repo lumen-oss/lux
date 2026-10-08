@@ -14,8 +14,8 @@ use crate::{
         GenLuaRc, GenLuaRcError, InstallProject, InstallProjectError, PackageInstallSpec,
     },
     package::PackageName,
+    package_db::{PackageDB, PackageDBError},
     project::project_toml::LocalProjectTomlValidationError,
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::{EntryType, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
@@ -94,7 +94,7 @@ pub enum SyncError {
     Project(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     GenLuaRc(#[from] GenLuaRcError),
@@ -202,11 +202,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     };
 
     let package_db = if !test.is_empty() || !regular.is_empty() || !build.is_empty() {
-        Some(
-            RemotePackageDB::from_config(config)
-                .await?
-                .with_locks(workspace.lockfile()?.local_pkg_locks()),
-        )
+        Some(PackageDB::for_open(config, workspace).await?)
     } else {
         None
     };
@@ -352,8 +348,7 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder, lockfile::LockedPackageLockType, lua_version::LuaVersion,
-        package::PackageName, remote_package_db::RemotePackageDB, tree::InstallTree,
-        workspace::Workspace,
+        package::PackageName, package_db::PackageDB, tree::InstallTree, workspace::Workspace,
     };
 
     use super::{Sync, SyncMode, TargetSet};
@@ -513,7 +508,7 @@ mod tests {
             .unwrap()
             .version()
             .clone();
-        let latest = RemotePackageDB::from_config(&config)
+        let latest = PackageDB::from_config(&config)
             .await
             .unwrap()
             .latest_version(&name)

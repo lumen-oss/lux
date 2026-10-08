@@ -16,7 +16,7 @@ use crate::{
     lua_installation::LuaInstallationError,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     package::PackageNameList,
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
+    package_db::{PackageDB, PackageDBError},
     tree::{self, InstallTree, TreeError},
     workspace::WorkspaceTreeError,
 };
@@ -50,7 +50,7 @@ where
     test_packages: Option<Vec<PackageInstallSpec>>,
     #[builder(field)]
     packages: Vec<PackageInstallSpec>,
-    package_db: Option<RemotePackageDB>,
+    package_db: Option<PackageDB>,
 }
 
 impl<'a, T, State> InstallPackagesBuilder<'a, T, State>
@@ -112,7 +112,7 @@ where
 {
     let package_db = match install.package_db {
         Some(db) => db,
-        None => RemotePackageDB::from_config(install.config).await?,
+        None => PackageDB::from_config(install.config).await?,
     };
 
     let duplicate_entrypoints = install
@@ -301,7 +301,7 @@ pub enum InstallPackagesError {
     LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
     #[error("cannot install conflicting entrypoints:\n{0}")]

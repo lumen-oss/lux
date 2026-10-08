@@ -24,6 +24,7 @@ use crate::{
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{self, PackageInstallSpec, UnpackError},
     package::{PackageReq, PackageSpec},
+    package_db::{PackageDB, PackageDBError},
     pipeline::{
         download_sources_and_hash::{
             DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage, PackageSource,
@@ -32,7 +33,6 @@ use crate::{
         Artifacts,
     },
     project::project_toml::LocalProjectTomlValidationError,
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::Rockspec,
     tree::EntryType,
     workspace::{Workspace, WorkspaceError},
@@ -78,7 +78,7 @@ pub enum VendorError {
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolve(#[from] ResolveError),
@@ -122,7 +122,7 @@ const CARGO_VENDOR_SUBDIR: &str = "cargo";
 /// Resolves the requested packages and downloads (and hashes) their sources.
 async fn resolve_and_download(
     config: &Config,
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     install_specs: Artifacts<Vec<PackageInstallSpec>>,
 ) -> Result<Vec<DownloadedPackage>, VendorError> {
     let Artifacts {
@@ -225,15 +225,15 @@ async fn gather_install_specs(
     no_lock: bool,
     target: &VendorTarget,
     config: &Config,
-) -> Result<(RemotePackageDB, Artifacts<Vec<PackageInstallSpec>>), VendorError> {
+) -> Result<(PackageDB, Artifacts<Vec<PackageInstallSpec>>), VendorError> {
     // Resolve against the project's lockfile if present, otherwise fall back to
     // the remote package DB (e.g. for a project that has not yet generated a lockfile).
     let package_db = match target {
         VendorTarget::Workspace(workspace) => match workspace.try_lockfile()? {
             Some(lockfile) if !no_lock => lockfile.local_pkg_locks().into(),
-            _ => RemotePackageDB::from_config(config).await?,
+            _ => PackageDB::from_config(config).await?,
         },
-        VendorTarget::Rockspec(_) => RemotePackageDB::from_config(config).await?,
+        VendorTarget::Rockspec(_) => PackageDB::from_config(config).await?,
     };
 
     let mut install_specs: Artifacts<Vec<PackageInstallSpec>> = Artifacts::default();

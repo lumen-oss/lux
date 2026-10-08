@@ -6,7 +6,7 @@ use crate::{
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
     package::{PackageReq, PackageSpec},
-    remote_package_db::{RemotePackageDB, SearchError},
+    package_db::{PackageDB, SearchError},
     remote_package_source::RemotePackageSource,
 };
 use bon::Builder;
@@ -19,7 +19,7 @@ use thiserror::Error;
 pub(crate) struct FetchVendored<'a> {
     vendor_dir: &'a Path,
     package: &'a PackageReq,
-    package_db: &'a RemotePackageDB,
+    package_db: &'a PackageDB,
 }
 
 #[derive(Error, Debug, Diagnostic)]
