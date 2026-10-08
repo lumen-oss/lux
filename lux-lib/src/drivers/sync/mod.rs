@@ -3,7 +3,7 @@ use miette::Diagnostic;
 use nonempty::NonEmpty;
 use thiserror::Error;
 
-mod reconcile;
+mod frozen;
 
 use crate::{
     build::BuildBehaviour,
@@ -100,7 +100,7 @@ pub enum SyncError {
     GenLuaRc(#[from] GenLuaRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Frozen(#[from] reconcile::SyncError),
+    Frozen(#[from] frozen::SyncError),
 }
 
 impl From<InstallPackagesError> for SyncError {
@@ -333,6 +333,15 @@ fn gather_dependencies(
         }
     }
     Ok(packages)
+}
+
+async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
+    let report = frozen::Sync::new(args.workspace, args.config)
+        .validate_integrity(args.validate_integrity.unwrap_or(true))
+        .test(args.targets.test)
+        .sync()
+        .await?;
+    Ok(report)
 }
 
 #[cfg(all(test, feature = "impure_tests"))]
@@ -592,13 +601,4 @@ mod tests {
             "0.7.2-1"
         );
     }
-}
-
-async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
-    let report = reconcile::Sync::new(args.workspace, args.config)
-        .validate_integrity(args.validate_integrity.unwrap_or(true))
-        .test(args.targets.test)
-        .sync()
-        .await?;
-    Ok(report)
 }
