@@ -17,7 +17,7 @@ use crate::{
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
@@ -91,7 +91,7 @@ pub enum ResolveError {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub(crate) struct ResolvePackageDependencies<'a> {
     #[builder(start_fn)]
-    pub(crate) package_db: RemotePackageDB,
+    pub(crate) package_db: PackageDB,
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     #[builder(field)]
@@ -165,7 +165,7 @@ struct Node {
 }
 
 struct Resolver {
-    package_db: RemotePackageDB,
+    package_db: PackageDB,
     config: Arc<Config>,
     max_concurrent: usize,
     joinset: JoinSet<(
@@ -183,7 +183,7 @@ struct Resolver {
 
 impl Resolver {
     fn new(
-        package_db: RemotePackageDB,
+        package_db: PackageDB,
         config: &Config,
         installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
     ) -> Self {
@@ -196,7 +196,7 @@ impl Resolver {
     }
 
     fn with_max_concurrent(
-        package_db: RemotePackageDB,
+        package_db: PackageDB,
         config: Arc<Config>,
         max_concurrent: usize,
         installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
@@ -549,7 +549,6 @@ mod tests {
     use crate::config::ConfigBuilder;
     use crate::lockfile::{LockConstraint, LockedPackageHashes};
     use crate::package::{PackageSpec, RemotePackage};
-    use crate::remote_package_db::RemoteSource;
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
         let dependencies = if dependencies.is_empty() {
@@ -567,8 +566,8 @@ mod tests {
         )
     }
 
-    fn local_packages(rockspecs: &[String]) -> RemotePackageDB {
-        RemotePackageDB(vec![RemoteSource::Local(
+    fn local_packages(rockspecs: &[String]) -> PackageDB {
+        PackageDB::from_local(
             rockspecs
                 .iter()
                 .map(|content| {
@@ -590,7 +589,7 @@ mod tests {
                     }
                 })
                 .collect(),
-        )])
+        )
     }
 
     fn install_spec(name: &str) -> PackageInstallSpec {

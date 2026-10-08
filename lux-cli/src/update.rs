@@ -2,7 +2,7 @@ use clap::Args;
 use itertools::Itertools;
 use lux_lib::package::{PackageName, PackageReq};
 
-use lux_lib::remote_package_db::RemotePackageDB;
+use lux_lib::package_db::PackageDB;
 use lux_lib::rockspec::lua_dependency::LuaDependencyType;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config::Config, operations};
@@ -42,7 +42,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
     if args.toml {
         let mut workspace = Workspace::current_or_err()?;
 
-        let db = RemotePackageDB::from_config(&config).await?;
+        let db = PackageDB::from_config(&config).await?;
         let package_names = to_package_names(args.packages.as_ref())?;
         let mut upgrade_all = true;
         if let Some(packages) = package_names {

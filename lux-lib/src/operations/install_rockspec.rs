@@ -12,8 +12,8 @@ use crate::{
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
+    package_db::{PackageDB, PackageDBError},
     pipeline::discover::FoundPackage,
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{self, InstallTree, TreeError},
 };
@@ -27,7 +27,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
     #[diagnostic(transparent)]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[diagnostic(transparent)]
@@ -92,9 +92,7 @@ impl<
 
         let name = rockspec.package().clone();
         let root = FoundPackage::from_rockspec(rockspec);
-        let package_db = RemotePackageDB::from_config(config)
-            .await?
-            .with_local(vec![root]);
+        let package_db = PackageDB::from_config(config).await?.with_local(vec![root]);
 
         let install_spec =
             PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)

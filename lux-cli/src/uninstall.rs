@@ -9,6 +9,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageReq,
+    package_db::PackageDB,
     tree::{self, InstallTree, RockMatches, TreeError},
 };
 

@@ -167,6 +167,7 @@ async fn install_package(
                 .build_behaviour(BuildBehaviour::Force)
                 .build(),
         )
+        .package_db(PackageDB::from_config(config).await?)
         .install()
         .await?
         .0;

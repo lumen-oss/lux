@@ -21,7 +21,7 @@ use crate::{
         PackageName, PackageReq, PackageSpec, PackageSpecFromPackageReqError, PackageVersion,
         RemotePackageTypeFilterSpec,
     },
-    remote_package_db::{RemotePackageDB, RemotePackageDBError, SearchError},
+    package_db::{PackageDB, PackageDBError, SearchError},
     remote_package_source::RemotePackageSource,
     reqwest::{RequestBuilderExt, RequestError},
     rockspec::Rockspec,
@@ -30,7 +30,7 @@ use crate::{
 /// Builder for a rock downloader.
 pub struct Download<'a> {
     package_req: &'a PackageReq,
-    package_db: Option<&'a RemotePackageDB>,
+    package_db: Option<&'a PackageDB>,
     config: &'a Config,
 }
 
@@ -46,7 +46,7 @@ impl<'a> Download<'a> {
 
     /// Sets the package database to use for searching for packages.
     /// Instantiated from the config if not set.
-    pub fn package_db(self, package_db: &'a RemotePackageDB) -> Self {
+    pub fn package_db(self, package_db: &'a PackageDB) -> Self {
         Self {
             package_db: Some(package_db),
             ..self
@@ -58,7 +58,7 @@ impl<'a> Download<'a> {
         match self.package_db {
             Some(db) => download_rockspec(self.package_req, db, self.config).await,
             None => {
-                let db = RemotePackageDB::from_config(self.config).await?;
+                let db = PackageDB::from_config(self.config).await?;
                 download_rockspec(self.package_req, &db, self.config).await
             }
         }
@@ -75,7 +75,7 @@ impl<'a> Download<'a> {
                 download_src_rock_to_file(self.package_req, destination_dir, db, self.config).await
             }
             None => {
-                let db = RemotePackageDB::from_config(self.config).await?;
+                let db = PackageDB::from_config(self.config).await?;
                 download_src_rock_to_file(self.package_req, destination_dir, &db, self.config).await
             }
         }
@@ -88,7 +88,7 @@ impl<'a> Download<'a> {
         match self.package_db {
             Some(db) => search_and_download_src_rock(self.package_req, db, self.config).await,
             None => {
-                let db = RemotePackageDB::from_config(self.config).await?;
+                let db = PackageDB::from_config(self.config).await?;
                 search_and_download_src_rock(self.package_req, &db, self.config).await
             }
         }
@@ -100,7 +100,7 @@ impl<'a> Download<'a> {
         match self.package_db {
             Some(db) => download_remote_rock(self.package_req, db, self.config).await,
             None => {
-                let db = RemotePackageDB::from_config(self.config).await?;
+                let db = PackageDB::from_config(self.config).await?;
                 download_remote_rock(self.package_req, &db, self.config).await
             }
         }
@@ -211,7 +211,7 @@ if the issue persists, the server may be temporarily unavailable."#
     ResponseConversion(#[from] FromUtf8Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     DownloadSrcRock(#[from] DownloadSrcRockError),
@@ -226,7 +226,7 @@ impl From<reqwest::Error> for DownloadRockspecError {
 /// Find and download a rockspec for a given package requirement
 async fn download_rockspec(
     package_req: &PackageReq,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     config: &Config,
 ) -> Result<DownloadedRockspec, SearchAndDownloadError> {
     let rockspec = match download_remote_rock(package_req, package_db, config).await? {
@@ -253,7 +253,7 @@ async fn download_rockspec(
 )]
 async fn download_remote_rock(
     package_req: &PackageReq,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     config: &Config,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     let remote_package = package_db.find(package_req, None)?;
@@ -373,7 +373,7 @@ if the issue persists, the server may be temporarily unavailable."#
     Rockspec(Box<LuaRockspecError>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error("failed to read packed rock {0}:\n{1}")]
     #[diagnostic(help(
         r#"the downloaded rock may be corrupted.
@@ -433,7 +433,7 @@ impl From<reqwest::Error> for SearchAndDownloadError {
 
 async fn search_and_download_src_rock(
     package_req: &PackageReq,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     config: &Config,
 ) -> Result<DownloadedPackedRockBytes, SearchAndDownloadError> {
     let filter = Some(RemotePackageTypeFilterSpec {
@@ -500,7 +500,7 @@ pub(crate) async fn download_binary_rock(
 async fn download_src_rock_to_file(
     package_req: &PackageReq,
     destination_dir: Option<PathBuf>,
-    package_db: &RemotePackageDB,
+    package_db: &PackageDB,
     config: &Config,
 ) -> Result<DownloadedPackedRock, SearchAndDownloadError> {
     let rock = search_and_download_src_rock(package_req, package_db, config).await?;

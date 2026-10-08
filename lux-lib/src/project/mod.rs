@@ -29,7 +29,7 @@ use crate::{
     },
     lua_version::LuaVersion,
     package::SpecRev,
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         LuaVersionCompatibility,
@@ -323,7 +323,7 @@ impl Project {
     pub async fn add(
         &mut self,
         dependencies: DependencyType<&PackageReq>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
@@ -477,7 +477,7 @@ impl Project {
     pub async fn upgrade(
         &mut self,
         dependencies: LuaDependencyType<&PackageName>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
         config: &Config,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
@@ -568,7 +568,7 @@ impl Project {
 
     pub async fn upgrade_all(
         &mut self,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
         config: &Config,
     ) -> Result<(), ProjectEditError> {
         if let Some(dependencies) = &self.toml().dependencies {

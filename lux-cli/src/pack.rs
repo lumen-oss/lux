@@ -116,6 +116,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                                 .build_behaviour(BuildBehaviour::Force)
                                 .build(),
                         )
+                        .package_db(PackageDB::from_config(&temp_config).await?)
                         .install()
                         .await?
                         .0;

@@ -9,8 +9,8 @@ use crate::{
     lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildWorkspace, BuildWorkspaceError},
     package::{PackageReq, PackageVersionReqError},
+    package_db::{PackageDB, PackageDBError},
     path::{Paths, PathsError},
-    remote_package_db::RemotePackageDBError,
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
 };
@@ -121,7 +121,7 @@ impl From<InstallCommandError> for ExecError {
 pub enum InstallCommandError {
     InstallError(#[from] Box<InstallPackagesError>),
     PackageVersionReqError(#[from] PackageVersionReqError),
-    RemotePackageDBError(#[from] RemotePackageDBError),
+    PackageDBError(#[from] PackageDBError),
     Tree(#[from] TreeError),
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
@@ -236,6 +236,7 @@ async fn install_command(command: &str, config: &Config) -> Result<(), InstallCo
         .build();
     InstallPackages::new(config, &tree)
         .package(install_spec)
+        .package_db(PackageDB::from_config(config).await?)
         .install()
         .await?;
     Ok(())

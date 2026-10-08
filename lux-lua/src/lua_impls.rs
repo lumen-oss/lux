@@ -35,11 +35,11 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
     package::{PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, SpecRev},
+    package_db::PackageDB,
     project::{
         project_toml::{LocalProjectToml, PartialProjectToml, RemoteProjectToml},
         Project,
     },
-    remote_package_db::RemotePackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         Rockspec,
@@ -2742,28 +2742,28 @@ impl mlua::UserData for RemoteProjectTomlLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RemotePackageDBLua(pub RemotePackageDB);
+pub struct PackageDBLua(pub PackageDB);
 
-impl Typed for RemotePackageDBLua {
+impl Typed for PackageDBLua {
     fn ty() -> Type {
-        Type::named("RemotePackageDB")
+        Type::named("PackageDB")
     }
 }
 
-impl FromLua for RemotePackageDBLua {
+impl FromLua for PackageDBLua {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<RemotePackageDBLua>()?.clone()),
+            LuaValue::UserData(ud) => Ok(ud.borrow::<PackageDBLua>()?.clone()),
             v => Err(LuaError::FromLuaConversionError {
                 from: v.type_name(),
-                to: "RemotePackageDBLua".to_string(),
+                to: "PackageDBLua".to_string(),
                 message: None,
             }),
         }
     }
 }
 
-impl mlua::UserData for RemotePackageDBLua {
+impl mlua::UserData for PackageDBLua {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
         <Self as TypedUserData>::add_fields(&mut wrapper);
@@ -2775,7 +2775,7 @@ impl mlua::UserData for RemotePackageDBLua {
     }
 }
 
-impl TypedUserData for RemotePackageDBLua {
+impl TypedUserData for PackageDBLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.document("Search for all packages that match the requirement");
         methods.param(
@@ -3133,7 +3133,7 @@ impl TypedUserData for ProjectLua {
                 let _guard = lux_lib::lua::lua_runtime().enter();
                 let deps = map_dependency_type(deps.0);
                 let package_db =
-                    RemotePackageDB::from_config(&config.0)
+                    PackageDB::from_config(&config.0)
                         .await
                         .into_lua_err()?;
                 this.0.add(deps.as_ref(), &package_db).await.into_lua_err()
@@ -3222,8 +3222,8 @@ mod definitions_registry {
         InstallSpecLua, LocalLuaRockspecLua, LocalProjectTomlLua, LockedPackageHashesLua,
         LockedPackageLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
         LuaDependencySpecLua, LuaScriptTestSpecLua, MakeBuildSpecLua, ModulePathsLua,
-        NvimLayoutLua, PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
-        PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
+        NvimLayoutLua, PackageDBLua, PackageReqLua, PackageSpecLua, PartialLuaRockspecLua,
+        PartialProjectTomlLua, PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua,
         RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutLua,
         RustBinaryBuildSpecLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua,
         WorkspaceLua,
@@ -3276,7 +3276,7 @@ mod definitions_registry {
         "PartialProjectToml" => PartialProjectTomlLua,
         "LocalProjectToml" => LocalProjectTomlLua,
         "RemoteProjectToml" => RemoteProjectTomlLua,
-        "RemotePackageDB" => RemotePackageDBLua,
+        "PackageDB" => PackageDBLua,
         "LockfileReadOnly" => LockfileReadOnlyLua,
         "LockfileGuard" => LockfileGuardLua,
         "LockfileReadWrite" => LockfileReadWriteLua,
