@@ -15,7 +15,13 @@ use tracing::{info_span, Instrument};
 pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Sync(#[from] SyncError),
+    Sync(Box<SyncError>),
+}
+
+impl From<SyncError> for BuildWorkspaceError {
+    fn from(source: SyncError) -> Self {
+        Self::Sync(Box::new(source))
+    }
 }
 
 #[derive(Builder)]
@@ -68,7 +74,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "impure_tests"))]
 mod tests {
     use super::*;
 

@@ -454,11 +454,14 @@ mod tests {
         lockfile::{LockConstraint, LockedPackageHashes},
         lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_version::LuaVersion,
-        operations::{unpack_rockspec, DownloadedPackedRockBytes},
         package::PackageSpec,
-        pipeline::build_local::Build,
         project::Project,
         remote_package_source::RemotePackageSource,
+    };
+    #[cfg(feature = "impure_tests")]
+    use crate::{
+        operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        pipeline::build_local::Build,
         tree::Tree,
     };
 
@@ -542,11 +545,15 @@ mod tests {
         bin_file.assert(predicate::str::contains("echo \"Hello\""));
     }
 
+    #[cfg(feature = "impure_tests")]
     const LUATEST_SRC_ROCK: &str = "resources/test/luatest-0.2-1.src.rock";
+    #[cfg(feature = "impure_tests")]
     const LUATEST_SRC_ROCK_SOURCE_HASH: &str =
         "sha256-2jS0XOq0iIVhsZJ3BVqXSlKsx2vsqCAaaYyqcBEb7RI=";
+    #[cfg(feature = "impure_tests")]
     const LUATEST_ROCKSPEC_HASH: &str = "sha256-NljJ20A+VadUyhhBjrRnojeQjSqRpQy7FWcgjUt2Fdc=";
 
+    #[cfg(feature = "impure_tests")]
     fn luatest_src_rock_bytes() -> Bytes {
         Bytes::copy_from_slice(
             &std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(LUATEST_SRC_ROCK))
@@ -554,6 +561,7 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "impure_tests")]
     fn luatest_config(dir: &assert_fs::TempDir) -> Config {
         ConfigBuilder::new()
             .unwrap()
@@ -563,6 +571,7 @@ mod tests {
             .unwrap()
     }
 
+    #[cfg(feature = "impure_tests")]
     async fn build_luatest(
         config: &Config,
         tree: &Tree,
@@ -601,6 +610,7 @@ mod tests {
             .unwrap()
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn luatest_src_rock_produces_expected_hashes() {
         let dir = assert_fs::TempDir::new().unwrap();
@@ -625,6 +635,7 @@ mod tests {
         assert!(tree.bin().join("luatest").is_file());
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn force_build_is_deterministic() {
         let dir1 = assert_fs::TempDir::new().unwrap();
@@ -654,6 +665,7 @@ mod tests {
         assert_eq!(package1.hashes(), package2.hashes());
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn noforce_skips_rebuild_when_package_is_locked() {
         let dir = assert_fs::TempDir::new().unwrap();

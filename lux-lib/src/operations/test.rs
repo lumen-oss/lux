@@ -255,7 +255,7 @@ async fn run_project_tests(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "impure_tests"))]
 mod tests {
     use std::path::Path;
 

@@ -501,34 +501,24 @@ async fn cargo_vendor(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
-    use bytes::Bytes;
     use tempfile::TempDir;
 
     use super::*;
     use crate::{
         build::BuildBehaviour,
-        config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
-        operations::unpack_rockspec,
         remote_package_source::RemotePackageSource,
     };
-    use assert_fs::prelude::PathCopy;
+    #[cfg(feature = "impure_tests")]
+    use {crate::config::ConfigBuilder, assert_fs::prelude::PathCopy, std::path::PathBuf};
 
+    #[cfg(feature = "impure_tests")]
     fn test_config() -> Config {
         ConfigBuilder::new()
             .unwrap()
             .lua_version(Some(crate::lua_version::LuaVersion::Lua51))
             .build()
             .unwrap()
-    }
-
-    fn fixture_bytes(name: &str) -> Bytes {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test")
-            .join(name);
-        Bytes::from(std::fs::read(path).unwrap())
     }
 
     fn make_downloaded_package(
@@ -639,6 +629,7 @@ mod tests {
         assert!(stale_dir.join("hello.lua").is_file());
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn vendor_workspace_no_delete_preserves_existing_contents() {
         let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -539,12 +539,12 @@ local unpack = unpack or table.unpack
 mod tests {
     use super::*;
 
-    use assert_fs::fixture::PathCopy;
     #[cfg(target_os = "linux")]
     use assert_fs::prelude::{PathChild, PathCreateDir};
     use assert_fs::TempDir;
+    #[cfg(feature = "impure_tests")]
+    use {crate::lua_installation::detect_installed_lua_version, assert_fs::fixture::PathCopy};
 
-    use crate::lua_installation::detect_installed_lua_version;
     use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
     #[cfg(target_os = "linux")]
     use crate::{
@@ -637,6 +637,7 @@ mod tests {
             .is_some_and(|e| e == c_dylib_extension()));
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn test_collect_installed_files_from_sample_project() {
         let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -682,17 +683,20 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     async fn test_dist_bin_from_lua_source_compiles_and_runs() {
         test_dist_bin_compiles_and_runs("resources/test/sample-projects/only-src/", "1").await
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     #[cfg(target_os = "linux")]
     async fn test_dist_bin_from_c_source_compiles_and_runs() {
         test_dist_bin_compiles_and_runs("resources/test/sample-projects/c-src/", "OK").await
     }
 
+    #[cfg(feature = "impure_tests")]
     async fn test_dist_bin_compiles_and_runs(sample_project_path: &str, expected_output: &str) {
         let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(sample_project_path);
         let project_dir = TempDir::new().unwrap();

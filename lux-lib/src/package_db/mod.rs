@@ -37,7 +37,13 @@ pub enum PackageDBError {
     ConfigError(#[from] ConfigError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(Box<WorkspaceError>),
+}
+
+impl From<WorkspaceError> for PackageDBError {
+    fn from(err: WorkspaceError) -> Self {
+        Self::Workspace(Box::new(err))
+    }
 }
 
 #[derive(Error, Debug, Diagnostic)]
