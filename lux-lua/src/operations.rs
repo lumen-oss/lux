@@ -64,7 +64,9 @@ impl TypedUserData for OperationsModule {
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
+                let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
                 InstallPackages::new(&config.0, &tree.0)
+                    .package_db(package_db)
                     .packages(specs)
                     .install()
                     .await
@@ -159,6 +161,7 @@ impl TypedUserData for OperationsModule {
 
                 let tree = workspace.0.tree(&config.0).into_lua_err()?;
                 InstallPackages::new(&config.0, &tree)
+                    .package_db(package_db)
                     .packages(install_specs)
                     .install()
                     .await

@@ -40,7 +40,10 @@ impl TargetSet {
     pub fn all(workspace: &Workspace, test: bool) -> Self {
         Self {
             test,
-            members: workspace.member_names(),
+            members: workspace
+                .members()
+                .clone()
+                .map(|project| project.toml().package.clone()),
         }
     }
 
@@ -160,7 +163,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     let regular = gather_dependencies(
         workspace,
         DependencyKind::Regular,
-        &workspace.member_names(),
+        &workspace.member_names()?,
     )?
     .into_iter()
     .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
@@ -170,7 +173,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
     })
     .collect::<Vec<_>>();
 
-    let build = gather_dependencies(workspace, DependencyKind::Build, &workspace.member_names())?
+    let build = gather_dependencies(workspace, DependencyKind::Build, &workspace.member_names()?)?
         .into_iter()
         .filter(|spec| {
             !build_tree
@@ -201,16 +204,12 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
         Vec::new()
     };
 
-    let package_db = if !test.is_empty() || !regular.is_empty() || !build.is_empty() {
-        Some(PackageDB::for_open(config, workspace).await?)
-    } else {
-        None
-    };
+    let package_db = PackageDB::open(config, workspace).await?;
 
     let mut install = InstallPackages::new(config, &tree)
         .packages(regular)
         .build_packages(build)
-        .maybe_package_db(package_db);
+        .package_db(package_db);
     if !test.is_empty() {
         install = install.test_packages(test);
     }

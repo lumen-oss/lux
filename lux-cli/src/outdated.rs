@@ -22,6 +22,9 @@ pub struct Outdated {
 /// If in a project, this lists rocks in the project tree
 pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let workspace = Workspace::current()?;
+    // NOTE: We deliberately do not sync the workspace before listing outdated
+    // rocks. `Sync` may install or remove packages as a side effect, which would
+    // make this otherwise read-only command mutate the install tree.
     let tree = match &workspace {
         Some(project) => project.tree(&config)?,
         None => {
@@ -52,6 +55,8 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         .iter()
         .sorted_by_key(|(rock, _)| rock.name().to_owned())
         .into_group_map_by(|(rock, _)| rock.name().to_owned());
+
+    let has_outdated = !rock_list.is_empty();
 
     match outdated_data.output_format {
         OutputFormat::Json => {
@@ -91,7 +96,9 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
         }
     }
 
-    println!("\nRun `lx update` to update all outdated rocks.");
+    if has_outdated {
+        println!("\nRun `lx update` to update all outdated rocks.");
+    }
 
     Ok(())
 }

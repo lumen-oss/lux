@@ -11,6 +11,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{Exec, PackageInstallSpec},
     package::{PackageName, PackageReq},
+    package_db::PackageDB,
     tree::{EntryType, InstallTree},
 };
 use std::path::PathBuf;
@@ -80,6 +81,7 @@ async fn install_and_use(package: PackageReq, module_name: &str) {
         .unwrap();
     let installed = InstallPackages::new(&config, &tree)
         .package(install_spec)
+        .package_db(PackageDB::from_config(&config).await.unwrap())
         .install()
         .await
         .unwrap()
@@ -134,6 +136,7 @@ async fn test_install(install_spec: PackageInstallSpec) {
         .unwrap();
     let installed = InstallPackages::new(&config, &tree)
         .package(install_spec)
+        .package_db(PackageDB::from_config(&config).await.unwrap())
         .install()
         .await
         .unwrap()

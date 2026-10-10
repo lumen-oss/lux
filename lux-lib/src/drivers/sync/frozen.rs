@@ -199,7 +199,9 @@ async fn do_sync(
     let package_db = workspace_lockfile.local_pkg_locks().into();
 
     let (to_add, mut report) = reconcile_locks(&workspace_lockfile, &dest_lockfile, lock_type);
-    let member_names = args.workspace.member_names();
+    // Workspace members are the workspace's own entrypoints, not dependencies,
+    // so they must never be reported (or uninstalled) as removed by a sync.
+    let member_names = args.workspace.member_names()?;
     report
         .removed
         .retain(|package| !member_names.contains(package.name()));
@@ -236,6 +238,9 @@ async fn do_sync(
         .collect_vec();
 
     install_tree_lockfile.map_then_flush(|lockfile| {
+        // `sync` replaces the lockfile's contents whole, so we synchronize the
+        // workspace lockfile first and only then re-add the workspace members as
+        // entrypoints. Adding them beforehand would have them wiped out.
         lockfile.sync(workspace_lockfile.local_pkg_lock(lock_type));
         for package in &member_packages {
             lockfile.add_entrypoint(package);
@@ -285,7 +290,7 @@ impl<'a, 'b> SyncPackages<'a, 'b> {
             }
         }
 
-        let mut extra_packages = self.args.extra_packages.iter().cloned().collect_vec();
+        let mut extra_packages = self.args.extra_packages.clone();
         match self.lock_type {
             LockedPackageLockType::Build => {
                 for project in self.args.workspace.members() {
@@ -402,7 +407,7 @@ fn validate_integrity(
 }
 
 /// Installs packages that were newly added to the workspace lockfile but are not yet present in
-/// the install tree, using the default package database.
+/// the install tree, using the workspace lockfile as the package database.
 async fn install_missing_packages<T>(
     args: &Sync<'_>,
     tree: &T,
@@ -433,6 +438,7 @@ where
         .collect();
 
     let added = InstallPackages::new(args.config, tree)
+        .package_db(workspace_lockfile.local_pkg_locks().into())
         .packages(missing_packages)
         .install()
         .await?

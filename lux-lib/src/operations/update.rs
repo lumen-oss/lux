@@ -294,7 +294,7 @@ async fn update(
                     .map(|updatable| mk_install_spec(updatable, lockfile))
                     .collect(),
             )
-            .maybe_package_db(Some(package_db))
+            .package_db(package_db)
             .install()
             .await?;
         Ok(updated_packages)

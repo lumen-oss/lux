@@ -164,15 +164,13 @@ async fn run_project_tests(
     let test_spec = rocks.test().current_platform().to_validated(project)?;
     let test_config = test_spec.test_config(config)?;
 
-    Box::pin(
-        Sync::new(workspace, &test_config)
-            .mode(SyncMode::Open)
-            .targets(TargetSet::member(project.toml().package().clone(), true))
-            .no_lock(no_lock)
-            .behaviour(BuildBehaviour::Ignore)
-            .sync(),
-    )
-    .await?;
+    Sync::new(workspace, &test_config)
+        .mode(SyncMode::Open)
+        .targets(TargetSet::member(project.toml().package().clone(), true))
+        .no_lock(no_lock)
+        .behaviour(BuildBehaviour::Ignore)
+        .sync()
+        .await?;
 
     let lua_version = project.lua_version(&test_config)?;
     let project_tree = workspace.lua_version_tree(lua_version, &test_config)?;

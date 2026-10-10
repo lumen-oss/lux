@@ -12,6 +12,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageName,
+    package_db::PackageDB,
     pipeline::build_local::Build,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
@@ -115,6 +116,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                                 .build_behaviour(BuildBehaviour::Force)
                                 .build(),
                         )
+                        .package_db(PackageDB::from_config(&temp_config).await?)
                         .install()
                         .await?
                         .0;

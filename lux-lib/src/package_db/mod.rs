@@ -82,7 +82,7 @@ impl PackageDB {
 
     /// Builds a package database that prefers the workspace lockfile, falling
     /// back to the manifests for requirements the lockfile does not satisfy.
-    pub(crate) async fn for_open(
+    pub(crate) async fn open(
         config: &Config,
         workspace: &Workspace,
     ) -> Result<Self, PackageDBError> {

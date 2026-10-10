@@ -120,7 +120,7 @@ impl<
 
         let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
         let package_db = match args.workspace {
-            Some(workspace) => PackageDB::for_open(config, workspace).await?,
+            Some(workspace) => PackageDB::open(config, workspace).await?,
             None => PackageDB::from_config(config).await?,
         }
         .with_local(vec![root]);

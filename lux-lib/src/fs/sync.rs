@@ -23,6 +23,11 @@ pub(crate) fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Resul
     })
 }
 
+/// Atomically writes `contents` to `path`.
+///
+/// The contents are written to a temporary file in the destination directory
+/// and then renamed into place, so readers never observe a partially-written
+/// file. The temporary file is flushed to disk before the rename.
 pub(crate) fn write_atomic(
     path: impl AsRef<Path>,
     contents: impl AsRef<[u8]>,
@@ -30,31 +35,26 @@ pub(crate) fn write_atomic(
     use std::io::Write;
 
     let path = path.as_ref();
-    let parent = match path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => parent,
-        _ => Path::new("."),
-    };
+    let dir = path
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
 
-    let mut file =
-        tempfile::NamedTempFile::new_in(parent).map_err(|source| FsError::FileCreate {
-            path: path.to_path_buf(),
-            source,
-        })?;
+    let mut file = tempfile::NamedTempFile::new_in(dir).map_err(|source| FsError::FileCreate {
+        path: path.to_path_buf(),
+        source,
+    })?;
     file.write_all(contents.as_ref())
+        .and_then(|()| file.as_file().sync_all())
         .map_err(|source| FsError::Write {
             path: path.to_path_buf(),
             source,
         })?;
-    file.as_file().sync_all().map_err(|source| FsError::Write {
+    file.persist(path).map_err(|err| FsError::Write {
         path: path.to_path_buf(),
-        source,
+        source: err.error,
     })?;
-    file.persist(path)
-        .map_err(|err| FsError::Write {
-            path: path.to_path_buf(),
-            source: err.error,
-        })
-        .map(|_| ())
+    Ok(())
 }
 
 /// Wrapped [`fs::copy`].

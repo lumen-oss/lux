@@ -4,10 +4,12 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
+    drivers::install_packages::InstallPackages,
     lockfile::LockedPackageId,
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageReq,
+    package_db::PackageDB,
     tree::{self, InstallTree, RockMatches, TreeError},
 };
 
@@ -151,7 +153,8 @@ Reinstall?
                 .packages(dependencies)
                 .remove()
                 .await?;
-            lux_lib::drivers::install_packages::InstallPackages::new(&config, &tree)
+            InstallPackages::new(&config, &tree)
+                .package_db(PackageDB::from_config(&config).await?)
                 .packages(reinstall_specs)
                 .install()
                 .await?;

@@ -14,6 +14,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{InstallProject, PackageInstallSpec},
     package::{PackageName, PackageReq},
+    package_db::PackageDB,
     pipeline::build_local::Build,
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
@@ -166,6 +167,7 @@ async fn install_package(
                 .build_behaviour(BuildBehaviour::Force)
                 .build(),
         )
+        .package_db(PackageDB::from_config(config).await?)
         .install()
         .await?
         .0;

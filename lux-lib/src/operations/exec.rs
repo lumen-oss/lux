@@ -9,7 +9,7 @@ use crate::{
     lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildWorkspace, BuildWorkspaceError},
     package::{PackageReq, PackageVersionReqError},
-    package_db::PackageDBError,
+    package_db::{PackageDB, PackageDBError},
     path::{Paths, PathsError},
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
@@ -236,6 +236,7 @@ async fn install_command(command: &str, config: &Config) -> Result<(), InstallCo
         .build();
     InstallPackages::new(config, &tree)
         .package(install_spec)
+        .package_db(PackageDB::from_config(config).await?)
         .install()
         .await?;
     Ok(())

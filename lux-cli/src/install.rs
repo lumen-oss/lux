@@ -7,6 +7,7 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations,
     package::{PackageName, PackageReq},
+    package_db::PackageDB,
     workspace::{Workspace, WorkspaceError},
 };
 
@@ -81,6 +82,7 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
     // TODO(vhyrro): If the tree doesn't exist then error out.
     InstallPackages::new(&config, &tree)
         .packages(packages)
+        .package_db(PackageDB::from_config(&config).await?)
         .install()
         .await?;
 

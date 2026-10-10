@@ -50,7 +50,7 @@ where
     test_packages: Option<Vec<PackageInstallSpec>>,
     #[builder(field)]
     packages: Vec<PackageInstallSpec>,
-    package_db: Option<PackageDB>,
+    package_db: PackageDB,
 }
 
 impl<'a, T, State> InstallPackagesBuilder<'a, T, State>
@@ -110,10 +110,7 @@ async fn install_packages<T>(
 where
     T: InstallTree + Send + Sync,
 {
-    let package_db = match install.package_db {
-        Some(db) => db,
-        None => PackageDB::from_config(install.config).await?,
-    };
+    let package_db = install.package_db;
 
     let duplicate_entrypoints = install
         .packages
