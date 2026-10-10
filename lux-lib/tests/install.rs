@@ -10,9 +10,9 @@ use lux_lib::{
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
     operations::{Exec, PackageInstallSpec},
-    package::{PackageName, PackageReq},
+    package::PackageReq,
     package_db::PackageDB,
-    tree::{EntryType, InstallTree},
+    tree::EntryType,
 };
 use std::path::PathBuf;
 use walkdir::WalkDir;

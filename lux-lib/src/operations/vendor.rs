@@ -503,7 +503,6 @@ async fn cargo_vendor(
 mod tests {
     use std::path::PathBuf;
 
-    use bytes::Bytes;
     use tempfile::TempDir;
 
     use super::*;
@@ -511,7 +510,6 @@ mod tests {
         build::BuildBehaviour,
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
-        operations::unpack_rockspec,
         remote_package_source::RemotePackageSource,
     };
     use assert_fs::prelude::PathCopy;
@@ -522,13 +520,6 @@ mod tests {
             .lua_version(Some(crate::lua_version::LuaVersion::Lua51))
             .build()
             .unwrap()
-    }
-
-    fn fixture_bytes(name: &str) -> Bytes {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test")
-            .join(name);
-        Bytes::from(std::fs::read(path).unwrap())
     }
 
     fn make_downloaded_package(

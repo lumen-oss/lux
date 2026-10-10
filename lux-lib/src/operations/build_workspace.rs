@@ -15,7 +15,13 @@ use tracing::{info_span, Instrument};
 pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Sync(#[from] SyncError),
+    Sync(Box<SyncError>),
+}
+
+impl From<SyncError> for BuildWorkspaceError {
+    fn from(source: SyncError) -> Self {
+        Self::Sync(Box::new(source))
+    }
 }
 
 #[derive(Builder)]

@@ -16,6 +16,7 @@ use crate::{
     luarocks::luarocks_installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError},
     package::{PackageName, PackageReq},
+    package_db::{PackageDB, PackageDBError},
     pipeline::resolve::luarocks_build_backend_name,
     project::{project_toml::LocalProjectTomlValidationError, ProjectError},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
@@ -156,11 +157,20 @@ pub enum SyncError {
     #[error("failed to generate `.luarc.json`")]
     #[diagnostic(forward(0))]
     GenLuaRc(#[from] GenLuaRcError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageDB(Box<PackageDBError>),
 }
 
 impl From<InstallPackagesError> for SyncError {
     fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
+    }
+}
+
+impl From<PackageDBError> for SyncError {
+    fn from(source: PackageDBError) -> Self {
+        Self::PackageDB(Box::new(source))
     }
 }
 
@@ -407,7 +417,7 @@ fn validate_integrity(
 }
 
 /// Installs packages that were newly added to the workspace lockfile but are not yet present in
-/// the install tree, using the workspace lockfile as the package database.
+/// the install tree, resolving them from the configured package database.
 async fn install_missing_packages<T>(
     args: &Sync<'_>,
     tree: &T,
@@ -438,7 +448,7 @@ where
         .collect();
 
     let added = InstallPackages::new(args.config, tree)
-        .package_db(workspace_lockfile.local_pkg_locks().into())
+        .package_db(PackageDB::from_config(args.config).await?)
         .packages(missing_packages)
         .install()
         .await?

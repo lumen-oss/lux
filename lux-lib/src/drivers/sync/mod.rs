@@ -82,7 +82,7 @@ pub enum SyncError {
     InstallPackages(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallProject(#[from] InstallProjectError),
+    InstallProject(Box<InstallProjectError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] WorkspaceError),
@@ -103,12 +103,24 @@ pub enum SyncError {
     GenLuaRc(#[from] GenLuaRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Frozen(#[from] frozen::SyncError),
+    Frozen(Box<frozen::SyncError>),
 }
 
 impl From<InstallPackagesError> for SyncError {
     fn from(source: InstallPackagesError) -> Self {
         Self::InstallPackages(Box::new(source))
+    }
+}
+
+impl From<InstallProjectError> for SyncError {
+    fn from(source: InstallProjectError) -> Self {
+        Self::InstallProject(Box::new(source))
+    }
+}
+
+impl From<frozen::SyncError> for SyncError {
+    fn from(source: frozen::SyncError) -> Self {
+        Self::Frozen(Box::new(source))
     }
 }
 
