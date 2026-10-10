@@ -1,7 +1,7 @@
 use clap::Args;
 use lux_lib::{
-    config::Config, package::PackageName, remote_package_db::RemotePackageDB,
-    upload::ProjectUpload, workspace::Workspace,
+    config::Config, package::PackageName, package_db::PackageDB, upload::ProjectUpload,
+    workspace::Workspace,
 };
 
 use miette::{IntoDiagnostic, Result};
@@ -31,7 +31,7 @@ pub struct Upload {
 pub async fn upload(data: Upload, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
 
-    let package_db = RemotePackageDB::from_config(&config).await?;
+    let package_db = PackageDB::from_config(&config).await?;
     let tfa_code = tfa_code_from_args_or_secret(&data, &config)?;
     if let Some(package) = data.package {
         let project = workspace.select_member(&package)?;
@@ -62,7 +62,7 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
 #[cfg(not(feature = "gpgme"))]
 pub async fn upload(data: Upload, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
-    let package_db = RemotePackageDB::from_config(&config).await?;
+    let package_db = PackageDB::from_config(&config).await?;
     let tfa_code = tfa_code_from_args_or_secret(&data, &config)?;
     if let Some(package) = data.package {
         let project = workspace.select_member(&package)?;

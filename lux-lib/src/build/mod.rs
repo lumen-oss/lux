@@ -1,15 +1,14 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
-use crate::lockfile::{LockfileError, OptState, RemotePackageSourceUrl};
+use crate::lockfile::{LockfileError, RemotePackageSourceUrl};
 use crate::lua_installation::LuaInstallationError;
 use crate::lua_rockspec::LuaVersionError;
-use crate::operations::{RemotePackageSourceMetadata, UnpackError};
-use crate::rockspec::{LuaVersionCompatibility, Rockspec};
-use crate::tree::{self, EntryType, InstallTree, TreeError};
+use crate::operations::UnpackError;
+use crate::rockspec::Rockspec;
+use crate::tree::{EntryType, InstallTree, TreeError};
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::fs::DirEntry;
-use std::io::Cursor;
 use std::path::PathBuf;
 use std::{io, path::Path};
 use tracing::Instrument;
@@ -17,14 +16,11 @@ use tracing::Instrument;
 use crate::{
     config::Config,
     hash::HasIntegrity,
-    lockfile::{LocalPackage, LocalPackageHashes, LockConstraint, PinnedState},
+    lockfile::{LockedPackage, LockedPackageSpec},
     lua_installation::LuaInstallation,
     lua_rockspec::BuildBackendSpec,
-    operations::{self, FetchSrcError},
-    package::PackageSpec,
-    remote_package_source::RemotePackageSource,
+    operations::FetchSrcError,
 };
-use bon::Builder;
 use builtin::BuiltinBuildError;
 use cmake::CMakeError;
 use command::CommandError;
@@ -60,34 +56,6 @@ pub(crate) mod utils;
 
 pub mod external_dependency;
 
-/// A rocks package builder, providing fine-grained control
-/// over how a package should be built.
-#[derive(Builder)]
-#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
-    rockspec: &'a R,
-    tree: &'a T,
-    entry_type: tree::EntryType,
-    config: &'a Config,
-    lua: &'a LuaInstallation,
-
-    #[builder(default)]
-    pin: PinnedState,
-    #[builder(default)]
-    opt: OptState,
-    #[builder(default)]
-    constraint: LockConstraint,
-    #[builder(default)]
-    behaviour: BuildBehaviour,
-
-    #[builder(setters(vis = "pub(crate)"))]
-    source_spec: Option<RemotePackageSourceSpec>,
-
-    // TODO(vhyrro): Remove this and enforce that this is provided at a type level.
-    #[builder(setters(vis = "pub(crate)"))]
-    source: Option<RemotePackageSource>,
-}
-
 #[derive(Debug)]
 pub(crate) enum RemotePackageSourceSpec {
     RockSpec(Option<RemotePackageSourceUrl>),
@@ -99,22 +67,6 @@ pub(crate) enum RemotePackageSourceSpec {
 pub(crate) struct SrcRockSource {
     pub bytes: Bytes,
     pub source_url: RemotePackageSourceUrl,
-}
-
-// Overwrite the `build()` function to use our own instead.
-impl<R: Rockspec + HasIntegrity, T: InstallTree + Sync, State> BuildBuilder<'_, R, T, State>
-where
-    State: build_builder::State + build_builder::IsComplete,
-{
-    pub async fn build(self) -> Result<LocalPackage, BuildError> {
-        let build = self._build();
-        let span = tracing::info_span!(
-            "Building",
-            package = build.rockspec.package().to_string(),
-            version = build.rockspec.version().to_string(),
-        );
-        do_build(build).instrument(span).await
-    }
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -209,12 +161,15 @@ impl From<SourceBuildError> for BuildError {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BuildBehaviour {
-    /// Don't force a rebuild if the package is already installed
-    #[default]
-    NoForce,
-    /// Force a rebuild if the package is already installed
+    /// If a package with the same version is already installed, do nothing.
+    /// Otherwise, behave like [`BuildBehaviour::Conflict`].
+    Ignore,
+    /// Error if an entrypoint with the same name is already installed, even if
+    /// it is the same version.
+    Conflict,
+    /// Remove any installed entrypoint with the same name and rebuild.
     Force,
 }
 
@@ -250,7 +205,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
     tree: &T,
-    package: &LocalPackage,
+    package: &LockedPackageSpec,
     lua: &LuaInstallation,
     build_dir: &Path,
     entry_type: &EntryType,
@@ -320,144 +275,102 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     Ok(())
 }
 
-#[tracing::instrument(level = "trace", skip_all)]
-async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LocalPackage, BuildError>
-where
-    R: Rockspec + HasIntegrity,
-    T: InstallTree + Sync,
-{
-    let rockspec = build.rockspec;
-    let lua = build.lua;
-
-    rockspec.validate_lua_version(&lua.version)?;
-
-    let tree = build.tree;
-
-    let temp_dir = fs::tempfile::tempdir()?;
-
-    let source_metadata = match build.source_spec {
-        Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
-            let hash = bytes.hash().await?;
-            let cursor = Cursor::new(bytes);
-            operations::unpack_src_rock(cursor, temp_dir.path().to_path_buf())
-                .await
-                .map_err(BuildError::UnpackSrcRock)?;
-            RemotePackageSourceMetadata { hash, source_url }
-        }
-        Some(RemotePackageSourceSpec::RockSpec(source_url)) => {
-            operations::FetchSrc::new(temp_dir.path(), rockspec, build.config)
-                .maybe_source_url(source_url)
-                .fetch_internal()
-                .await?
-        }
-        None => {
-            operations::FetchSrc::new(temp_dir.path(), rockspec, build.config)
-                .fetch_internal()
-                .await?
-        }
-    };
-
-    let hashes = LocalPackageHashes {
-        rockspec: rockspec.hash().await?,
-        source: source_metadata.hash.clone(),
-    };
-
-    let mut package = LocalPackage::from(
-        &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
-        build.constraint,
-        rockspec.binaries(),
-        build
-            .source
-            .map(Result::Ok)
-            .unwrap_or_else(|| {
-                rockspec
-                    .to_lua_remote_rockspec_string()
-                    .map(RemotePackageSource::RockspecContent)
-            })
-            .unwrap_or(RemotePackageSource::Local),
-        Some(source_metadata.source_url.clone()),
-        hashes,
-    );
-    package.spec.pinned = build.pin;
-    package.spec.opt = build.opt;
-
-    match tree.lockfile()?.get(&package.id()) {
-        Some(package) if build.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
-        _ => {
-            tree.prepare(&package)?;
-            let layout = tree.layout_for(&package);
-
-            let rock_source = rockspec.source().current_platform();
-            let build_dir = resolve_source_dir(
-                temp_dir.path(),
-                rock_source.unpack_dir.as_deref(),
-                &rockspec.build().current_platform().copy_directories,
-            )?;
-
-            Patch::new(&build_dir, &rockspec.build().current_platform().patches).apply()?;
-
-            let external_dependencies = rockspec
-                .external_dependencies()
-                .current_platform()
-                .iter()
-                .map(|(name, dep)| {
-                    ExternalDependencyInfo::probe(name, dep, build.config.external_deps())
-                        .map(|info| (name.clone(), info))
-                })
-                .try_collect::<_, HashMap<_, _>, _>()?;
-
-            let output = run_build(
-                rockspec,
-                RunBuildArgs::new()
-                    .package(&package)
-                    .no_install(false)
-                    .lua(lua)
-                    .external_dependencies(&external_dependencies)
-                    .deploy(rockspec.deploy().current_platform())
-                    .config(build.config)
-                    .tree(tree)
-                    .build_dir(&build_dir)
-                    .build(),
-            )
-            .await?;
-
-            package.spec.binaries.extend(output.binaries);
-
-            install(
-                rockspec,
-                tree,
-                &package,
-                lua,
-                &build_dir,
-                &build.entry_type,
-                build.config,
-            )
-            .await?;
-
-            for directory in rockspec
-                .build()
-                .current_platform()
-                .copy_directories
-                .iter()
-                .filter(|dir| {
-                    dir.file_name()
-                        .is_some_and(|name| name != "doc" && name != "docs")
-                })
-            {
-                recursive_copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
-            }
-
-            recursive_copy_doc_dir(&layout.doc, &build_dir).await?;
-
-            if let Ok(rockspec_str) = rockspec.to_lua_remote_rockspec_string() {
-                fs::sync::write(layout.rockspec_path(), rockspec_str)?;
-            }
-
-            tree.finalize(&package, build.entry_type)?;
-
-            Ok(package)
+// TODO(vhyrro): break apart deployment into a separate step (once we implement transactions)
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
+    rockspec: &R,
+    tree: &T,
+    package: LockedPackage,
+    lua: &LuaInstallation,
+    source_root: &Path,
+    entry_type: EntryType,
+    config: &Config,
+    behaviour: BuildBehaviour,
+) -> Result<LockedPackage, BuildError> {
+    if matches!(behaviour, BuildBehaviour::Ignore | BuildBehaviour::Conflict) {
+        if let Some(existing) = tree.lockfile()?.get(&package.id()) {
+            return Ok(existing.clone());
         }
     }
+
+    // TODO(vhyrro): When we implement transactionality make this a Drop guard
+    // or something else.
+    tree.prepare(&package.spec)?;
+    let layout = tree.layout_for(&package.spec);
+
+    let rock_source = rockspec.source().current_platform();
+    let build_dir = resolve_source_dir(
+        source_root,
+        rock_source.unpack_dir.as_deref(),
+        &rockspec.build().current_platform().copy_directories,
+    )?;
+
+    Patch::new(&build_dir, &rockspec.build().current_platform().patches).apply()?;
+
+    let external_dependencies = rockspec
+        .external_dependencies()
+        .current_platform()
+        .iter()
+        .map(|(name, dep)| {
+            ExternalDependencyInfo::probe(name, dep, config.external_deps())
+                .map(|info| (name.clone(), info))
+        })
+        .try_collect::<_, HashMap<_, _>, _>()?;
+
+    let output = run_build(
+        rockspec,
+        RunBuildArgs::new()
+            .package(&package.spec)
+            .no_install(false)
+            .lua(lua)
+            .external_dependencies(&external_dependencies)
+            .deploy(rockspec.deploy().current_platform())
+            .config(config)
+            .tree(tree)
+            .build_dir(&build_dir)
+            .build(),
+    )
+    .await?;
+
+    let mut binaries = rockspec.binaries();
+    binaries.extend(output.binaries);
+    tree.lockfile()?
+        .write_guard()
+        .set_binaries(&package, binaries);
+
+    install(
+        rockspec,
+        tree,
+        &package.spec,
+        lua,
+        &build_dir,
+        &entry_type,
+        config,
+    )
+    .await?;
+
+    for directory in rockspec
+        .build()
+        .current_platform()
+        .copy_directories
+        .iter()
+        .filter(|dir| {
+            dir.file_name()
+                .is_some_and(|name| name != "doc" && name != "docs")
+        })
+    {
+        recursive_copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
+    }
+
+    recursive_copy_doc_dir(&layout.doc, &build_dir).await?;
+
+    if let Ok(rockspec_str) = rockspec.to_lua_remote_rockspec_string() {
+        fs::sync::write(layout.rockspec_path(), rockspec_str)?;
+    }
+
+    tree.finalize(&package, entry_type)?;
+
+    Ok(package)
 }
 
 fn is_source_or_etc_dir(dir: &DirEntry, copy_dirs: &[PathBuf]) -> bool {
@@ -538,10 +451,15 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder,
+        lockfile::{LockConstraint, LockedPackageHashes},
         lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_version::LuaVersion,
+        operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        package::PackageSpec,
+        pipeline::build_local::Build,
         project::Project,
-        rockspec::RockBinaries,
+        remote_package_source::RemotePackageSource,
+        tree::Tree,
     };
 
     #[tokio::test]
@@ -565,13 +483,12 @@ mod tests {
         let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
         let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
-        let package = LocalPackage::from(
+        let package = LockedPackage::from(
             &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
-            LocalPackageHashes {
+            LockedPackageHashes {
                 rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                     .parse()
                     .unwrap(),
@@ -580,12 +497,12 @@ mod tests {
                     .unwrap(),
             },
         );
-        tree.prepare(&package).unwrap();
-        let src_dir = tree.layout_for(&package).src;
+        tree.prepare(&package.spec).unwrap();
+        let src_dir = tree.layout_for(&package.spec).src;
         run_build(
             &rockspec,
             RunBuildArgs::new()
-                .package(&package)
+                .package(&package.spec)
                 .no_install(false)
                 .lua(&lua)
                 .external_dependencies(&HashMap::default())
@@ -623,5 +540,151 @@ mod tests {
         bin_file.assert(predicate::path::is_file());
         bin_file.assert(predicate::str::contains("#!/usr/bin/env bash"));
         bin_file.assert(predicate::str::contains("echo \"Hello\""));
+    }
+
+    const LUATEST_SRC_ROCK: &str = "resources/test/luatest-0.2-1.src.rock";
+    const LUATEST_SRC_ROCK_SOURCE_HASH: &str =
+        "sha256-2jS0XOq0iIVhsZJ3BVqXSlKsx2vsqCAaaYyqcBEb7RI=";
+    const LUATEST_ROCKSPEC_HASH: &str = "sha256-NljJ20A+VadUyhhBjrRnojeQjSqRpQy7FWcgjUt2Fdc=";
+
+    fn luatest_src_rock_bytes() -> Bytes {
+        Bytes::copy_from_slice(
+            &std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(LUATEST_SRC_ROCK))
+                .unwrap(),
+        )
+    }
+
+    fn luatest_config(dir: &assert_fs::TempDir) -> Config {
+        ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(dir.to_path_buf()))
+            .lua_version(Some(LuaVersion::Lua51))
+            .build()
+            .unwrap()
+    }
+
+    async fn build_luatest(
+        config: &Config,
+        tree: &Tree,
+        entry_type: EntryType,
+        behaviour: BuildBehaviour,
+    ) -> LockedPackage {
+        let bytes = luatest_src_rock_bytes();
+        let rock = DownloadedPackedRockBytes {
+            name: "luatest".into(),
+            version: "0.2-1".parse().unwrap(),
+            bytes: bytes.clone(),
+            file_name: "luatest-0.2-1.src.rock".into(),
+            url: "https://example.org/luatest-0.2-1.src.rock"
+                .parse()
+                .unwrap(),
+        };
+        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let lua = LuaInstallation::new_from_config(config).await.unwrap();
+        Build::new()
+            .rockspec(&rockspec)
+            .lua(&lua)
+            .tree(tree)
+            .entry_type(entry_type)
+            .config(config)
+            .behaviour(behaviour)
+            .source_spec(RemotePackageSourceSpec::SrcRock(SrcRockSource {
+                bytes,
+                source_url: RemotePackageSourceUrl::Url {
+                    url: "https://example.org/luatest-0.2-1.src.rock"
+                        .parse()
+                        .unwrap(),
+                },
+            }))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn luatest_src_rock_produces_expected_hashes() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        let config = luatest_config(&dir);
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let package =
+            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+
+        assert_eq!(
+            package.hashes().source,
+            LUATEST_SRC_ROCK_SOURCE_HASH.parse().unwrap()
+        );
+        assert_eq!(
+            package.hashes().rockspec,
+            LUATEST_ROCKSPEC_HASH.parse().unwrap()
+        );
+        assert_eq!(
+            package.hashes().source,
+            luatest_src_rock_bytes().hash().await.unwrap()
+        );
+        assert!(tree.bin().join("luatest").is_file());
+    }
+
+    #[tokio::test]
+    async fn force_build_is_deterministic() {
+        let dir1 = assert_fs::TempDir::new().unwrap();
+        let config1 = luatest_config(&dir1);
+        let tree1 = config1.user_tree(LuaVersion::Lua51).unwrap();
+
+        let dir2 = assert_fs::TempDir::new().unwrap();
+        let config2 = luatest_config(&dir2);
+        let tree2 = config2.user_tree(LuaVersion::Lua51).unwrap();
+
+        let package1 = build_luatest(
+            &config1,
+            &tree1,
+            EntryType::Entrypoint,
+            BuildBehaviour::Force,
+        )
+        .await;
+        let package2 = build_luatest(
+            &config2,
+            &tree2,
+            EntryType::Entrypoint,
+            BuildBehaviour::Force,
+        )
+        .await;
+
+        assert_eq!(package1, package2);
+        assert_eq!(package1.hashes(), package2.hashes());
+    }
+
+    #[tokio::test]
+    async fn noforce_skips_rebuild_when_package_is_locked() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        let config = luatest_config(&dir);
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let package =
+            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        let bin = tree.bin().join("luatest");
+        assert!(bin.is_file());
+
+        // Simulate a committed install
+        {
+            let mut lockfile = tree.lockfile().unwrap().write_guard();
+            lockfile.add_entrypoint(&package);
+        }
+
+        // Simulate a partially broken install.
+        std::fs::remove_file(&bin).unwrap();
+
+        let skipped = build_luatest(
+            &config,
+            &tree,
+            EntryType::Entrypoint,
+            BuildBehaviour::Ignore,
+        )
+        .await;
+        assert_eq!(skipped.id(), package.id());
+        assert!(!bin.is_file());
+
+        build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        assert!(bin.is_file());
     }
 }

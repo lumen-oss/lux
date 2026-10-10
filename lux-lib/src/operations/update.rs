@@ -1,14 +1,15 @@
 use std::io;
 
 use crate::{
+    build::BuildBehaviour,
     config::Config,
     lockfile::{
-        LocalPackage, LocalPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
+        LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
         WorkspaceLockfile,
     },
     lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageReq, RockConstraintUnsatisfied},
-    remote_package_db::{RemotePackageDB, RemotePackageDBError},
+    package_db::{PackageDB, PackageDBError},
     remote_package_source::RemotePackageSource,
     tree::{self, InstallTree, Tree, TreeError},
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
@@ -18,7 +19,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{Install, InstallError, PackageInstallSpec, RemoveError, SyncError, Uninstall};
+use super::{PackageInstallSpec, RemoveError, Uninstall};
+
+use crate::drivers::install_packages::{InstallPackages, InstallPackagesError};
+use crate::drivers::sync::{Sync, SyncError, SyncMode, TargetSet};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UpdateError {
@@ -27,13 +31,13 @@ pub enum UpdateError {
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
     #[error("failed to update rock")]
     #[diagnostic(forward(0))]
-    Install(#[from] Box<InstallError>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    RemotePackageDB(#[from] RemotePackageDBError),
+    PackageDB(#[from] PackageDBError),
     #[error("error loading the workspace")]
     #[diagnostic(forward(0))]
     Workspace(#[from] WorkspaceError),
@@ -53,8 +57,8 @@ pub enum UpdateError {
     Sync(#[from] Box<SyncError>),
 }
 
-impl From<InstallError> for UpdateError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for UpdateError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -93,7 +97,7 @@ pub struct Update<'a> {
     /// Whether to validate the integrity when syncing the project lockfile.
     validate_integrity: Option<bool>,
 
-    package_db: Option<RemotePackageDB>,
+    package_db: Option<PackageDB>,
 }
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
@@ -113,9 +117,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
     #[tracing::instrument(name = "Updating packages", skip_all)]
-
-    /// Returns the packages that were installed or removed
-    pub async fn update(self) -> Result<Vec<LocalPackage>, UpdateError>
+    pub async fn update(self) -> Result<Vec<LockedPackage>, UpdateError>
     where
         State: update_builder::IsComplete,
     {
@@ -132,7 +134,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
         let package_db = match &args.package_db {
             Some(db) => db.clone(),
             None => {
-                let db = RemotePackageDB::from_config(args.config).await?;
+                let db = PackageDB::from_config(args.config).await?;
                 db
             }
         };
@@ -143,8 +145,8 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
         };
 
         match workspace {
-            Some(workspace) => update_workspace(workspace, args, package_db).await,
-            None => update_install_tree(args, package_db).await,
+            Some(workspace) => Box::pin(update_workspace(workspace, args, package_db)).await,
+            None => Box::pin(update_install_tree(args, package_db)).await,
         }
     }
 }
@@ -152,21 +154,22 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 async fn update_workspace(
     workspace: Workspace,
     args: Update<'_>,
-    package_db: RemotePackageDB,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+    package_db: PackageDB,
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let mut project_lockfile = workspace.lockfile()?.write_guard();
     let tree = workspace.tree(args.config)?;
 
-    let sync_report = super::Sync::new(&workspace, args.config)
+    let sync_report = Sync::new(&workspace, args.config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(args.validate_integrity.unwrap_or(false))
-        .test(true)
         .sync()
         .await?;
 
     let updated_dependencies = update_dependency_tree(
         tree,
         &mut project_lockfile,
-        LocalPackageLockType::Regular,
+        LockedPackageLockType::Regular,
         package_db.clone(),
         args.config,
         &args.packages,
@@ -178,7 +181,7 @@ async fn update_workspace(
     let updated_test_dependencies = update_dependency_tree(
         test_tree,
         &mut project_lockfile,
-        LocalPackageLockType::Test,
+        LockedPackageLockType::Test,
         package_db.clone(),
         args.config,
         &args.test_dependencies,
@@ -190,7 +193,7 @@ async fn update_workspace(
     let updated_build_dependencies = update_dependency_tree(
         build_tree,
         &mut project_lockfile,
-        LocalPackageLockType::Build,
+        LockedPackageLockType::Build,
         package_db.clone(),
         args.config,
         &args.build_dependencies,
@@ -209,11 +212,11 @@ async fn update_workspace(
 async fn update_dependency_tree(
     tree: Tree,
     project_lockfile: &mut WorkspaceLockfile<ReadWrite>,
-    lock_type: LocalPackageLockType,
-    package_db: RemotePackageDB,
+    lock_type: LockedPackageLockType,
+    package_db: PackageDB,
     config: &Config,
     packages: &Option<Vec<PackageReq>>,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let lockfile = tree.lockfile()?;
     let dependencies = updatable_packages(&lockfile)
         .into_iter()
@@ -228,7 +231,7 @@ async fn update_dependency_tree(
 }
 
 fn is_included(
-    (pkg, _): &(LocalPackage, PackageReq),
+    (pkg, _): &(LockedPackage, PackageReq),
     package_reqs: &Option<Vec<PackageReq>>,
 ) -> bool {
     package_reqs.is_none()
@@ -241,8 +244,8 @@ fn is_included(
 
 async fn update_install_tree(
     args: Update<'_>,
-    package_db: RemotePackageDB,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+    package_db: PackageDB,
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let tree = args
         .config
         .user_tree(LuaVersion::from(args.config)?.clone())?;
@@ -255,12 +258,12 @@ async fn update_install_tree(
 }
 
 async fn update(
-    packages: Vec<(LocalPackage, PackageReq)>,
-    package_db: RemotePackageDB,
+    packages: Vec<(LockedPackage, PackageReq)>,
+    package_db: PackageDB,
     tree: Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
-) -> Result<Vec<LocalPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, UpdateError> {
     let updatable = packages
         .clone()
         .into_iter()
@@ -284,14 +287,13 @@ async fn update(
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .remove()
             .await?;
-        let updated_packages = Install::new(config)
+        let (updated_packages, _lockfile) = InstallPackages::new(config, &tree)
             .packages(
                 updatable
                     .iter()
                     .map(|updatable| mk_install_spec(updatable, lockfile))
                     .collect(),
             )
-            .tree(tree)
             .package_db(package_db)
             .install()
             .await?;
@@ -299,7 +301,7 @@ async fn update(
     }
 }
 
-fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LocalPackage, PackageReq)> {
+fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, PackageReq)> {
     lockfile
         .rocks()
         .values()
@@ -322,7 +324,7 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LocalPackage, Packa
 }
 
 fn mk_install_spec(
-    (package, req): &(LocalPackage, PackageReq),
+    (package, req): &(LockedPackage, PackageReq),
     lockfile: &Lockfile<ReadOnly>,
 ) -> PackageInstallSpec {
     let entry_type = if lockfile.is_entrypoint(&package.id()) {
@@ -331,6 +333,7 @@ fn mk_install_spec(
         tree::EntryType::DependencyOnly
     };
     PackageInstallSpec::new(req.clone(), entry_type)
+        .build_behaviour(BuildBehaviour::Force)
         .pin(PinnedState::Unpinned)
         .opt(package.opt())
         .build()

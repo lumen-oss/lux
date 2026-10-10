@@ -45,7 +45,7 @@ impl Paths {
     pub fn new(tree: &impl InstallTree) -> Result<Self, PathsError> {
         let mut paths = Self::default(tree);
         for package in tree.list()?.values().flatten() {
-            let layout = tree.layout_for(package);
+            let layout = tree.layout_for(&package.spec);
             paths.src.0.push(layout.src.join("?.lua"));
             paths.src.0.push(layout.src.join("?").join("init.lua"));
             paths

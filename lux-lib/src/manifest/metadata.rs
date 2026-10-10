@@ -223,4 +223,43 @@ mod tests {
         };
         assert!(metadata.latest_match(&package_req, &filter).is_none());
     }
+
+    #[tokio::test]
+    pub async fn latest_match_prefers_binary_then_rockspec_then_src() {
+        let manifest = r#"
+            commands = {}
+            modules = {}
+            repository = {
+               ['testpkg'] = {
+                  ['1.0-1'] = {
+                     { arch = "rockspec" }, { arch = "src" }, { arch = "all" }
+                  }
+               }
+            }
+        "#
+        .to_string();
+        let metadata = ManifestMetadata::new(&manifest).unwrap();
+        let package_req: PackageReq = "testpkg == 1.0-1".parse().unwrap();
+
+        let (_, rock_type) = metadata
+            .latest_match(&package_req, &Default::default())
+            .unwrap();
+        assert_eq!(rock_type, RemotePackageType::Binary);
+
+        let no_binary = RemotePackageTypeFilterSpec {
+            rockspec: true,
+            src: true,
+            binary: false,
+        };
+        let (_, rock_type) = metadata.latest_match(&package_req, &no_binary).unwrap();
+        assert_eq!(rock_type, RemotePackageType::Rockspec);
+
+        let src_only = RemotePackageTypeFilterSpec {
+            rockspec: false,
+            src: true,
+            binary: false,
+        };
+        let (_, rock_type) = metadata.latest_match(&package_req, &src_only).unwrap();
+        assert_eq!(rock_type, RemotePackageType::Src);
+    }
 }

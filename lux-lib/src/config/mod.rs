@@ -821,7 +821,9 @@ impl ConfigBuilder {
             no_progress: self.no_progress.unwrap_or(false),
             no_prompt: self.no_prompt.unwrap_or(false),
             timeout: self.timeout.unwrap_or_else(|| Duration::from_secs(30)),
-            max_jobs: match self.max_jobs.unwrap_or(usize::MAX) {
+            max_jobs: match self.max_jobs.unwrap_or_else(|| {
+                std::thread::available_parallelism().map_or(1, |available| available.get())
+            }) {
                 0 => usize::MAX,
                 max_jobs => max_jobs,
             },

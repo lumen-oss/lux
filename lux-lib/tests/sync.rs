@@ -2,7 +2,7 @@ use assert_fs::{prelude::PathCopy, TempDir};
 use flaky_test::flaky_test;
 use lux_lib::{
     config::ConfigBuilder,
-    operations::Sync,
+    drivers::sync::{Sync, SyncMode, TargetSet},
     tree::{InstallTree, RockMatches},
     workspace::Workspace,
 };
@@ -22,9 +22,9 @@ async fn sync_test_dependencies_empty_project() {
         String::from_utf8(tokio::fs::read(workspace.lockfile_path()).await.unwrap());
 
     Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(cfg!(not(target_os = "windows")))
-        .test(true)
-        .fast(true)
         .sync()
         .await
         .unwrap();
@@ -71,9 +71,9 @@ async fn sync_multi_projects_same_dependencies() {
     let config = ConfigBuilder::new().unwrap().build().unwrap();
 
     Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(cfg!(not(target_os = "windows")))
-        .test(true)
-        .fast(true)
         .sync()
         .await
         .unwrap();
@@ -121,6 +121,8 @@ fallo = "2.2.0"
     let workspace_lockfile = project_dir.join("lux.lock");
 
     Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -133,6 +135,8 @@ fallo = "2.2.0"
     tokio::fs::remove_dir_all(workspace_tree).await.unwrap();
 
     Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -158,6 +162,8 @@ async fn sync_dependencies_adds_luarocks_build_backend() {
     let config = ConfigBuilder::new().unwrap().build().unwrap();
 
     Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await
@@ -185,6 +191,8 @@ async fn sync_dependencies_adds_transitive_build_dependencies() {
     let config = ConfigBuilder::new().unwrap().build().unwrap();
 
     Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, false))
         .validate_integrity(cfg!(not(target_os = "windows")))
         .sync()
         .await

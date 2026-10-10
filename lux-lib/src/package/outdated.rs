@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::remote_package_db::RemotePackageDB;
+use crate::package_db::PackageDB;
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -22,7 +22,7 @@ impl PackageSpec {
     /// Returns the latest version if found.
     pub fn has_update(
         &self,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<Option<PackageVersion>, RockNotFound> {
         let latest_version = package_db
             .latest_version(&self.name)
@@ -40,7 +40,7 @@ impl PackageSpec {
     pub fn has_update_with(
         &self,
         constraint: &PackageReq,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<Option<PackageVersion>, RockConstraintUnsatisfied> {
         let latest_version =
             package_db

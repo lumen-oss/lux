@@ -173,7 +173,7 @@ impl BuildBackend for MakeBuildSpec {
                         status: output.status,
                         stdout: String::from_utf8_lossy(&output.stdout).into(),
                         stderr: String::from_utf8_lossy(&output.stderr).into(),
-                    })
+                    });
                 }
                 Err(err) => return Err(MakeError::Io(err)),
             }

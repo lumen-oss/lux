@@ -21,8 +21,8 @@ use lux_lib::{
     config::{Config, ConfigBuilder},
     git::{GitRef, GitSource},
     lockfile::{
-        LocalPackage, LocalPackageHashes, LocalPackageId, LockConstraint, Lockfile, LockfileGuard,
-        OptState, PinnedState, ReadOnly, ReadWrite,
+        LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile,
+        LockfileGuard, OptState, PinnedState, ReadOnly, ReadWrite,
     },
     lua_rockspec::{
         BuildBackendSpec, BuildSpec, BuiltinBuildSpec, BustedTestSpec, CMakeBuildSpec,
@@ -35,11 +35,11 @@ use lux_lib::{
     lua_version::LuaVersion,
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
     package::{PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, SpecRev},
+    package_db::PackageDB,
     project::{
         project_toml::{LocalProjectToml, PartialProjectToml, RemoteProjectToml},
         Project,
     },
-    remote_package_db::RemotePackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         Rockspec,
@@ -264,23 +264,23 @@ impl IntoLua for OptStateLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalPackageIdLua(pub LocalPackageId);
+pub struct LockedPackageIdLua(pub LockedPackageId);
 
-impl Typed for LocalPackageIdLua {
+impl Typed for LockedPackageIdLua {
     fn ty() -> Type {
         Type::string()
     }
 }
 
-impl FromLua for LocalPackageIdLua {
+impl FromLua for LockedPackageIdLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        Ok(LocalPackageIdLua(unsafe {
-            LocalPackageId::from_unchecked(String::from_lua(value, lua)?)
+        Ok(LockedPackageIdLua(unsafe {
+            LockedPackageId::from_unchecked(String::from_lua(value, lua)?)
         }))
     }
 }
 
-impl IntoLua for LocalPackageIdLua {
+impl IntoLua for LockedPackageIdLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         self.0.into_string().into_lua(lua)
     }
@@ -565,10 +565,10 @@ impl IntoLua for RockMatchesLua {
         table.set("is_found", lua.create_function(move |_, ()| Ok(is_found))?)?;
         match self.0 {
             RockMatches::NotFound(req) => table.set("not_found", PackageReqLua(req))?,
-            RockMatches::Single(id) => table.set("single", LocalPackageIdLua(id))?,
+            RockMatches::Single(id) => table.set("single", LockedPackageIdLua(id))?,
             RockMatches::Many(ids) => table.set(
                 "many",
-                ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>(),
+                ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>(),
             )?,
         }
         Ok(LuaValue::Table(table))
@@ -712,7 +712,7 @@ impl IntoLua for SyncReportLua {
                 .added()
                 .iter()
                 .cloned()
-                .map(LocalPackageLua)
+                .map(LockedPackageLua)
                 .collect::<Vec<_>>(),
         )?;
         table.set(
@@ -721,7 +721,7 @@ impl IntoLua for SyncReportLua {
                 .removed()
                 .iter()
                 .cloned()
-                .map(LocalPackageLua)
+                .map(LockedPackageLua)
                 .collect::<Vec<_>>(),
         )?;
         Ok(LuaValue::Table(table))
@@ -863,17 +863,17 @@ impl mlua::UserData for PackageReqLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalPackageHashesLua(pub LocalPackageHashes);
+pub struct LockedPackageHashesLua(pub LockedPackageHashes);
 
-impl Typed for LocalPackageHashesLua {
+impl Typed for LockedPackageHashesLua {
     fn ty() -> Type {
-        Type::named("LocalPackageHashes")
+        Type::named("LockedPackageHashes")
     }
 }
 
-impl_from_lua_userdata!(LocalPackageHashesLua);
+impl_from_lua_userdata!(LockedPackageHashesLua);
 
-impl TypedUserData for LocalPackageHashesLua {
+impl TypedUserData for LockedPackageHashesLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.param("rockspec", "sha256sum of the rockspec");
         methods.add_method("rockspec", |_, this, ()| Ok(this.0.rockspec.to_hex().1));
@@ -885,7 +885,7 @@ impl TypedUserData for LocalPackageHashesLua {
     }
 }
 
-impl mlua::UserData for LocalPackageHashesLua {
+impl mlua::UserData for LockedPackageHashesLua {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
         <Self as TypedUserData>::add_fields(&mut wrapper);
@@ -898,30 +898,30 @@ impl mlua::UserData for LocalPackageHashesLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalPackageLua(pub LocalPackage);
+pub struct LockedPackageLua(pub LockedPackage);
 
-impl Typed for LocalPackageLua {
+impl Typed for LockedPackageLua {
     fn ty() -> Type {
-        Type::named("LocalPackage")
+        Type::named("LockedPackage")
     }
 }
 
-impl FromLua for LocalPackageLua {
+impl FromLua for LockedPackageLua {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<LocalPackageLua>()?.clone()),
+            LuaValue::UserData(ud) => Ok(ud.borrow::<LockedPackageLua>()?.clone()),
             v => Err(LuaError::FromLuaConversionError {
                 from: v.type_name(),
-                to: "LocalPackageLua".to_string(),
+                to: "LockedPackageLua".to_string(),
                 message: None,
             }),
         }
     }
 }
 
-impl TypedUserData for LocalPackageLua {
+impl TypedUserData for LockedPackageLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("id", |_, this, ()| Ok(LocalPackageIdLua(this.0.id())));
+        methods.add_method("id", |_, this, ()| Ok(LockedPackageIdLua(this.0.id())));
         methods.add_method("name", |_, this, ()| {
             Ok(PackageNameLua(this.0.name().clone()))
         });
@@ -934,14 +934,14 @@ impl TypedUserData for LocalPackageLua {
                 .0
                 .dependencies()
                 .into_iter()
-                .map(|id| LocalPackageIdLua(id.clone()))
+                .map(|id| LockedPackageIdLua(id.clone()))
                 .collect::<Vec<_>>())
         });
         methods.add_method("constraint", |_, this, ()| {
             Ok(LockConstraintLua(this.0.constraint()))
         });
         methods.add_method("hashes", |_, this, ()| {
-            Ok(LocalPackageHashesLua(this.0.hashes().clone()))
+            Ok(LockedPackageHashesLua(this.0.hashes().clone()))
         });
         methods.add_method("to_package", |_, this, ()| {
             Ok(PackageSpecLua(this.0.to_package()))
@@ -955,7 +955,7 @@ impl TypedUserData for LocalPackageLua {
     }
 }
 
-impl mlua::UserData for LocalPackageLua {
+impl mlua::UserData for LockedPackageLua {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
         <Self as TypedUserData>::add_fields(&mut wrapper);
@@ -1064,10 +1064,10 @@ impl TypedUserData for TreeLua {
         });
         methods.document("The root directory of a package in this tree");
         methods.param("package", "");
-        methods.add_method("root_for", |_, this, package: LocalPackageLua| {
+        methods.add_method("root_for", |_, this, package: LockedPackageLua| {
             Ok(this
                 .0
-                .layout_for(&package.0)
+                .layout_for(package.0.spec())
                 .root
                 .to_slash_lossy()
                 .into_owned())
@@ -1078,8 +1078,8 @@ impl TypedUserData for TreeLua {
         });
         methods.document("Get the `RockLayout` for an installed package.");
         methods.param("package", "");
-        methods.add_method("rock_layout", |_, this, package: LocalPackageLua| {
-            Ok(RockLayoutLua(this.0.layout_for(&package.0)))
+        methods.add_method("rock_layout", |_, this, package: LockedPackageLua| {
+            Ok(RockLayoutLua(this.0.layout_for(package.0.spec())))
         });
         methods.document("Find installed rocks that match the given `PackageReq`");
         methods.param("req", "");
@@ -2742,28 +2742,28 @@ impl mlua::UserData for RemoteProjectTomlLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RemotePackageDBLua(pub RemotePackageDB);
+pub struct PackageDBLua(pub PackageDB);
 
-impl Typed for RemotePackageDBLua {
+impl Typed for PackageDBLua {
     fn ty() -> Type {
-        Type::named("RemotePackageDB")
+        Type::named("PackageDB")
     }
 }
 
-impl FromLua for RemotePackageDBLua {
+impl FromLua for PackageDBLua {
     fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
         match value {
-            LuaValue::UserData(ud) => Ok(ud.borrow::<RemotePackageDBLua>()?.clone()),
+            LuaValue::UserData(ud) => Ok(ud.borrow::<PackageDBLua>()?.clone()),
             v => Err(LuaError::FromLuaConversionError {
                 from: v.type_name(),
-                to: "RemotePackageDBLua".to_string(),
+                to: "PackageDBLua".to_string(),
                 message: None,
             }),
         }
     }
 }
 
-impl mlua::UserData for RemotePackageDBLua {
+impl mlua::UserData for PackageDBLua {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
         <Self as TypedUserData>::add_fields(&mut wrapper);
@@ -2775,7 +2775,7 @@ impl mlua::UserData for RemotePackageDBLua {
     }
 }
 
-impl TypedUserData for RemotePackageDBLua {
+impl TypedUserData for PackageDBLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.document("Search for all packages that match the requirement");
         methods.param(
@@ -2834,15 +2834,15 @@ impl TypedUserData for LockfileReadOnlyLua {
                 .map(|(id, rock)| {
                     (
                         id.clone().into_string().clone(),
-                        LocalPackageLua(rock.clone()),
+                        LockedPackageLua(rock.clone()),
                     )
                 })
                 .collect::<HashMap<_, _>>())
         });
 
         methods.param("id", "");
-        methods.add_method("get", |_, this, id: LocalPackageIdLua| {
-            Ok(this.0.get(&id.0).cloned().map(LocalPackageLua))
+        methods.add_method("get", |_, this, id: LockedPackageIdLua| {
+            Ok(this.0.get(&id.0).cloned().map(LockedPackageLua))
         });
 
         methods.document(
@@ -2891,15 +2891,15 @@ impl TypedUserData for LockfileGuardLua {
                 .map(|(id, rock)| {
                     (
                         id.clone().into_string().clone(),
-                        LocalPackageLua(rock.clone()),
+                        LockedPackageLua(rock.clone()),
                     )
                 })
                 .collect::<HashMap<_, _>>())
         });
 
         methods.param("id", "");
-        methods.add_method("get", |_, this, id: LocalPackageIdLua| {
-            Ok(this.0.get(&id.0).cloned().map(LocalPackageLua))
+        methods.add_method("get", |_, this, id: LockedPackageIdLua| {
+            Ok(this.0.get(&id.0).cloned().map(LockedPackageLua))
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -2939,7 +2939,7 @@ impl TypedUserData for LockfileReadWriteLua {
                 .map(|(id, rock)| {
                     (
                         id.clone().into_string().clone(),
-                        LocalPackageLua(rock.clone()),
+                        LockedPackageLua(rock.clone()),
                     )
                 })
                 .collect::<HashMap<_, _>>())
@@ -2949,9 +2949,9 @@ impl TypedUserData for LockfileReadWriteLua {
         methods.add_method("get", |_, this, id: String| {
             Ok(this
                 .0
-                .get(unsafe { &LocalPackageId::from_unchecked(id) })
+                .get(unsafe { &LockedPackageId::from_unchecked(id) })
                 .cloned()
-                .map(LocalPackageLua))
+                .map(LockedPackageLua))
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -3133,7 +3133,7 @@ impl TypedUserData for ProjectLua {
                 let _guard = lux_lib::lua::lua_runtime().enter();
                 let deps = map_dependency_type(deps.0);
                 let package_db =
-                    RemotePackageDB::from_config(&config.0)
+                    PackageDB::from_config(&config.0)
                         .await
                         .into_lua_err()?;
                 this.0.add(deps.as_ref(), &package_db).await.into_lua_err()
@@ -3219,11 +3219,11 @@ mod definitions_registry {
     use super::{
         BuildSpecLua, BustedTestSpecLua, CMakeBuildSpecLua, CommandBuildSpecLua,
         CommandTestSpecLua, ConfigBuilderLua, ConfigLua, DownloadedRockspecLua, GitSourceLua,
-        InstallSpecLua, LocalLuaRockspecLua, LocalPackageHashesLua, LocalPackageLua,
-        LocalProjectTomlLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
+        InstallSpecLua, LocalLuaRockspecLua, LocalProjectTomlLua, LockedPackageHashesLua,
+        LockedPackageLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
         LuaDependencySpecLua, LuaScriptTestSpecLua, MakeBuildSpecLua, ModulePathsLua,
-        NvimLayoutLua, PackageReqLua, PackageSpecLua, PartialLuaRockspecLua, PartialProjectTomlLua,
-        PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua, RemotePackageDBLua,
+        NvimLayoutLua, PackageDBLua, PackageReqLua, PackageSpecLua, PartialLuaRockspecLua,
+        PartialProjectTomlLua, PlatformSupportLua, ProjectLua, RemoteLuaRockspecLua,
         RemoteProjectTomlLua, RemoteRockSourceLua, RockDescriptionLua, RockLayoutLua,
         RustBinaryBuildSpecLua, RustMluaBuildSpecLua, TreeLua, TreesitterParserBuildSpecLua,
         WorkspaceLua,
@@ -3246,8 +3246,8 @@ mod definitions_registry {
     submit_definitions! {
         "PackageSpec" => PackageSpecLua,
         "PackageReq" => PackageReqLua,
-        "LocalPackageHashes" => LocalPackageHashesLua,
-        "LocalPackage" => LocalPackageLua,
+        "LockedPackageHashes" => LockedPackageHashesLua,
+        "LockedPackage" => LockedPackageLua,
         "RockLayout" => RockLayoutLua,
         "Tree" => TreeLua,
         "NvimLayout" => NvimLayoutLua,
@@ -3276,7 +3276,7 @@ mod definitions_registry {
         "PartialProjectToml" => PartialProjectTomlLua,
         "LocalProjectToml" => LocalProjectTomlLua,
         "RemoteProjectToml" => RemoteProjectTomlLua,
-        "RemotePackageDB" => RemotePackageDBLua,
+        "PackageDB" => PackageDBLua,
         "LockfileReadOnly" => LockfileReadOnlyLua,
         "LockfileGuard" => LockfileGuardLua,
         "LockfileReadWrite" => LockfileReadWriteLua,
@@ -3329,14 +3329,16 @@ impl From<EntryTypeLua> for EntryType {
 #[serde(rename_all = "snake_case")]
 enum BuildBehaviourLua {
     #[default]
-    NoForce,
+    Ignore,
+    Conflict,
     Force,
 }
 
 impl From<BuildBehaviourLua> for BuildBehaviour {
     fn from(val: BuildBehaviourLua) -> Self {
         match val {
-            BuildBehaviourLua::NoForce => Self::NoForce,
+            BuildBehaviourLua::Ignore => Self::Ignore,
+            BuildBehaviourLua::Conflict => Self::Conflict,
             BuildBehaviourLua::Force => Self::Force,
         }
     }
@@ -3346,7 +3348,7 @@ impl From<BuildBehaviourLua> for BuildBehaviour {
 /// ```lua
 /// "say >= 1.3"
 ///
-/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "no_force" }
+/// { package = "say >= 1.3", entry_type = "entrypoint", pin = false, opt = false, build_behaviour = "ignore" }
 /// ```
 #[derive(Deserialize)]
 #[serde(untagged)]

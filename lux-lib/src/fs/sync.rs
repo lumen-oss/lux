@@ -23,6 +23,40 @@ pub(crate) fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Resul
     })
 }
 
+/// Atomically writes `contents` to `path`.
+///
+/// The contents are written to a temporary file in the destination directory
+/// and then renamed into place, so readers never observe a partially-written
+/// file. The temporary file is flushed to disk before the rename.
+pub(crate) fn write_atomic(
+    path: impl AsRef<Path>,
+    contents: impl AsRef<[u8]>,
+) -> Result<(), FsError> {
+    use std::io::Write;
+
+    let path = path.as_ref();
+    let dir = path
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+
+    let mut file = tempfile::NamedTempFile::new_in(dir).map_err(|source| FsError::FileCreate {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    file.write_all(contents.as_ref())
+        .and_then(|()| file.as_file().sync_all())
+        .map_err(|source| FsError::Write {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.persist(path).map_err(|err| FsError::Write {
+        path: path.to_path_buf(),
+        source: err.error,
+    })?;
+    Ok(())
+}
+
 /// Wrapped [`fs::copy`].
 pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, FsError> {
     let from = from.as_ref();

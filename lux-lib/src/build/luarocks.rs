@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::{
     config::Config,
-    lockfile::LocalPackage,
+    lockfile::LockedPackageSpec,
     luarocks::luarocks_installation::{ExecLuaRocksError, LuaRocksError, LuaRocksInstallation},
 };
 
@@ -34,9 +34,8 @@ pub enum LuarocksBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Rockspec(Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to serialize rockspec: {0}")]
+    Rockspec(String),
     #[error("error installing luarocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaVersion(#[from] LuaVersionError),
@@ -68,7 +67,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
         &rockspec_file,
         rockspec
             .to_lua_remote_rockspec_string()
-            .map_err(|err| LuarocksBuildError::Rockspec(Box::new(err)))?,
+            .map_err(|err| LuarocksBuildError::Rockspec(err.to_string()))?,
     )
     .await?;
     let luarocks = LuaRocksInstallation::new(config, tree.build_tree(config)?)?;
@@ -83,7 +82,7 @@ async fn install<R: Rockspec, T: InstallTree>(
     rockspec: &R,
     luarocks_tree: &Path,
     tree: &T,
-    package: &LocalPackage,
+    package: &LockedPackageSpec,
     config: &Config,
 ) -> Result<BuildInfo, LuarocksBuildError> {
     let layout = tree.layout_for(package);

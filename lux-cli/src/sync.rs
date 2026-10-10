@@ -1,5 +1,9 @@
 use clap::Args;
-use lux_lib::{config::Config, operations::Sync, workspace::Workspace};
+use lux_lib::{
+    config::Config,
+    drivers::sync::{Sync, SyncMode, TargetSet},
+    workspace::Workspace,
+};
 
 use miette::Result;
 
@@ -15,8 +19,9 @@ pub async fn sync(args: SyncProject, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
 
     let report = Sync::new(&workspace, &config)
+        .mode(SyncMode::Frozen)
+        .targets(TargetSet::all(&workspace, true))
         .validate_integrity(!args.no_integrity_check)
-        .test(true)
         .sync()
         .await?;
 

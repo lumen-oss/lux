@@ -2,10 +2,12 @@ use std::path::PathBuf;
 
 use lux_lib::{
     config::Config,
+    drivers::install_packages::InstallPackages,
     lockfile::PinnedState,
     lua_version::LuaVersion,
     operations,
     package::{PackageName, PackageReq},
+    package_db::PackageDB,
     workspace::{Workspace, WorkspaceError},
 };
 
@@ -62,6 +64,7 @@ async fn install_from_path(
         .project(project)
         .config(&config)
         .tree(&tree)
+        .workspace(&workspace)
         .build()
         .await?;
 
@@ -77,9 +80,9 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
     let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree, &config)?;
 
     // TODO(vhyrro): If the tree doesn't exist then error out.
-    operations::Install::new(&config)
+    InstallPackages::new(&config, &tree)
         .packages(packages)
-        .tree(tree)
+        .package_db(PackageDB::from_config(&config).await?)
         .install()
         .await?;
 

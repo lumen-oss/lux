@@ -29,7 +29,7 @@ use crate::{
     },
     lua_version::LuaVersion,
     package::SpecRev,
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
         LuaVersionCompatibility,
@@ -285,6 +285,16 @@ impl Project {
             .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
     }
 
+    /// Returns this project's rockspec as a [`RemoteLuaRockspec`] whose source points at the
+    /// project's own directory, so it can be built like any other package.
+    pub fn local_remote_rockspec(&self) -> Result<RemoteLuaRockspec, IntoLocalRockspecError> {
+        self.toml()
+            .into_local()
+            .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
+            .to_local_rockspec()
+            .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
+    }
+
     pub fn remote_rockspec(
         &self,
         specrev: Option<SpecRev>,
@@ -313,7 +323,7 @@ impl Project {
     pub async fn add(
         &mut self,
         dependencies: DependencyType<&PackageReq>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
@@ -467,7 +477,7 @@ impl Project {
     pub async fn upgrade(
         &mut self,
         dependencies: LuaDependencyType<&PackageName>,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
         config: &Config,
     ) -> Result<(), ProjectEditError> {
         let mut project_toml =
@@ -558,7 +568,7 @@ impl Project {
 
     pub async fn upgrade_all(
         &mut self,
-        package_db: &RemotePackageDB,
+        package_db: &PackageDB,
         config: &Config,
     ) -> Result<(), ProjectEditError> {
         if let Some(dependencies) = &self.toml().dependencies {

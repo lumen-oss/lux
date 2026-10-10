@@ -154,7 +154,7 @@ where
         std::env::current_dir()?.join(output)
     };
 
-    let lib_root = args.tree.layout_for(&package).lib;
+    let lib_root = args.tree.layout_for(&package.spec).lib;
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
 
     let work_dir = fs::tempfile::tempdir()?;
@@ -173,7 +173,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
     let c_dylib_ext = c_dylib_extension();
 
     for package in tree.list()?.values().flatten() {
-        let layout = tree.layout_for(package);
+        let layout = tree.layout_for(&package.spec);
         if layout.src.is_dir() {
             let src_canonical = layout.src.canonicalize().unwrap_or(layout.src.clone());
             for path in WalkDir::new(&src_canonical)
@@ -549,15 +549,14 @@ mod tests {
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
-        lockfile::{LocalPackage, LocalPackageHashes, LockConstraint},
+        lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         package::PackageSpec,
         remote_package_source::RemotePackageSource,
-        rockspec::RockBinaries,
     };
 
     #[cfg(target_os = "linux")]
-    fn mk_dummy_package(spec: PackageSpec) -> LocalPackage {
-        let hashes = LocalPackageHashes {
+    fn mk_dummy_package(spec: PackageSpec) -> LockedPackage {
+        let hashes = LockedPackageHashes {
             rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 .parse()
                 .unwrap(),
@@ -565,10 +564,9 @@ mod tests {
                 .parse()
                 .unwrap(),
         };
-        LocalPackage::from(
+        LockedPackage::from(
             &spec,
             LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             hashes,
@@ -587,8 +585,8 @@ mod tests {
         let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_a).unwrap();
-        let layout_a = tree.layout_for(&pkg_a);
+        tree.prepare(&pkg_a.spec).unwrap();
+        let layout_a = tree.layout_for(&pkg_a.spec);
         staging
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
@@ -598,8 +596,8 @@ mod tests {
             .unwrap();
 
         let pkg_b = mk_dummy_package(PackageSpec::new("bar".into(), "2.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_b).unwrap();
-        let layout_b = tree.layout_for(&pkg_b);
+        tree.prepare(&pkg_b.spec).unwrap();
+        let layout_b = tree.layout_for(&pkg_b.spec);
         staging
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
