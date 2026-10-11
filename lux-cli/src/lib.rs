@@ -99,20 +99,20 @@ pub struct Cli {
     pub dev: bool,
 
     /// Fetch rocks/rockspecs from this server (takes priority over config file).
-    #[arg(long, value_name = "server")]
+    #[arg(long, global = true, value_name = "server")]
     pub server: Option<Url>,
 
     /// Fetch rocks/rockspecs from these servers in addition to the main server{n}
     /// (overrides any entries in the config file).
-    #[arg(long, value_name = "extra-server")]
+    #[arg(long, global = true, value_name = "extra-server")]
     pub extra_servers: Option<Vec<Url>>,
 
     /// Specify the luarocks server namespace to use.
-    #[arg(long, value_name = "namespace")]
+    #[arg(long, global = true, value_name = "namespace")]
     pub namespace: Option<String>,
 
     /// Specify the directory in which to install Lua if not found.
-    #[arg(long, value_name = "prefix")]
+    #[arg(long, global = true, value_name = "prefix")]
     pub lua_dir: Option<PathBuf>,
 
     /// Which Lua installation to use.{n}
@@ -120,16 +120,16 @@ pub struct Cli {
     /// If not set, Lux will detempt to detect the Lua version:{n}
     ///   - From the current project, if it has an exact Lua version requirement.{n}
     ///   - From the Lua installation that is available on the PATH.
-    #[arg(long, value_name = "ver")]
+    #[arg(long, global = true, value_name = "ver")]
     pub lua_version: Option<LuaVersion>,
 
     /// Which tree to operate on.{n}
     /// In a workspace, this can be used to specify a detached workspace tree.
-    #[arg(long, value_name = "tree")]
+    #[arg(long, global = true, value_name = "tree")]
     pub tree: Option<PathBuf>,
 
     /// Specifies the cache directory, e.g. for luarocks manifests.
-    #[arg(long, value_name = "cache-dir")]
+    #[arg(long, global = true, value_name = "cache-dir")]
     pub cache_dir: Option<PathBuf>,
 
     /// Disable the precomputed manifest cache.
@@ -139,7 +139,7 @@ pub struct Cli {
     /// Specifies the data directory,{n}
     /// in which the default user install tree resides{n}
     /// (e.g. ~/.local/share/lux).
-    #[arg(long, value_name = "data-dir")]
+    #[arg(long, global = true, value_name = "data-dir")]
     pub data_dir: Option<PathBuf>,
 
     /// Specifies a directory with locally vendored sources and RockSpecs.{n}
@@ -150,65 +150,65 @@ pub struct Cli {
 
     /// Override config variables.{n}
     /// Example: `lx -v "LUA=/path/to/lua" ...`
-    #[arg(long, value_name = "variable", visible_short_alias = 'v', value_parser = parse_key_val::<String, String>)]
+    #[arg(long, global = true, value_name = "variable", visible_short_alias = 'v', value_parser = parse_key_val::<String, String>)]
     pub variables: Option<Vec<(String, String)>>,
 
     /// The build profile to use when compiling packages.{n}
     /// Default: `release`.
-    #[arg(long, value_enum, value_name = "profile")]
+    #[arg(long, global = true, value_enum, value_name = "profile")]
     pub profile: Option<lux_lib::config::build::Profile>,
 
     /// Display verbose output of commands executed, enabling DEBUG logs.{n}
     /// To enable TRACE logs, set RUST_LOG=trace.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub verbose: bool,
 
     /// Don't print any progress bars or spinners.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub no_progress: bool,
 
     /// Skip prompts, selecting the default option.{n}
     /// Prompting is enabled by default in terminal/TTY environments.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub no_prompt: Option<bool>,
 
     /// Configure Lux for a specific environment.{n}
     /// Valid presets are: 'nvim'.
-    #[arg(long, value_enum, value_name = "preset")]
+    #[arg(long, global = true, value_enum, value_name = "preset")]
     pub preset: Option<Preset>,
 
     /// [DEPRECATED] Configure lux for installing Neovim packages.{n}
     /// Use `--preset nvim` instead.
-    #[arg(long, conflicts_with = "preset")]
+    #[arg(long, global = true, conflicts_with = "preset")]
     pub nvim: bool,
     /// Disable prompts for two-factor authentication (2FA) codes.{n}
     /// It is strongly recommended to enable 2FA instead
     /// see (https://luarocks.org/settings/two-factor-auth).
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub no_tfa: bool,
 
     /// Timeout on network operations, in seconds.{n}
     /// 0 means no timeout (wait forever). Default is 30.
-    #[arg(long, value_name = "seconds")]
+    #[arg(long, global = true, value_name = "seconds")]
     pub timeout: Option<usize>,
 
     /// Maximum buffer size for parallel jobs, such as downloading rockspecs and installing rocks.
     /// 0 means no limit. Default is 0.
-    #[arg(long, visible_short_alias = 'j')]
+    #[arg(long, global = true, visible_short_alias = 'j')]
     pub max_jobs: Option<usize>,
 
     /// Do not generate or update a `.luarc.json` file when building{n}
     /// a project.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub no_luarc: bool,
 
     /// Do not wrap Lua `bin` scripts.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub no_wrap_bin: bool,
 
     /// The user agent to set when making web requests.
     /// Default is "lux/<version>"
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub user_agent: Option<String>,
 
     #[command(subcommand)]
