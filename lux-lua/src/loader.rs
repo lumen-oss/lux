@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(result, "nested");
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "impure_tests"))]
     #[tokio::test]
     async fn test_load_c_module_from_built_project() {
         use lux_lib::{
