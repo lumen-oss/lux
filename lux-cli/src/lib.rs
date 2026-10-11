@@ -59,6 +59,7 @@ pub mod download;
 pub mod exec;
 pub mod fetch;
 pub mod format;
+pub mod generate_lockfile;
 pub mod generate_rockspec;
 pub mod info;
 pub mod install;
@@ -243,6 +244,8 @@ pub enum Commands {
     Fmt(Fmt),
     /// Generate a rockspec file from a project.
     GenerateRockspec(GenerateRockspec),
+    /// Generate a lockfile for the current project without installing its dependencies.
+    GenerateLockfile,
     /// Show metadata for any rock.
     Info(Info),
     /// Install a rock for use on the system.
@@ -440,6 +443,7 @@ impl Commands {
             | Self::Outdated(_)
             | Self::Path(_)
             | Self::Shell(_)
+            | Self::GenerateLockfile
             | Self::Sync(_)
             | Self::Vendor(_) => {
                 project_lua_version(&None)
@@ -506,6 +510,7 @@ impl Commands {
             | Self::Outdated(_)
             | Self::Path(_)
             | Self::Shell(_)
+            | Self::GenerateLockfile
             | Self::Sync(_)
             | Self::Config(_)
             | Self::Vendor(_)

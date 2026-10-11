@@ -257,13 +257,13 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
 }
 
 #[derive(Clone, Copy)]
-enum DependencyKind {
+pub(crate) enum DependencyKind {
     Regular,
     Build,
     Test,
 }
 
-fn gather_dependencies(
+pub(crate) fn gather_dependencies(
     workspace: &Workspace,
     kind: DependencyKind,
     members: &NonEmpty<PackageName>,
