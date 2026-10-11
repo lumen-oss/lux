@@ -537,14 +537,17 @@ local unpack = unpack or table.unpack
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(target_os = "linux", feature = "impure_tests"))]
     use super::*;
 
     #[cfg(target_os = "linux")]
     use assert_fs::prelude::{PathChild, PathCreateDir};
+    #[cfg(any(target_os = "linux", feature = "impure_tests"))]
     use assert_fs::TempDir;
     #[cfg(feature = "impure_tests")]
     use {crate::lua_installation::detect_installed_lua_version, assert_fs::fixture::PathCopy};
 
+    #[cfg(any(target_os = "linux", feature = "impure_tests"))]
     use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
     #[cfg(target_os = "linux")]
     use crate::{

@@ -37,7 +37,7 @@ buildLuxPackage {
     hash = "sha256-imyKEDvbn9EWJ8Cm54v5sUKZV2fZuBTT3du+1ipKgW4=";
   };
 
-  luxHash = "sha256-DpkDMK6AV7Iy6YFbKbx+EEkDeGaAFbszNkLPhdVr+qY=";
+  luxHash = "sha256-XaA9FtwHtm8BSvjTyRHvAkgCZpbo48gNI5yfNQuRL78=";
 
   meta = {
     description = "Modern and ergonomic error handling for Lua";
@@ -70,7 +70,7 @@ buildLuxApplication {
     hash = "sha256-imyKEDvbn9EWJ8Cm54v5sUKZV2fZuBTT3du+1ipKgW4=";
   };
 
-  luxHash = "sha256-DpkDMK6AV7Iy6YFbKbx+EEkDeGaAFbszNkLPhdVr+qY=";
+  luxHash = "sha256-XaA9FtwHtm8BSvjTyRHvAkgCZpbo48gNI5yfNQuRL78=";
 }
 ```
 

@@ -189,20 +189,20 @@ where
         .iter()
         .filter(|package| package.entry_type == tree::EntryType::Entrypoint)
     {
-        let Some(existing) = lockfile.entrypoint(package.package.name()) else {
-            continue;
-        };
-        match package.build_behaviour {
-            // Forced installs replace the existing entrypoint.
-            BuildBehaviour::Force => {
-                conflicting_entrypoints.insert(existing.id(), existing.clone());
-            }
-            // `Ignore` tolerates re-installing the exact same version.
-            BuildBehaviour::Ignore if existing.version() == package.package.version() => {}
-            // Any other existing entrypoint is a conflict.
-            BuildBehaviour::Ignore | BuildBehaviour::Conflict => {
-                unforced_conflicts.push(format!("{}@{}", existing.name(), existing.version()));
-            }
+        match lockfile.entrypoint(package.package.name()) {
+            None => continue,
+            Some(existing) => match package.build_behaviour {
+                // Forced installs replace the existing entrypoint.
+                BuildBehaviour::Force => {
+                    conflicting_entrypoints.insert(existing.id(), existing.clone());
+                }
+                // `Ignore` tolerates re-installing the exact same version.
+                BuildBehaviour::Ignore if existing.version() == package.package.version() => {}
+                // Any other existing entrypoint is a conflict.
+                BuildBehaviour::Ignore | BuildBehaviour::Conflict => {
+                    unforced_conflicts.push(format!("{}@{}", existing.name(), existing.version()));
+                }
+            },
         }
     }
 

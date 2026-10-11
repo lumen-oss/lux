@@ -41,8 +41,7 @@ impl FoundPackage {
     }
 
     /// Builds a discovered package from a project root rockspec, using the
-    /// project's own directory as the source. The source is hashed and built in
-    /// place, so no download happens.
+    /// project's own directory as the source.
     pub(crate) fn from_project_root(rockspec: RemoteLuaRockspec, root_dir: PathBuf) -> Self {
         let remote = RemotePackage::new(
             PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),

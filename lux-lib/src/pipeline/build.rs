@@ -122,7 +122,7 @@ where
                 )
                 .await
                 .map_err(|err| BuildError::Build(rockspec.package().to_string(), Box::new(err)))?,
-                PackageSource::PackedRock(bytes) => BinaryRockInstall::new(
+                PackageSource::Archive(bytes) => BinaryRockInstall::new(
                     &rockspec,
                     package.source().clone(),
                     bytes,
@@ -160,6 +160,38 @@ where
 }
 
 fn order_by_build_dependencies(packages: Vec<DownloadedPackage>) -> Vec<DownloadedPackage> {
+    fn visit(
+        id: LockedPackageId,
+        by_id: &mut HashMap<LockedPackageId, DownloadedPackage>,
+        visited: &mut HashSet<LockedPackageId>,
+        ordered: &mut Vec<DownloadedPackage>,
+    ) {
+        if !visited.insert(id.clone()) {
+            return;
+        }
+
+        let build_dependencies: Vec<LockedPackageId> = by_id
+            .get(&id)
+            .map(|package| {
+                package
+                    .package
+                    .spec
+                    .build_dependencies()
+                    .into_iter()
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for dependency in build_dependencies {
+            visit(dependency, by_id, visited, ordered);
+        }
+
+        if let Some(package) = by_id.remove(&id) {
+            ordered.push(package);
+        }
+    }
+
     let mut by_id: HashMap<LockedPackageId, DownloadedPackage> = packages
         .into_iter()
         .map(|package| (package.package.id(), package))
@@ -174,36 +206,4 @@ fn order_by_build_dependencies(packages: Vec<DownloadedPackage>) -> Vec<Download
     }
 
     ordered
-}
-
-fn visit(
-    id: LockedPackageId,
-    by_id: &mut HashMap<LockedPackageId, DownloadedPackage>,
-    visited: &mut HashSet<LockedPackageId>,
-    ordered: &mut Vec<DownloadedPackage>,
-) {
-    if !visited.insert(id.clone()) {
-        return;
-    }
-
-    let build_dependencies: Vec<LockedPackageId> = by_id
-        .get(&id)
-        .map(|package| {
-            package
-                .package
-                .spec
-                .build_dependencies()
-                .into_iter()
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default();
-
-    for dependency in build_dependencies {
-        visit(dependency, by_id, visited, ordered);
-    }
-
-    if let Some(package) = by_id.remove(&id) {
-        ordered.push(package);
-    }
 }

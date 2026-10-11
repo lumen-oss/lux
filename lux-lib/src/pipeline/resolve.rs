@@ -449,11 +449,15 @@ fn push_child(
     }
 }
 
+/// Graph coloring algorithm for cycle detection.
 fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Color {
+        /// Not yet visited
         White,
+        /// On path: revisiting it indicates a cycle
         Grey,
+        /// Fully explored
         Black,
     }
 

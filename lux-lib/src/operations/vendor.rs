@@ -346,7 +346,7 @@ async fn vendor_package_sources(
             fs::tokio::remove_dir_all(&source_path).await.ok();
             fs::tokio::copy_dir_all(path, &source_path).await?;
         }
-        PackageSource::PackedRock(bytes) => {
+        PackageSource::Archive(bytes) => {
             let rock_path = vendor_dir.join(format!("{}@{}.rock", name, version));
             let mut file = fs::tokio::create(&rock_path).await?;
             file.write_all(bytes)

@@ -34,7 +34,7 @@ use super::{
 #[derive(Clone, Debug)]
 pub(crate) enum PackageSource {
     SourceDir(PathBuf),
-    PackedRock(Bytes),
+    Archive(Bytes),
 }
 
 pub(crate) struct DownloadedPackage {
@@ -139,7 +139,7 @@ async fn download_sources_and_hash(
     let name = spec.name().to_string();
 
     let (package, artifact, temp_dir) = match artifact {
-        Some(PackageSource::PackedRock(bytes)) => match &source {
+        Some(PackageSource::Archive(bytes)) => match &source {
             RemotePackageSource::LuarocksBinaryRock(url) => {
                 let binary_url = url.clone();
                 let rockspec_hash = rockspec
@@ -160,7 +160,7 @@ async fn download_sources_and_hash(
                     Some(RemotePackageSourceUrl::Url { url: binary_url }),
                     hashes,
                 );
-                (package, PackageSource::PackedRock(bytes), None)
+                (package, PackageSource::Archive(bytes), None)
             }
             _ => {
                 let source_url = source_url

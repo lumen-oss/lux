@@ -163,13 +163,10 @@ impl PackageDB {
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Result<RemotePackage, SearchError> {
-        if let Some(package) = self.find_in_local(package_req) {
-            return Ok(package);
-        }
-        if let Some(package) = self.find_in_locks(package_req, filter.clone()) {
-            return Ok(package);
-        }
-        if let Some(package) = self.find_in_manifests(package_req, filter) {
+        let found = self
+            .find_in_local(package_req)
+            .or_else(|| self.find_in_locks(package_req, filter.clone()));
+        if let Some(package) = found.or_else(|| self.find_in_manifests(package_req, filter)) {
             return Ok(package);
         }
         Err(SearchError::RockNotFound(package_req.clone()))
@@ -240,10 +237,10 @@ impl PackageDB {
                     ..
                 } => {
                     package.source_url = Some(source_url.clone());
-                    Some(PackageSource::PackedRock(src_rock.clone()))
+                    Some(PackageSource::Archive(src_rock.clone()))
                 }
                 RemoteRockDownload::BinaryRock { packed_rock, .. } => {
-                    Some(PackageSource::PackedRock(packed_rock.clone()))
+                    Some(PackageSource::Archive(packed_rock.clone()))
                 }
                 RemoteRockDownload::RockspecOnly { .. } => None,
             };
@@ -260,6 +257,9 @@ impl PackageDB {
     }
 
     /// Search for all packages that match the requirement.
+    ///
+    /// NOTE: This doesn't group packages by name, but we don't care for now,
+    /// as we shouldn't need to use this function with a lockfile.
     pub fn search(&self, package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
         self.local
             .iter()
@@ -280,8 +280,6 @@ impl PackageDB {
                     .iter()
                     .flat_map(|lock| lock.rocks().values())
                     .filter_map(|package| {
-                        // NOTE: This doesn't group packages by name, but we don't care for now,
-                        // as we shouldn't need to use this function with a lockfile.
                         let name = package.name();
                         if name.to_string().contains(&package_req.name().to_string()) {
                             Some((name, vec![package.version()]))
