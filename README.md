@@ -17,29 +17,32 @@
 <p align="center">
   <a href="#star2-key-features">Key Features</a> •
   <a href="#gear-how-to-use">How To Use</a> •
-  <a href="#bar_chart-comparison-with-luarocks">Comparison with LuaRocks</a> •
+  <a href="#bar_chart-comparison-with-luarocks">Comparison with Luarocks</a> •
   <a href="#bulb-you-may-also-like">Related Projects</a> •
   <a href="#green_heart-contributing">Contributing</a>
 </p>
 
 ## :star2: Key Features
 
+Lux is a next-generation package manager with ease of use and security in mind. It removes all the troubles
+of building, managing and deploying Lua packages and brings joy back into the Lua development cycle.
+
 #### :package: Create and Manage Lua Projects
 
-- Easily manage dependencies, build steps and more through the `lux.toml` file.
-- Full support for existing `.rockspec` files.
+- Easily manage your entire project in a single, unified `lux.toml` file.
+- Supports everything a modern ecosystem needs - build scripts, dependencies, testing and more.
+- Full support for the `rockspec` file format.
 
 #### :gear: Modern, Comfortable Tooling
 
-- Parallel builds and installs.
-- Add/remove dependencies with simple CLI commands.
 - Integrated code formatting, type checking and powerful code linting.
 - Good DX - automatically adds project dependencies to [`.luarc.json`](https://luals.github.io/wiki/configuration/#luarcjson-file) for rich LSP diagnostics.
 - Distribute projects (including dependencies) as install tree archives
-  or as static binaries without the need for a Lua installation.
+  or as static binaries that **just work** on target machines.
 
-#### :tada: Automatic Generation of Rockspecs
+#### :tada: Automatic Rockspec Generation
 
+- Lux handles versioning and rockspec generation for you.
 - Say goodbye to managing 10 different rockspec files in your source code!
 
 #### :jigsaw: Lua Versioning Done Easy
@@ -50,14 +53,14 @@
 #### :lock: Advanced Lockfile Support
 
 - Fully reproducible developer environments.
-- Makes Lux easy to integrate with Nix!
+- Makes Lux easy to integrate with Nix.
 
-#### :globe_with_meridians: Fully Compatible with the Ecosystem
+#### :globe_with_meridians: Fully Ecosystem Compatible
 
-- Works with existing LuaRocks packages.
-- Have a complex rockspec that you don't want to rewrite to TOML? No problem!
-  Lux allows the creation of an `extra.rockspec` file, everything just works.
-- Have a very complex build script? Lux can shell out to `luarocks` if it detects it has
+- Works with existing Luarocks packages.
+- Have a complex rockspec that you don't want to rewrite to TOML?
+  Lux allows the creation of an `extra.rockspec` file for just that purpose.
+- Have a very complex build script? Lux can utilise `luarocks` as a library if it detects it has
   to preserve maximum compatibility.
 
 ## :gear: How To Use
@@ -71,15 +74,15 @@ It features a tutorial and several guides to make you good at managing Lua proje
 > **Lux, while fully functional, is a work in progress
 > and does not have a `1.0` release yet.**
 
-## :bar_chart: Comparison with LuaRocks
+## :bar_chart: Comparison with Luarocks
 
-As this project is still a work in progress, some LuaRocks features
+As this project is still a work in progress, some Luarocks features
 have not been fully implemented yet.
-On the other hand, Lux has some features that are not present in LuaRocks.
+On the other hand, Lux has some features that are not present in Luarocks.
 
 The following table provides a brief comparison:
 
-|                                                                                         | Lux                          | LuaRocks v3.13.0   |
+|                                                                                         | Lux                          | Luarocks v3.13.0   |
 | ---                                                                                     | ---                          | ---                |
 | Project format                                                                          | TOML / Lua                   | Lua                |
 | Add/remove dependencies                                                                 | :white_check_mark:           | :x:                |
@@ -112,11 +115,11 @@ The following table provides a brief comparison:
 | Vendor sources for offline use                                                          | :white_check_mark:           | :x:                |
 | Distribute install tree archives                                                        | :white_check_mark:           | :x:                |
 | Distribute static binaries                                                              | :white_check_mark:           | :x:                |
-| Load RockSpecs and LuaRocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:    | :x:                |
+| Load RockSpecs and Luarocks manifests with [full sandboxing](https://github.com/kyren/piccolo) | :white_check_mark:    | :x:                |
 | Sandbox build execution                                                                 | :white_check_mark: [^4]      | :x:                |
 
-[^1]: Supported via a compatibility layer that uses LuaRocks as a backend.
-[^2]: Aims to be compatible with the LuaRocks version parser,
+[^1]: Supported via a compatibility layer that uses Luarocks as a backend.
+[^2]: Aims to be compatible with the Luarocks version parser,
       which allows an arbitrary number of version components.
       We treat anything after the third version component
       (except for the specrev) as a prerelease/build version,
@@ -248,12 +251,12 @@ Lux will auto-detect `lux-lua`.
 
 ## :bulb: You may also like...
 
-- [LuaRocks](https://github.com/luarocks/luarocks) - The original Lua package manager
+- [Luarocks](https://github.com/luarocks/luarocks) - The original Lua package manager
 - [rocks.nvim](https://github.com/lumen-oss/rocks.nvim) - A Neovim plugin manager that uses `luarocks` under the hood, and will soon be undergoing a rewrite to use Lux instead.
 
 ## :purple_heart: Credits
 
-Credits go to the LuaRocks team for maintaining [LuaRocks](https://github.com/luarocks/luarocks) and [luarocks.org](https://luarocks.org) for as long as they have.
+Credits go to the Luarocks team for maintaining [Luarocks](https://github.com/luarocks/luarocks) and [luarocks.org](https://luarocks.org) for as long as they have.
 Without their prior work Lux would not be possible.
 
 ## :green_heart: Contributing
