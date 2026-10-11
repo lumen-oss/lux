@@ -9,9 +9,9 @@ use lux_cli::{
     build, check, config,
     debug::{self, Debug},
     dist::{self, Dist},
-    doc, download, exec, fetch, format, generate_rockspec, info, install, install_lua,
-    install_rockspec, lint, list, outdated, pack, path, pin, progress, project, purge, remove, run,
-    run_lua, search, shell, sync, test, uninstall, unpack, update,
+    doc, download, exec, fetch, format, generate_lockfile, generate_rockspec, info, install,
+    install_lua, install_rockspec, lint, list, outdated, pack, path, pin, progress, project, purge,
+    remove, run, run_lua, search, shell, sync, test, uninstall, unpack, update,
     upload::{self},
     util, vendor, which, Cli, Commands,
 };
@@ -215,6 +215,7 @@ async fn main() -> Result<()> {
         Commands::Which(which_args) => which::which(which_args, config)?,
         Commands::Run(run_args) => run::run(run_args, config).await?,
         Commands::GenerateRockspec(data) => generate_rockspec::generate_rockspec(data).await?,
+        Commands::GenerateLockfile => generate_lockfile::generate_lockfile(config).await?,
         Commands::Shell(data) => shell::shell(data, config).await?,
         Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
     }
