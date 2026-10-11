@@ -505,6 +505,7 @@ mod tests {
             .await
             .unwrap()
             .latest_version(&name)
+            .await
             .unwrap();
         assert_eq!(installed, latest);
         assert_ne!(installed.to_string(), "0.7.1-1");

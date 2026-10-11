@@ -344,6 +344,7 @@ impl Project {
                     let dep_version_str = if dep.version_req().is_any() {
                         package_db
                             .latest_version(dep.name())
+                            .await
                             .map(|latest_version| latest_version.to_string())
                             .unwrap_or_else(|| dep.version_req().to_string())
                     } else {
@@ -494,18 +495,15 @@ impl Project {
             LuaDependencyType::Regular(deps)
             | LuaDependencyType::Build(deps)
             | LuaDependencyType::Test(deps) => {
-                let latest_rock_version_str =
-                    |dep: &PackageName| -> Result<String, ProjectEditError> {
-                        Ok(package_db
-                            .latest_version(dep)
-                            .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
-                            .to_string())
-                    };
                 for dep in deps {
                     let mut dep_item = table[dep.to_string()].clone();
                     match &dep_item {
                         Item::Value(_) => {
-                            let dep_version_str = latest_rock_version_str(dep)?;
+                            let dep_version_str = package_db
+                                .latest_version(dep)
+                                .await
+                                .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
+                                .to_string();
                             table[dep.to_string()] = toml_edit::value(dep_version_str);
                         }
                         Item::Table(tbl) => {
@@ -542,7 +540,13 @@ impl Project {
                                     table[dep.to_string()] = dep_item;
                                 }
                                 None => {
-                                    let dep_version_str = latest_rock_version_str(dep)?;
+                                    let dep_version_str = package_db
+                                        .latest_version(dep)
+                                        .await
+                                        .ok_or(ProjectEditError::LatestVersionNotFound(
+                                            dep.clone(),
+                                        ))?
+                                        .to_string();
                                     dep_item["version".to_string()] =
                                         toml_edit::value(dep_version_str);
                                     table[dep.to_string()] = dep_item;

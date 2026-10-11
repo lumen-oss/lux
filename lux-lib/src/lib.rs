@@ -11,6 +11,7 @@ pub mod lua_rockspec;
 pub mod lua_version;
 pub mod luarocks;
 pub mod manifest;
+pub mod manifest_cache;
 pub mod operations;
 pub mod package;
 pub mod package_db;

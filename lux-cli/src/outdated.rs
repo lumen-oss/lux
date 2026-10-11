@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    config::Config, lockfile::LockedPackage, lua_version::LuaVersion, package::PackageVersion,
-    package_db::PackageDB, workspace::Workspace,
+    config::Config, lua_version::LuaVersion, package_db::PackageDB, workspace::Workspace,
 };
 
 use miette::{IntoDiagnostic, Result};
@@ -40,16 +39,15 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     // This will naturally occur with lockfiles and should be accounted for directly in the
     // `has_update` function.
     let rock_list = tree.as_rock_list()?;
-    let rock_list = rock_list
-        .iter()
-        .filter_map(|rock| {
-            rock.to_package()
-                .has_update(&package_db)
-                .ok()
-                .flatten()
-                .map(|version| (rock, version))
-        })
-        .collect::<Vec<(&LockedPackage, PackageVersion)>>();
+    let rock_list = {
+        let mut rocks = Vec::new();
+        for rock in rock_list.iter() {
+            if let Ok(Some(version)) = rock.to_package().has_update(&package_db).await {
+                rocks.push((rock, version));
+            }
+        }
+        rocks
+    };
 
     let rock_list = rock_list
         .iter()
