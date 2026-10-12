@@ -154,7 +154,7 @@ impl DisplayAsLuaKV for RockSourceSpec {
                 let mut source_tbl = Vec::new();
                 source_tbl.push(DisplayLuaKV {
                     key: "url".to_string(),
-                    value: DisplayLuaValue::String(format!("file:://{}", path.display())),
+                    value: DisplayLuaValue::String(format!("file://{}", path.display())),
                 });
                 DisplayLuaKV {
                     key: "source".to_string(),
