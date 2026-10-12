@@ -118,7 +118,7 @@ pub struct Cli {
 
     /// Which Lua installation to use.{n}
     /// Valid versions are: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit' and 'jit52'.{n}
-    /// If not set, Lux will detempt to detect the Lua version:{n}
+    /// If not set, Lux will attempt to detect the Lua version:{n}
     ///   - From the current project, if it has an exact Lua version requirement.{n}
     ///   - From the Lua installation that is available on the PATH.
     #[arg(long, global = true, value_name = "ver")]
