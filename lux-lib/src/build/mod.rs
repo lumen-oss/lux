@@ -19,7 +19,7 @@ use crate::{
     hash::HasIntegrity,
     lockfile::{LocalPackage, LocalPackageHashes, LockConstraint, PinnedState},
     lua_installation::LuaInstallation,
-    lua_rockspec::BuildBackendSpec,
+    lua_rockspec::{BuildBackendSpec, RockSourceSpec},
     operations::{self, FetchSrcError},
     package::PackageSpec,
     remote_package_source::RemotePackageSource,
@@ -388,11 +388,15 @@ where
             let layout = tree.layout_for(&package);
 
             let rock_source = rockspec.source().current_platform();
-            let build_dir = resolve_source_dir(
-                temp_dir.path(),
-                rock_source.unpack_dir.as_deref(),
-                &rockspec.build().current_platform().copy_directories,
-            )?;
+            // If `source_spec` is a local directory, it's not an extracted archive.
+            let build_dir = match &rock_source.source_spec {
+                RockSourceSpec::File(dir) if dir.is_dir() => temp_dir.path().to_path_buf(),
+                _ => resolve_source_dir(
+                    temp_dir.path(),
+                    rock_source.unpack_dir.as_deref(),
+                    &rockspec.build().current_platform().copy_directories,
+                )?,
+            };
 
             Patch::new(&build_dir, &rockspec.build().current_platform().patches).apply()?;
 
