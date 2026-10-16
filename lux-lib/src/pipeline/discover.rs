@@ -11,7 +11,7 @@ use crate::{
 };
 use std::path::PathBuf;
 
-use super::download_sources_and_hash::PackageSource;
+use super::materialise::PackageSource;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FoundPackage {

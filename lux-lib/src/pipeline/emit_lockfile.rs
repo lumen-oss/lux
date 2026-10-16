@@ -1,6 +1,6 @@
 use crate::lockfile::{PackageLock, ReadWrite, WorkspaceLockfile};
 
-use super::{download_sources_and_hash::DownloadSourcesAndHashArtifacts, Artifacts};
+use super::{materialise::MaterialiseArtifacts, Artifacts};
 
 /// The lockfile entries resolved by the pipeline, grouped by section.
 /// Allows for transactionality when committing to the lockfile.
@@ -8,7 +8,7 @@ use super::{download_sources_and_hash::DownloadSourcesAndHashArtifacts, Artifact
 pub struct LockfileHandle(Artifacts<PackageLock>);
 
 impl LockfileHandle {
-    pub(crate) fn from_artifacts(artifacts: &DownloadSourcesAndHashArtifacts) -> Self {
+    pub(crate) fn from_artifacts(artifacts: &MaterialiseArtifacts) -> Self {
         Self(
             artifacts
                 .iter()

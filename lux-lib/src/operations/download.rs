@@ -259,7 +259,7 @@ async fn download_remote_rock(
     let remote_package = package_db.find(package_req, None)?;
     match &remote_package.source {
         RemotePackageSource::LuarocksRockspec(url) => {
-            let package = &remote_package.package;
+            let package = &remote_package.spec;
             let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
             let url = url
                 .join(&rockspec_name)
@@ -305,7 +305,7 @@ async fn download_remote_rock(
             } else {
                 url
             };
-            let rock = download_binary_rock(&remote_package.package, url, config).await?;
+            let rock = download_binary_rock(&remote_package.spec, url, config).await?;
             let rockspec = DownloadedRockspec {
                 rockspec: unpack_rockspec(&rock).await?,
                 source: remote_package.source,
@@ -324,7 +324,7 @@ async fn download_remote_rock(
             } else {
                 url.clone()
             };
-            let rock = download_src_rock(&remote_package.package, &url, config).await?;
+            let rock = download_src_rock(&remote_package.spec, &url, config).await?;
             let rockspec = DownloadedRockspec {
                 rockspec: unpack_rockspec(&rock).await?,
                 source: remote_package.source,
@@ -446,7 +446,7 @@ async fn search_and_download_src_rock(
         .source
         .url()
         .ok_or(SearchAndDownloadError::NonURLSource)?;
-    Ok(download_src_rock(&remote_package.package, &source_url, config).await?)
+    Ok(download_src_rock(&remote_package.spec, &source_url, config).await?)
 }
 
 #[derive(Error, Debug, Diagnostic)]

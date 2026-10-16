@@ -12,7 +12,7 @@ use crate::{
     tree::{EntryType, InstallTree},
 };
 
-use super::download_sources_and_hash::fetch_and_hash_source;
+use super::materialise::fetch_and_hash_source;
 
 /// A rocks package builder, providing fine-grained control
 /// over how a local package should be built.

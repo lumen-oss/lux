@@ -9,7 +9,7 @@ use crate::{
     },
     pipeline::{
         discover::{DiscoverError, FoundPackage},
-        download_sources_and_hash::PackageSource,
+        materialise::PackageSource,
     },
     workspace::{Workspace, WorkspaceError},
 };

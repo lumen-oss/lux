@@ -26,9 +26,7 @@ use crate::{
     package::{PackageReq, PackageSpec},
     package_db::{PackageDB, PackageDBError},
     pipeline::{
-        download_sources_and_hash::{
-            DownloadSourcesAndHash, DownloadSourcesAndHashError, DownloadedPackage, PackageSource,
-        },
+        materialise::{Error as MaterialiseError, Materialise, MaterialisedPackage, PackageSource},
         resolve::{luarocks_build_backend_name, ResolveError, ResolvePackageDependencies},
         Artifacts,
     },
@@ -84,7 +82,7 @@ pub enum VendorError {
     Resolve(#[from] ResolveError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Download(#[from] DownloadSourcesAndHashError),
+    Download(#[from] MaterialiseError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::FsError),
@@ -124,7 +122,7 @@ async fn resolve_and_download(
     config: &Config,
     package_db: PackageDB,
     install_specs: Artifacts<Vec<PackageInstallSpec>>,
-) -> Result<Vec<DownloadedPackage>, VendorError> {
+) -> Result<Vec<MaterialisedPackage>, VendorError> {
     let Artifacts {
         regular,
         build,
@@ -140,9 +138,9 @@ async fn resolve_and_download(
     }
     let resolved = resolve.resolve().await?;
 
-    let artifacts = DownloadSourcesAndHash::new(config)
+    let artifacts = Materialise::new(config)
         .resolved(resolved)
-        .download_sources_and_hash()
+        .materialise()
         .await?;
 
     // The lockfile may contain the same package (name@version) multiple times,
@@ -163,7 +161,7 @@ async fn resolve_and_download(
 /// Vendors the sources of all packages into `vendor_dir`.
 async fn vendor_sources(
     vendor_dir: &Path,
-    packages: &[DownloadedPackage],
+    packages: &[MaterialisedPackage],
     config: &Config,
 ) -> Result<(), VendorError> {
     futures::stream::iter(
@@ -178,7 +176,7 @@ async fn vendor_sources(
 
 /// Cargo-based build backends need their Cargo dependencies vendored too.
 fn cargo_dependencies(
-    packages: &[DownloadedPackage],
+    packages: &[MaterialisedPackage],
 ) -> Vec<(PackageSpec, Option<PathBuf>, Vec<PathBuf>)> {
     packages
         .iter()
@@ -326,7 +324,7 @@ fn push_dependencies<R: Rockspec>(
 )]
 async fn vendor_package_sources(
     vendor_dir: &Path,
-    package: &DownloadedPackage,
+    package: &MaterialisedPackage,
 ) -> Result<(), VendorError> {
     let rockspec = &package.rockspec;
     let name = rockspec.package();
@@ -526,7 +524,7 @@ mod tests {
         source: RemotePackageSource,
         artifact: PackageSource,
         temp_dir: Option<TempDir>,
-    ) -> DownloadedPackage {
+    ) -> MaterialisedPackage {
         let spec = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
@@ -549,7 +547,7 @@ mod tests {
                     .unwrap(),
             },
         );
-        DownloadedPackage {
+        MaterialisedPackage {
             package,
             rockspec,
             entry_type: EntryType::Entrypoint,

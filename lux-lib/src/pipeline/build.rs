@@ -18,7 +18,7 @@ use crate::{
     tree::{InstallTree, TreeError},
 };
 
-use super::download_sources_and_hash::{DownloadedPackage, PackageSource};
+use super::materialise::{MaterialisedPackage, PackageSource};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -57,7 +57,7 @@ pub(crate) struct Build<'a, T: InstallTree + Send + Sync> {
     #[builder(start_fn)]
     pub(crate) tree: &'a T,
     #[builder(field)]
-    pub(crate) packages: Vec<DownloadedPackage>,
+    pub(crate) packages: Vec<MaterialisedPackage>,
 }
 
 impl<T, State> BuildBuilder<'_, T, State>
@@ -65,7 +65,7 @@ where
     T: InstallTree + Send + Sync,
     State: build_builder::State,
 {
-    pub(crate) fn packages(mut self, packages: Vec<DownloadedPackage>) -> Self {
+    pub(crate) fn packages(mut self, packages: Vec<MaterialisedPackage>) -> Self {
         self.packages = packages;
         self
     }
@@ -95,7 +95,7 @@ where
         let mut installed = Vec::new();
 
         for downloaded in order_by_build_dependencies(args.packages) {
-            let DownloadedPackage {
+            let MaterialisedPackage {
                 package,
                 rockspec,
                 entry_type,
@@ -159,12 +159,12 @@ where
     }
 }
 
-fn order_by_build_dependencies(packages: Vec<DownloadedPackage>) -> Vec<DownloadedPackage> {
+fn order_by_build_dependencies(packages: Vec<MaterialisedPackage>) -> Vec<MaterialisedPackage> {
     fn visit(
         id: LockedPackageId,
-        by_id: &mut HashMap<LockedPackageId, DownloadedPackage>,
+        by_id: &mut HashMap<LockedPackageId, MaterialisedPackage>,
         visited: &mut HashSet<LockedPackageId>,
-        ordered: &mut Vec<DownloadedPackage>,
+        ordered: &mut Vec<MaterialisedPackage>,
     ) {
         if !visited.insert(id.clone()) {
             return;
@@ -192,7 +192,7 @@ fn order_by_build_dependencies(packages: Vec<DownloadedPackage>) -> Vec<Download
         }
     }
 
-    let mut by_id: HashMap<LockedPackageId, DownloadedPackage> = packages
+    let mut by_id: HashMap<LockedPackageId, MaterialisedPackage> = packages
         .into_iter()
         .map(|package| (package.package.id(), package))
         .collect();

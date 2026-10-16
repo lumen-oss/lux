@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     discover::{DiscoverError, FoundPackage},
-    download_sources_and_hash::PackageSource,
+    materialise::PackageSource,
     Artifacts,
 };
 
@@ -449,10 +449,10 @@ fn push_child(
     }
 }
 
-/// Graph coloring algorithm for cycle detection.
+/// Graph colouring algorithm for cycle detection.
 fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> {
     #[derive(Clone, Copy, PartialEq, Eq)]
-    enum Color {
+    enum Colour {
         /// Not yet visited
         White,
         /// On path: revisiting it indicates a cycle
@@ -461,13 +461,13 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
         Black,
     }
 
-    let mut colors: HashMap<&RequestKey, Color> = HashMap::with_capacity(nodes.len());
+    let mut colors: HashMap<&RequestKey, Colour> = HashMap::with_capacity(nodes.len());
 
     for start in nodes.keys() {
-        if colors.get(start).copied().unwrap_or(Color::White) != Color::White {
+        if colors.get(start).copied().unwrap_or(Colour::White) != Colour::White {
             continue;
         }
-        colors.insert(start, Color::Grey);
+        colors.insert(start, Colour::Grey);
         let mut stack: Vec<(&RequestKey, usize)> = vec![(start, 0)];
         let mut path: Vec<&RequestKey> = vec![start];
 
@@ -481,13 +481,13 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
                 if !nodes.contains_key(child) {
                     continue;
                 }
-                match colors.get(child).copied().unwrap_or(Color::White) {
-                    Color::White => {
-                        colors.insert(child, Color::Grey);
+                match colors.get(child).copied().unwrap_or(Colour::White) {
+                    Colour::White => {
+                        colors.insert(child, Colour::Grey);
                         path.push(child);
                         stack.push((child, 0));
                     }
-                    Color::Grey => {
+                    Colour::Grey => {
                         let Some(position) = path.iter().position(|key| *key == child) else {
                             continue;
                         };
@@ -499,10 +499,10 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
                             .join(" -> ");
                         return Err(ResolveError::CyclicDependency(chain));
                     }
-                    Color::Black => {}
+                    Colour::Black => {}
                 }
             } else {
-                colors.insert(node, Color::Black);
+                colors.insert(node, Colour::Black);
                 stack.pop();
                 path.pop();
             }
@@ -577,7 +577,7 @@ mod tests {
                 .map(|content| {
                     let rockspec = match RemoteLuaRockspec::new(content) {
                         Ok(rockspec) => rockspec,
-                        Err(err) => panic!("invalid test rockspec: {err}"),
+                        Err(err) => unreachable!("invalid test rockspec: {err}"),
                     };
                     FoundPackage {
                         remote: RemotePackage::new(
@@ -599,7 +599,7 @@ mod tests {
     fn install_spec(name: &str) -> PackageInstallSpec {
         let package = match name.parse::<PackageReq>() {
             Ok(package) => package,
-            Err(err) => panic!("invalid package req: {err}"),
+            Err(err) => unreachable!("invalid package req: {err}"),
         };
         PackageInstallSpec::new(package, EntryType::Entrypoint)
             .build_behaviour(BuildBehaviour::Ignore)
@@ -635,11 +635,11 @@ mod tests {
     fn test_config() -> Arc<Config> {
         let builder = match ConfigBuilder::new() {
             Ok(builder) => builder,
-            Err(err) => panic!("invalid test config: {err}"),
+            Err(err) => unreachable!("invalid test config: {err}"),
         };
         let config = match builder.build() {
             Ok(config) => config,
-            Err(err) => panic!("invalid test config: {err}"),
+            Err(err) => unreachable!("invalid test config: {err}"),
         };
         Arc::new(config)
     }

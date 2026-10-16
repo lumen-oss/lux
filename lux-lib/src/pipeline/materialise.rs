@@ -37,7 +37,7 @@ pub(crate) enum PackageSource {
     Archive(Bytes),
 }
 
-pub(crate) struct DownloadedPackage {
+pub(crate) struct MaterialisedPackage {
     pub(crate) package: LockedPackage,
     pub(crate) rockspec: RemoteLuaRockspec,
     pub(crate) entry_type: EntryType,
@@ -46,12 +46,11 @@ pub(crate) struct DownloadedPackage {
     pub(crate) temp_dir: Option<TempDir>,
 }
 
-pub(crate) type DownloadSourcesAndHashArtifacts =
-    Artifacts<HashMap<LockedPackageId, DownloadedPackage>>;
+pub(crate) type MaterialiseArtifacts = Artifacts<HashMap<LockedPackageId, MaterialisedPackage>>;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum DownloadSourcesAndHashError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] FsError),
@@ -64,7 +63,7 @@ pub enum DownloadSourcesAndHashError {
     MissingSourceUrl(String),
 }
 
-impl From<BuildError> for DownloadSourcesAndHashError {
+impl From<BuildError> for Error {
     fn from(source: BuildError) -> Self {
         Self::Build(Box::new(source))
     }
@@ -72,23 +71,21 @@ impl From<BuildError> for DownloadSourcesAndHashError {
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct DownloadSourcesAndHash<'a> {
+pub(crate) struct Materialise<'a> {
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     pub(crate) resolved: ResolvedArtifacts,
 }
 
-impl<State> DownloadSourcesAndHashBuilder<'_, State>
+impl<State> MaterialiseBuilder<'_, State>
 where
-    State: download_sources_and_hash_builder::State + download_sources_and_hash_builder::IsComplete,
+    State: materialise_builder::State + materialise_builder::IsComplete,
 {
-    pub(crate) async fn download_sources_and_hash(
-        self,
-    ) -> Result<DownloadSourcesAndHashArtifacts, DownloadSourcesAndHashError> {
+    pub(crate) async fn materialise(self) -> Result<MaterialiseArtifacts, Error> {
         let args = self._build();
         let config = args.config;
 
-        let artifacts: DownloadSourcesAndHashArtifacts = args
+        let artifacts: MaterialiseArtifacts = args
             .resolved
             .iter()
             .map(|(section, packages)| (section, packages.map(|_| HashMap::new())))
@@ -103,7 +100,7 @@ where
 
         futures::stream::iter(jobs)
             .map(|(section, id, package)| async move {
-                download_sources_and_hash(config, package)
+                materialise(config, package)
                     .await
                     .map(|package| (section, id, package))
             })
@@ -122,10 +119,10 @@ where
     }
 }
 
-async fn download_sources_and_hash(
+async fn materialise(
     config: &Config,
     resolved: ResolvedPackage,
-) -> Result<DownloadedPackage, DownloadSourcesAndHashError> {
+) -> Result<MaterialisedPackage, Error> {
     let ResolvedPackage {
         spec,
         rockspec,
@@ -145,11 +142,11 @@ async fn download_sources_and_hash(
                 let rockspec_hash = rockspec
                     .hash()
                     .await
-                    .map_err(|err| DownloadSourcesAndHashError::Hash(name.clone(), err))?;
+                    .map_err(|err| Error::Hash(name.clone(), err))?;
                 let source_hash = bytes
                     .hash()
                     .await
-                    .map_err(|err| DownloadSourcesAndHashError::Hash(name.clone(), err))?;
+                    .map_err(|err| Error::Hash(name.clone(), err))?;
                 let hashes = LockedPackageHashes {
                     rockspec: rockspec_hash,
                     source: source_hash,
@@ -165,7 +162,7 @@ async fn download_sources_and_hash(
             _ => {
                 let source_url = source_url
                     .clone()
-                    .ok_or_else(|| DownloadSourcesAndHashError::MissingSourceUrl(name.clone()))?;
+                    .ok_or_else(|| Error::MissingSourceUrl(name.clone()))?;
                 let (package, dir) = fetch_and_hash_source(
                     &rockspec,
                     spec,
@@ -185,11 +182,11 @@ async fn download_sources_and_hash(
             let rockspec_hash = rockspec
                 .hash()
                 .await
-                .map_err(|err| DownloadSourcesAndHashError::Hash(name.clone(), err))?;
+                .map_err(|err| Error::Hash(name.clone(), err))?;
             let source_hash = path
                 .hash()
                 .await
-                .map_err(|err| DownloadSourcesAndHashError::Hash(name.clone(), err))?;
+                .map_err(|err| Error::Hash(name.clone(), err))?;
             let hashes = LockedPackageHashes {
                 rockspec: rockspec_hash,
                 source: source_hash,
@@ -211,7 +208,7 @@ async fn download_sources_and_hash(
         }
     };
 
-    Ok(DownloadedPackage {
+    Ok(MaterialisedPackage {
         package,
         rockspec,
         entry_type,

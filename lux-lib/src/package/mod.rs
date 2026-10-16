@@ -103,7 +103,7 @@ impl HasVariables for PackageSpec {
 
 #[derive(Clone, Debug)]
 pub(crate) struct RemotePackage {
-    pub package: PackageSpec,
+    pub spec: PackageSpec,
     pub source: RemotePackageSource,
     /// `Some` if present in a lockfile
     pub source_url: Option<RemotePackageSourceUrl>,
@@ -111,12 +111,12 @@ pub(crate) struct RemotePackage {
 
 impl RemotePackage {
     pub fn new(
-        package: PackageSpec,
+        spec: PackageSpec,
         source: RemotePackageSource,
         source_url: Option<RemotePackageSourceUrl>,
     ) -> Self {
         Self {
-            package,
+            spec,
             source,
             source_url,
         }

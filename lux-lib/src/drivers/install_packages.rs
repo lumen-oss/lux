@@ -23,8 +23,8 @@ use crate::{
 
 use crate::pipeline::{
     build::{Build as PipelineBuild, BuildError as PipelineBuildError},
-    download_sources_and_hash::{DownloadSourcesAndHash, DownloadSourcesAndHashError},
     emit_lockfile::LockfileHandle,
+    materialise::{Error as MaterialiseError, Materialise},
     resolve::{ResolveError, ResolvePackageDependencies},
 };
 
@@ -164,9 +164,9 @@ where
         resolve = resolve.test_packages(test_packages);
     }
     let resolved = resolve.resolve().await?;
-    let artifacts = DownloadSourcesAndHash::new(config)
+    let artifacts = Materialise::new(config)
         .resolved(resolved)
-        .download_sources_and_hash()
+        .materialise()
         .await?;
     let handle = LockfileHandle::from_artifacts(&artifacts);
 
@@ -303,7 +303,7 @@ pub enum InstallPackagesError {
     DuplicateEntrypoints(PackageNameList),
     #[error("cannot install conflicting entrypoints:\n{0}")]
     #[diagnostic(help(
-        "only a single entrypoint per package is allowed.\nretry with `--force` to overwrite the existing entrypoint"
+        "only a single entrypoint per package is allowed.\nif you would like to replace the existing entrypoints, retry with `--force` to overwrite the existing entrypoint"
     ))]
     ConflictingEntrypoints(String),
     #[error(transparent)]
@@ -311,7 +311,7 @@ pub enum InstallPackagesError {
     Resolve(#[from] ResolveError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Download(#[from] DownloadSourcesAndHashError),
+    Download(#[from] MaterialiseError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Build(#[from] PipelineBuildError),
@@ -359,8 +359,6 @@ impl LockfileExt for &mut Lockfile<ReadWrite> {
 error writing dependencies to the lockfile.
 A required dependency was not installed correctly.
 This is likely a bug in Lux.
-
-[THIS IS A BUG!]
 "#,
                     ))?,
             );
@@ -383,8 +381,6 @@ This is likely a bug in Lux.
 error writing build dependencies to the lockfile.
 A required build dependency was not installed correctly.
 This is likely a bug in Lux.
-
-[THIS IS A BUG!]
 "#,
                     ))?,
             );
