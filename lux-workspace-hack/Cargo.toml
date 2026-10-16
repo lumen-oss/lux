@@ -60,6 +60,7 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
+stable_deref_trait = { version = "1" }
 subtle = { version = "2", default-features = false, features = ["i128"] }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["full"] }
@@ -74,6 +75,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
+ucd-trie = { version = "0.1" }
 url = { version = "2", features = ["serde"] }
 web-time = { version = "1", default-features = false, features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
@@ -127,6 +129,7 @@ sha2 = { version = "0.10", features = ["oid"] }
 simd-adler32 = { version = "0.3" }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
+stable_deref_trait = { version = "1" }
 subtle = { version = "2", default-features = false, features = ["i128"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit", "visit-mut"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -143,6 +146,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
+ucd-trie = { version = "0.1" }
 url = { version = "2", features = ["serde"] }
 web-time = { version = "1", default-features = false, features = ["serde"] }
 winnow-ca01ad9e24f5d932 = { package = "winnow", version = "0.7" }
