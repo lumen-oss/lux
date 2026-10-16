@@ -1,15 +1,17 @@
+use self::reconcile::SyncReport;
 use bon::Builder;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
 use thiserror::Error;
 
 mod frozen;
+pub(crate) mod reconcile;
 
 use crate::{
     build::BuildBehaviour,
     config::Config,
     drivers::install_packages::{InstallPackages, InstallPackagesError},
-    lockfile::{LockedPackage, LockedPackageLockType},
+    lockfile::LockedPackageLockType,
     operations::{
         GenLuaRc, GenLuaRcError, InstallProject, InstallProjectError, PackageInstallSpec,
     },
@@ -52,26 +54,6 @@ impl TargetSet {
             test,
             members: NonEmpty::new(member),
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct SyncReport {
-    pub(crate) added: Vec<LockedPackage>,
-    pub(crate) removed: Vec<LockedPackage>,
-}
-
-impl SyncReport {
-    pub fn added(&self) -> &[LockedPackage] {
-        &self.added
-    }
-    pub fn removed(&self) -> &[LockedPackage] {
-        &self.removed
-    }
-
-    pub(crate) fn merge(&mut self, other: SyncReport) {
-        self.added.extend(other.added);
-        self.removed.extend(other.removed);
     }
 }
 

@@ -21,7 +21,7 @@ mod unpack;
 mod update;
 mod vendor;
 
-pub use crate::drivers::sync::SyncReport;
+pub use crate::drivers::sync::reconcile::SyncReport;
 pub use build_lua::*;
 pub use build_workspace::*;
 pub use dist_bin::*;
