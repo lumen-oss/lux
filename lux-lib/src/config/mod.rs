@@ -399,43 +399,74 @@ pub enum ConfigError {
 /// - Populate the fields from overriding sources (e.g. CLI arguments).
 /// - Finish with [`ConfigBuilder::build`].
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ConfigBuilder {
+    /// The LuaRocks repository server to fetch rocks and rockspecs from.
+    /// Default: "https://luarocks.org/".
     #[serde(
         default,
         deserialize_with = "deserialize_url",
         serialize_with = "serialize_url"
     )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     server: Option<Url>,
+    /// Additional LuaRocks repository servers.
     #[serde(
         default,
         deserialize_with = "deserialize_url_vec",
         serialize_with = "serialize_url_vec"
     )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     extra_servers: Option<Vec<Url>>,
+    /// Additional wally package registries (git-index URLs), in addition to the
+    /// official wally index.
     #[serde(
         default,
         deserialize_with = "deserialize_url_vec",
         serialize_with = "serialize_url_vec"
     )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     extra_wally_registries: Option<Vec<Url>>,
+    /// The LuaRocks server namespace to use.
     namespace: Option<String>,
+    /// The Lua version to use. Default: the detected installed Lua version.
     lua_version: Option<LuaVersion>,
+    /// The tree in which to install rocks.
     user_tree: Option<PathBuf>,
+    /// The tree to use when in a workspace.
+    /// Default: a ".lux" directory in the workspace root.
     workspace_tree: Option<PathBuf>,
+    /// The directory in which to install Lua if it is not found.
     lua_dir: Option<PathBuf>,
+    /// The cache directory, e.g. for LuaRocks manifests.
     cache_dir: Option<PathBuf>,
+    /// The data directory, in which the default user install tree resides.
     data_dir: Option<PathBuf>,
+    /// A directory with locally vendored sources and rockspecs, used instead of
+    /// a remote server.
     vendor_dir: Option<PathBuf>,
+    /// Whether to fetch development/scm rocks. Default: `false`.
     enable_development_packages: Option<bool>,
+    /// Whether to display verbose output of executed commands. Default: `false`.
     verbose: Option<bool>,
+    /// Whether to disable progress bars and spinners. Default: `false`.
     no_progress: Option<bool>,
+    /// Whether to skip prompts, selecting the default option. Default: `false`.
     no_prompt: Option<bool>,
+    /// Timeout for network operations, in seconds. `0` disables the timeout.
+    /// Default: `30`.
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u64>"))]
     timeout: Option<Duration>,
+    /// Maximum number of parallel jobs, e.g. for downloads and installs.
+    /// `0` means no limit.
     max_jobs: Option<usize>,
+    /// Variable names mapped to their values. Lux substitutes these in the
+    /// `lux.toml` and in rockspecs before building.
     variables: Option<HashMap<String, String>>,
     /// Access tokens for fetching sources from private hosts, mapped by host.
     /// These can also be set via the `LUX_ACCESS_TOKENS` environment variable.
     #[serde(default, skip_serializing)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<HashMap<String, String>>"))]
     access_tokens: Option<HashMap<String, AccessToken>>,
     #[serde(default)]
     external_deps: ExternalDependencySearchConfig,
@@ -444,11 +475,20 @@ pub struct ConfigBuilder {
 
     #[serde(skip)]
     entrypoint_layout: Option<Arc<dyn CustomRockLayout>>,
+    /// The user agent to use when making web requests.
+    /// Default: "lux/<version>" (CLI), "lux-lua/<version>" (lux-lua) or "lux-lib/<version>".
     user_agent: Option<String>,
+    /// Whether to generate a ".luarc.json" on build. Default: `true`.
     generate_luarc: Option<bool>,
+    /// The Lua language server configuration file name. Default: ".luarc.json".
     luarc_file_name: Option<String>,
+    /// Whether to wrap installed Lua bin scripts to run with the detected or
+    /// configured Lua installation. Default: `true`.
     wrap_bin_scripts: Option<bool>,
+    /// Which package types to include in searches.
     package_types: Option<RemotePackageTypeFilterSpec>,
+    /// Whether to disable prompts for two-factor authentication (2FA) codes.
+    /// Default: `false`.
     no_tfa: Option<bool>,
 }
 

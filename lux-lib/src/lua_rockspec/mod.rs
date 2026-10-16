@@ -699,6 +699,7 @@ impl HasIntegrity for RemoteLuaRockspec {
 
 /// A rock's metadata, to be displayed on the remote package server
 #[derive(Clone, Deserialize, Debug, PartialEq, Default, lux_macros::DisplayAsLuaKV)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "description")]
 pub struct RockDescription {
     /// A one-line description of the package.
@@ -709,9 +710,11 @@ pub struct RockDescription {
     pub license: Option<String>,
     /// An URL for the project. This is not the URL for the tarball, but the address of a website.
     #[serde(default, deserialize_with = "deserialize_url")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub homepage: Option<Url>,
     /// An URL for the project's issue tracker.
     #[serde(default, deserialize_with = "deserialize_url")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub issues_url: Option<Url>,
     /// Contact information for the rockspec maintainer.
     pub maintainer: Option<String>,
@@ -770,6 +773,7 @@ where
 pub struct InvalidRockspecFormat(String);
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum RockspecFormat {
     #[serde(rename = "1.0")]
     _1_0,

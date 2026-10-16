@@ -17,6 +17,8 @@ pub mod progress;
 pub mod project;
 pub mod remote_package_db;
 pub mod rockspec;
+#[cfg(feature = "schema")]
+pub mod schema;
 pub mod toolchains;
 pub mod tree;
 pub mod upload;

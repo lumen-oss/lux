@@ -3879,6 +3879,7 @@ dependencies = [
  "proptest",
  "remove_dir_all",
  "reqwest",
+ "schemars 1.2.2",
  "semver",
  "serde",
  "serde-enum-str",
