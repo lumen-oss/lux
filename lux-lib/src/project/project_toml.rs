@@ -41,6 +41,8 @@ use crate::{
 use itertools::Itertools;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
+
+use crate::package::wally::PackageReq as WallyPackageReq;
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use ssri::Integrity;
@@ -64,7 +66,8 @@ enum DependencyEntry {
 
 #[derive(Debug, Deserialize)]
 struct DependencyTableEntry {
-    version: PackageVersionReq,
+    #[serde(default)]
+    version: Option<PackageVersionReq>,
     #[serde(default)]
     opt: Option<bool>,
     #[serde(default)]
@@ -75,6 +78,8 @@ struct DependencyTableEntry {
     path: Option<PathBuf>,
     #[serde(default)]
     rev: Option<String>,
+    #[serde(default)]
+    wally: Option<WallyPackageReq>,
 }
 
 fn parse_map_to_dependency_vec_opt<'de, D>(
@@ -96,40 +101,68 @@ where
                         Ok(PackageReq { name, version_req }.into())
                     }
                     DependencyEntry::Detailed(entry) => {
-                        let source = match (entry.git, entry.rev, entry.path) {
-                            (None, None, None) => Ok(None),
-                            (None, Some(_), None) => Err(de::Error::custom(format!(
-                                "dependency {} specifies a 'rev', but missing a 'git' field",
-                                name
-                            ))),
-                            (Some(git), Some(rev), None) => Ok(Some(RockSourceSpec::Git(GitSource {
-                                url: git.into(),
-                                git_ref: Some(GitRef::Tag(rev)),
-                            }))),
-                            (Some(git), None, None) => Ok(Some(RockSourceSpec::Git(GitSource {
-                                url: git.into(),
-                                git_ref: Some(GitRef::Tag(
-                                    entry
-                                        .version
-                                        .clone()
-                                        .to_string()
-                                        .trim_start_matches("=")
-                                        .to_string(),
-                                )),
-                            }))),
-                            (None, None, Some(path)) => Ok(Some(RockSourceSpec::File(path))),
-                            (_, _, Some(_)) => Err(de::Error::custom(format!(
-                                "dependency '{}' specifies a 'path', which cannot be combined with 'git' or 'rev'",
-                                name
-                            ))),
-                        }?;
+                        let DependencyTableEntry {
+                            version,
+                            opt,
+                            pin,
+                            git,
+                            path,
+                            rev,
+                            wally,
+                        } = entry;
+
+                        let (version_req, source) = if let Some(wally) = wally {
+                            if version.is_some() || git.is_some() || rev.is_some() || path.is_some() {
+                                return Err(de::Error::custom(format!(
+                                    "dependency '{}' specifies 'wally', which cannot be combined with 'version', 'git', 'rev', or 'path'",
+                                    name
+                                )));
+                            }
+                            (
+                                PackageVersionReq::SemVer(wally.version_req().clone()),
+                                Some(RockSourceSpec::Wally(wally)),
+                            )
+                        } else {
+                            let version = version.ok_or_else(|| {
+                                de::Error::custom(format!(
+                                    "dependency '{name}' is missing a 'version' or 'wally' field"
+                                ))
+                            })?;
+                            let source = match (git, rev, path) {
+                                (None, None, None) => Ok(None),
+                                (None, Some(_), None) => Err(de::Error::custom(format!(
+                                    "dependency {} specifies a 'rev', but missing a 'git' field",
+                                    name
+                                ))),
+                                (Some(git), Some(rev), None) => {
+                                    Ok(Some(RockSourceSpec::Git(GitSource {
+                                        url: git.into(),
+                                        git_ref: Some(GitRef::Tag(rev)),
+                                    })))
+                                }
+                                (Some(git), None, None) => Ok(Some(RockSourceSpec::Git(GitSource {
+                                    url: git.into(),
+                                    git_ref: Some(GitRef::Tag(
+                                        version
+                                            .clone()
+                                            .to_string()
+                                            .trim_start_matches("=")
+                                            .to_string(),
+                                    )),
+                                }))),
+                                (None, None, Some(path)) => Ok(Some(RockSourceSpec::File(path))),
+                                (_, _, Some(_)) => Err(de::Error::custom(format!(
+                                    "dependency '{}' specifies a 'path', which cannot be combined with 'git' or 'rev'",
+                                    name
+                                ))),
+                            }?;
+                            (version, source)
+                        };
+
                         Ok(LuaDependencySpec {
-                            package_req: PackageReq {
-                                name,
-                                version_req: entry.version,
-                            },
-                            opt: OptState::from(entry.opt.unwrap_or(false)),
-                            pin: PinnedState::from(entry.pin.unwrap_or(false)),
+                            package_req: PackageReq { name, version_req },
+                            opt: OptState::from(opt.unwrap_or(false)),
+                            pin: PinnedState::from(pin.unwrap_or(false)),
                             source,
                         })
                     }
@@ -1615,6 +1648,49 @@ mod tests {
         assert_eq!(merged.format(), expected_rockspec.format());
         // Ensure that the run command is retained after merge.
         assert!(merged.local.run().is_some());
+    }
+
+    #[test]
+    fn wally_dependency_parsing() {
+        let project_toml = r#"
+        package = "my-package"
+        version = "1.0.0"
+        lua = "5.1"
+
+        [dependencies.roact]
+        wally = "jsdotperf/roact@^1.4.0"
+
+        [build]
+        type = "builtin"
+        "#;
+
+        let project =
+            PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default()).unwrap();
+        let deps = project.dependencies.unwrap();
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0].name().to_string(), "roact");
+        assert!(matches!(
+            deps[0].source(),
+            Some(RockSourceSpec::Wally(req)) if req.name().to_string() == "jsdotperf/roact"
+        ));
+    }
+
+    #[test]
+    fn wally_dependency_conflicts_with_version() {
+        let project_toml = r#"
+        package = "my-package"
+        version = "1.0.0"
+        lua = "5.1"
+
+        [dependencies.roact]
+        wally = "jsdotperf/roact@^1.4.0"
+        version = "1.4.0"
+
+        [build]
+        type = "builtin"
+        "#;
+
+        PartialProjectToml::new(PROJECT_TOML, project_toml, ProjectRoot::default()).unwrap_err();
     }
 
     #[test]

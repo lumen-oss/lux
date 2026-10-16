@@ -16,6 +16,7 @@ pub(crate) enum RemotePackageSource {
     LuarocksRockspec(Url),
     LuarocksSrcRock(Url),
     LuarocksBinaryRock(Url),
+    Wally(Url),
     RockspecContent(String),
     Local,
     #[cfg(test)]
@@ -27,7 +28,8 @@ impl RemotePackageSource {
         match self {
             Self::LuarocksRockspec(url)
             | Self::LuarocksSrcRock(url)
-            | Self::LuarocksBinaryRock(url) => Some(url),
+            | Self::LuarocksBinaryRock(url)
+            | Self::Wally(url) => Some(url),
             Self::RockspecContent(_) | Self::Local => None,
             #[cfg(test)]
             Self::Test => None,
@@ -47,6 +49,7 @@ impl Display for RemotePackageSource {
             RemotePackageSource::LuarocksBinaryRock(url) => {
                 format!("luarocks_rock{PLUS}{url}").fmt(f)
             }
+            RemotePackageSource::Wally(url) => format!("wally{PLUS}{url}").fmt(f),
             RemotePackageSource::RockspecContent(content) => {
                 format!("rockspec{PLUS}{content}").fmt(f)
             }
@@ -90,6 +93,7 @@ impl TryFrom<String> for RemotePackageSource {
                     "luarocks_rockspec" => Ok(Self::LuarocksRockspec(Url::parse(str)?)),
                     "luarocks_src_rock" => Ok(Self::LuarocksSrcRock(Url::parse(str)?)),
                     "luarocks_rock" => Ok(Self::LuarocksBinaryRock(Url::parse(str)?)),
+                    "wally" => Ok(Self::Wally(Url::parse(str)?)),
                     "rockspec" => Ok(Self::RockspecContent(str.into())),
                     #[cfg(test)]
                     "test" => Ok(Self::Test),
@@ -144,6 +148,14 @@ source = {
         let source = RemotePackageSource::LuarocksBinaryRock(url);
         let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped)
+    }
+
+    #[test]
+    fn wally_source_roundtrip() {
+        let url = Url::parse("https://github.com/UpliftGames/wally-index").unwrap();
+        let source = RemotePackageSource::Wally(url);
+        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        assert_eq!(source, roundtripped);
     }
 
     #[test]

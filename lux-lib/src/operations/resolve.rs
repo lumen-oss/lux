@@ -15,7 +15,7 @@ use crate::{
     lockfile::{
         LocalPackageId, LocalPackageSpec, Lockfile, LockfilePermissions, OptState, PinnedState,
     },
-    lua_rockspec::BuildBackendSpec,
+    lua_rockspec::{BuildBackendSpec, RockSourceSpec},
     operations::{FetchVendored, FetchVendoredError},
     package::{PackageName, PackageReq},
     remote_package_db::RemotePackageDB,
@@ -23,7 +23,9 @@ use crate::{
     tree,
 };
 
-use super::{Download, PackageInstallSpec, RemoteRockDownload, SearchAndDownloadError};
+use super::{
+    download_wally_rock, Download, PackageInstallSpec, RemoteRockDownload, SearchAndDownloadError,
+};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -189,10 +191,15 @@ where
                     tokio::spawn(
                         async move {
                             let downloaded_rock = if let Some(source) = source {
-                                RemoteRockDownload::from_package_req_and_source_spec(
-                                    package.clone(),
-                                    source,
-                                )?
+                                match &source {
+                                    RockSourceSpec::Wally(wally_req) => {
+                                        download_wally_rock(&package, wally_req, &config).await?
+                                    }
+                                    _ => RemoteRockDownload::from_package_req_and_source_spec(
+                                        package.clone(),
+                                        source,
+                                    )?,
+                                }
                             } else if let Some(vendor_dir) = config.vendor_dir() {
                                 FetchVendored::new()
                                     .vendor_dir(vendor_dir)

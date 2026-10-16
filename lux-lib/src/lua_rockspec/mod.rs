@@ -445,6 +445,92 @@ impl RemoteLuaRockspec {
         package_spec: PackageSpec,
         source_spec: RockSourceSpec,
     ) -> Self {
+        Self::from_source_spec(package_spec, source_spec, Vec::new())
+    }
+
+    /// Build a rockspec for a wally package, whose contents are fetched from
+    /// `content_url`, whose dependencies come from the package's manifest
+    pub fn from_wally(
+        package_spec: PackageSpec,
+        content_url: Url,
+        dependencies: Vec<LuaDependencySpec>,
+        modules: HashMap<LuaModule, ModuleSpec>,
+    ) -> Self {
+        let version = package_spec.version().clone();
+        let rockspec_format = RockspecFormat::default();
+        let source_spec = RockSourceSpec::Url(content_url);
+
+        let mut module_entries: Vec<_> = modules.iter().collect();
+        module_entries.sort_by_key(|(module, _)| module.as_str());
+        let modules_lua = module_entries
+            .into_iter()
+            .map(|(module, spec)| {
+                let path = match spec {
+                    ModuleSpec::SourcePath(path) => path,
+                    _ => unreachable!(),
+                };
+                format!(
+                    "    [\"{module}\"] = \"{}\",",
+                    path.to_string_lossy().replace('\\', "/")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let raw_content = format!(
+            r#"
+rockspec_format = "{}"
+package = "{}"
+version = "{}"
+{}
+build = {{
+  type = "builtin",
+  modules = {{
+{}
+  }}
+}}"#,
+            rockspec_format,
+            package_spec.name(),
+            version,
+            source_spec.display_lua(),
+            modules_lua,
+        );
+
+        let source: RemoteRockSource = source_spec.into();
+
+        let local = LocalLuaRockspec {
+            rockspec_format: Some(rockspec_format),
+            package: package_spec.name().clone(),
+            version,
+            description: RockDescription::default(),
+            supported_platforms: PlatformSupport::default(),
+            lua: PackageVersionReq::Any,
+            dependencies: PerPlatform::new(dependencies),
+            build_dependencies: PerPlatform::default(),
+            external_dependencies: PerPlatform::default(),
+            test_dependencies: PerPlatform::default(),
+            build: PerPlatform::new(BuildSpec {
+                build_backend: Some(BuildBackendSpec::Builtin(BuiltinBuildSpec { modules })),
+                install: InstallSpec::default(),
+                copy_directories: Vec::new(),
+                patches: HashMap::new(),
+            }),
+            source: PerPlatform::new(source.clone()),
+            test: PerPlatform::default(),
+            deploy: PerPlatform::default(),
+            raw_content,
+        };
+        Self {
+            local,
+            source: PerPlatform::new(source),
+        }
+    }
+
+    fn from_source_spec(
+        package_spec: PackageSpec,
+        source_spec: RockSourceSpec,
+        dependencies: Vec<LuaDependencySpec>,
+    ) -> Self {
         let version = package_spec.version().clone();
         let rockspec_format = RockspecFormat::default();
         let raw_content = format!(
@@ -471,7 +557,7 @@ build = {{
             description: RockDescription::default(),
             supported_platforms: PlatformSupport::default(),
             lua: PackageVersionReq::Any,
-            dependencies: PerPlatform::default(),
+            dependencies: PerPlatform::new(dependencies),
             build_dependencies: PerPlatform::default(),
             external_dependencies: PerPlatform::default(),
             test_dependencies: PerPlatform::default(),
