@@ -1,0 +1,10 @@
+package = "hello-rojo"
+version = "0.1.0"
+lua = "luau"
+
+[dependencies.foo]
+path = "./foo"
+version = "1.0.0"
+
+[build]
+type = "builtin"
