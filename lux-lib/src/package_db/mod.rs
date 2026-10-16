@@ -260,55 +260,61 @@ impl PackageDB {
     ///
     /// NOTE: This doesn't group packages by name, but we don't care for now,
     /// as we shouldn't need to use this function with a lockfile.
-    pub fn search(&self, package_req: &PackageReq) -> Vec<(&PackageName, Vec<&PackageVersion>)> {
-        self.local
-            .iter()
-            .filter_map(|found| {
-                let name = found.remote.spec.name();
-                if name.to_string().contains(&package_req.name().to_string())
-                    && package_req
-                        .version_req()
-                        .matches(found.remote.spec.version())
-                {
-                    Some((name, vec![found.remote.spec.version()]))
-                } else {
-                    None
-                }
-            })
-            .chain(
-                self.locks
-                    .iter()
-                    .flat_map(|lock| lock.rocks().values())
-                    .filter_map(|package| {
-                        let name = package.name();
-                        if name.to_string().contains(&package_req.name().to_string()) {
-                            Some((name, vec![package.version()]))
-                        } else {
-                            None
-                        }
-                    }),
-            )
-            .chain(self.remote_manifests.iter().flat_map(|manifest| {
-                manifest
-                    .metadata()
-                    .repository
-                    .iter()
-                    .filter_map(|(name, elements)| {
-                        if name.to_string().contains(&package_req.name().to_string()) {
-                            Some((
-                                name,
-                                elements
-                                    .keys()
-                                    .filter(|version| package_req.version_req().matches(version))
-                                    .sorted_by(|a, b| Ord::cmp(b, a))
-                                    .collect_vec(),
-                            ))
-                        } else {
-                            None
-                        }
-                    })
-            }))
+    pub fn search<'a>(
+        &'a self,
+        package_req: &'a PackageReq,
+    ) -> Vec<(&'a PackageName, Vec<&'a PackageVersion>)> {
+        self.search_local(package_req)
+            .chain(self.search_locks(package_req))
+            .chain(self.search_manifests(package_req))
             .collect()
+    }
+
+    fn search_local<'a>(
+        &'a self,
+        req: &'a PackageReq,
+    ) -> impl Iterator<Item = (&'a PackageName, Vec<&'a PackageVersion>)> + 'a {
+        self.local.iter().filter_map(move |found| {
+            let name = found.remote.spec.name();
+            (name_matches(name, req) && req.version_req().matches(found.remote.spec.version()))
+                .then(|| (name, vec![found.remote.spec.version()]))
+        })
+    }
+
+    fn search_locks<'a>(
+        &'a self,
+        req: &'a PackageReq,
+    ) -> impl Iterator<Item = (&'a PackageName, Vec<&'a PackageVersion>)> + 'a {
+        self.locks
+            .iter()
+            .flat_map(|lock| lock.rocks().values())
+            .filter_map(move |package| {
+                let name = package.name();
+                name_matches(name, req).then(|| (name, vec![package.version()]))
+            })
+    }
+
+    fn search_manifests<'a>(
+        &'a self,
+        req: &'a PackageReq,
+    ) -> impl Iterator<Item = (&'a PackageName, Vec<&'a PackageVersion>)> + 'a {
+        self.remote_manifests.iter().flat_map(move |manifest| {
+            manifest
+                .metadata()
+                .repository
+                .iter()
+                .filter(|&(name, _)| name_matches(name, req))
+                .map(|(name, elements)| {
+                    (
+                        name,
+                        elements
+                            .keys()
+                            .filter(|version| req.version_req().matches(version))
+                            .sorted_by(|a, b| Ord::cmp(b, a))
+                            .collect_vec(),
+                    )
+                })
+        })
     }
 
     /// Find the latest version for a package by name.
@@ -328,6 +334,10 @@ impl PackageDB {
             Err(_) => None,
         }
     }
+}
+
+fn name_matches(name: &PackageName, req: &PackageReq) -> bool {
+    name.to_string().contains(&req.name().to_string())
 }
 
 impl From<Manifest> for PackageDB {
