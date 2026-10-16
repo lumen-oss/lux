@@ -17,6 +17,7 @@ use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
 use miette::Diagnostic;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::File;
@@ -228,8 +229,7 @@ fn add_dir_or_file_entry(
             if let Some(first_dir) = components.pop_front() {
                 let remainder = components.iter().collect::<PathBuf>();
                 match dir_map.entry(first_dir) {
-                    std::collections::hash_map::Entry::Occupied(mut entry) => match entry.get_mut()
-                    {
+                    Entry::Occupied(mut entry) => match entry.get_mut() {
                         DirOrFileEntry::DirEntry(entries) => {
                             add_dir_or_file_entry(entries, &remainder, digest);
                         }
@@ -239,7 +239,7 @@ fn add_dir_or_file_entry(
                             entry.insert(DirOrFileEntry::DirEntry(entries));
                         }
                     },
-                    std::collections::hash_map::Entry::Vacant(entry) => {
+                    Entry::Vacant(entry) => {
                         let mut entries = HashMap::new();
                         add_dir_or_file_entry(&mut entries, &remainder, digest);
                         entry.insert(DirOrFileEntry::DirEntry(entries));
@@ -260,6 +260,7 @@ fn add_dir_or_file_entry(
 mod tests {
     use super::*;
 
+    // non-regression for https://github.com/lumen-oss/lux/issues/2031
     #[test]
     fn add_dir_or_file_entry_preserves_siblings_and_nested_entries() {
         let mut entries = HashMap::new();
