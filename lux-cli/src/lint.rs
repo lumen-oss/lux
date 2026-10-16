@@ -2,9 +2,10 @@ use std::path::PathBuf;
 
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{config::Config, operations::Exec, workspace::Workspace};
+use lux_lib::{config::Config, lua_version::LuaVersion, operations::Exec, workspace::Workspace};
 use path_slash::PathBufExt;
 
+use crate::utils;
 use crate::utils::path::{classify_path, PathTarget};
 use crate::workspace::top_level_ignored_files;
 use miette::{IntoDiagnostic, Result};
@@ -48,27 +49,36 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
         }
     };
 
-    let check_args: Vec<String> = match lint_args.args {
-        Some(args) => args,
-        None if lint_args.no_ignore => Vec::new(),
-        None => {
-            let ignored_files = workspace.iter().flat_map(|workspace| {
-                top_level_ignored_files(workspace)
-                    .into_iter()
-                    .map(|file| file.to_slash_lossy().to_string())
-            });
-            std::iter::once("--exclude-files".into())
-                .chain(ignored_files)
-                .collect_vec()
-        }
-    };
+    if config.lua_version().is_some_and(|v| v == &LuaVersion::Luau) {
+        utils::luau_analyze::run(
+            &config,
+            vec![target_path],
+            lint_args.args.unwrap_or_default(),
+        )
+        .await
+    } else {
+        let check_args: Vec<String> = match lint_args.args {
+            Some(args) => args,
+            None if lint_args.no_ignore => Vec::new(),
+            None => {
+                let ignored_files = workspace.iter().flat_map(|workspace| {
+                    top_level_ignored_files(workspace)
+                        .into_iter()
+                        .map(|file| file.to_slash_lossy().to_string())
+                });
+                std::iter::once("--exclude-files".into())
+                    .chain(ignored_files)
+                    .collect_vec()
+            }
+        };
 
-    Exec::new("luacheck", None, &config)
-        .arg(target_path)
-        .args(check_args)
-        .disable_loader(true)
-        .exec()
-        .await?;
+        Exec::new("luacheck", None, &config)
+            .arg(target_path)
+            .args(check_args)
+            .disable_loader(true)
+            .exec()
+            .await?;
 
-    Ok(())
+        Ok(())
+    }
 }

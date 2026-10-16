@@ -113,10 +113,16 @@ impl<T: Rockspec> LuaVersionCompatibility for T {
     }
 
     fn supports_lua_version(&self, lua_version: &LuaVersion) -> bool {
+        if self.lua().is_luau() {
+            return matches!(lua_version, LuaVersion::Luau);
+        }
         self.lua().matches(&lua_version.as_version())
     }
 
     fn lua_version(&self) -> Option<LuaVersion> {
+        if self.lua().is_luau() {
+            return Some(LuaVersion::Luau);
+        }
         for (possibility, version) in [
             ("5.5.0", LuaVersion::Lua54),
             ("5.4.0", LuaVersion::Lua54),

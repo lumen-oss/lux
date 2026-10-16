@@ -6,7 +6,7 @@
   <span>Lux</span>
 </h1>
 
-<h4 align="center">A luxurious package manager for <a href="https://www.lua.org/" target="_blank">Lua</a>.</h4>
+<h4 align="center">A luxurious package manager for <a href="https://www.lua.org/" target="_blank">Lua</a> and <a href="https://luau.org" target="_blank">Luau</a>.</h4>
 
 <p align="center">
   <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/lumen-oss/lux/integration-tests.yml?style=for-the-badge">
@@ -105,6 +105,8 @@ The following table provides a brief comparison:
 | Rockspecs with CVS/Mercurial/SVN/SSCM sources                                           | :x: (YAGNI[^3])              | :white_check_mark: |
 | Load installed packages from multiple install trees                                     | :x: ([#1493](https://github.com/lumen-oss/lux/issues/1493)) | :white_check_mark: |
 | Static type checking                                                                    | :white_check_mark:           | :x:                |
+| Automatic Lua detection                                                                 | :white_check_mark:           | :x:                |
+| Luau support                                                                            | :white_check_mark:           | :x:                |
 | Generate a `.luarc` file with dependencies                                              | :white_check_mark:           | :x:                |
 | Git dependencies in local projects                                                      | :white_check_mark:           | :x:                |
 | Local dependencies in local projects                                                    | :white_check_mark:           | :x:                |
