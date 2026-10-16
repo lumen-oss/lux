@@ -6,6 +6,7 @@ use crate::lua_rockspec::LuaVersionError;
 use crate::operations::UnpackError;
 use crate::rockspec::Rockspec;
 use crate::tree::{EntryType, InstallTree, TreeError};
+use bon::Builder;
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::fs::DirEntry;
@@ -276,17 +277,49 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
 }
 
 // TODO(vhyrro): break apart deployment into a separate step (once we implement transactions)
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn deploy<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
-    rockspec: &R,
-    tree: &T,
+#[derive(Builder)]
+#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
+pub(crate) struct Deploy<'a, R: Rockspec + HasIntegrity, T: InstallTree + Sync> {
+    #[builder(start_fn)]
+    rockspec: &'a R,
+    #[builder(start_fn)]
+    tree: &'a T,
     package: LockedPackage,
-    lua: &LuaInstallation,
-    source_root: &Path,
+    lua: &'a LuaInstallation,
+    source_root: &'a Path,
     entry_type: EntryType,
-    config: &Config,
+    config: &'a Config,
     behaviour: BuildBehaviour,
-) -> Result<LockedPackage, BuildError> {
+}
+
+impl<R, T, State> DeployBuilder<'_, R, T, State>
+where
+    R: Rockspec + HasIntegrity,
+    T: InstallTree + Sync,
+    State: deploy_builder::State + deploy_builder::IsComplete,
+{
+    pub(crate) async fn deploy(self) -> Result<LockedPackage, BuildError> {
+        do_deploy(self._build()).await
+    }
+}
+
+#[tracing::instrument(level = "trace", skip_all, fields(package = deploy.rockspec.package().to_string()))]
+async fn do_deploy<R, T>(deploy: Deploy<'_, R, T>) -> Result<LockedPackage, BuildError>
+where
+    R: Rockspec + HasIntegrity,
+    T: InstallTree + Sync,
+{
+    let Deploy {
+        rockspec,
+        tree,
+        package,
+        lua,
+        source_root,
+        entry_type,
+        config,
+        behaviour,
+    } = deploy;
+
     if matches!(behaviour, BuildBehaviour::Ignore | BuildBehaviour::Conflict) {
         if let Some(existing) = tree.lockfile()?.get(&package.id()) {
             return Ok(existing.clone());

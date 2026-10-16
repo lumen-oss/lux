@@ -2,7 +2,7 @@ use bon::Builder;
 use tracing::Instrument;
 
 use crate::{
-    build::{deploy, BuildBehaviour, BuildError, RemotePackageSourceSpec},
+    build::{BuildBehaviour, BuildError, Deploy, RemotePackageSourceSpec},
     config::Config,
     hash::HasIntegrity,
     lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
@@ -86,15 +86,15 @@ where
     ))
     .await?;
 
-    Box::pin(deploy(
-        rockspec,
-        build.tree,
-        package,
-        lua,
-        temp_dir.path(),
-        build.entry_type,
-        build.config,
-        build.behaviour,
-    ))
+    Box::pin(
+        Deploy::new(rockspec, build.tree)
+            .package(package)
+            .lua(lua)
+            .source_root(temp_dir.path())
+            .entry_type(build.entry_type)
+            .config(build.config)
+            .behaviour(build.behaviour)
+            .deploy(),
+    )
     .await
 }

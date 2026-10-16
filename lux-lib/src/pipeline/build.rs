@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::deploy,
+    build::Deploy,
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
     lua_installation::{LuaInstallation, LuaInstallationError},
@@ -110,18 +110,18 @@ where
             let opt = package.spec.opt();
 
             let pkg = match artifact {
-                PackageSource::SourceDir(path) => deploy(
-                    &rockspec,
-                    args.tree,
-                    package,
-                    &lua,
-                    &path,
-                    entry_type,
-                    args.config,
-                    package_behaviour,
-                )
-                .await
-                .map_err(|err| BuildError::Build(rockspec.package().to_string(), Box::new(err)))?,
+                PackageSource::SourceDir(path) => Deploy::new(&rockspec, args.tree)
+                    .package(package)
+                    .lua(&lua)
+                    .source_root(&path)
+                    .entry_type(entry_type)
+                    .config(args.config)
+                    .behaviour(package_behaviour)
+                    .deploy()
+                    .await
+                    .map_err(|err| {
+                        BuildError::Build(rockspec.package().to_string(), Box::new(err))
+                    })?,
                 PackageSource::Archive(bytes) => BinaryRockInstall::new(
                     &rockspec,
                     package.source().clone(),
