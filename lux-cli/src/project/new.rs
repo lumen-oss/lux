@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, path::PathBuf, str::FromStr};
+use std::{error::Error, path::PathBuf, str::FromStr};
 
 use clap::Args;
 use inquire::{
@@ -27,13 +27,15 @@ use lux_lib::{
 enum SourceDirType {
     Src,
     Lua,
+    None,
 }
 
-impl Display for SourceDirType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl SourceDirType {
+    fn to_path_buf(&self) -> Option<PathBuf> {
         match self {
-            Self::Src => write!(f, "src"),
-            Self::Lua => write!(f, "lua"),
+            Self::Src => Some("src".into()),
+            Self::Lua => Some("lua".into()),
+            Self::None => None,
         }
     }
 }
@@ -364,8 +366,7 @@ labels = [ {labels} ]
 # Add your dependencies here
 # `busted = ">=2.0"`
 
-[run]
-args = [ "{main}/main.lua" ]
+{run}
 
 [build]
 type = "builtin"
@@ -383,22 +384,32 @@ type = "builtin"
                 .map(|label| "\"".to_string() + &label + "\"")
                 .join(", "),
             lua_version_req = validated.lua_versions.version_req(),
-            main = validated.main,
+            run = validated
+                .main
+                .to_path_buf()
+                .map(|main| format!("[run]\nargs = [ \"{}/main.lua\" ]", main.display()))
+                .unwrap_or_default(),
             source = validated.source_block,
         )
         .trim(),
     )
     .into_diagnostic()?;
 
-    let main_dir = validated.target.join(validated.main.to_string());
-    if main_dir.exists() {
-        tracing::info!(
-            "Directory `{}/` already exists - we won't make any changes to it.",
-            main_dir.display()
-        );
-    } else {
-        std::fs::create_dir(&main_dir).into_diagnostic()?;
-        std::fs::write(main_dir.join("main.lua"), r#"print("Hello world!")"#).into_diagnostic()?;
+    if let Some(main_dir) = validated
+        .main
+        .to_path_buf()
+        .map(|path| validated.target.join(path))
+    {
+        if main_dir.exists() {
+            tracing::info!(
+                "Directory `{}/` already exists - we won't make any changes to it.",
+                main_dir.display()
+            );
+        } else {
+            std::fs::create_dir(&main_dir).into_diagnostic()?;
+            std::fs::write(main_dir.join("main.lua"), r#"print("Hello world!")"#)
+                .into_diagnostic()?;
+        }
     }
 
     println!("All done!");
