@@ -219,9 +219,11 @@ async fn update_dependency_tree(
         .into_iter()
         .filter(|pkg| is_included(pkg, packages))
         .collect_vec();
-    let updated_lockfile = tree.lockfile()?;
     let updated_dependencies = update(dependencies, package_db, tree, &lockfile, config).await?;
     if !updated_dependencies.is_empty() {
+        // NOTE: Read the install tree lockfile *after* updating, otherwise we
+        // sync the workspace lockfile with a pre-update snapshot.
+        let updated_lockfile = tree.lockfile()?;
         project_lockfile.sync(updated_lockfile.local_pkg_lock(), &lock_type);
     }
     Ok(updated_dependencies)
