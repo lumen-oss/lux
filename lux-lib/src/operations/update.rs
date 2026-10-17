@@ -310,7 +310,6 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, Pack
                     RemotePackageSource::LuarocksSrcRock(_) => true,
                     RemotePackageSource::LuarocksBinaryRock(_) => true,
                     // We don't support updating git sources or local packages
-                    // Git sources can be updated with the --toml flag
                     RemotePackageSource::RockspecContent(_) => false,
                     RemotePackageSource::Local => false,
                     #[cfg(test)]

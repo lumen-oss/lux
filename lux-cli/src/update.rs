@@ -14,22 +14,18 @@ pub struct Update {
     #[arg(long)]
     no_integrity_check: bool,
 
-    /// Upgrade packages in the project's lux.toml (if operating on a project)
-    #[arg(long)]
-    toml: bool,
-
     /// Packages to update.
-    /// When used with the --toml flag in a project, these must be package names.
+    /// When updating a project, these must be package names.
     packages: Option<Vec<PackageReq>>,
 
     /// Build dependencies to update.
     /// Also called `dev`.
-    /// When used with the --toml flag in a project, these must be package names.
+    /// When updating a project, these must be package names.
     #[arg(short, long, alias = "dev", visible_short_aliases = ['d', 'b'])]
     build: Option<Vec<PackageReq>>,
 
     /// Build dependencies to update.
-    /// When used with the --toml flag in a project, these must be package names.
+    /// When updating a project, these must be package names.
     #[arg(short, long)]
     test: Option<Vec<PackageReq>>,
 
@@ -39,9 +35,7 @@ pub struct Update {
 }
 
 pub async fn update(args: Update, config: Config) -> Result<()> {
-    if args.toml {
-        let mut workspace = Workspace::current_or_err()?;
-
+    if let Some(mut workspace) = Workspace::current()? {
         let db = PackageDB::from_config(&config).await?;
         let package_names = to_package_names(args.packages.as_ref())?;
         let mut upgrade_all = true;
@@ -153,7 +147,7 @@ fn to_package_names(packages: Option<&Vec<PackageReq>>) -> Result<Option<Vec<Pac
             "a package name"
         };
         return Err(miette!(
-            help = format!("specify {names_str} using the '--toml' flag"),
+            help = format!("specify {names_str} without version constraints"),
             "cannot use version constraints to upgrade dependencies in lux.toml."
         ));
     }
