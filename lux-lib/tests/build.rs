@@ -8,10 +8,11 @@ use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{
-    build::{Build, BuildBehaviour::Force},
+    build::BuildBehaviour::Force,
     config::ConfigBuilder,
     lua_installation::{detect_installed_lua_version, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
+    pipeline::build_local::Build,
     tree,
 };
 use tokio::runtime::Builder;
@@ -193,7 +194,7 @@ async fn treesitter_parser_build() {
         .await
         .unwrap();
 
-    let etc = tree.layout_for(&package).etc;
+    let etc = tree.layout_for(package.spec()).etc;
 
     let folds_query = etc.join("queries").join("rust").join("folds.scm");
     assert!(folds_query.is_file());
@@ -239,7 +240,7 @@ async fn treesitter_parser_build_source_queries() {
         .await
         .unwrap();
 
-    let etc = tree.layout_for(&package).etc;
+    let etc = tree.layout_for(package.spec()).etc;
 
     let highlights_query = etc.join("queries").join("tmux").join("highlights.scm");
     assert!(highlights_query.is_file());
@@ -297,7 +298,7 @@ async fn test_build_local_project_no_source() {
         .await
         .unwrap();
 
-    let layout = tree.layout_for(&package);
+    let layout = tree.layout_for(package.spec());
     let conf_file = layout.conf.join("foo").join("bar.toml");
     assert!(conf_file.is_file());
 
@@ -338,7 +339,7 @@ async fn test_build_local_project_only_src() {
         .await
         .unwrap();
 
-    let src = tree.layout_for(&pkg).src;
+    let src = tree.layout_for(pkg.spec()).src;
     assert!(src.is_dir());
     assert!(src.join("main.lua").is_file());
     assert!(src.join("foo.lua").is_file());
@@ -475,7 +476,7 @@ async fn test_multiline_command_build() {
         .await
         .unwrap();
 
-    let success_dir = tree.layout_for(&package).src.join("success");
+    let success_dir = tree.layout_for(package.spec()).src.join("success");
     assert!(success_dir.is_dir());
 }
 

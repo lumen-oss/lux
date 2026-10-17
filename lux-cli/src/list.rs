@@ -4,7 +4,7 @@ use clap::Args;
 use itertools::Itertools as _;
 use lux_lib::{
     config::Config,
-    lockfile::{LocalPackageId, PinnedState},
+    lockfile::{LockedPackageId, PinnedState},
     lua_version::LuaVersion,
     tree::InstallTree,
 };
@@ -33,7 +33,7 @@ pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
     let lockfile = tree.lockfile()?;
     let mut available_rocks = tree.list()?;
     if list_data.orphans {
-        let reachable: HashSet<LocalPackageId> = lockfile
+        let reachable: HashSet<LockedPackageId> = lockfile
             .reachable_rocks()
             .into_iter()
             .map(|package| package.id())

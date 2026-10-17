@@ -1,8 +1,9 @@
 use clap::Args;
 use lux_lib::{
+    build::BuildBehaviour,
     config::Config,
-    lockfile::LocalPackage,
-    operations::{self},
+    drivers::sync::{Sync, SyncMode, TargetSet},
+    lockfile::LockedPackage,
     package::PackageName,
     workspace::Workspace,
 };
@@ -24,15 +25,28 @@ pub struct Build {
 }
 
 /// Returns `Some` if the `only_deps` arg is set to `false`.
-pub async fn build(data: Build, config: Config) -> Result<Vec<LocalPackage>> {
+pub async fn build(data: Build, config: Config) -> Result<Vec<LockedPackage>> {
+    build_with_behaviour(data, config, BuildBehaviour::Force).await
+}
+
+pub async fn build_with_behaviour(
+    data: Build,
+    config: Config,
+    behaviour: BuildBehaviour,
+) -> Result<Vec<LockedPackage>> {
     let workspace = Workspace::current_or_err()?;
-    let result = operations::BuildWorkspace::new(&workspace, &config)
-        .maybe_package(data.package)
-        .no_lock(data.no_lock)
+    let report = Sync::new(&workspace, &config)
+        .mode(SyncMode::Open)
+        .targets(match data.package {
+            Some(package) => TargetSet::member(package, false),
+            None => TargetSet::all(&workspace, false),
+        })
+        .behaviour(behaviour)
         .only_deps(data.only_deps)
-        .build()
+        .no_lock(data.no_lock)
+        .sync()
         .await?;
-    Ok(result)
+    Ok(report.added().to_vec())
 }
 
 #[cfg(test)]

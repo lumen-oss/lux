@@ -4,13 +4,16 @@ use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    build::{Build, BuildBehaviour},
+    build::BuildBehaviour,
     config::Config,
+    drivers::install_packages::InstallPackages,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{self, Install, PackageInstallSpec},
+    operations::{self, PackageInstallSpec},
     package::PackageName,
+    package_db::PackageDB,
+    pipeline::build_local::Build,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},
     workspace::Workspace,
@@ -107,15 +110,16 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let temp_dir = tempdir().into_diagnostic()?;
                     let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
-                    let packages = Install::new(&temp_config)
+                    let packages = InstallPackages::new(&temp_config, &tree)
                         .package(
                             PackageInstallSpec::new(package_req, tree::EntryType::Entrypoint)
                                 .build_behaviour(BuildBehaviour::Force)
                                 .build(),
                         )
-                        .tree(tree.clone())
+                        .package_db(PackageDB::from_config(&temp_config).await?)
                         .install()
-                        .await?;
+                        .await?
+                        .0;
                     let package = packages
                         .first()
                         .ok_or_else(|| miette!("no packages installed"))?;
@@ -174,6 +178,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .tree(&tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&config)
+                .behaviour(BuildBehaviour::Force)
                 .build()
                 .await?;
             let rock_path = operations::Pack::new(dest_dir, tree, package)

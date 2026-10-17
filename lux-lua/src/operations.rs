@@ -6,14 +6,17 @@ use std::{collections::HashMap, path::PathBuf};
 use itertools::Itertools;
 use lux_lib::tree::InstallTree;
 use lux_lib::{
-    lockfile::LocalPackageId,
+    build::BuildBehaviour,
+    drivers::install_packages::InstallPackages,
+    drivers::sync::{Sync, SyncMode, TargetSet},
+    lockfile::LockedPackageId,
     lua::lua_runtime,
     operations::{
-        set_pinned_state, BuildWorkspace, DistProjectBin, Download, Install, PackageInstallSpec,
-        Sync, Uninstall, Update,
+        set_pinned_state, BuildWorkspace, DistProjectBin, Download, PackageInstallSpec, Uninstall,
+        Update,
     },
     package::{PackageName, PackageReq},
-    remote_package_db::RemotePackageDB,
+    package_db::PackageDB,
     rockspec::lua_dependency::DependencyType,
     tree::{EntryType, RockMatches, Tree},
 };
@@ -22,9 +25,9 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use path_slash::PathBufExt;
 
 use crate::lua_impls::{
-    self, ConfigLua, DependencyTypeLua, DownloadedRockspecLua, LocalPackageIdLua, LocalPackageLua,
-    PackageInstallSpecLua, PackageNameLua, PackageReqLua, PinnedStateLua, ProjectLua,
-    SyncReportLua, TreeLua, WorkspaceLua,
+    self, ConfigLua, DependencyTypeLua, DownloadedRockspecLua, LockedPackageIdLua,
+    LockedPackageLua, PackageInstallSpecLua, PackageNameLua, PackageReqLua, PinnedStateLua,
+    ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone)]
@@ -61,13 +64,14 @@ impl TypedUserData for OperationsModule {
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
-                Install::new(&config.0)
+                let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
+                InstallPackages::new(&config.0, &tree.0)
+                    .package_db(package_db)
                     .packages(specs)
-                    .tree(tree.0)
                     .install()
                     .await
                     .into_lua_err()
-                    .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
+                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
             },
         );
 
@@ -77,7 +81,7 @@ impl TypedUserData for OperationsModule {
         methods.param("config", "Lux config");
         methods.add_async_function(
             "uninstall",
-            |_, (packages, tree, config): (Vec<LocalPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
+            |_, (packages, tree, config): (Vec<LockedPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
                 Uninstall::new()
@@ -87,7 +91,7 @@ impl TypedUserData for OperationsModule {
                     .remove()
                     .await
                     .into_lua_err()
-                    .map(|ids| ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>())
+                    .map(|ids| ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
             },
         );
 
@@ -118,7 +122,7 @@ impl TypedUserData for OperationsModule {
                     .update()
                     .await
                     .into_lua_err()
-                    .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
+                    .map(|pkgs| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
             },
         );
 
@@ -140,9 +144,7 @@ impl TypedUserData for OperationsModule {
             )| async move {
                 let _runtime = lua_runtime().enter();
                 let deps = lua_impls::map_dependency_type(deps.0);
-                let package_db = RemotePackageDB::from_config(&config.0)
-                    .await
-                    .into_lua_err()?;
+                let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
 
                 let install_specs = deps_to_specs(&deps);
 
@@ -157,13 +159,14 @@ impl TypedUserData for OperationsModule {
                     .await
                     .into_lua_err()?;
 
-                Install::new(&config.0)
+                let tree = workspace.0.tree(&config.0).into_lua_err()?;
+                InstallPackages::new(&config.0, &tree)
+                    .package_db(package_db)
                     .packages(install_specs)
-                    .tree(workspace.0.tree(&config.0).into_lua_err()?)
                     .install()
                     .await
                     .into_lua_err()
-                    .map(|pkgs| pkgs.into_iter().map(LocalPackageLua).collect::<Vec<_>>())
+                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
             },
         );
 
@@ -187,7 +190,7 @@ impl TypedUserData for OperationsModule {
                 let _runtime = lua_runtime().enter();
                 let deps = lua_impls::map_dependency_type_names(deps.0);
                 let tree = workspace.0.tree(&config.0).into_lua_err()?;
-                let ids_to_remove: Vec<LocalPackageId> = deps_to_ids(&deps, &tree);
+                let ids_to_remove: Vec<LockedPackageId> = deps_to_ids(&deps, &tree);
 
                 if ids_to_remove.is_empty() {
                     return Ok(Vec::new());
@@ -207,7 +210,7 @@ impl TypedUserData for OperationsModule {
                     .remove()
                     .await
                     .into_lua_err()
-                    .map(|ids| ids.into_iter().map(LocalPackageIdLua).collect::<Vec<_>>())
+                    .map(|ids| ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
             },
         );
 
@@ -219,7 +222,8 @@ impl TypedUserData for OperationsModule {
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
-                    .test(true)
+                    .mode(SyncMode::Frozen)
+                    .targets(TargetSet::all(&workspace.0, true))
                     .sync()
                     .await
                     .into_lua_err()
@@ -235,6 +239,8 @@ impl TypedUserData for OperationsModule {
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 Sync::new(&workspace.0, &config.0)
+                    .mode(SyncMode::Frozen)
+                    .targets(TargetSet::all(&workspace.0, false))
                     .sync()
                     .await
                     .into_lua_err()
@@ -261,7 +267,7 @@ impl TypedUserData for OperationsModule {
                     .build()
                     .await
                     .into_lua_err()
-                    .map(|packages: Vec<_>| packages.into_iter().map(LocalPackageLua).collect_vec())
+                    .map(|packages: Vec<_>| packages.into_iter().map(LockedPackageLua).collect_vec())
             },
         );
 
@@ -312,7 +318,7 @@ impl TypedUserData for OperationsModule {
         methods.param("pin_state", "The pinned state to set");
         methods.add_function(
             "pin",
-            |_, (package_id, tree, pin_state): (LocalPackageIdLua, TreeLua, PinnedStateLua)| {
+            |_, (package_id, tree, pin_state): (LockedPackageIdLua, TreeLua, PinnedStateLua)| {
                 set_pinned_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
             },
         );
@@ -351,9 +357,7 @@ mod definitions_registry {
 }
 
 async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String, Vec<String>>> {
-    let remote_db = RemotePackageDB::from_config(&config.0)
-        .await
-        .into_lua_err()?;
+    let remote_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
 
     Ok(remote_db
         .search(&query.parse().into_lua_err()?)
@@ -374,11 +378,15 @@ fn deps_to_specs(deps: &DependencyType<PackageReq>) -> Vec<PackageInstallSpec> {
     };
 
     reqs.iter()
-        .map(|r| PackageInstallSpec::new(r.clone(), EntryType::Entrypoint).build())
+        .map(|r| {
+            PackageInstallSpec::new(r.clone(), EntryType::Entrypoint)
+                .build_behaviour(BuildBehaviour::Force)
+                .build()
+        })
         .collect()
 }
 
-fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LocalPackageId> {
+fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LockedPackageId> {
     let names = match deps {
         DependencyType::Regular(d) | DependencyType::Build(d) | DependencyType::Test(d) => d,
         DependencyType::External(_) => &Vec::default(),
@@ -477,7 +485,7 @@ type = "builtin"
     fn test_package_install_spec_from_full_table() {
         let lua = Lua::new();
         let value = lua
-            .load(r#"{ package = "busted >= 2.0", entry_type = "dependency_only", pin = true, opt = true, build_behaviour = "no_force" }"#)
+            .load(r#"{ package = "busted >= 2.0", entry_type = "dependency_only", pin = true, opt = true, build_behaviour = "ignore" }"#)
             .eval()
             .unwrap();
         PackageInstallSpecLua::from_lua(value, &lua).unwrap();

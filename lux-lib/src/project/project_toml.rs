@@ -25,11 +25,11 @@ use std::{collections::HashMap, path::PathBuf};
 use crate::{
     config::Config,
     lua_rockspec::{
-        BuildSpec, BuildSpecInternal, BuildSpecInternalError, DisplayAsLuaKV, ExternalDependencies,
-        ExternalDependencySpec, LuaVersionError, PartialLuaRockspec, PerPlatform,
-        PlatformIdentifier, PlatformSupport, PlatformValidationError, RemoteRockSource,
-        RockDescription, RockSourceError, RockspecFormat, TestSpec, TestSpecDecodeError,
-        TestSpecInternal,
+        BuildSpec, BuildSpecInternal, BuildSpecInternalError, DisplayAsLuaKV, DisplayLuaKV,
+        ExternalDependencies, ExternalDependencySpec, LuaVersionError, PartialLuaRockspec,
+        PerPlatform, PlatformIdentifier, PlatformSupport, PlatformValidationError,
+        RemoteRockSource, RockDescription, RockSourceError, RockspecFormat, TestSpec,
+        TestSpecDecodeError, TestSpecInternal,
     },
     package::{
         BuildDependencies, Dependencies, PackageName, PackageReq, PackageVersion, PackageVersionReq,
@@ -709,6 +709,103 @@ impl LocalProjectToml {
             ProjectRoot(self.internal.lux_toml_dir.clone()),
         )
     }
+
+    /// Renders the rockspec for local builds, using the rockspec's own version
+    /// and its source pointing at the project root.
+    pub fn to_local_rockspec(&self) -> Result<RemoteLuaRockspec, LuaRockspecError> {
+        Ok(LocalLuaRockspec::from_project_toml(self).into_remote_with_source(self.source.clone()))
+    }
+
+    fn render_rockspec(
+        &self,
+        version: &PackageVersion,
+        source: Option<DisplayLuaKV>,
+    ) -> Result<String, ProjectTomlError> {
+        let starter = format!(
+            r#"
+rockspec_format = "{}"
+package = "{}"
+version = "{}""#,
+            self.rockspec_format
+                .as_ref()
+                .unwrap_or(&RockspecFormat::default()),
+            self.package,
+            version
+        );
+
+        let mut template = Vec::new();
+
+        if self.description != RockDescription::default() {
+            template.push(self.description.display_lua());
+        }
+
+        if self.supported_platforms != PlatformSupport::default() {
+            template.push(self.supported_platforms.display_lua());
+        }
+
+        {
+            let mut dependencies = self.internal.dependencies.clone().unwrap_or_default();
+            dependencies.insert(
+                0,
+                PackageReq {
+                    name: "lua".into(),
+                    version_req: self.lua.clone(),
+                }
+                .into(),
+            );
+            template.push(Dependencies(&dependencies).display_lua());
+        }
+
+        let mut build_dependencies = self
+            .internal
+            .build_dependencies
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+
+        let build_backend_dependency = self
+            .internal
+            .build
+            .build_type
+            .as_ref()
+            .and_then(|build_type| build_type.luarocks_build_backend());
+
+        if let Some(build_backend_dependency) = build_backend_dependency {
+            build_dependencies.push(build_backend_dependency);
+        }
+
+        if !build_dependencies.is_empty() {
+            template.push(BuildDependencies(&build_dependencies).display_lua());
+        }
+
+        match self.internal.external_dependencies {
+            Some(ref external_dependencies) if !external_dependencies.is_empty() => {
+                template.push(ExternalDependencies(external_dependencies).display_lua());
+            }
+            _ => {}
+        }
+
+        if let Some(source) = source {
+            template.push(source);
+        }
+
+        template.push(self.internal.build.display_lua());
+
+        let unformatted_code = std::iter::once(starter)
+            .chain(template.into_iter().map(|kv| kv.to_string()))
+            .join("\n\n");
+        let result = match stylua_lib::format_code(
+            &unformatted_code,
+            stylua_lib::Config::default(),
+            None,
+            stylua_lib::OutputVerification::Full,
+        ) {
+            Ok(formatted_code) => formatted_code,
+            Err(_) => unformatted_code,
+        };
+        validate_generated_lua(&result)?;
+        Ok(result)
+    }
 }
 
 impl Rockspec for LocalProjectToml {
@@ -792,92 +889,11 @@ impl Rockspec for LocalProjectToml {
             .internal
             .version_template
             .try_generate(lux_toml_dir, None)?;
-        let starter = format!(
-            r#"
-rockspec_format = "{}"
-package = "{}"
-version = "{}""#,
-            self.rockspec_format
-                .as_ref()
-                .unwrap_or(&RockspecFormat::default()),
-            self.package,
-            version
-        );
-
-        let mut template = Vec::new();
-
-        if self.description != RockDescription::default() {
-            template.push(self.description.display_lua());
-        }
-
-        if self.supported_platforms != PlatformSupport::default() {
-            template.push(self.supported_platforms.display_lua());
-        }
-
-        {
-            let mut dependencies = self.internal.dependencies.clone().unwrap_or_default();
-            dependencies.insert(
-                0,
-                PackageReq {
-                    name: "lua".into(),
-                    version_req: self.lua.clone(),
-                }
-                .into(),
-            );
-            template.push(Dependencies(&dependencies).display_lua());
-        }
-
-        let mut build_dependencies = self
-            .internal
-            .build_dependencies
-            .as_ref()
-            .cloned()
-            .unwrap_or_default();
-
-        let build_backend_dependency = self
-            .internal
-            .build
-            .build_type
-            .as_ref()
-            .and_then(|build_type| build_type.luarocks_build_backend());
-
-        if let Some(build_backend_dependency) = build_backend_dependency {
-            build_dependencies.push(build_backend_dependency);
-        }
-
-        if !build_dependencies.is_empty() {
-            template.push(BuildDependencies(&build_dependencies).display_lua());
-        }
-
-        match self.internal.external_dependencies {
-            Some(ref external_dependencies) if !external_dependencies.is_empty() => {
-                template.push(ExternalDependencies(external_dependencies).display_lua());
-            }
-            _ => {}
-        }
-
         let source =
             self.internal
                 .source_template
                 .try_generate(lux_toml_dir, &self.package, &version)?;
-        template.push(source.display_lua());
-
-        template.push(self.internal.build.display_lua());
-
-        let unformatted_code = std::iter::once(starter)
-            .chain(template.into_iter().map(|kv| kv.to_string()))
-            .join("\n\n");
-        let result = match stylua_lib::format_code(
-            &unformatted_code,
-            stylua_lib::Config::default(),
-            None,
-            stylua_lib::OutputVerification::Full,
-        ) {
-            Ok(formatted_code) => formatted_code,
-            Err(_) => unformatted_code,
-        };
-        validate_generated_lua(&result)?;
-        Ok(result)
+        self.render_rockspec(&version, Some(source.display_lua()))
     }
 }
 

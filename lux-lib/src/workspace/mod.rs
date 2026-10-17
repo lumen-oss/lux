@@ -159,6 +159,17 @@ impl Workspace {
         &mut self.members
     }
 
+    /// The package names of all workspace members.
+    pub fn member_names(&self) -> Result<NonEmpty<PackageName>, WorkspaceError> {
+        NonEmpty::from_vec(
+            self.members()
+                .iter()
+                .map(|project| project.toml().package.clone())
+                .collect(),
+        )
+        .ok_or_else(|| WorkspaceError::EmptyWorkspace(self.root.0.clone()))
+    }
+
     /// Get a workspace member, defaulting to the first one if none is specified.
     /// Fails if a package name is specified, but not found.
     pub fn single_member_or_select(

@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    config::Config, lockfile::LocalPackage, lua_version::LuaVersion, package::PackageVersion,
-    remote_package_db::RemotePackageDB, workspace::Workspace,
+    config::Config, lockfile::LockedPackage, lua_version::LuaVersion, package::PackageVersion,
+    package_db::PackageDB, workspace::Workspace,
 };
 
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
-use crate::{args::OutputFormat, workspace::sync_dependencies_if_locked};
+use crate::args::OutputFormat;
 
 #[derive(Args)]
 pub struct Outdated {
@@ -22,19 +22,18 @@ pub struct Outdated {
 /// If in a project, this lists rocks in the project tree
 pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let workspace = Workspace::current()?;
+    // NOTE: We deliberately do not sync the workspace before listing outdated
+    // rocks. `Sync` may install or remove packages as a side effect, which would
+    // make this otherwise read-only command mutate the install tree.
     let tree = match &workspace {
-        Some(project) => {
-            // Make sure dependencies are synced if in a project
-            sync_dependencies_if_locked(project, &config).await?;
-            project.tree(&config)?
-        }
+        Some(project) => project.tree(&config)?,
         None => {
             let lua_version = LuaVersion::from(&config)?.clone();
             config.user_tree(lua_version)?
         }
     };
 
-    let package_db = RemotePackageDB::from_config(&config).await?;
+    let package_db = PackageDB::from_config(&config).await?;
 
     // NOTE: This will display all installed versions and each possible upgrade.
     // However, this should also take into account dependency constraints made by other rocks.
@@ -43,18 +42,21 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let rock_list = tree.as_rock_list()?;
     let rock_list = rock_list
         .iter()
-        .map(|rock| {
+        .filter_map(|rock| {
             rock.to_package()
                 .has_update(&package_db)
-                .map(|mb_version| mb_version.map(|version| (rock, version)))
+                .ok()
+                .flatten()
+                .map(|version| (rock, version))
         })
-        .filter_map_ok(|mb_tuple| mb_tuple)
-        .try_collect::<_, Vec<(&LocalPackage, PackageVersion)>, _>()?;
+        .collect::<Vec<(&LockedPackage, PackageVersion)>>();
 
     let rock_list = rock_list
         .iter()
         .sorted_by_key(|(rock, _)| rock.name().to_owned())
         .into_group_map_by(|(rock, _)| rock.name().to_owned());
+
+    let has_outdated = !rock_list.is_empty();
 
     match outdated_data.output_format {
         OutputFormat::Json => {
@@ -92,6 +94,10 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
                 );
             }
         }
+    }
+
+    if has_outdated {
+        println!("\nRun `lx update` to update all outdated rocks.");
     }
 
     Ok(())

@@ -5,14 +5,17 @@ use std::{
 
 use clap::Args;
 use lux_lib::{
-    build::{Build, BuildBehaviour},
+    build::BuildBehaviour,
     config::{Config, ConfigBuilder},
-    lockfile::LocalPackage,
+    drivers::install_packages::InstallPackages,
+    lockfile::LockedPackage,
     lua_installation::LuaInstallation,
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    operations::{Install, InstallProject, PackageInstallSpec},
+    operations::{InstallProject, PackageInstallSpec},
     package::{PackageName, PackageReq},
+    package_db::PackageDB,
+    pipeline::build_local::Build,
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
 };
@@ -132,7 +135,7 @@ async fn install_project(
     package: Option<&PackageName>,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LockedPackage, PathBuf)> {
     let workspace = Workspace::current_or_err()?;
     let project = match package {
         Some(package) => workspace.select_member(package)?,
@@ -155,18 +158,19 @@ async fn install_package(
     package: &PackageReq,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LockedPackage, PathBuf)> {
     let lua_version = LuaVersion::from(config)?.clone();
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
-    let packages = Install::new(config)
+    let packages = InstallPackages::new(config, &tree)
         .package(
             PackageInstallSpec::new(package.clone(), tree::EntryType::Entrypoint)
                 .build_behaviour(BuildBehaviour::Force)
                 .build(),
         )
-        .tree(tree.clone())
+        .package_db(PackageDB::from_config(config).await?)
         .install()
-        .await?;
+        .await?
+        .0;
     let package = packages
         .into_iter()
         .find(|pkg| pkg.name() == package.name())
@@ -178,7 +182,7 @@ async fn install_rockspec(
     rockspec_path: &Path,
     staging_dir: &TempDir,
     config: &Config,
-) -> Result<(LocalPackage, PathBuf)> {
+) -> Result<(LockedPackage, PathBuf)> {
     let content = tokio::fs::read_to_string(&rockspec_path)
         .await
         .into_diagnostic()?;
@@ -203,6 +207,7 @@ async fn install_rockspec(
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
+        .behaviour(BuildBehaviour::Force)
         .build()
         .await?;
     Ok((package, tree.root()))

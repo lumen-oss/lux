@@ -98,13 +98,6 @@
         "name": "lua_cliargs",
         "version": "3.0.2-1",
         "constraint": ">=3.0",
-        "binaries": [
-          "watch-tests.sh",
-          "release",
-          "lint",
-          "docs",
-          "coverage"
-        ],
         "source": "luarocks_rockspec+https://luarocks.org/",
         "source_url": {
           "type": "git",
@@ -157,10 +150,6 @@
           "287e827f4a088d41bba04af5f61a13614346c16fe8150eb7c4246e67d6fd163e",
           "2bd1c8e4fea66a88aeb65c1c8a3d0efdf188d681d2d47f163b976a771545aac9",
           "01a3c364614bddff7370223a5a9c4580f8e62d144384148444c518ec5367a59b"
-        ],
-        "binaries": [
-          "busted",
-          "busted"
         ],
         "source": "luarocks_rockspec+https://luarocks.org/",
         "source_url": {

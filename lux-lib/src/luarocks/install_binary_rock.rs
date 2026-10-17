@@ -13,11 +13,11 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{
-        LocalPackage, LocalPackageHashes, LockConstraint, LockfileError, OptState, PinnedState,
+        LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageSpec, LockfileError,
+        OptState, PinnedState,
     },
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::rock_manifest::RockManifest,
-    package::PackageSpec,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
@@ -51,7 +51,9 @@ pub enum InstallBinaryRockError {
     LuaVersionError(#[from] LuaVersionError),
     #[error("failed to unpack packed rock")]
     Zip(#[from] zip::result::ZipError),
-    #[error("rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1")]
+    #[error(
+        "rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1"
+    )]
     RockManifestNotFound,
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -97,7 +99,7 @@ where
             config,
             tree,
             constraint: LockConstraint::default(),
-            behaviour: BuildBehaviour::default(),
+            behaviour: BuildBehaviour::Ignore,
             pin: PinnedState::default(),
             opt: OptState::default(),
             entry_type,
@@ -121,7 +123,7 @@ where
     }
 
     #[tracing::instrument(name = "Installing binary rock", skip_all)]
-    pub(crate) async fn install(self) -> Result<LocalPackage, InstallBinaryRockError> {
+    pub(crate) async fn install(self) -> Result<LockedPackage, InstallBinaryRockError> {
         let rockspec = self.rockspec;
         for (name, dep) in rockspec.external_dependencies().current_platform() {
             let _ = ExternalDependencyInfo::probe(name, dep, self.config.external_deps())?;
@@ -129,7 +131,7 @@ where
 
         rockspec.validate_lua_version_from_config(self.config)?;
 
-        let hashes = LocalPackageHashes {
+        let hashes = LockedPackageHashes {
             rockspec: rockspec.hash().await?,
             source: self.rock_bytes.hash().await?,
         };
@@ -139,18 +141,25 @@ where
             }
             _ => None,
         };
-        let mut package = LocalPackage::from(
-            &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+        let spec = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
             self.constraint,
-            rockspec.binaries(),
-            self.source,
-            source_url,
-            hashes,
+            Vec::new(),
+            Vec::new(),
+            &self.pin,
+            &self.opt,
         );
-        package.spec.pinned = self.pin;
-        package.spec.opt = self.opt;
+        let package = LockedPackage::new(spec, self.source, source_url, hashes);
         match self.tree.lockfile()?.get(&package.id()) {
-            Some(package) if self.behaviour == BuildBehaviour::NoForce => Ok(package.clone()),
+            Some(package)
+                if matches!(
+                    self.behaviour,
+                    BuildBehaviour::Ignore | BuildBehaviour::Conflict
+                ) =>
+            {
+                Ok(package.clone())
+            }
             _ => {
                 let unpack_dir = fs::tempfile::tempdir()?;
                 let cursor = Cursor::new(self.rock_bytes);
@@ -166,8 +175,8 @@ where
                     return Err(InstallBinaryRockError::RockManifestNotFound);
                 }
                 let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
-                self.tree.prepare(&package)?;
-                let layout = self.tree.layout_for(&package);
+                self.tree.prepare(&package.spec)?;
+                let layout = self.tree.layout_for(&package.spec);
                 let rock_manifest = RockManifest::new(&rock_manifest_content)?;
                 install_manifest_entries(
                     &rock_manifest.lib.entries,
@@ -209,6 +218,10 @@ where
                     fs::tokio::remove_file(&rockspec_path).await?;
                 }
                 self.tree.finalize(&package, self.entry_type)?;
+                self.tree
+                    .lockfile()?
+                    .write_guard()
+                    .set_binaries(&package, rockspec.binaries());
                 Ok(package)
             }
         }
@@ -297,8 +310,14 @@ mod tests {
         .install()
         .await
         .unwrap();
+        assert_eq!(
+            local_package.hashes().source,
+            "sha256-zDmnjE2b8GxX+6j5vTCWUEBxe0aFXFVhC4JOrnAgQ2g="
+                .parse()
+                .unwrap()
+        );
         let foo_bar_module = tree
-            .layout_for(&local_package)
+            .layout_for(&local_package.spec)
             .src
             .join("foo")
             .join("bar.lua");
@@ -360,7 +379,7 @@ mod tests {
         .install()
         .await
         .unwrap();
-        let layout = tree.layout_for(&local_package);
+        let layout = tree.layout_for(local_package.spec());
         assert!(layout.lib.join("toml_edit.so").is_file());
 
         let orig_install_tree_integrity = layout.root.hash().await.unwrap();
@@ -419,7 +438,7 @@ mod tests {
         .install()
         .await
         .unwrap();
-        let layout = tree.layout_for(&local_package);
+        let layout = tree.layout_for(local_package.spec());
         assert!(layout.rockspec_path().is_file());
         let new_install_tree_integrity = layout.root.hash().await.unwrap();
         assert_eq!(orig_install_tree_integrity, new_install_tree_integrity);

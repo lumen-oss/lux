@@ -4,10 +4,12 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    lockfile::LocalPackageId,
+    drivers::install_packages::InstallPackages,
+    lockfile::LockedPackageId,
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package::PackageReq,
+    package_db::PackageDB,
     tree::{self, InstallTree, RockMatches, TreeError},
 };
 
@@ -83,7 +85,7 @@ multiple packages satisfying your version requirements were found:
         ));
     }
 
-    let (dependencies, entrypoints): (Vec<LocalPackageId>, Vec<LocalPackageId>) = packages
+    let (dependencies, entrypoints): (Vec<LockedPackageId>, Vec<LockedPackageId>) = packages
         .iter()
         .cloned()
         .partition(|pkg_id| lockfile.is_dependency(pkg_id));
@@ -151,9 +153,9 @@ Reinstall?
                 .packages(dependencies)
                 .remove()
                 .await?;
-            operations::Install::new(&config)
+            InstallPackages::new(&config, &tree)
+                .package_db(PackageDB::from_config(&config).await?)
                 .packages(reinstall_specs)
-                .tree(tree)
                 .install()
                 .await?;
         } else {

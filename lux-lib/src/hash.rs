@@ -64,10 +64,9 @@ fn hash_file(path: &Path, integrity_opts: &mut IntegrityOpts) -> io::Result<()> 
     Ok(())
 }
 
-/// A [`FileSystem`] that excludes VCS directories (e.g. `.git`, `.jj`) and
-/// files ignored by the project's `.gitignore` from the encoded
-/// NAR, as their contents are not deterministic and are not part of a
-/// package's sources.
+/// A [`FileSystem`] that excludes VCS directories (e.g. `.git`, `.jj`, files from `.gitignore`) and
+/// lux-generated files (e.g. `.lux`, `lux.lock`, `.luarc.json`) from the NAR, as their contents are
+/// not deterministic and are not part of a package's sources.
 struct VcsExcludingFileSystem {
     gitignore: Gitignore,
 }
@@ -89,6 +88,13 @@ fn is_vcs_dir(name: &str) -> bool {
     matches!(name, ".git" | ".jj" | ".hg" | "_darcs" | ".svn" | ".bzr")
 }
 
+fn is_lux_generated(name: &str) -> bool {
+    matches!(
+        name,
+        crate::workspace::LUX_DIR_NAME | "lux.lock" | ".luarc.json" | ".emmyrc.json"
+    )
+}
+
 impl FileSystem for VcsExcludingFileSystem {
     type File = std::fs::File;
 
@@ -99,7 +105,7 @@ impl FileSystem for VcsExcludingFileSystem {
     fn read_dir(&self, path: &Utf8Path) -> io::Result<Vec<String>> {
         Ok(FileSystem::read_dir(&NativeFileSystem {}, path)?
             .into_iter()
-            .filter(|name| !is_vcs_dir(name))
+            .filter(|name| !is_vcs_dir(name) && !is_lux_generated(name))
             .filter(|name| {
                 let full = path.join(name);
                 let is_dir = full.as_std_path().is_dir();
@@ -252,6 +258,10 @@ mod tests {
         write(temp.child(".git/config").path(), "nondeterministic").unwrap();
         temp.child(".jj").create_dir_all().unwrap();
         write(temp.child(".jj/repo").path(), "nondeterministic").unwrap();
+        temp.child(".lux").create_dir_all().unwrap();
+        write(temp.child(".lux/tree").path(), "nondeterministic").unwrap();
+        write(temp.child("lux.lock").path(), "nondeterministic").unwrap();
+        write(temp.child(".luarc.json").path(), "nondeterministic").unwrap();
 
         let hash_with_vcs = temp.path().to_path_buf().hash().await.unwrap();
 

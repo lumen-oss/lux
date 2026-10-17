@@ -1,54 +1,55 @@
-use crate::{
-    build::{Build, BuildBehaviour, BuildError},
-    config::Config,
-    lockfile::LocalPackage,
-    lua_installation::{LuaInstallation, LuaInstallationError},
-    luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
-    operations::{install_dependencies::prepare_dependencies_for_build, InstallDependencies},
-    project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
-    tree::{self, InstallTree, TreeError},
-};
 use bon::Builder;
-use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::InstallError;
+use crate::{
+    build::{BuildBehaviour, BuildError},
+    config::Config,
+    drivers::install_packages::{InstallPackages, InstallPackagesError},
+    hash::HasIntegrity,
+    lockfile::LockedPackage,
+    operations::PackageInstallSpec,
+    package::{PackageName, PackageReq},
+    package_db::{PackageDB, PackageDBError},
+    pipeline::discover::FoundPackage,
+    project::{IntoLocalRockspecError, Project, ProjectError},
+    rockspec::Rockspec,
+    tree::{self, InstallTree, TreeError},
+    workspace::{Workspace, WorkspaceError},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallProjectError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
     Project(#[from] ProjectError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LocalRockspec(#[from] IntoLocalRockspecError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageDB(#[from] PackageDBError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRocks(#[from] LuaRocksError),
+    Install(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
-    #[error("error installind dependencies")]
-    #[diagnostic(forward(0))]
-    InstallDependencies(Box<InstallError>),
-    #[error("error installind build dependencies")]
-    #[diagnostic(forward(0))]
-    InstallBuildDependencies(Box<InstallError>),
-    #[error("error building project")]
-    #[diagnostic(forward(0))]
     Build(#[from] Box<BuildError>),
+    #[error("package '{0}' was not installed")]
+    PackageNotInstalled(PackageName),
+    #[error("failed to hash the project's sources")]
+    Hash(#[source] std::io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Workspace(#[from] WorkspaceError),
 }
 
-impl From<LuaRocksInstallError> for InstallProjectError {
-    fn from(source: LuaRocksInstallError) -> Self {
-        Self::LuaRocksInstall(Box::new(source))
+impl From<InstallPackagesError> for InstallProjectError {
+    fn from(source: InstallPackagesError) -> Self {
+        Self::Install(Box::new(source))
     }
 }
 
@@ -72,70 +73,71 @@ where
     config: &'a Config,
 
     tree: &'a T,
+
+    #[builder(default = BuildBehaviour::Force)]
+    behaviour: BuildBehaviour,
+
+    /// Workspace whose lockfile is preferred during dependency resolution.
+    workspace: Option<&'a Workspace>,
 }
 
 impl<
-        T: InstallTree + Sync + Send + Clone + 'static,
+        T: InstallTree + Sync + Send,
         State: install_project_builder::State + install_project_builder::IsComplete,
     > InstallProjectBuilder<'_, T, State>
 {
-    /// Returns `Some` if the `only_deps` option is set to `false`.
-    pub async fn build(self) -> Result<LocalPackage, InstallProjectError> {
+    /// Builds the project's root package, installing its dependencies through
+    /// the pipeline. Returns the installed root package.
+    pub async fn build(self) -> Result<LockedPackage, InstallProjectError> {
         let args = self._build();
         let config = args.config;
         let project = args.project;
         let tree = args.tree;
-        let build_tree = tree.build_tree(config)?;
-        let lua = LuaInstallation::new_from_config(config).await?;
-        let luarocks = LuaRocksInstallation::new(config, build_tree.clone())?;
-        let mut dependencies_to_install = Vec::new();
-        let mut build_dependencies_to_install = Vec::new();
-        let project_toml = project.toml().into_local()?;
-        prepare_dependencies_for_build(
-            &project_toml,
-            tree,
-            &mut dependencies_to_install,
-            &mut build_dependencies_to_install,
-            tree::EntryType::DependencyOnly,
-        );
 
-        let dependencies = InstallDependencies::new()
-            .dependencies(dependencies_to_install.into_iter().unique().collect_vec())
-            .build_dependencies(
-                build_dependencies_to_install
-                    .into_iter()
-                    .unique()
-                    .collect_vec(),
-            )
-            .tree(tree)
-            .lua(&lua)
-            .luarocks(&luarocks)
-            .config(config)
-            .build()
-            .await
-            .map_err(|err| InstallProjectError::InstallBuildDependencies(Box::new(err)))?;
+        let rockspec = project.local_remote_rockspec()?;
+        let name = rockspec.package().clone();
 
-        let package = Build::new()
-            .rockspec(&project_toml)
-            .lua(&lua)
-            .tree(tree)
-            .entry_type(tree::EntryType::Entrypoint)
-            .config(config)
-            .behaviour(BuildBehaviour::Force)
-            .build()
-            .await?;
+        let behaviour = if matches!(args.behaviour, BuildBehaviour::Ignore) {
+            match tree.lockfile()?.entrypoint(&name) {
+                Some(existing) => {
+                    let source_hash = project
+                        .root()
+                        .hash()
+                        .await
+                        .map_err(InstallProjectError::Hash)?;
+                    if existing.version() == rockspec.version()
+                        && existing.hashes().source == source_hash
+                    {
+                        return Ok(existing.clone());
+                    }
+                    BuildBehaviour::Force
+                }
+                None => args.behaviour,
+            }
+        } else {
+            args.behaviour
+        };
 
-        let lockfile = tree.lockfile()?;
-        let mut lockfile = lockfile.write_guard();
-        let build_lockfile = tree.build_tree(config)?.lockfile()?;
-
-        lockfile.add_entrypoint(&package);
-        for dep in dependencies {
-            lockfile.add_dependency(&package, &dep);
+        let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
+        let package_db = match args.workspace {
+            Some(workspace) => PackageDB::open(config, workspace).await?,
+            None => PackageDB::from_config(config).await?,
         }
-        for dep in build_lockfile.rocks().values() {
-            lockfile.add_build_dependency(&package, dep);
-        }
-        Ok(package)
+        .with_local(vec![root]);
+
+        let install_spec =
+            PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)
+                .build_behaviour(behaviour)
+                .build();
+
+        InstallPackages::new(config, tree)
+            .package_db(package_db)
+            .package(install_spec)
+            .install()
+            .await?
+            .0
+            .into_iter()
+            .find(|package| package.name() == &name)
+            .ok_or(InstallProjectError::PackageNotInstalled(name))
     }
 }

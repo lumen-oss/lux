@@ -108,10 +108,6 @@
       "name": "lua-cjson",
       "version": "2.1.0-1",
       "constraint": "==2.1.0",
-      "binaries": [
-        "json2lua",
-        "lua2json"
-      ],
       "source": "luarocks_rockspec+https://luarocks.org/",
       "source_url": {
         "type": "url",

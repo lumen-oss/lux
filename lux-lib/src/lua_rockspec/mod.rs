@@ -206,6 +206,44 @@ impl<'gc> HasRockspecKey<'gc> for ottavino::Table<'gc> {
 }
 
 impl LocalLuaRockspec {
+    /// Builds a [`LocalLuaRockspec`] from an already-parsed project.
+    /// FIXME(vhyrro): investigate if necessary or can be deduplicated
+    pub(crate) fn from_project_toml(
+        project: &crate::project::project_toml::LocalProjectToml,
+    ) -> Self {
+        use crate::rockspec::Rockspec;
+
+        Self {
+            rockspec_format: project.format().clone(),
+            package: project.package().clone(),
+            version: project.version().clone(),
+            description: project.description().clone(),
+            supported_platforms: project.supported_platforms().clone(),
+            lua: project.lua().clone(),
+            dependencies: project.dependencies().clone(),
+            build_dependencies: project.build_dependencies().clone(),
+            external_dependencies: project.external_dependencies().clone(),
+            test_dependencies: project.test_dependencies().clone(),
+            build: project.build().clone(),
+            source: project.source().clone(),
+            test: project.test().clone(),
+            deploy: project.deploy().clone(),
+            raw_content: String::new(),
+        }
+    }
+
+    /// Wraps this rockspec into a [`RemoteLuaRockspec`], overriding its source
+    /// with the given `source`.
+    pub fn into_remote_with_source(
+        self,
+        source: PerPlatform<RemoteRockSource>,
+    ) -> RemoteLuaRockspec {
+        RemoteLuaRockspec {
+            local: self,
+            source,
+        }
+    }
+
     pub fn new(
         rockspec_content: &str,
         project_root: ProjectRoot,

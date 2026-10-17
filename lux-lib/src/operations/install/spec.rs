@@ -16,7 +16,6 @@ pub struct PackageInstallSpec {
     pub(crate) package: PackageReq,
     #[builder(start_fn)]
     pub(crate) entry_type: tree::EntryType,
-    #[builder(default)]
     pub(crate) build_behaviour: BuildBehaviour,
     #[builder(default)]
     pub(crate) pin: PinnedState,

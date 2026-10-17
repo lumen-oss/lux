@@ -2,13 +2,15 @@ use std::io;
 use tokio::process::Command;
 
 use crate::{
+    build::BuildBehaviour,
     config::Config,
+    drivers::install_packages::{InstallPackages, InstallPackagesError},
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
-    operations::{BuildWorkspace, BuildWorkspaceError, Install},
+    operations::{BuildWorkspace, BuildWorkspaceError},
     package::{PackageReq, PackageVersionReqError},
+    package_db::{PackageDB, PackageDBError},
     path::{Paths, PathsError},
-    remote_package_db::RemotePackageDBError,
     tree::{self, InstallTree, TreeError},
     workspace::{Workspace, WorkspaceTreeError},
 };
@@ -18,7 +20,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use which::which;
 
-use super::{InstallError, PackageInstallSpec};
+use super::PackageInstallSpec;
 
 /// Rocks package runner, providing fine-grained control
 /// over how a package should be run.
@@ -91,7 +93,7 @@ pub enum ExecError {
     LuaVersionError(#[from] LuaVersionError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildProject(#[from] Box<BuildWorkspaceError>),
+    BuildWorkspace(#[from] Box<BuildWorkspaceError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallCommand(#[from] Box<InstallCommandError>),
@@ -104,7 +106,7 @@ pub enum ExecError {
 
 impl From<BuildWorkspaceError> for ExecError {
     fn from(source: BuildWorkspaceError) -> Self {
-        Self::BuildProject(Box::new(source))
+        Self::BuildWorkspace(Box::new(source))
     }
 }
 
@@ -117,15 +119,15 @@ impl From<InstallCommandError> for ExecError {
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum InstallCommandError {
-    InstallError(#[from] Box<InstallError>),
+    InstallError(#[from] Box<InstallPackagesError>),
     PackageVersionReqError(#[from] PackageVersionReqError),
-    RemotePackageDBError(#[from] RemotePackageDBError),
+    PackageDBError(#[from] PackageDBError),
     Tree(#[from] TreeError),
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
 
-impl From<InstallError> for InstallCommandError {
-    fn from(source: InstallError) -> Self {
+impl From<InstallPackagesError> for InstallCommandError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::InstallError(Box::new(source))
     }
 }
@@ -220,15 +222,21 @@ To suppress this warning, set the `--no-loader` option."#
 /// Ensure that a command is installed.
 /// This defaults to the local project tree if cwd is a project root.
 async fn install_command(command: &str, config: &Config) -> Result<(), InstallCommandError> {
-    let install_spec = PackageInstallSpec::new(
-        PackageReq::new(command.into(), None)?,
-        tree::EntryType::Entrypoint,
-    )
-    .build();
+    let package = PackageReq::new(command.into(), None)?;
     let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
-    Install::new(config)
+
+    if tree
+        .match_rocks(&package)
+        .is_ok_and(|matches| matches.is_found())
+    {
+        return Ok(());
+    }
+    let install_spec = PackageInstallSpec::new(package, tree::EntryType::Entrypoint)
+        .build_behaviour(BuildBehaviour::Force)
+        .build();
+    InstallPackages::new(config, &tree)
         .package(install_spec)
-        .tree(tree)
+        .package_db(PackageDB::from_config(config).await?)
         .install()
         .await?;
     Ok(())

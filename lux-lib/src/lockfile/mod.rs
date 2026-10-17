@@ -161,16 +161,15 @@ impl<'de> Deserialize<'de> for OptState {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct LocalPackageSpec {
-    pub name: PackageName,
-    pub version: PackageVersion,
-    pub pinned: PinnedState,
-    pub opt: OptState,
-    pub dependencies: Vec<LocalPackageId>,
-    pub build_dependencies: Vec<LocalPackageId>,
+pub struct LockedPackageSpec {
+    name: PackageName,
+    version: PackageVersion,
+    pinned: PinnedState,
+    opt: OptState,
+    dependencies: Vec<LockedPackageId>,
+    build_dependencies: Vec<LockedPackageId>,
     // TODO: Deserialize this directly into a `LuaPackageReq`
-    pub constraint: Option<String>,
-    pub binaries: RockBinaries,
+    constraint: Option<String>,
 }
 
 /// ID of a local package, a hash that is comprised of:
@@ -180,9 +179,9 @@ pub(crate) struct LocalPackageSpec {
 /// - opt state
 /// - lock constraint
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Clone)]
-pub struct LocalPackageId(String);
+pub struct LockedPackageId(String);
 
-impl LocalPackageId {
+impl LockedPackageId {
     pub fn new(
         name: &PackageName,
         version: &PackageVersion,
@@ -223,23 +222,22 @@ impl LocalPackageId {
     }
 }
 
-impl Display for LocalPackageId {
+impl Display for LockedPackageId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl LocalPackageSpec {
+impl LockedPackageSpec {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         name: &PackageName,
         version: &PackageVersion,
         constraint: LockConstraint,
-        dependencies: Vec<LocalPackageId>,
-        build_dependencies: Vec<LocalPackageId>,
+        dependencies: Vec<LockedPackageId>,
+        build_dependencies: Vec<LockedPackageId>,
         pinned: &PinnedState,
         opt: &OptState,
-        binaries: RockBinaries,
     ) -> Self {
         Self {
             name: name.clone(),
@@ -252,12 +250,11 @@ impl LocalPackageSpec {
                 LockConstraint::Unconstrained => None,
                 LockConstraint::Constrained(version_req) => Some(version_req.to_string()),
             },
-            binaries,
         }
     }
 
-    pub fn id(&self) -> LocalPackageId {
-        LocalPackageId::new(
+    pub fn id(&self) -> LockedPackageId {
+        LockedPackageId::new(
             self.name(),
             self.version(),
             self.pinned,
@@ -290,16 +287,12 @@ impl LocalPackageSpec {
         self.opt
     }
 
-    pub fn dependencies(&self) -> Vec<&LocalPackageId> {
+    pub fn dependencies(&self) -> Vec<&LockedPackageId> {
         self.dependencies.iter().collect()
     }
 
-    pub fn build_dependencies(&self) -> Vec<&LocalPackageId> {
+    pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
         self.build_dependencies.iter().collect()
-    }
-
-    pub fn binaries(&self) -> Vec<&PathBuf> {
-        self.binaries.iter().collect()
     }
 
     pub fn to_package(&self) -> PackageSpec {
@@ -362,118 +355,31 @@ impl Display for RemotePackageSourceUrl {
 
 // TODO(vhyrro): Move to `package/local.rs`
 
-/// A locally installed rock
+/// A package whose source has been downloaded, hashed and which is installed in a tree.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct LocalPackage {
-    pub(crate) spec: LocalPackageSpec,
+pub struct LockedPackage {
+    pub(crate) spec: LockedPackageSpec,
     pub(crate) source: RemotePackageSource,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
-    hashes: LocalPackageHashes,
+    pub(crate) hashes: LockedPackageHashes,
 }
 
-impl LocalPackage {
-    pub fn into_package_spec(self) -> PackageSpec {
-        PackageSpec::new(self.spec.name, self.spec.version)
+impl LockedPackage {
+    pub(crate) fn repin(mut self, pinned: PinnedState) -> Self {
+        self.spec.pinned = pinned;
+        self
     }
 
-    pub fn as_package_spec(&self) -> PackageSpec {
-        PackageSpec::new(self.spec.name.clone(), self.spec.version.clone())
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct LocalPackageIntermediate {
-    name: PackageName,
-    version: PackageVersion,
-    #[serde(default, skip_serializing_if = "PinnedState::is_default")]
-    pinned: PinnedState,
-    #[serde(default, skip_serializing_if = "OptState::is_default")]
-    opt: OptState,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    dependencies: Vec<LocalPackageId>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    build_dependencies: Vec<LocalPackageId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    constraint: Option<String>,
-    #[serde(default, skip_serializing_if = "RockBinaries::is_default")]
-    binaries: RockBinaries,
-    source: RemotePackageSource,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    source_url: Option<RemotePackageSourceUrl>,
-    hashes: LocalPackageHashes,
-}
-
-impl TryFrom<LocalPackageIntermediate> for LocalPackage {
-    type Error = LockConstraintParseError;
-
-    fn try_from(value: LocalPackageIntermediate) -> Result<Self, Self::Error> {
-        let constraint = LockConstraint::try_from(&value.constraint)?;
-        Ok(Self {
-            spec: LocalPackageSpec::new(
-                &value.name,
-                &value.version,
-                constraint,
-                value.dependencies,
-                value.build_dependencies,
-                &value.pinned,
-                &value.opt,
-                value.binaries,
-            ),
-            source: value.source,
-            source_url: value.source_url,
-            hashes: value.hashes,
-        })
-    }
-}
-
-impl From<&LocalPackage> for LocalPackageIntermediate {
-    fn from(value: &LocalPackage) -> Self {
-        Self {
-            name: value.spec.name.clone(),
-            version: value.spec.version.clone(),
-            pinned: value.spec.pinned,
-            opt: value.spec.opt,
-            dependencies: value.spec.dependencies.clone(),
-            build_dependencies: value.spec.build_dependencies.clone(),
-            constraint: value.spec.constraint.clone(),
-            binaries: value.spec.binaries.clone(),
-            source: value.source.clone(),
-            source_url: value.source_url.clone(),
-            hashes: value.hashes.clone(),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for LocalPackage {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        LocalPackage::try_from(LocalPackageIntermediate::deserialize(deserializer)?)
-            .map_err(de::Error::custom)
-    }
-}
-
-impl Serialize for LocalPackage {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        LocalPackageIntermediate::from(self).serialize(serializer)
-    }
-}
-
-impl LocalPackage {
+    #[cfg(test)]
     pub(crate) fn from(
         package: &PackageSpec,
         constraint: LockConstraint,
-        binaries: RockBinaries,
         source: RemotePackageSource,
         source_url: Option<RemotePackageSourceUrl>,
-        hashes: LocalPackageHashes,
+        hashes: LockedPackageHashes,
     ) -> Self {
-        Self {
-            spec: LocalPackageSpec::new(
+        Self::new(
+            LockedPackageSpec::new(
                 package.name(),
                 package.version(),
                 constraint,
@@ -481,15 +387,40 @@ impl LocalPackage {
                 Vec::default(),
                 &PinnedState::Unpinned,
                 &OptState::Required,
-                binaries,
             ),
+            source,
+            source_url,
+            hashes,
+        )
+    }
+
+    pub(crate) fn new(
+        spec: LockedPackageSpec,
+        source: RemotePackageSource,
+        source_url: Option<RemotePackageSourceUrl>,
+        hashes: LockedPackageHashes,
+    ) -> Self {
+        Self {
+            spec,
             source,
             source_url,
             hashes,
         }
     }
 
-    pub fn id(&self) -> LocalPackageId {
+    pub fn spec(&self) -> &LockedPackageSpec {
+        &self.spec
+    }
+
+    pub fn into_package_spec(self) -> PackageSpec {
+        self.spec.to_package()
+    }
+
+    pub fn as_package_spec(&self) -> PackageSpec {
+        self.spec.to_package()
+    }
+
+    pub fn id(&self) -> LockedPackageId {
         self.spec.id()
     }
 
@@ -509,15 +440,11 @@ impl LocalPackage {
         self.spec.opt()
     }
 
-    pub(crate) fn source(&self) -> &RemotePackageSource {
-        &self.source
-    }
-
-    pub fn dependencies(&self) -> Vec<&LocalPackageId> {
+    pub fn dependencies(&self) -> Vec<&LockedPackageId> {
         self.spec.dependencies()
     }
 
-    pub fn build_dependencies(&self) -> Vec<&LocalPackageId> {
+    pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
         self.spec.build_dependencies()
     }
 
@@ -525,7 +452,15 @@ impl LocalPackage {
         self.spec.constraint()
     }
 
-    pub fn hashes(&self) -> &LocalPackageHashes {
+    pub(crate) fn source(&self) -> &RemotePackageSource {
+        &self.source
+    }
+
+    pub(crate) fn source_url(&self) -> Option<&RemotePackageSourceUrl> {
+        self.source_url.as_ref()
+    }
+
+    pub fn hashes(&self) -> &LockedPackageHashes {
         &self.hashes
     }
 
@@ -538,13 +473,91 @@ impl LocalPackage {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct LockedPackageIntermediate {
+    name: PackageName,
+    version: PackageVersion,
+    #[serde(default, skip_serializing_if = "PinnedState::is_default")]
+    pinned: PinnedState,
+    #[serde(default, skip_serializing_if = "OptState::is_default")]
+    opt: OptState,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    dependencies: Vec<LockedPackageId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    build_dependencies: Vec<LockedPackageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    constraint: Option<String>,
+    source: RemotePackageSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_url: Option<RemotePackageSourceUrl>,
+    hashes: LockedPackageHashes,
+}
+
+impl TryFrom<LockedPackageIntermediate> for LockedPackage {
+    type Error = LockConstraintParseError;
+
+    fn try_from(value: LockedPackageIntermediate) -> Result<Self, Self::Error> {
+        let constraint = LockConstraint::try_from(&value.constraint)?;
+        Ok(Self {
+            spec: LockedPackageSpec::new(
+                &value.name,
+                &value.version,
+                constraint,
+                value.dependencies,
+                value.build_dependencies,
+                &value.pinned,
+                &value.opt,
+            ),
+            source: value.source,
+            source_url: value.source_url,
+            hashes: value.hashes,
+        })
+    }
+}
+
+impl From<&LockedPackage> for LockedPackageIntermediate {
+    fn from(value: &LockedPackage) -> Self {
+        Self {
+            name: value.spec.name.clone(),
+            version: value.spec.version.clone(),
+            pinned: value.spec.pinned,
+            opt: value.spec.opt,
+            dependencies: value.spec.dependencies.clone(),
+            build_dependencies: value.spec.build_dependencies.clone(),
+            constraint: value.spec.constraint.clone(),
+            source: value.source.clone(),
+            source_url: value.source_url.clone(),
+            hashes: value.hashes.clone(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for LockedPackage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        LockedPackage::try_from(LockedPackageIntermediate::deserialize(deserializer)?)
+            .map_err(de::Error::custom)
+    }
+}
+
+impl Serialize for LockedPackage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        LockedPackageIntermediate::from(self).serialize(serializer)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
-pub struct LocalPackageHashes {
+pub struct LockedPackageHashes {
     pub rockspec: Integrity,
     pub source: Integrity,
 }
 
-impl Ord for LocalPackageHashes {
+impl Ord for LockedPackageHashes {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let a = (self.rockspec.to_hex().1, self.source.to_hex().1);
         let b = (other.rockspec.to_hex().1, other.source.to_hex().1);
@@ -552,7 +565,7 @@ impl Ord for LocalPackageHashes {
     }
 }
 
-impl PartialOrd for LocalPackageHashes {
+impl PartialOrd for LockedPackageHashes {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -638,17 +651,48 @@ impl LockfilePermissions for ReadOnly {}
 impl LockfilePermissions for ReadWrite {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub(crate) struct LocalPackageLock {
+pub(crate) struct PackageLock {
     // NOTE: We cannot directly serialize to a `Sha256` object as they don't implement serde traits.
     // NOTE: We want to retain ordering of rocks when de/serializing.
-    rocks: BTreeMap<LocalPackageId, LocalPackage>,
+    rocks: BTreeMap<LockedPackageId, LockedPackage>,
 
     /// The entrypoints of the tree. Enforces one entrypoint per package name.
-    entrypoints: BTreeMap<PackageName, LocalPackageId>,
+    entrypoints: BTreeMap<PackageName, LockedPackageId>,
 }
 
-impl LocalPackageLock {
-    fn get(&self, id: &LocalPackageId) -> Option<&LocalPackage> {
+impl PackageLock {
+    pub(crate) fn from_packages(
+        packages: impl Iterator<Item = (LockedPackage, EntryType)>,
+    ) -> Self {
+        let mut lock = Self::default();
+
+        for (package, entry_type) in packages {
+            if matches!(entry_type, EntryType::Entrypoint) {
+                lock.entrypoints
+                    .insert(package.name().clone(), package.id());
+            }
+            lock.rocks.insert(package.id(), package);
+        }
+
+        lock
+    }
+
+    pub(crate) fn merge(&mut self, other: &PackageLock) {
+        self.entrypoints.extend(
+            other
+                .entrypoints
+                .iter()
+                .map(|(name, id)| (name.clone(), id.clone())),
+        );
+        self.rocks.extend(
+            other
+                .rocks
+                .iter()
+                .map(|(id, package)| (id.clone(), package.clone())),
+        );
+    }
+
+    fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
         self.rocks.get(id)
     }
 
@@ -656,27 +700,27 @@ impl LocalPackageLock {
         self.rocks.is_empty()
     }
 
-    pub(crate) fn rocks(&self) -> &BTreeMap<LocalPackageId, LocalPackage> {
+    pub(crate) fn rocks(&self) -> &BTreeMap<LockedPackageId, LockedPackage> {
         &self.rocks
     }
 
-    fn is_entrypoint(&self, package: &LocalPackageId) -> bool {
+    fn is_entrypoint(&self, package: &LockedPackageId) -> bool {
         self.entrypoints.values().any(|id| id == package)
     }
 
     /// Returns the entrypoint with the given package name, if any.
-    pub(crate) fn entrypoint(&self, name: &PackageName) -> Option<&LocalPackage> {
+    pub(crate) fn entrypoint(&self, name: &PackageName) -> Option<&LockedPackage> {
         self.entrypoints.get(name).and_then(|id| self.get(id))
     }
 
-    fn is_dependency(&self, package: &LocalPackageId) -> bool {
+    fn is_dependency(&self, package: &LockedPackageId) -> bool {
         self.rocks
             .values()
             .flat_map(|rock| rock.dependencies())
             .any(|dep_id| dep_id == package)
     }
 
-    fn list(&self) -> HashMap<PackageName, Vec<LocalPackage>> {
+    fn list(&self) -> HashMap<PackageName, Vec<LockedPackage>> {
         self.rocks()
             .values()
             .cloned()
@@ -684,11 +728,11 @@ impl LocalPackageLock {
             .into_group_map()
     }
 
-    fn remove(&mut self, target: &LocalPackage) {
+    fn remove(&mut self, target: &LockedPackage) {
         self.remove_by_id(&target.id())
     }
 
-    fn remove_by_id(&mut self, target: &LocalPackageId) {
+    fn remove_by_id(&mut self, target: &LockedPackageId) {
         self.rocks.remove(target);
         self.entrypoints.retain(|_, id| id != target);
     }
@@ -697,14 +741,14 @@ impl LocalPackageLock {
         &self,
         req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<LocalPackage> {
+    ) -> Option<LockedPackage> {
         self.list()
             .get(req.name())
             .map(|packages| {
                 packages
                     .iter()
                     .filter(|package| match &filter {
-                        Some(filter_spec) => match package.source {
+                        Some(filter_spec) => match &package.source {
                             RemotePackageSource::LuarocksRockspec(_) => filter_spec.rockspec,
                             RemotePackageSource::LuarocksSrcRock(_) => filter_spec.src,
                             RemotePackageSource::LuarocksBinaryRock(_) => filter_spec.binary,
@@ -721,7 +765,7 @@ impl LocalPackageLock {
             .cloned()
     }
 
-    fn has_rock_with_equal_constraint(&self, req: &LuaDependencySpec) -> Option<LocalPackage> {
+    fn has_rock_with_equal_constraint(&self, req: &LuaDependencySpec) -> Option<LockedPackage> {
         self.list()
             .get(req.name())
             .map(|packages| {
@@ -744,12 +788,12 @@ impl LocalPackageLock {
         packages: &[LuaDependencySpec],
         strategy: &SyncStrategy<'_>,
     ) -> PackageSyncSpec {
-        let pkg_dir_exists = |pkg: &LocalPackage| match strategy {
+        let pkg_dir_exists = |pkg: &LockedPackage| match strategy {
             SyncStrategy::LockfileOnly => true,
-            SyncStrategy::EnsureInstalled(tree) => tree.layout_for(pkg).root.is_dir(),
+            SyncStrategy::EnsureInstalled(tree) => tree.layout_for(pkg.spec()).root.is_dir(),
         };
 
-        let entrypoints_to_keep: HashSet<LocalPackage> = self
+        let entrypoints_to_keep: HashSet<LockedPackage> = self
             .entrypoints
             .values()
             .filter_map(|id| self.get(id))
@@ -763,7 +807,7 @@ impl LocalPackageLock {
             .cloned()
             .collect();
 
-        let packages_to_keep: HashSet<&LocalPackage> = entrypoints_to_keep
+        let packages_to_keep: HashSet<&LockedPackage> = entrypoints_to_keep
             .iter()
             .flat_map(|local_pkg| self.get_all_dependencies(&local_pkg.id()))
             .collect();
@@ -789,7 +833,7 @@ impl LocalPackageLock {
     }
 
     /// Return all dependencies of a package, including itself
-    fn get_all_dependencies(&self, id: &LocalPackageId) -> HashSet<&LocalPackage> {
+    fn get_all_dependencies(&self, id: &LockedPackageId) -> HashSet<&LockedPackage> {
         let mut packages = HashSet::new();
         if let Some(local_pkg) = self.get(id) {
             packages.insert(local_pkg);
@@ -805,7 +849,7 @@ impl LocalPackageLock {
 
     /// The set of all packages reachable from the entrypoints via the
     /// dependency graph.
-    fn reachable(&self) -> HashSet<&LocalPackage> {
+    fn reachable(&self) -> HashSet<&LockedPackage> {
         self.entrypoints
             .values()
             .flat_map(|id| self.get_all_dependencies(id))
@@ -822,12 +866,14 @@ pub struct Lockfile<P: LockfilePermissions> {
     _marker: PhantomData<P>,
     // TODO: Serialize this directly into a `Version`
     version: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    binaries: BTreeMap<LockedPackageId, RockBinaries>,
     #[serde(flatten)]
-    lock: LocalPackageLock,
+    lock: PackageLock,
 }
 
-#[derive(EnumIter, Debug, PartialEq, Eq)]
-pub enum LocalPackageLockType {
+#[derive(EnumIter, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LockedPackageLockType {
     Regular,
     Test,
     Build,
@@ -841,12 +887,12 @@ pub struct WorkspaceLockfile<P: LockfilePermissions> {
     #[serde(skip)]
     _marker: PhantomData<P>,
     version: String,
-    #[serde(default, skip_serializing_if = "LocalPackageLock::is_empty")]
-    dependencies: LocalPackageLock,
-    #[serde(default, skip_serializing_if = "LocalPackageLock::is_empty")]
-    test_dependencies: LocalPackageLock,
-    #[serde(default, skip_serializing_if = "LocalPackageLock::is_empty")]
-    build_dependencies: LocalPackageLock,
+    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
+    dependencies: PackageLock,
+    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
+    test_dependencies: PackageLock,
+    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
+    build_dependencies: PackageLock,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -923,7 +969,9 @@ check the source URL, then rerun the command with `lx --no-lock` to update the h
         expected: Integrity,
         got: Integrity,
     },
-    #[error("package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile.")]
+    #[error(
+        "package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile."
+    )]
     PackageNotFound(PackageName, Box<PackageVersion>, PinnedState, String),
 }
 
@@ -940,7 +988,7 @@ pub struct FlushLockfileError {
 #[derive(Debug, Default)]
 pub(crate) struct PackageSyncSpec {
     pub to_add: Vec<LuaDependencySpec>,
-    pub to_remove: Vec<LocalPackage>,
+    pub to_remove: Vec<LockedPackage>,
 }
 
 /// Controls how `package_sync_spec` determines whether a package exists.
@@ -957,30 +1005,30 @@ impl<P: LockfilePermissions> Lockfile<P> {
         &self.version
     }
 
-    pub fn rocks(&self) -> &BTreeMap<LocalPackageId, LocalPackage> {
+    pub fn rocks(&self) -> &BTreeMap<LockedPackageId, LockedPackage> {
         self.lock.rocks()
     }
 
-    pub fn is_dependency(&self, package: &LocalPackageId) -> bool {
+    pub fn is_dependency(&self, package: &LockedPackageId) -> bool {
         self.lock.is_dependency(package)
     }
 
-    pub fn is_entrypoint(&self, package: &LocalPackageId) -> bool {
+    pub fn is_entrypoint(&self, package: &LockedPackageId) -> bool {
         self.lock.is_entrypoint(package)
     }
 
     /// Returns the entrypoint with the given package name, if any.
-    pub fn entrypoint(&self, name: &PackageName) -> Option<&LocalPackage> {
+    pub fn entrypoint(&self, name: &PackageName) -> Option<&LockedPackage> {
         self.lock.entrypoint(name)
     }
 
     /// Returns all rocks in the lockfile that are reachable from an entrypoint
     /// via the dependency graph.
-    pub fn reachable_rocks(&self) -> Vec<LocalPackage> {
+    pub fn reachable_rocks(&self) -> Vec<LockedPackage> {
         self.lock.reachable().into_iter().cloned().collect()
     }
 
-    pub fn entry_type(&self, package: &LocalPackageId) -> EntryType {
+    pub fn entry_type(&self, package: &LockedPackageId) -> EntryType {
         if self.lock.is_entrypoint(package) {
             EntryType::Entrypoint
         } else {
@@ -988,11 +1036,16 @@ impl<P: LockfilePermissions> Lockfile<P> {
         }
     }
 
-    pub(crate) fn local_pkg_lock(&self) -> &LocalPackageLock {
+    /// The binaries installed in the tree for a given package.
+    pub(crate) fn binaries(&self, id: &LockedPackageId) -> Option<&RockBinaries> {
+        self.binaries.get(id)
+    }
+
+    pub(crate) fn local_pkg_lock(&self) -> &PackageLock {
         &self.lock
     }
 
-    pub fn get(&self, id: &LocalPackageId) -> Option<&LocalPackage> {
+    pub fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
         self.lock.get(id)
     }
 
@@ -1001,11 +1054,11 @@ impl<P: LockfilePermissions> Lockfile<P> {
     /// # Safety
     ///
     /// Ensure that the package is present in the lockfile before calling this function.
-    pub unsafe fn get_unchecked(&self, id: &LocalPackageId) -> &LocalPackage {
+    pub unsafe fn get_unchecked(&self, id: &LockedPackageId) -> &LockedPackage {
         self.lock.get(id).unwrap_unchecked()
     }
 
-    pub(crate) fn list(&self) -> HashMap<PackageName, Vec<LocalPackage>> {
+    pub(crate) fn list(&self) -> HashMap<PackageName, Vec<LockedPackage>> {
         self.lock.list()
     }
 
@@ -1013,12 +1066,12 @@ impl<P: LockfilePermissions> Lockfile<P> {
         &self,
         req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<LocalPackage> {
+    ) -> Option<LockedPackage> {
         self.lock.has_rock(req, filter)
     }
 
     /// Find all rocks that match the requirement
-    pub(crate) fn find_rocks(&self, req: &PackageReq) -> Vec<LocalPackageId> {
+    pub(crate) fn find_rocks(&self, req: &PackageReq) -> Vec<LockedPackageId> {
         match self.list().get(req.name()) {
             Some(packages) => packages
                 .iter()
@@ -1033,7 +1086,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     /// Validate the integrity of an installed package with the entry in this lockfile.
     pub(crate) fn validate_integrity(
         &self,
-        expected_package: &LocalPackage,
+        expected_package: &LockedPackage,
     ) -> Result<(), LockfileIntegrityError> {
         // NOTE: We can't query by ID, because when installing from a lockfile (e.g. during sync),
         // the constraint is always `==`.
@@ -1085,7 +1138,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
             source: io::Error::other(err),
         })?;
 
-        fs::sync::write(&self.filepath, content).map_err(|err| FlushLockfileError {
+        fs::sync::write_atomic(&self.filepath, content).map_err(|err| FlushLockfileError {
             filepath: self.filepath.to_path_buf(),
             source: io::Error::other(err),
         })
@@ -1095,67 +1148,67 @@ impl<P: LockfilePermissions> Lockfile<P> {
 impl<P: LockfilePermissions> WorkspaceLockfile<P> {
     pub(crate) fn rocks(
         &self,
-        deps: &LocalPackageLockType,
-    ) -> &BTreeMap<LocalPackageId, LocalPackage> {
+        deps: &LockedPackageLockType,
+    ) -> &BTreeMap<LockedPackageId, LockedPackage> {
         match deps {
-            LocalPackageLockType::Regular => self.dependencies.rocks(),
-            LocalPackageLockType::Test => self.test_dependencies.rocks(),
-            LocalPackageLockType::Build => self.build_dependencies.rocks(),
+            LockedPackageLockType::Regular => self.dependencies.rocks(),
+            LockedPackageLockType::Test => self.test_dependencies.rocks(),
+            LockedPackageLockType::Build => self.build_dependencies.rocks(),
         }
     }
 
     pub(crate) fn get(
         &self,
-        id: &LocalPackageId,
-        deps: &LocalPackageLockType,
-    ) -> Option<&LocalPackage> {
+        id: &LockedPackageId,
+        deps: &LockedPackageLockType,
+    ) -> Option<&LockedPackage> {
         match deps {
-            LocalPackageLockType::Regular => self.dependencies.get(id),
-            LocalPackageLockType::Test => self.test_dependencies.get(id),
-            LocalPackageLockType::Build => self.build_dependencies.get(id),
+            LockedPackageLockType::Regular => self.dependencies.get(id),
+            LockedPackageLockType::Test => self.test_dependencies.get(id),
+            LockedPackageLockType::Build => self.build_dependencies.get(id),
         }
     }
 
     pub(crate) fn is_entrypoint(
         &self,
-        package: &LocalPackageId,
-        deps: &LocalPackageLockType,
+        package: &LockedPackageId,
+        deps: &LockedPackageLockType,
     ) -> bool {
         match deps {
-            LocalPackageLockType::Regular => self.dependencies.is_entrypoint(package),
-            LocalPackageLockType::Test => self.test_dependencies.is_entrypoint(package),
-            LocalPackageLockType::Build => self.build_dependencies.is_entrypoint(package),
+            LockedPackageLockType::Regular => self.dependencies.is_entrypoint(package),
+            LockedPackageLockType::Test => self.test_dependencies.is_entrypoint(package),
+            LockedPackageLockType::Build => self.build_dependencies.is_entrypoint(package),
         }
     }
 
     pub(crate) fn package_sync_spec(
         &self,
         packages: &[LuaDependencySpec],
-        deps: &LocalPackageLockType,
+        deps: &LockedPackageLockType,
         strategy: &SyncStrategy<'_>,
     ) -> PackageSyncSpec {
         match deps {
-            LocalPackageLockType::Regular => {
+            LockedPackageLockType::Regular => {
                 self.dependencies.package_sync_spec(packages, strategy)
             }
-            LocalPackageLockType::Test => {
+            LockedPackageLockType::Test => {
                 self.test_dependencies.package_sync_spec(packages, strategy)
             }
-            LocalPackageLockType::Build => self
+            LockedPackageLockType::Build => self
                 .build_dependencies
                 .package_sync_spec(packages, strategy),
         }
     }
 
-    pub(crate) fn local_pkg_lock(&self, deps: &LocalPackageLockType) -> &LocalPackageLock {
+    pub(crate) fn local_pkg_lock(&self, deps: &LockedPackageLockType) -> &PackageLock {
         match deps {
-            LocalPackageLockType::Regular => &self.dependencies,
-            LocalPackageLockType::Test => &self.test_dependencies,
-            LocalPackageLockType::Build => &self.build_dependencies,
+            LockedPackageLockType::Regular => &self.dependencies,
+            LockedPackageLockType::Test => &self.test_dependencies,
+            LockedPackageLockType::Build => &self.build_dependencies,
         }
     }
 
-    pub(crate) fn local_pkg_locks(&self) -> Vec<LocalPackageLock> {
+    pub(crate) fn local_pkg_locks(&self) -> Vec<PackageLock> {
         vec![
             self.dependencies.clone(),
             self.test_dependencies.clone(),
@@ -1166,7 +1219,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
     fn flush(&self) -> io::Result<()> {
         let content = serde_json::to_string_pretty(&self)?;
 
-        fs::sync::write(&self.filepath, content).map_err(io::Error::other)?;
+        fs::sync::write_atomic(&self.filepath, content).map_err(io::Error::other)?;
 
         Ok(())
     }
@@ -1183,7 +1236,8 @@ impl Lockfile<ReadOnly> {
                     filepath: filepath.clone(),
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
-                    lock: LocalPackageLock::default(),
+                    binaries: BTreeMap::new(),
+                    lock: PackageLock::default(),
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
@@ -1197,7 +1251,7 @@ impl Lockfile<ReadOnly> {
                 return Err(LockfileError::Fs(fs::FsError::FileOpen {
                     path: filepath.to_path_buf(),
                     source,
-                }))
+                }));
             }
         }
 
@@ -1225,6 +1279,7 @@ remove the tree at '{}' and reinstall all packages it contained.",
             _marker: PhantomData,
             filepath: self.filepath,
             version: self.version,
+            binaries: self.binaries,
             lock: self.lock,
         }
     }
@@ -1287,9 +1342,9 @@ impl WorkspaceLockfile<ReadOnly> {
                     filepath: filepath.clone(),
                     _marker: PhantomData,
                     version: LOCKFILE_VERSION_STR.into(),
-                    dependencies: LocalPackageLock::default(),
-                    test_dependencies: LocalPackageLock::default(),
-                    build_dependencies: LocalPackageLock::default(),
+                    dependencies: PackageLock::default(),
+                    test_dependencies: PackageLock::default(),
+                    build_dependencies: PackageLock::default(),
                 };
                 let json_str =
                     serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
@@ -1303,7 +1358,7 @@ impl WorkspaceLockfile<ReadOnly> {
                 return Err(LockfileError::Fs(fs::FsError::FileOpen {
                     path: filepath.to_path_buf(),
                     source,
-                }))
+                }));
             }
         }
 
@@ -1346,12 +1401,12 @@ remove the `lux.lock` and run `lx sync` to regenerate it.",
 }
 
 impl Lockfile<ReadWrite> {
-    pub(crate) fn add_entrypoint(&mut self, rock: &LocalPackage) {
+    pub(crate) fn add_entrypoint(&mut self, rock: &LockedPackage) {
         self.add(rock);
         self.lock.entrypoints.insert(rock.name().clone(), rock.id());
     }
 
-    fn add(&mut self, rock: &LocalPackage) {
+    pub(crate) fn add(&mut self, rock: &LockedPackage) {
         // Since rocks entries are mutable, we only add the dependency if it
         // has not already been added.
         self.lock
@@ -1361,7 +1416,7 @@ impl Lockfile<ReadWrite> {
     }
 
     /// Add a dependency for a package.
-    pub(crate) fn add_dependency(&mut self, target: &LocalPackage, dependency: &LocalPackage) {
+    pub(crate) fn add_dependency(&mut self, target: &LockedPackage, dependency: &LockedPackage) {
         self.lock
             .rocks
             .entry(target.id())
@@ -1385,8 +1440,8 @@ impl Lockfile<ReadWrite> {
     /// Add a build dependency for a package.
     pub(crate) fn add_build_dependency(
         &mut self,
-        target: &LocalPackage,
-        dependency: &LocalPackage,
+        target: &LockedPackage,
+        dependency: &LockedPackage,
     ) {
         self.lock
             .rocks
@@ -1407,15 +1462,22 @@ impl Lockfile<ReadWrite> {
             });
     }
 
-    pub(crate) fn remove(&mut self, target: &LocalPackage) {
+    /// Record the binaries installed for `package` into the tree lockfile.
+    pub(crate) fn set_binaries(&mut self, package: &LockedPackage, binaries: RockBinaries) {
+        self.binaries.insert(package.id(), binaries);
+    }
+
+    pub(crate) fn remove(&mut self, target: &LockedPackage) {
+        self.binaries.remove(&target.id());
         self.lock.remove(target)
     }
 
-    pub(crate) fn remove_by_id(&mut self, target: &LocalPackageId) {
+    pub(crate) fn remove_by_id(&mut self, target: &LockedPackageId) {
+        self.binaries.remove(target);
         self.lock.remove_by_id(target)
     }
 
-    pub(crate) fn sync(&mut self, lock: &LocalPackageLock) {
+    pub(crate) fn sync(&mut self, lock: &PackageLock) {
         self.lock = lock.clone();
     }
 
@@ -1423,25 +1485,33 @@ impl Lockfile<ReadWrite> {
 }
 
 impl WorkspaceLockfile<ReadWrite> {
-    pub(crate) fn remove(&mut self, target: &LocalPackage, deps: &LocalPackageLockType) {
+    pub(crate) fn remove(&mut self, target: &LockedPackage, deps: &LockedPackageLockType) {
         match deps {
-            LocalPackageLockType::Regular => self.dependencies.remove(target),
-            LocalPackageLockType::Test => self.test_dependencies.remove(target),
-            LocalPackageLockType::Build => self.build_dependencies.remove(target),
+            LockedPackageLockType::Regular => self.dependencies.remove(target),
+            LockedPackageLockType::Test => self.test_dependencies.remove(target),
+            LockedPackageLockType::Build => self.build_dependencies.remove(target),
         }
     }
 
-    pub(crate) fn sync(&mut self, lock: &LocalPackageLock, deps: &LocalPackageLockType) {
+    pub(crate) fn sync(&mut self, lock: &PackageLock, deps: &LockedPackageLockType) {
         match deps {
-            LocalPackageLockType::Regular => {
+            LockedPackageLockType::Regular => {
                 self.dependencies = lock.clone();
             }
-            LocalPackageLockType::Test => {
+            LockedPackageLockType::Test => {
                 self.test_dependencies = lock.clone();
             }
-            LocalPackageLockType::Build => {
+            LockedPackageLockType::Build => {
                 self.build_dependencies = lock.clone();
             }
+        }
+    }
+
+    pub(crate) fn merge(&mut self, lock: &PackageLock, deps: &LockedPackageLockType) {
+        match deps {
+            LockedPackageLockType::Regular => self.dependencies.merge(lock),
+            LockedPackageLockType::Test => self.test_dependencies.merge(lock),
+            LockedPackageLockType::Build => self.build_dependencies.merge(lock),
         }
     }
 }
@@ -1660,7 +1730,7 @@ fn migrate_entrypoints(
     Ok(())
 }
 
-fn integrity_err_not_found(package: &LocalPackage) -> LockfileIntegrityError {
+fn integrity_err_not_found(package: &LockedPackage) -> LockfileIntegrityError {
     LockfileIntegrityError::PackageNotFound(
         package.name().clone(),
         Box::new(package.version().clone()),
@@ -1727,7 +1797,7 @@ mod tests {
         )
         .unwrap();
 
-        let mock_hashes = LocalPackageHashes {
+        let mock_hashes = LockedPackageHashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                 .parse()
                 .unwrap(),
@@ -1745,10 +1815,9 @@ mod tests {
         let mut lockfile = tree.lockfile().unwrap().write_guard();
 
         let test_package = PackageSpec::parse("test1".to_string(), "0.1.0".to_string()).unwrap();
-        let test_local_package = LocalPackage::from(
+        let test_local_package = LockedPackage::from(
             &test_package,
             crate::lockfile::LockConstraint::Unconstrained,
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes.clone(),
@@ -1757,10 +1826,9 @@ mod tests {
 
         let test_dep_package =
             PackageSpec::parse("test2".to_string(), "0.1.0".to_string()).unwrap();
-        let mut test_local_dep_package = LocalPackage::from(
+        let mut test_local_dep_package = LockedPackage::from(
             &test_dep_package,
             crate::lockfile::LockConstraint::Constrained(">= 1.0.0".parse().unwrap()),
-            RockBinaries::default(),
             RemotePackageSource::Test,
             None,
             mock_hashes.clone(),

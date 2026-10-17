@@ -26,7 +26,7 @@ use crate::tree::{self, Tree, TreeError};
 use crate::tree::{Tree, TreeError};
 
 #[cfg(target_family = "unix")]
-use crate::build::Build;
+use crate::pipeline::build_local::Build;
 
 #[cfg(target_family = "unix")]
 const LUAROCKS_EXE: &str = "luarocks";
@@ -97,7 +97,9 @@ pub enum ExecLuaRocksError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
-    #[error("could not substitute '$(LUA_LIBDIR)' and '$(LUA_INCDIR)' variables in the luarocks config template")]
+    #[error(
+        "could not substitute '$(LUA_LIBDIR)' and '$(LUA_INCDIR)' variables in the luarocks config template"
+    )]
     #[diagnostic(forward(0))]
     VariableSubstitutionInConfig(#[from] VariableSubstitutionError),
     #[error("failed to run luarocks")]
@@ -165,6 +167,7 @@ impl LuaRocksInstallation {
                 .tree(&self.tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&self.config)
+                .behaviour(build::BuildBehaviour::Ignore)
                 .constraint(luarocks_req.version_req().clone().into())
                 .build()
                 .await?;

@@ -74,7 +74,7 @@
     '';
 in {
   fetchLuxDeps = mkTest "build-lux-helpers-test" {
-    luxHash = "sha256-DpkDMK6AV7Iy6YFbKbx+EEkDeGaAFbszNkLPhdVr+qY=";
+    luxHash = "sha256-XaA9FtwHtm8BSvjTyRHvAkgCZpbo48gNI5yfNQuRL78=";
   };
 
   importLuxLock = mkTest "build-lux-helpers-import-lock-test" {
@@ -98,7 +98,7 @@ in {
       pname = "fallo";
       version = "0-unstable-2026-03-25";
       inherit src;
-      luxHash = "sha256-DpkDMK6AV7Iy6YFbKbx+EEkDeGaAFbszNkLPhdVr+qY=";
+      luxHash = "sha256-XaA9FtwHtm8BSvjTyRHvAkgCZpbo48gNI5yfNQuRL78=";
     };
   in
     pkgs.runCommandLocal "build-lux-helpers-with-packages-test" {} ''

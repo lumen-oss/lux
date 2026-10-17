@@ -4,7 +4,7 @@ use super::{EntryType, InstallTree, RockLayout, Tree, TreeError};
 use crate::{
     config::Config,
     fs,
-    lockfile::{LocalPackage, Lockfile, ReadOnly},
+    lockfile::{LockedPackage, LockedPackageSpec, Lockfile, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageVersion},
 };
@@ -42,7 +42,7 @@ impl FlatDistTree {
         Ok(Self(tree))
     }
 
-    fn guard_no_conflicting_package(&self, package: &LocalPackage) -> Result<(), io::Error> {
+    fn guard_no_conflicting_package(&self, package: &LockedPackageSpec) -> Result<(), io::Error> {
         let lockfile = self.lockfile().map_err(io::Error::other)?;
         match lockfile.has_rock(&package.clone().into_package_req(), None) {
             Some(existing_package) => {
@@ -91,7 +91,7 @@ impl InstallTree for FlatDistTree {
         self.0.root()
     }
 
-    fn layout_for(&self, _package: &LocalPackage) -> RockLayout {
+    fn layout_for(&self, _package: &LockedPackageSpec) -> RockLayout {
         RockLayout::new(self.0.root(), self.0.bin())
     }
 
@@ -103,7 +103,7 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn prepare(&self, package: &LocalPackage) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError> {
         self.guard_no_conflicting_package(package)
             .map_err(TreeError::Io)?;
         let layout = self.layout_for(package);
@@ -113,7 +113,7 @@ impl InstallTree for FlatDistTree {
         Ok(())
     }
 
-    fn cleanup(&self, _package: &LocalPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+    fn cleanup(&self, _package: &LockedPackage, _entry_type: EntryType) -> Result<(), TreeError> {
         unreachable!("dist trees do not undergo cleanup for packages")
     }
 
@@ -133,7 +133,7 @@ impl InstallTree for FlatDistTree {
         self.0.test_tree(config)
     }
 
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LocalPackage>>, TreeError> {
+    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, TreeError> {
         self.0.list()
     }
 
