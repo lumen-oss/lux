@@ -28,11 +28,11 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
 
     let lua_package_req = data.lua_package_req;
 
-    let result = package_db.search(&lua_package_req);
+    let result = package_db.search(&lua_package_req).await;
 
     match data.output_format {
         OutputFormat::Json => {
-            let rock_to_version_map: HashMap<&PackageName, Vec<&PackageVersion>> =
+            let rock_to_version_map: HashMap<PackageName, Vec<PackageVersion>> =
                 HashMap::from_iter(result);
             println!(
                 "{}",

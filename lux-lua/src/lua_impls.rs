@@ -2782,10 +2782,12 @@ impl TypedUserData for PackageDBLua {
             "package_req",
             "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
         );
-        methods.add_method("search", |_, this, package_req: PackageReqLua| {
+        methods.add_async_method("search", |_, this, package_req: PackageReqLua| async move {
+            let _guard = lux_lib::lua::lua_runtime().enter();
             let results: HashMap<String, Vec<String>> = this
                 .0
                 .search(&package_req.0)
+                .await
                 .into_iter()
                 .map(|(name, versions)| {
                     (
@@ -2802,12 +2804,17 @@ impl TypedUserData for PackageDBLua {
             "package_req",
             "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
         );
-        methods.add_method("latest_match", |_, this, package_req: PackageReqLua| {
-            Ok(this
-                .0
-                .latest_match(&package_req.0, None)
-                .map(PackageSpecLua))
-        });
+        methods.add_async_method(
+            "latest_match",
+            |_, this, package_req: PackageReqLua| async move {
+                let _guard = lux_lib::lua::lua_runtime().enter();
+                Ok(this
+                    .0
+                    .latest_match(&package_req.0, None)
+                    .await
+                    .map(PackageSpecLua))
+            },
+        );
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add("Package database, used to look up remote rocks");

@@ -256,7 +256,7 @@ async fn download_remote_rock(
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
-    let remote_package = package_db.find(package_req, None)?;
+    let remote_package = package_db.find(package_req, None).await?;
     match &remote_package.source {
         RemotePackageSource::LuarocksRockspec(url) => {
             let package = &remote_package.spec;
@@ -441,7 +441,7 @@ async fn search_and_download_src_rock(
         binary: false,
         src: true,
     });
-    let remote_package = package_db.find(package_req, filter)?;
+    let remote_package = package_db.find(package_req, filter).await?;
     let source_url = remote_package
         .source
         .url()

@@ -73,7 +73,7 @@ async fn do_fetch_vendored_rock(
     let package = args.package;
     let package_db = args.package_db;
 
-    let package_spec = package_db.find(package, None)?.spec;
+    let package_spec = package_db.find(package, None).await?.spec;
     let rockspec = load_vendored_rockspec(vendor_dir, &package_spec).await?;
     match load_vendored_package(vendor_dir, &package_spec)? {
         VendoredPackage::Source(path) => Ok(RemoteRockDownload::RockspecOnly {
