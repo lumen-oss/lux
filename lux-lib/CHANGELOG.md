@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.65.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.65.0...lux-lib-v0.65.1) `lux-lib` - 2026-10-15
+
+### Fixed
+- *(generate-rockspec)* source `file://` prefix typo ([#2023](https://github.com/lumen-oss/lux/pull/2023))
+
 ## [0.65.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.64.2...lux-lib-v0.65.0) `lux-lib` - 2026-10-05
 
 ### Added
