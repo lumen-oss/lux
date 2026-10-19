@@ -19,7 +19,11 @@ use crate::workspace::current_workspace_or_user_tree;
 
 #[derive(Args)]
 pub struct Doc {
-    package: PackageReq,
+    /// The package to show documentation for.{n}
+    /// If not set, lux will use the package installed in the tree,{n}
+    /// or prompt to select one if the tree has many.
+    #[arg(short, long, visible_short_alias = 'p')]
+    package: Option<PackageReq>,
 
     /// Ignore local docs and open the package's homepage in a browser.
     #[arg(long)]
@@ -28,14 +32,52 @@ pub struct Doc {
 
 pub async fn doc(args: Doc, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
-    let package_id = match tree.match_rocks(&args.package)? {
+    let package_req = match &args.package {
+        Some(package_req) => package_req.clone(),
+        None => {
+            let candidates = tree
+                .list()?
+                .into_values()
+                .flatten()
+                .map(|pkg| pkg.into_package_spec().into_package_req().to_string())
+                .unique()
+                .sorted()
+                .collect_vec();
+            let selected = match candidates.as_slice() {
+                [] => {
+                    return Err(miette!(
+                        help = "install a package into this tree, or specify a package with '--package=<PACKAGE>'",
+                        "no packages found in this tree"
+                    ));
+                }
+                [candidate] => candidate.clone(),
+                candidates => {
+                    if config.no_prompt() {
+                        return Err(miette!(
+                            help = "specify the package with '--package=<PACKAGE>'",
+                            "multiple packages found in this tree, but no package specified"
+                        ));
+                    }
+                    Select::new(
+                        "Please select a package to show documentation for.",
+                        candidates.to_vec(),
+                    )
+                    .prompt()
+                    .into_diagnostic()
+                    .wrap_err("error selecting from multiple packages")?
+                }
+            };
+            PackageReq::parse(&selected)?
+        }
+    };
+    let package_id = match tree.match_rocks(&package_req)? {
         RockMatches::NotFound(package_req) => {
             Err(miette!("no package matching {package_req} found"))
         }
         RockMatches::Many(_package_ids) => Err(miette!(
             help = "specify an exact package (<name>@<version>) or narrow the version requirement",
             "found multiple packages matching {}",
-            &args.package
+            &package_req
         )),
         RockMatches::Single(package_id) => Ok(package_id),
     }?;
