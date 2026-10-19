@@ -4092,9 +4092,9 @@ dependencies = [
 
 [[package]]
 name = "nix-nar"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "757bc2a75b33415c4732599e57309e01966ee019356ed3c105172cecad5e7ac1"
+checksum = "6eca6464876368b6348b66f0af30e7da18166389d7a05998f4b93cc2530b16cc"
 dependencies = [
  "camino",
  "is_executable",
