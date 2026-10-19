@@ -302,7 +302,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     let host = Triple::host();
     let target = host.to_string();
     let cl = cc::windows_registry::find_tool(&target, "cl.exe").ok_or(BuildLuaError::ClNotFound)?;
-    for (k, v) in cl.env() {
+    for (k, v) in cl.get_envs() {
         msvcbuild.env(k, v);
     }
     fs::tokio::create_dir_all(&install_dir)
