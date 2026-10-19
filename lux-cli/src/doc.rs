@@ -5,7 +5,6 @@ use lux_lib::{
     config::Config,
     lockfile::LockedPackage,
     lua_rockspec::RemoteLuaRockspec,
-    lua_version::LuaVersion,
     package::PackageReq,
     rockspec::Rockspec,
     tree::{InstallTree, RockMatches, Tree},
@@ -15,6 +14,8 @@ use std::io::Read;
 use std::path::Path;
 use url::Url;
 use walkdir::WalkDir;
+
+use crate::workspace::current_workspace_or_user_tree;
 
 #[derive(Args)]
 pub struct Doc {
@@ -26,7 +27,7 @@ pub struct Doc {
 }
 
 pub async fn doc(args: Doc, config: Config) -> Result<()> {
-    let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+    let tree = current_workspace_or_user_tree(&config)?;
     let package_id = match tree.match_rocks(&args.package)? {
         RockMatches::NotFound(package_req) => {
             Err(miette!("no package matching {package_req} found"))
