@@ -222,7 +222,7 @@ async fn update_dependency_tree(
         .into_iter()
         .filter(|pkg| is_included(pkg, packages))
         .collect_vec();
-    let updated_dependencies = update(dependencies, package_db, tree.clone(), &lockfile, config).await?;
+    let updated_dependencies = update(dependencies, package_db, &tree, &lockfile, config).await?;
     if !updated_dependencies.is_empty() {
         // NOTE: Read the install tree lockfile *after* updating, otherwise we
         // sync the workspace lockfile with a pre-update snapshot.
@@ -256,13 +256,13 @@ async fn update_install_tree(
         .into_iter()
         .filter(|pkg| is_included(pkg, &args.packages))
         .collect_vec();
-    update(packages, package_db, tree, &lockfile, args.config).await
+    update(packages, package_db, &tree, &lockfile, args.config).await
 }
 
 async fn update(
     packages: Vec<(LockedPackage, PackageReq)>,
     package_db: PackageDB,
-    tree: Tree,
+    tree: &Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
@@ -287,7 +287,7 @@ async fn update(
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .remove()
             .await?;
-        let (updated_packages, _lockfile) = InstallPackages::new(config, &tree)
+        let (updated_packages, _lockfile) = InstallPackages::new(config, tree)
             .packages(
                 updatable
                     .iter()
