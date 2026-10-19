@@ -15,7 +15,8 @@ use crate::workspace::{sync_dependencies_if_locked, PackageReqOrGitShorthand};
 pub struct Add {
     /// Package or list of packages to install and add to the project's dependencies. {n}
     /// Examples: "pkg", "pkg@1.0.0", "pkg>=1.0.0" {n}
-    /// If you do not specify a version requirement, lux will fetch the latest version. {n}
+    /// If you do not specify a version requirement, lux will add a pessimistic `~>` {n}
+    /// constraint on the latest version. {n}
     /// {n}
     /// You can also specify git packages by providing a git URL shorthand. {n}
     /// Example: "github:owner/repo" {n}

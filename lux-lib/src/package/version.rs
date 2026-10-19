@@ -71,6 +71,22 @@ impl PackageVersion {
         }
     }
 
+    /// A `~>` version requirement that allows non-breaking updates, or `None` if this is
+    /// not a SemVer version.
+    /// Following the SemVer conventions around zero versions, the most significant non-zero
+    /// component is kept, so that only the components to its right may change.
+    pub(crate) fn to_pessimistic_version_req(&self) -> Option<String> {
+        let PackageVersion::SemVer(sem_ver) = self else {
+            return None;
+        };
+        let version = &sem_ver.version;
+        Some(match (version.major, version.minor) {
+            (0, 0) => format!("~> 0.0.{}", version.patch),
+            (0, minor) => format!("~> 0.{minor}"),
+            (major, _) => format!("~> {major}"),
+        })
+    }
+
     pub(crate) fn is_semver(&self) -> bool {
         matches!(self, PackageVersion::SemVer(_))
     }
@@ -946,6 +962,38 @@ mod tests {
                 component_count: 3,
                 specrev: 1.into()
             })
+        );
+    }
+
+    #[test]
+    fn to_pessimistic_version_req() {
+        for (version, req, expected) in [
+            ("1.5.6-2", "~> 1", ">=1.0.0, <2.0.0"),
+            ("0.5.6-2", "~> 0.5", ">=0.5.0, <0.6.0"),
+            ("0.0.6-2", "~> 0.0.6", ">=0.0.6, <0.0.7"),
+        ] {
+            let pessimistic = PackageVersion::parse(version)
+                .unwrap()
+                .to_pessimistic_version_req()
+                .unwrap();
+            assert_eq!(pessimistic, req);
+            let req = PackageVersionReq::parse(&pessimistic).unwrap();
+            assert_eq!(req.to_string(), expected);
+        }
+
+        let req = PackageVersionReq::parse("~> 1").unwrap();
+        assert!(req.matches(&PackageVersion::parse("1.9.0-2").unwrap()));
+        assert!(!req.matches(&PackageVersion::parse("2.0.0-1").unwrap()));
+
+        let req = PackageVersionReq::parse("~> 0.5").unwrap();
+        assert!(req.matches(&PackageVersion::parse("0.5.9-1").unwrap()));
+        assert!(!req.matches(&PackageVersion::parse("0.6.0-1").unwrap()));
+
+        assert_eq!(
+            PackageVersion::parse("scm")
+                .unwrap()
+                .to_pessimistic_version_req(),
+            None
         );
     }
 

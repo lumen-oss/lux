@@ -345,7 +345,11 @@ impl Project {
                         package_db
                             .latest_version(dep.name())
                             .await
-                            .map(|latest_version| latest_version.to_string())
+                            .map(|latest_version| {
+                                latest_version
+                                    .to_pessimistic_version_req()
+                                    .unwrap_or_else(|| latest_version.to_string())
+                            })
                             .unwrap_or_else(|| dep.version_req().to_string())
                     } else {
                         dep.version_req().to_string()
