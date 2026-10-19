@@ -68,6 +68,12 @@ pub enum DiscoverError {
     #[error("failed to fetch vendored package for '{0}'")]
     #[diagnostic(forward(1))]
     FetchVendored(PackageReq, Box<operations::FetchVendoredError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Project(#[from] crate::project::ProjectError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LocalRockspec(#[from] crate::project::IntoLocalRockspecError),
 }
 
 #[cfg(test)]

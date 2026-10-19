@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     config::{Config, ConfigError},
     lockfile::{LockfileIntegrityError, PackageLock},
-    lua_rockspec::RemoteLuaRockspec,
+    lua_rockspec::{RemoteLuaRockspec, RockSourceSpec},
     manifest::{Manifest, ManifestError},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
     operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
@@ -15,6 +15,7 @@ use crate::{
         discover::{DiscoverError, FoundPackage},
         materialise::PackageSource,
     },
+    project::Project,
     remote_package_source::RemotePackageSource,
     workspace::{Workspace, WorkspaceError},
 };
@@ -389,6 +390,10 @@ impl PackageDB {
         spec: &PackageInstallSpec,
         config: &Config,
     ) -> Result<FoundPackage, DiscoverError> {
+        if let Some(found) = resolve_path_project(spec)? {
+            return Ok(found);
+        }
+
         if let Some(source) = &spec.source {
             let download = RemoteRockDownload::from_package_req_and_source_spec(
                 spec.package.clone(),
@@ -518,5 +523,60 @@ impl From<Vec<PackageLock>> for PackageDB {
         Self {
             providers: vec![PackageProvider::Lockfile(locks)],
         }
+    }
+}
+
+/// Resolves a `path` dependency from the project TOML in the given directory.
+/// Returns `None` for non-project paths or if the project's name does not match the spec.
+fn resolve_path_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, DiscoverError> {
+    if let Some(RockSourceSpec::File(path)) = &spec.source {
+        Ok(match Project::from_exact(path)? {
+            Some(project) if project.toml().package() == spec.package.name() => {
+                Some(FoundPackage::from_project_root(
+                    project.local_remote_rockspec()?,
+                    project.root().to_path_buf(),
+                ))
+            }
+            _ => None,
+        })
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        build::BuildBehaviour, config::ConfigBuilder, rockspec::Rockspec, tree::EntryType,
+    };
+    use std::path::PathBuf;
+
+    // https://github.com/lumen-oss/lux/issues/2018
+    #[tokio::test]
+    async fn resolves_path_dependency_from_project_manifest() {
+        let bar_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/multi-project-local-deps/projects/bar");
+
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let spec = PackageInstallSpec::new(
+            PackageReq::new("bar".into(), Some("1.0.0".into())).unwrap(),
+            EntryType::DependencyOnly,
+        )
+        .build_behaviour(BuildBehaviour::Ignore)
+        .maybe_source(Some(RockSourceSpec::File(bar_dir)))
+        .build();
+
+        let found = PackageDB::from_local(Vec::new())
+            .resolve(&spec, &config)
+            .await
+            .unwrap();
+
+        assert!(found
+            .rockspec
+            .dependencies()
+            .current_platform()
+            .iter()
+            .any(|dependency| dependency.name().to_string() == "foo"));
     }
 }
