@@ -798,10 +798,12 @@ mod tests {
 
     use super::*;
     use crate::{
+        config::ConfigBuilder,
         fs,
         lua_rockspec::ExternalDependencySpec,
         manifest::{Manifest, ManifestMetadata},
         package::PackageReq,
+        package_db::PackageDB,
         rockspec::Rockspec,
     };
 
@@ -822,12 +824,15 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(
-            Url::parse("https://example.com").unwrap(),
-            metadata,
-            Default::default(),
-        )
-        .into();
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let package_db = PackageDB::from_manifest(
+            Manifest::new(
+                Url::parse("https://example.com").unwrap(),
+                metadata,
+                Default::default(),
+            ),
+            &config,
+        );
 
         project
             .add(
@@ -910,12 +915,15 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(
-            Url::parse("https://example.com").unwrap(),
-            metadata,
-            Default::default(),
-        )
-        .into();
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let package_db = PackageDB::from_manifest(
+            Manifest::new(
+                Url::parse("https://example.com").unwrap(),
+                metadata,
+                Default::default(),
+            ),
+            &config,
+        );
 
         let unknown_dependencies = [PackageReq::from_str("not-a-package-in-any-manifest").unwrap()];
         let err = project
@@ -946,13 +954,15 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(
-            Url::parse("https://example.com").unwrap(),
-            metadata,
-            Default::default(),
-        )
-        .into();
-        let config = crate::config::ConfigBuilder::default().build().unwrap();
+        let config = ConfigBuilder::default().build().unwrap();
+        let package_db = PackageDB::from_manifest(
+            Manifest::new(
+                Url::parse("https://example.com").unwrap(),
+                metadata,
+                Default::default(),
+            ),
+            &config,
+        );
 
         let base = r#"package = "sample-project-no-build-spec"
 version = "0.1.0"

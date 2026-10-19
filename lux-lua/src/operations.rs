@@ -362,6 +362,7 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
     Ok(remote_db
         .search(&query.parse().into_lua_err()?)
         .await
+        .into_lua_err()?
         .into_iter()
         .map(|(name, versions)| {
             (

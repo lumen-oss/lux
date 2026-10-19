@@ -2788,6 +2788,7 @@ impl TypedUserData for PackageDBLua {
                 .0
                 .search(&package_req.0)
                 .await
+                .into_lua_err()?
                 .into_iter()
                 .map(|(name, versions)| {
                     (

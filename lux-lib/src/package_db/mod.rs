@@ -20,7 +20,7 @@ use crate::{
     workspace::{Workspace, WorkspaceError},
 };
 use itertools::Itertools;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use url::Url;
 
 use miette::Diagnostic;
@@ -76,9 +76,43 @@ pub(crate) enum PackageProvider {
     /// Packages pinned in the lockfile.
     Lockfile(Vec<PackageLock>),
     /// A luarocks manifest.
-    Manifest(Manifest),
+    Manifest(ManifestProvider),
     /// The manifest cache.
     Closure(ClosureProvider),
+}
+
+/// A luarocks manifest that is only fetched when it is first needed.
+#[derive(Clone, Debug)]
+pub(crate) struct ManifestProvider {
+    server_url: Url,
+    config: Box<Config>,
+    manifest: Arc<OnceCell<Manifest>>,
+}
+
+impl ManifestProvider {
+    fn new(server_url: Url, config: &Config) -> Self {
+        Self {
+            server_url,
+            config: Box::new(config.clone()),
+            manifest: Arc::new(OnceCell::new()),
+        }
+    }
+
+    #[cfg(test)]
+    fn from_manifest(manifest: Manifest, config: &Config) -> Self {
+        Self {
+            server_url: manifest.server_url().clone(),
+            config: Box::new(config.clone()),
+            manifest: Arc::new(OnceCell::from(manifest)),
+        }
+    }
+
+    async fn get(&self) -> Result<&Manifest, ManifestError> {
+        let manifest = self
+            .manifest
+            .get_or_try_init(|| Manifest::from_config(self.server_url.clone(), &self.config));
+        Box::pin(manifest).await
+    }
 }
 
 impl PackageProvider {
@@ -86,13 +120,13 @@ impl PackageProvider {
         &self,
         package_req: &PackageReq,
         filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<RemotePackage> {
+    ) -> Result<Option<RemotePackage>, SearchError> {
         match self {
-            Self::Local(packages) => packages
+            Self::Local(packages) => Ok(packages
                 .iter()
                 .find(|found| found.remote.spec.name() == package_req.name())
-                .map(|found| found.remote.clone()),
-            Self::Lockfile(locks) => locks
+                .map(|found| found.remote.clone())),
+            Self::Lockfile(locks) => Ok(locks
                 .iter()
                 .filter_map(|lock| lock.has_rock(package_req, filter.clone()))
                 .map(|locked_package| {
@@ -102,9 +136,9 @@ impl PackageProvider {
                         locked_package.source_url().cloned(),
                     )
                 })
-                .next(),
-            Self::Manifest(manifest) => manifest.find(package_req, filter),
-            Self::Closure(closure) => closure.find(package_req, filter).await,
+                .next()),
+            Self::Manifest(manifest) => Ok(manifest.get().await?.find(package_req, filter)),
+            Self::Closure(closure) => Ok(closure.find(package_req, filter).await),
         }
     }
 
@@ -123,9 +157,12 @@ impl PackageProvider {
         }
     }
 
-    async fn search(&self, package_req: &PackageReq) -> Vec<(PackageName, Vec<PackageVersion>)> {
+    async fn search(
+        &self,
+        package_req: &PackageReq,
+    ) -> Result<Vec<(PackageName, Vec<PackageVersion>)>, SearchError> {
         match self {
-            Self::Local(packages) => packages
+            Self::Local(packages) => Ok(packages
                 .iter()
                 .filter_map(|package| {
                     let name = package.remote.spec.name();
@@ -139,10 +176,10 @@ impl PackageProvider {
                         None
                     }
                 })
-                .collect(),
+                .collect()),
             // NOTE: This doesn't group packages by name, but we don't care for now,
             // as we shouldn't need to use this function with a lockfile.
-            Self::Lockfile(locks) => locks
+            Self::Lockfile(locks) => Ok(locks
                 .iter()
                 .flat_map(|lock| lock.rocks().values())
                 .filter_map(|package| {
@@ -153,8 +190,10 @@ impl PackageProvider {
                         None
                     }
                 })
-                .collect(),
-            Self::Manifest(manifest) => manifest
+                .collect()),
+            Self::Manifest(manifest) => Ok(manifest
+                .get()
+                .await?
                 .metadata()
                 .repository
                 .iter()
@@ -173,9 +212,9 @@ impl PackageProvider {
                         None
                     }
                 })
-                .collect(),
+                .collect()),
             // The cache only supports lookups by exact name, not substring search.
-            Self::Closure(_) => Vec::new(),
+            Self::Closure(_) => Ok(Vec::new()),
         }
     }
 }
@@ -294,17 +333,31 @@ impl PackageDB {
             )));
         }
         for server in config.enabled_dev_servers()? {
-            let manifest = Manifest::from_config(server, config).await?;
-            providers.push(PackageProvider::Manifest(manifest));
+            providers.push(PackageProvider::Manifest(ManifestProvider::new(
+                server, config,
+            )));
         }
         for server in config.extra_servers() {
-            let manifest = Manifest::from_config(server.clone(), config).await?;
-            providers.push(PackageProvider::Manifest(manifest));
+            providers.push(PackageProvider::Manifest(ManifestProvider::new(
+                server.clone(),
+                config,
+            )));
         }
-        providers.push(PackageProvider::Manifest(
-            Manifest::from_config(config.server().clone(), config).await?,
-        ));
+        providers.push(PackageProvider::Manifest(ManifestProvider::new(
+            config.server().clone(),
+            config,
+        )));
         Ok(Self { providers })
+    }
+
+    /// Builds a package database from a single, already loaded manifest.
+    #[cfg(test)]
+    pub(crate) fn from_manifest(manifest: Manifest, config: &Config) -> Self {
+        Self {
+            providers: vec![PackageProvider::Manifest(ManifestProvider::from_manifest(
+                manifest, config,
+            ))],
+        }
     }
 
     /// Builds a package database that prefers the workspace lockfile, falling
@@ -376,7 +429,7 @@ impl PackageDB {
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Result<RemotePackage, SearchError> {
         for provider in &self.providers {
-            if let Some(package) = provider.find(package_req, filter.clone()).await {
+            if let Some(package) = provider.find(package_req, filter.clone()).await? {
                 return Ok(package);
             }
         }
@@ -427,7 +480,7 @@ impl PackageDB {
 
             // Otherwise break on the first provider that has the package. The `break` prevents a
             // further invocation of `provider.resolve` on a provider we don't want.
-            if provider.find(&spec.package, None).await.is_some() {
+            if provider.find(&spec.package, None).await?.is_some() {
                 break;
             }
         }
@@ -482,12 +535,12 @@ impl PackageDB {
     pub async fn search(
         &self,
         package_req: &PackageReq,
-    ) -> Vec<(PackageName, Vec<PackageVersion>)> {
+    ) -> Result<Vec<(PackageName, Vec<PackageVersion>)>, SearchError> {
         let mut results = Vec::new();
         for provider in &self.providers {
-            results.extend(provider.search(package_req).await);
+            results.extend(provider.search(package_req).await?);
         }
-        results
+        Ok(results)
     }
 
     /// Find the latest version for a package by name.
@@ -506,14 +559,6 @@ impl PackageDB {
         match self.find(package_req, filter).await {
             Ok(result) => Some(result.spec),
             Err(_) => None,
-        }
-    }
-}
-
-impl From<Manifest> for PackageDB {
-    fn from(manifest: Manifest) -> Self {
-        Self {
-            providers: vec![PackageProvider::Manifest(manifest)],
         }
     }
 }

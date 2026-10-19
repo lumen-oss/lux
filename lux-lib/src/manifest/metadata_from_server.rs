@@ -333,9 +333,6 @@ mod tests {
         )
         .unwrap();
         let cache_dir = assert_fs::TempDir::new().unwrap();
-        let cache = cache_dir.join("manifest-5.1");
-        fs::tokio::write(&cache, &manifest_content).await.unwrap();
-        let _metadata = fs::tokio::metadata(&cache).await.unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir.to_path_buf()))
@@ -343,7 +340,16 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        let result = manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config)
+        let server_url = Url::parse(&url_str).unwrap();
+        let manifest_url = mk_manifest_url(
+            &server_url,
+            &LuaVersion::Lua51.version_compatibility_str(),
+            &config,
+        )
+        .unwrap();
+        let cache = mk_manifest_cache(&manifest_url, &config).await.unwrap();
+        fs::tokio::write(&cache, &manifest_content).await.unwrap();
+        let result = manifest_from_cache_or_server(&server_url, &config)
             .await
             .unwrap();
         assert_eq!(result, manifest_content);

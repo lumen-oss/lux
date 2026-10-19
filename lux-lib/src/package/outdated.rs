@@ -72,8 +72,10 @@ mod tests {
     use url::Url;
 
     use crate::{
+        config::ConfigBuilder,
         manifest::{Manifest, ManifestMetadata},
         package::PackageSpec,
+        package_db::PackageDB,
     };
 
     #[tokio::test]
@@ -82,12 +84,15 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let package_db = Manifest::new(
-            Url::parse("https://example.com").unwrap(),
-            metadata,
-            Default::default(),
-        )
-        .into();
+        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let package_db = PackageDB::from_manifest(
+            Manifest::new(
+                Url::parse("https://example.com").unwrap(),
+                metadata,
+                Default::default(),
+            ),
+            &config,
+        );
 
         let test_package =
             PackageSpec::parse("lua-cjson".to_string(), "2.0.0".to_string()).unwrap();
