@@ -12,6 +12,9 @@ use nonempty::NonEmpty;
 use semver::{Comparator, Error, Op, Prerelease, Version, VersionReq};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
+
+mod upgrade;
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum VersionReqToVersionError {
     #[error("cannot parse version from non-exact version requirement '{0}'")]
@@ -123,16 +126,9 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
                             pre: comparator.pre.clone(),
                             build: semver::BuildMetadata::EMPTY,
                         };
-                        let component_count = if comparator.patch.is_some() {
-                            3
-                        } else if comparator.minor.is_some() {
-                            2
-                        } else {
-                            1
-                        };
                         Ok(PackageVersion::SemVer(SemVer {
                             version,
-                            component_count,
+                            component_count: comparator_component_count(comparator),
                             specrev: 1.into(),
                         }))
                     }
@@ -380,6 +376,16 @@ fn cmp_prerelease(a: &Prerelease, b: &Prerelease) -> Ordering {
         (false, true) => Ordering::Greater,
         (true, false) => Ordering::Less,
         (false, false) => a.cmp(b),
+    }
+}
+
+fn comparator_component_count(comparator: &Comparator) -> usize {
+    if comparator.patch.is_some() {
+        3
+    } else if comparator.minor.is_some() {
+        2
+    } else {
+        1
     }
 }
 

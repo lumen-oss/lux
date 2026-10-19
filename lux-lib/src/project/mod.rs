@@ -37,7 +37,7 @@ use crate::{
 };
 use crate::{
     lockfile::PinnedState,
-    package::{PackageName, PackageReq},
+    package::{PackageName, PackageReq, PackageVersionReq},
 };
 
 pub(crate) mod gen;
@@ -498,65 +498,7 @@ impl Project {
             | LuaDependencyType::Build(deps)
             | LuaDependencyType::Test(deps) => {
                 for dep in deps {
-                    let mut dep_item = table[dep.to_string()].clone();
-                    match &dep_item {
-                        Item::Value(_) => {
-                            let dep_version_str = package_db
-                                .latest_version(dep)
-                                .await
-                                .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?
-                                .to_string();
-                            table[dep.to_string()] = toml_edit::value(dep_version_str);
-                        }
-                        Item::Table(tbl) => {
-                            match tbl.get("git") {
-                                Some(git_item) => {
-                                    let git_value =
-                                        git_item.clone().into_value().map_err(|err| {
-                                            ProjectEditError::ExpectedValue(Box::new(err))
-                                        })?;
-                                    let git_url_str = git_value.as_str().ok_or(
-                                        ProjectEditError::ExpectedString(Box::new(
-                                            git_value.clone(),
-                                        )),
-                                    )?;
-                                    let shorthand: RemoteGitUrlShorthand = git_url_str.parse()?;
-                                    match git::utils::latest_semver_tag_or_commit_sha(
-                                        &shorthand.into(),
-                                        config,
-                                    )? {
-                                        SemVerTagOrSha::SemVerTag(latest_tag) => {
-                                            table[dep.to_string()]["version"] =
-                                                Item::Value(latest_tag.clone().into());
-                                            if latest_tag.contains("-") {
-                                                // Tag contains a specrev.
-                                                table[dep.to_string()]["rev"] =
-                                                    Item::Value(latest_tag.into());
-                                            }
-                                        }
-                                        SemVerTagOrSha::CommitSha(latest_sha) => {
-                                            table[dep.to_string()]["version"] =
-                                                Item::Value(latest_sha.into());
-                                        }
-                                    }
-                                    table[dep.to_string()] = dep_item;
-                                }
-                                None => {
-                                    let dep_version_str = package_db
-                                        .latest_version(dep)
-                                        .await
-                                        .ok_or(ProjectEditError::LatestVersionNotFound(
-                                            dep.clone(),
-                                        ))?
-                                        .to_string();
-                                    dep_item["version".to_string()] =
-                                        toml_edit::value(dep_version_str);
-                                    table[dep.to_string()] = dep_item;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
+                    upgrade_dependency(table, dep, package_db, config).await?;
                 }
             }
         }
@@ -731,6 +673,94 @@ pub(crate) fn project_files(src: &Path) -> Vec<PathBuf> {
         .collect_vec()
 }
 
+async fn upgraded_version_req(
+    existing: Option<&str>,
+    dep: &PackageName,
+    package_db: &PackageDB,
+) -> Result<Option<String>, ProjectEditError> {
+    if let Some(existing) = existing.and_then(|existing| PackageVersionReq::parse(existing).ok()) {
+        let latest = package_db
+            .latest_version(dep)
+            .await
+            .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?;
+        Ok(latest.upgrade_version_req(&existing))
+    } else {
+        Ok(None)
+    }
+}
+
+async fn upgrade_dependency(
+    table: &mut Item,
+    dep: &PackageName,
+    package_db: &PackageDB,
+    config: &Config,
+) -> Result<(), ProjectEditError> {
+    let mut dep_item = table[dep.to_string()].clone();
+    match &dep_item {
+        Item::Value(val) => {
+            if let Some(upgraded) = upgraded_version_req(val.as_str(), dep, package_db).await? {
+                table[dep.to_string()] = toml_edit::value(upgraded);
+            }
+        }
+        Item::Table(tbl) => {
+            if let Some(git_item) = tbl.get("git") {
+                let latest = resolve_git_latest(git_url_from_item(git_item)?, config)?;
+                apply_git_latest(table, dep, latest);
+            } else {
+                if let Some(upgraded) = upgraded_version_req(
+                    dep_item.get("version").and_then(Item::as_str),
+                    dep,
+                    package_db,
+                )
+                .await?
+                {
+                    dep_item["version"] = toml_edit::value(upgraded);
+                }
+                table[dep.to_string()] = dep_item;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn git_url_from_item(git_item: &Item) -> Result<RemoteGitUrlShorthand, ProjectEditError> {
+    let git_value = git_item
+        .clone()
+        .into_value()
+        .map_err(|err| ProjectEditError::ExpectedValue(Box::new(err)))?;
+    let git_url_str = git_value
+        .as_str()
+        .ok_or(ProjectEditError::ExpectedString(Box::new(
+            git_value.clone(),
+        )))?;
+    Ok(git_url_str.parse()?)
+}
+
+fn resolve_git_latest(
+    url: RemoteGitUrlShorthand,
+    config: &Config,
+) -> Result<SemVerTagOrSha, ProjectEditError> {
+    Ok(git::utils::latest_semver_tag_or_commit_sha(
+        &url.into(),
+        config,
+    )?)
+}
+
+fn apply_git_latest(table: &mut Item, dep: &PackageName, latest: SemVerTagOrSha) {
+    match latest {
+        SemVerTagOrSha::SemVerTag(latest_tag) => {
+            table[dep.to_string()]["version"] = Item::Value(latest_tag.clone().into());
+            if latest_tag.contains("-") {
+                table[dep.to_string()]["rev"] = Item::Value(latest_tag.into());
+            }
+        }
+        SemVerTagOrSha::CommitSha(latest_sha) => {
+            table[dep.to_string()]["version"] = Item::Value(latest_sha.into());
+        }
+    }
+}
+
 fn prepare_dependency_tables(project_toml: &mut DocumentMut) {
     if !project_toml.contains_table("dependencies") {
         if let Ok(mut table) = toml_edit::table().into_table() {
@@ -901,6 +931,59 @@ mod tests {
             fs::sync::read_to_string(project.toml_path()).unwrap(),
             toml_before
         );
+    }
+
+    #[tokio::test]
+    async fn test_upgrade_preserves_version_req_style() {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/no-build-spec/");
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+        let project_root: PathBuf = project_root.path().into();
+        let toml_path = project_root.join("lux.toml");
+
+        let test_manifest_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
+        let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
+        let metadata = ManifestMetadata::new(&content).unwrap();
+        let package_db = Manifest::new(
+            Url::parse("https://example.com").unwrap(),
+            metadata,
+            Default::default(),
+        )
+        .into();
+        let config = crate::config::ConfigBuilder::default().build().unwrap();
+
+        let base = r#"package = "sample-project-no-build-spec"
+version = "0.1.0"
+lua = ">=5.1"
+
+[source]
+url = "https://github.com/lumen-oss/luarocks-stub"
+
+[build]
+type = "builtin"
+"#;
+        for (input, expected) in [
+            ("30log = \"~> 1.0\"", "30log = \"~> 1.3\""),
+            ("30log = \"~> 1\"", "30log = \"~> 1\""),
+            ("30log = \">= 1.0.0\"", "30log = \">= 1.0.0\""),
+            ("30log = \"1.0.0\"", "30log = \"1.3.0\""),
+        ] {
+            std::fs::write(&toml_path, format!("{base}\n[dependencies]\n{input}\n")).unwrap();
+            let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+            let packages = [PackageName::from("30log")];
+            project
+                .upgrade(
+                    LuaDependencyType::Regular(packages.iter().collect()),
+                    &package_db,
+                    &config,
+                )
+                .await
+                .unwrap();
+            let rewritten = std::fs::read_to_string(&toml_path).unwrap();
+            assert!(rewritten.contains(expected), "input {input}: {rewritten}");
+        }
     }
 
     #[tokio::test]

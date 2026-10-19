@@ -156,7 +156,6 @@ async fn update_workspace(
     args: Update<'_>,
     package_db: PackageDB,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
-    let mut project_lockfile = workspace.lockfile()?.write_guard();
     let tree = workspace.tree(args.config)?;
 
     let sync_report = Sync::new(&workspace, args.config)
@@ -165,6 +164,8 @@ async fn update_workspace(
         .validate_integrity(args.validate_integrity.unwrap_or(false))
         .sync()
         .await?;
+
+    let mut project_lockfile = workspace.lockfile()?.write_guard();
 
     let updated_dependencies = update_dependency_tree(
         tree,
@@ -194,7 +195,7 @@ async fn update_workspace(
         build_tree,
         &mut project_lockfile,
         LockedPackageLockType::Build,
-        package_db.clone(),
+        package_db,
         args.config,
         &args.build_dependencies,
     )
@@ -222,9 +223,9 @@ async fn update_dependency_tree(
         .into_iter()
         .filter(|pkg| is_included(pkg, packages))
         .collect_vec();
-    let updated_lockfile = tree.lockfile()?;
-    let updated_dependencies = update(dependencies, package_db, tree, &lockfile, config).await?;
+    let updated_dependencies = update(dependencies, package_db, &tree, &lockfile, config).await?;
     if !updated_dependencies.is_empty() {
+        let updated_lockfile = tree.lockfile()?;
         project_lockfile.sync(updated_lockfile.local_pkg_lock(), &lock_type);
     }
     Ok(updated_dependencies)
@@ -254,13 +255,13 @@ async fn update_install_tree(
         .into_iter()
         .filter(|pkg| is_included(pkg, &args.packages))
         .collect_vec();
-    update(packages, package_db, tree, &lockfile, args.config).await
+    update(packages, package_db, &tree, &lockfile, args.config).await
 }
 
 async fn update(
     packages: Vec<(LockedPackage, PackageReq)>,
     package_db: PackageDB,
-    tree: Tree,
+    tree: &Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
@@ -285,7 +286,7 @@ async fn update(
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .remove()
             .await?;
-        let (updated_packages, _lockfile) = InstallPackages::new(config, &tree)
+        let (updated_packages, _lockfile) = InstallPackages::new(config, tree)
             .packages(
                 updatable
                     .iter()
@@ -316,7 +317,7 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, Pack
                     RemotePackageSource::Test => false,
                 }
         })
-        .map(|package| (package.clone(), package.to_package().into_package_req()))
+        .map(|package| (package.clone(), package.spec().as_package_req()))
         .collect_vec()
 }
 
@@ -334,4 +335,77 @@ fn mk_install_spec(
         .pin(PinnedState::Unpinned)
         .opt(package.opt())
         .build()
+}
+
+#[cfg(all(test, feature = "impure_tests"))]
+mod tests {
+    use std::path::PathBuf;
+
+    use assert_fs::prelude::PathCopy;
+
+    use crate::{
+        config::ConfigBuilder, lockfile::LockedPackageLockType, lua_version::LuaVersion,
+        package_db::PackageDB, workspace::Workspace,
+    };
+
+    use super::Update;
+
+    #[tokio::test]
+    async fn update_preserves_pessimistic_req_and_persists_lockfile() {
+        let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/no-build-spec/");
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.copy_from(sample, &["**"]).unwrap();
+        let toml_path = temp.path().join("lux.toml");
+        let manifest = std::fs::read_to_string(&toml_path).unwrap();
+        std::fs::write(
+            &toml_path,
+            format!("{manifest}\n[dependencies]\n30log = \"~> 0.9\"\n"),
+        )
+        .unwrap();
+
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(Some(LuaVersion::Lua51))
+            .build()
+            .unwrap();
+        let package_db = PackageDB::from_config(&config).await.unwrap();
+
+        let mut workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
+        workspace
+            .members_mut()
+            .iter_mut()
+            .next()
+            .unwrap()
+            .upgrade_all(&package_db, &config)
+            .await
+            .unwrap();
+
+        let rewritten = std::fs::read_to_string(&toml_path).unwrap();
+        assert!(
+            rewritten.contains("30log = \"~>"),
+            "upgrade overwrote the pessimistic req: {rewritten}"
+        );
+        assert!(
+            !rewritten.contains("30log = \"~> 0.9\""),
+            "upgrade did not widen the pessimistic req: {rewritten}"
+        );
+
+        Update::new(&config)
+            .workspace(workspace.clone())
+            .package_db(package_db.clone())
+            .update()
+            .await
+            .unwrap();
+
+        let reloaded = Workspace::from_exact(temp.path()).unwrap().unwrap();
+        let lockfile = reloaded.lockfile().unwrap();
+        assert!(
+            lockfile
+                .rocks(&LockedPackageLockType::Regular)
+                .values()
+                .any(|pkg| pkg.name().to_string() == "30log"),
+            "lockfile was not persisted"
+        );
+    }
 }
