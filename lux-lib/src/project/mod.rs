@@ -342,15 +342,13 @@ impl Project {
             | DependencyType::Test(ref deps) => {
                 for dep in deps {
                     let dep_version_str = if dep.version_req().is_any() {
-                        package_db
-                            .latest_version(dep.name())
-                            .await
-                            .map(|latest_version| {
-                                latest_version
-                                    .to_pessimistic_version_req()
-                                    .unwrap_or_else(|| latest_version.to_string())
-                            })
-                            .unwrap_or_else(|| dep.version_req().to_string())
+                        let latest_version =
+                            package_db.latest_version(dep.name()).await.ok_or_else(|| {
+                                ProjectEditError::LatestVersionNotFound(dep.name().clone())
+                            })?;
+                        latest_version
+                            .to_pessimistic_version_req()
+                            .unwrap_or_else(|| latest_version.to_string())
                     } else {
                         dep.version_req().to_string()
                     };
@@ -865,6 +863,43 @@ mod tests {
                 library: Some("path.so".into()),
                 header: None
             }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_unpublished_package_does_not_edit_toml() {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/no-build-spec/");
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+        let project_root: PathBuf = project_root.path().into();
+        let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+        let toml_before = fs::sync::read_to_string(project.toml_path()).unwrap();
+
+        let test_manifest_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
+        let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
+        let metadata = ManifestMetadata::new(&content).unwrap();
+        let package_db = Manifest::new(
+            Url::parse("https://example.com").unwrap(),
+            metadata,
+            Default::default(),
+        )
+        .into();
+
+        let unknown_dependencies = [PackageReq::from_str("not-a-package-in-any-manifest").unwrap()];
+        let err = project
+            .add(
+                DependencyType::Regular(unknown_dependencies.iter().collect_vec()),
+                &package_db,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ProjectEditError::LatestVersionNotFound(_)));
+        assert_eq!(
+            fs::sync::read_to_string(project.toml_path()).unwrap(),
+            toml_before
         );
     }
 
