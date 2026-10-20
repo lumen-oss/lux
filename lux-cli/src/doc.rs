@@ -11,7 +11,7 @@ use lux_lib::{
 };
 use miette::{miette, Context, IntoDiagnostic, Result};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use url::Url;
 use walkdir::WalkDir;
 
@@ -91,36 +91,36 @@ fn open_doc_file(path: &Path) -> Result<()> {
 
 async fn open_local_docs(pkg: LockedPackage, tree: &Tree, config: &Config) -> Result<()> {
     let doc_dir = tree.layout_for(pkg.spec()).doc;
-    let files: Vec<String> = WalkDir::new(&doc_dir)
+    let files: Vec<PathBuf> = WalkDir::new(&doc_dir)
         .into_iter()
         .filter_map_ok(|file| {
             let path = file.into_path();
-            if path.is_file() {
-                path.file_name()
-                    .map(|file_name| file_name.to_string_lossy().to_string())
-            } else {
-                None
-            }
+            path.is_file().then_some(path)
         })
         .try_collect()
         .into_diagnostic()?;
-    match files.first() {
-        Some(file) if files.len() == 1 => {
-            open_doc_file(&doc_dir.join(file))?;
-            Ok(())
-        }
-        Some(_) => {
-            let file = Select::new(
+    match files.as_slice() {
+        [file] => open_doc_file(file),
+        [_, _, ..] => {
+            let labels = files
+                .iter()
+                .map(|file| {
+                    file.strip_prefix(&doc_dir)
+                        .unwrap_or(file.as_path())
+                        .to_string_lossy()
+                        .to_string()
+                })
+                .collect_vec();
+            let selected = Select::new(
                 "Multiple documentation files found. Please select one to open.",
-                files,
+                labels,
             )
-            .prompt()
+            .raw_prompt()
             .into_diagnostic()
             .wrap_err("error selecting from multiple files")?;
-            open_doc_file(&doc_dir.join(file))?;
-            Ok(())
+            open_doc_file(&files[selected.index])
         }
-        None => match get_homepage(&pkg, tree)? {
+        [] => match get_homepage(&pkg, tree)? {
             None => Err(miette!(
                 "no documentation found for package '{}'",
                 pkg.into_package_spec()
