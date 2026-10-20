@@ -157,6 +157,14 @@ async fn open_local_docs(pkg: LockedPackage, tree: &Tree, config: &Config) -> Re
                         .to_string()
                 })
                 .collect_vec();
+            if config.no_prompt() {
+                return Err(miette!(
+                    help = "rerun without `--no-prompt` to select a documentation file",
+                    "found multiple documentation files for package '{}': {}",
+                    pkg.as_package_spec(),
+                    labels.join(", ")
+                ));
+            }
             let selected = Select::new(
                 "Multiple documentation files found. Please select one to open.",
                 labels,
