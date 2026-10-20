@@ -14,6 +14,8 @@ use serde::Deserialize;
 use strum::IntoEnumIterator;
 use xtask_lua::LuaFeature;
 
+mod static_libgpg_error;
+
 type DynError = Box<dyn std::error::Error>;
 
 fn main() {
@@ -55,6 +57,9 @@ fn try_main() -> Result<(), DynError> {
             vendored: false,
         })?,
         Some("gen-definitions") => gen_definitions()?,
+        Some("build-static-libgpg-error") => {
+            static_libgpg_error::ensure_installed()?;
+        }
         _ => print_help(),
     }
 
@@ -68,6 +73,8 @@ fn print_help() {
 build               builds and links all libraries and the application
 dist-man            builds man pages
 dist-completions    builds shell completions
+build-static-libgpg-error
+                    builds a static libgpg-error for macOS
 dist-package        builds binary package distribution(s) for the current platform
 dist                builds everything, equivalent to build + dist-man + dist-completions
 gen-definitions     generates Lua/Luau type definition files into definitions/
@@ -93,6 +100,26 @@ struct BuildOpts {
     vendored: bool,
 }
 
+fn features(opts: &BuildOpts) -> Vec<String> {
+    #[cfg(not(target_env = "msvc"))]
+    let mut features = vec!["gpgme".to_string()];
+    #[cfg(target_env = "msvc")]
+    let mut features = vec![];
+
+    if opts.vendored {
+        features.push("vendored".to_string());
+    }
+    features
+}
+
+fn push_features(args: &mut Vec<String>, opts: &BuildOpts) {
+    let features = features(opts);
+    if !features.is_empty() {
+        args.push("--features".into());
+        args.push(features.join(","));
+    }
+}
+
 fn build(opts: &BuildOpts) -> Result<(), DynError> {
     let profile = if opts.release { "release" } else { "debug" };
 
@@ -107,19 +134,16 @@ fn build(opts: &BuildOpts) -> Result<(), DynError> {
         "--no-default-features".into(),
     ];
 
-    if opts.vendored {
-        args.push("--features".into());
-        args.push("vendored".into());
-    }
+    push_features(&mut args, opts);
 
     if opts.release {
         args.push("--release".into());
     }
 
-    let status = Command::new(cargo)
-        .current_dir(project_root())
-        .args(args)
-        .status()?;
+    let mut command = Command::new(cargo);
+    command.current_dir(project_root()).args(args);
+    static_libgpg_error::apply(&mut command)?;
+    let status = command.status()?;
 
     if !status.success() {
         Err("cargo build failed")?;
@@ -185,10 +209,7 @@ fn lx(lx_args: Vec<String>, opts: &BuildOpts) -> Result<(), DynError> {
         "--no-default-features".into(),
     ];
 
-    if opts.vendored {
-        args.push("--features".into());
-        args.push("vendored".into());
-    }
+    push_features(&mut args, opts);
 
     args.push("--bin".into());
     args.push("lx".into());
@@ -196,10 +217,10 @@ fn lx(lx_args: Vec<String>, opts: &BuildOpts) -> Result<(), DynError> {
 
     args = args.into_iter().chain(lx_args).collect::<Vec<_>>();
 
-    let status = Command::new(cargo)
-        .current_dir(project_root())
-        .args(args)
-        .status()?;
+    let mut command = Command::new(cargo);
+    command.current_dir(project_root()).args(args);
+    static_libgpg_error::apply(&mut command)?;
+    let status = command.status()?;
 
     if !status.success() {
         Err("cargo run failed")?;

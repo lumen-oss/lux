@@ -5357,6 +5357,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2",
@@ -8057,11 +8058,15 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "bzip2",
  "cargo-packager",
  "clap 4.6.4",
  "lux-workspace-hack",
+ "reqwest",
  "serde",
+ "ssri",
  "strum 0.28.0",
+ "tar",
  "toml 1.1.4+spec-1.1.0",
  "xtask-lua",
 ]

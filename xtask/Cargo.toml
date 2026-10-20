@@ -5,11 +5,19 @@ edition = "2021"
 publish = false
 
 [dependencies]
+bzip2 = "0.6"
 cargo-packager = { version = "0.11", default-features = false, features = [
   "rustls-tls",
 ] }
 clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.13", default-features = false, features = [
+  "blocking",
+  "native-tls",
+  "system-proxy",
+] }
 serde = { version = "1", default-features = false }
+ssri = "9.2"
+tar = "0.4"
 
 lux-workspace-hack = { workspace = true }
 strum = { workspace = true }
