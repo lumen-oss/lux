@@ -81,10 +81,14 @@ fn is_plain_text(path: &Path) -> Result<bool> {
 }
 
 fn open_doc_file(path: &Path) -> Result<()> {
-    if is_plain_text(path)? {
-        edit::edit_file(path).into_diagnostic()?;
+    if is_plain_text(path).wrap_err_with(|| format!("error reading '{}'", path.display()))? {
+        edit::edit_file(path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("could not open '{}' for editing", path.display()))?;
     } else {
-        open::that(path).into_diagnostic()?;
+        open::that(path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("could not open '{}' in a browser", path.display()))?;
     }
     Ok(())
 }
