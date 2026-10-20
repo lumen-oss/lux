@@ -3,7 +3,7 @@ use inquire::{Confirm, Select};
 use itertools::Itertools;
 use lux_lib::{
     config::Config,
-    lockfile::LockedPackage,
+    lockfile::{LockedPackage, OptState, PinnedState},
     lua_rockspec::RemoteLuaRockspec,
     package::PackageReq,
     rockspec::Rockspec,
@@ -28,6 +28,29 @@ pub struct Doc {
     /// Ignore local docs and open the package's homepage in a browser.
     #[arg(long)]
     online: bool,
+}
+
+fn package_label(pkg: &LockedPackage) -> String {
+    let mut modifiers = Vec::new();
+    if pkg.pinned() == PinnedState::Pinned {
+        modifiers.push("pinned".to_string());
+    }
+    if pkg.opt() == OptState::Optional {
+        modifiers.push("optional".to_string());
+    }
+    if let Some(constraint) = pkg.spec().constraint().to_string_opt() {
+        modifiers.push(format!("constraint: {constraint}"));
+    }
+    if modifiers.is_empty() {
+        format!("{}@{}", pkg.name(), pkg.version())
+    } else {
+        format!(
+            "{}@{} ({})",
+            pkg.name(),
+            pkg.version(),
+            modifiers.join(", ")
+        )
+    }
 }
 
 pub async fn doc(args: Doc, config: Config) -> Result<()> {
@@ -70,18 +93,42 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
             PackageReq::parse(&selected)?
         }
     };
+    let lockfile = tree.lockfile()?;
     let package_id = match tree.match_rocks(&package_req)? {
         RockMatches::NotFound(package_req) => {
             Err(miette!("no package matching {package_req} found"))
         }
-        RockMatches::Many(_package_ids) => Err(miette!(
-            help = "specify an exact package (<name>@<version>) or narrow the version requirement",
-            "found multiple packages matching {}",
-            &package_req
-        )),
+        RockMatches::Many(package_ids) => {
+            if config.no_prompt() {
+                Err(miette!(
+                    help = "specify an exact package (<name>@<version>) or narrow the version requirement",
+                    "found multiple packages matching {}",
+                    &args.package
+                ))
+            } else {
+                let candidates: Vec<_> = package_ids
+                    .into_iter()
+                    .filter_map(|id| lockfile.get(&id).map(|pkg| (id, pkg.clone())))
+                    .collect();
+                let labels = candidates
+                    .iter()
+                    .map(|(_, pkg)| package_label(pkg))
+                    .collect_vec();
+                let selected = Select::new(
+                    &format!(
+                        "Multiple packages matching {} found. Please select one to open.",
+                        &args.package
+                    ),
+                    labels,
+                )
+                .raw_prompt()
+                .into_diagnostic()
+                .wrap_err("error selecting from multiple packages")?;
+                Ok(candidates[selected.index].0.clone())
+            }
+        }
         RockMatches::Single(package_id) => Ok(package_id),
     }?;
-    let lockfile = tree.lockfile()?;
     let pkg = lockfile
         .get(&package_id)
         .ok_or_else(|| miette!("package is installed, but not found in the lockfile"))?
