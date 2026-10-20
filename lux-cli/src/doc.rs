@@ -102,8 +102,7 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
             if config.no_prompt() {
                 Err(miette!(
                     help = "specify an exact package (<name>@<version>) or narrow the version requirement",
-                    "found multiple packages matching {}",
-                    &args.package
+                    "found multiple packages matching {package_req}"
                 ))
             } else {
                 let candidates: Vec<_> = package_ids
@@ -116,8 +115,7 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
                     .collect_vec();
                 let selected = Select::new(
                     &format!(
-                        "Multiple packages matching {} found. Please select one to open.",
-                        &args.package
+                        "Multiple packages matching {package_req} found. Please select one to open.",
                     ),
                     labels,
                 )
