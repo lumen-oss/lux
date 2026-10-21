@@ -610,7 +610,7 @@ pub(crate) async fn unpack_rockspec(
         .find(|&i| {
             unsafe { zip.by_index(i).unwrap_unchecked() }
                 .name()
-                .eq(&rockspec_file_name)
+                .is_ok_and(|name| name.eq(&rockspec_file_name))
         })
         .ok_or(SearchAndDownloadError::RockspecNotFoundInPackedRock(
             rockspec_file_name.to_string(),
