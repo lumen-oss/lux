@@ -70,9 +70,7 @@ pub enum WallyDiscoverError {
     ))]
     InvalidSourceUrl(String),
     #[error("failed to parse the wally package requirement")]
-    #[diagnostic(help(
-        "the lockfile may contain an invalid wally version; regenerate it."
-    ))]
+    #[diagnostic(help("the lockfile may contain an invalid wally version; regenerate it."))]
     Requirement(#[from] semver::Error),
     #[error("client error")]
     #[diagnostic(transparent)]
@@ -91,8 +89,8 @@ pub(crate) async fn discover(
     wally_req: &WallyPackageReq,
     config: &Config,
 ) -> Result<FoundPackage, WallyDiscoverError> {
-    let mut registries = vec![unsafe { Url::parse(DEFAULT_INDEX_URL).unwrap_unchecked() }];
-    registries.extend(config.extra_wally_registries().iter().cloned());
+    let mut registries = config.extra_wally_registries().clone();
+    registries.push(unsafe { Url::parse(DEFAULT_INDEX_URL).unwrap_unchecked() });
     for registry in &registries {
         let index = WallyIndex::open(registry, config.cache_dir())?;
         let Some(manifest) = index.find(wally_req)? else {
@@ -385,9 +383,13 @@ mod tests {
     use super::*;
     use std::{collections::BTreeMap, io::Write};
 
+    use httptest::{matchers::request, responders::status_code, Expectation, Server};
     use semver::Version;
 
-    use crate::package::wally::{Package, PlaceInfo, Realm};
+    use crate::{
+        config::ConfigBuilder,
+        package::wally::{Package, PlaceInfo, Realm},
+    };
 
     fn package(version: Version) -> Manifest {
         Manifest {
@@ -410,6 +412,49 @@ mod tests {
             server_dependencies: BTreeMap::new(),
             dev_dependencies: BTreeMap::new(),
         }
+    }
+
+    fn local_index(api: &Url) -> (assert_fs::TempDir, Url) {
+        let dir = assert_fs::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("config.json"),
+            format!(r#"{{"api":"{api}"}}"#),
+        )
+        .unwrap();
+        let pkg_path = dir.path().join("evaera").join("promise");
+        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
+        let manifest = serde_json::to_string(&package(Version::new(1, 0, 0))).unwrap();
+        std::fs::write(pkg_path, format!("{manifest}\n")).unwrap();
+
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index
+                .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+                .unwrap();
+            index.write().unwrap();
+            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+            let sig = git2::Signature::now("test", "test@example.com").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+                .unwrap();
+        }
+
+        let url = Url::from_directory_path(dir.path()).unwrap();
+        (dir, url)
+    }
+
+    fn wally_package_content_zip() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));
+            let options = zip::write::SimpleFileOptions::default();
+            for entry in ["init.luau", "src/foo.luau"] {
+                zip.start_file(entry, options).unwrap();
+                zip.write_all(b"return {}").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        bytes
     }
 
     #[test]
@@ -541,54 +586,16 @@ mod tests {
 
     #[tokio::test]
     async fn resolves_locked_package_from_registry() {
-        use httptest::{matchers::request, responders::status_code, Expectation, Server};
-
-        use crate::config::ConfigBuilder;
-
         let server = Server::run();
         let api_url = Url::parse(&server.url("/").to_string()).unwrap();
-        let index_dir = assert_fs::TempDir::new().unwrap();
-        std::fs::write(
-            index_dir.path().join("config.json"),
-            format!(r#"{{"api":"{api_url}"}}"#),
-        )
-        .unwrap();
-        let pkg_path = index_dir.path().join("evaera").join("promise");
-        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
-        let manifest = serde_json::to_string(&package(Version::new(1, 0, 0))).unwrap();
-        std::fs::write(pkg_path, format!("{manifest}\n")).unwrap();
-
-        let repo = git2::Repository::init(index_dir.path()).unwrap();
-        {
-            let mut index = repo.index().unwrap();
-            index
-                .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
-                .unwrap();
-            index.write().unwrap();
-            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
-            let sig = git2::Signature::now("test", "test@example.com").unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
-                .unwrap();
-        }
-
-        let mut zip_bytes = Vec::new();
-        {
-            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut zip_bytes));
-            let options = zip::write::SimpleFileOptions::default();
-            for entry in ["init.luau", "src/foo.luau"] {
-                zip.start_file(entry, options).unwrap();
-                zip.write_all(b"return {}").unwrap();
-            }
-            zip.finish().unwrap();
-        }
+        let (_index_dir, index_url) = local_index(&api_url);
 
         let content_path = "/v1/package-contents/evaera/promise/1.0.0";
         server.expect(
             Expectation::matching(request::method_path("GET", content_path))
-                .respond_with(status_code(200).body(zip_bytes)),
+                .respond_with(status_code(200).body(wally_package_content_zip())),
         );
 
-        let index_url = Url::from_directory_path(index_dir.path()).unwrap();
         let content_url = Url::parse(&server.url(content_path).to_string()).unwrap();
         let remote = RemotePackage::new(
             PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
@@ -607,5 +614,32 @@ mod tests {
         assert_eq!(found.remote.spec.version().to_version_string(), "1.0.0");
         assert_eq!(found.remote.source, RemotePackageSource::Wally(index_url));
         assert!(found.artifact.is_none());
+    }
+
+    #[tokio::test]
+    async fn discovers_from_extra_registry() {
+        let server = Server::run();
+        let api_url = Url::parse(&server.url("/").to_string()).unwrap();
+        let (_index_dir, index_url) = local_index(&api_url);
+
+        let content_path = "/v1/package-contents/evaera/promise/1.0.0";
+        server.expect(
+            Expectation::matching(request::method_path("GET", content_path))
+                .respond_with(status_code(200).body(wally_package_content_zip())),
+        );
+
+        let cache = assert_fs::TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .cache_dir(Some(cache.path().to_path_buf()))
+            .extra_wally_registries(Some(vec![index_url.clone()]))
+            .build()
+            .unwrap();
+        let package_req = PackageReq::new("promise".into(), Some("1.0.0".into())).unwrap();
+        let wally_req: WallyPackageReq = "evaera/promise@1".parse().unwrap();
+
+        let found = discover(&package_req, &wally_req, &config).await.unwrap();
+        assert_eq!(found.remote.spec.name().to_string(), "promise");
+        assert_eq!(found.remote.source, RemotePackageSource::Wally(index_url));
     }
 }
