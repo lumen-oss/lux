@@ -14,20 +14,17 @@ use crate::{
     config::Config,
     fs,
     git::{GitRef, GitSource},
-    lockfile::{OptState, PinnedState, RemotePackageSourceUrl},
+    lockfile::RemotePackageSourceUrl,
     lua_rockspec::{LuaRockspecError, RemoteLuaRockspec, RockSourceSpec},
     luarocks,
     package::{
-        wally::{
-            self, PackageReq as WallyPackageReq, WallyIndex, WallyIndexError, WallyModulesError,
-        },
         PackageName, PackageReq, PackageSpec, PackageSpecFromPackageReqError, PackageVersion,
-        PackageVersionParseError, PackageVersionReq, RemotePackageTypeFilterSpec,
+        RemotePackageTypeFilterSpec,
     },
     package_db::{PackageDB, PackageDBError, SearchError},
     remote_package_source::RemotePackageSource,
     reqwest::{RequestBuilderExt, RequestError},
-    rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
+    rockspec::Rockspec,
 };
 
 /// Builder for a rock downloader.
@@ -199,83 +196,6 @@ impl RemoteRockDownload {
         };
         Ok(Self::RockspecOnly { rockspec_download })
     }
-}
-
-/// Resolve and download a wally package from the configured registries.
-pub(crate) async fn download_wally_rock(
-    package_req: &PackageReq,
-    wally_req: &WallyPackageReq,
-    config: &Config,
-) -> Result<RemoteRockDownload, SearchAndDownloadError> {
-    let mut registries = vec![unsafe { Url::parse(wally::DEFAULT_INDEX_URL).unwrap_unchecked() }];
-    registries.extend(config.extra_wally_registries().iter().cloned());
-    download_wally_rock_from_registries(package_req, wally_req, &registries, config).await
-}
-
-pub(crate) async fn download_wally_rock_from_registries(
-    package_req: &PackageReq,
-    wally_req: &WallyPackageReq,
-    registries: &[Url],
-    config: &Config,
-) -> Result<RemoteRockDownload, SearchAndDownloadError> {
-    for registry in registries {
-        let index = WallyIndex::open(registry, config.cache_dir())?;
-        let Some(manifest) = index.find(wally_req)? else {
-            continue;
-        };
-        let version = PackageVersion::parse(&manifest.package.version.to_string())?;
-        let package_spec = PackageSpec::new(package_req.name().clone(), version);
-        let content_url = index
-            .config()
-            .api
-            .join(&format!(
-                "/v1/package-contents/{}/{}/{}",
-                wally_req.name().scope(),
-                wally_req.name().name(),
-                manifest.package.version
-            ))
-            .map_err(|source| SearchAndDownloadError::Parse {
-                source,
-                url: index.config().api.to_string(),
-            })?;
-        let contents = fetch_wally_contents(&content_url, config).await?;
-        let modules = wally::modules_from_zip(&contents)?;
-        let dependencies = manifest
-            .dependencies
-            .into_iter()
-            .map(|(alias, dep_req)| LuaDependencySpec {
-                package_req: PackageReq {
-                    name: PackageName::new(alias),
-                    version_req: PackageVersionReq::SemVer(dep_req.version_req().clone()),
-                },
-                pin: PinnedState::default(),
-                opt: OptState::default(),
-                source: Some(RockSourceSpec::Wally(dep_req)),
-            })
-            .collect();
-        let rockspec =
-            RemoteLuaRockspec::from_wally(package_spec, content_url.clone(), dependencies, modules);
-        let rockspec_download = DownloadedRockspec {
-            rockspec,
-            source: RemotePackageSource::Wally(registry.clone()),
-            source_url: Some(RemotePackageSourceUrl::Url { url: content_url }),
-        };
-        return Ok(RemoteRockDownload::RockspecOnly { rockspec_download });
-    }
-
-    Err(SearchAndDownloadError::WallyNotFound(wally_req.clone()))
-}
-
-async fn fetch_wally_contents(url: &Url, config: &Config) -> Result<Bytes, SearchAndDownloadError> {
-    let response = crate::reqwest::http_client(config)?
-        .get(url.clone())
-        .header("Wally-Version", wally::WALLY_VERSION)
-        .send()
-        .await?
-        .error_for_status()?
-        .bytes()
-        .await?;
-    Ok(response)
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -502,14 +422,6 @@ for local dependencies, use `path` in your lux.toml."#
         url("https://lux.lumen-labs.org/reference/lux-toml#local-dependencies")
     )]
     NonURLSource,
-    #[error("failed to resolve wally package")]
-    WallyIndex(#[from] WallyIndexError),
-    #[error("failed to inspect wally package contents")]
-    WallyModules(#[from] WallyModulesError),
-    #[error("failed to parse wally package version")]
-    WallyVersion(#[from] PackageVersionParseError),
-    #[error("wally package '{0}' was not found in any registry")]
-    WallyNotFound(WallyPackageReq),
     #[error("client error")]
     #[diagnostic(transparent)]
     Request(#[from] RequestError),

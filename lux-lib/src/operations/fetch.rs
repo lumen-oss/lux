@@ -343,12 +343,7 @@ async fn fetch_src_impl<R: Rockspec>(
             let request = crate::reqwest::http_client(config)?
                 .get(url.clone())
                 .apply_access_token(config, url);
-            let request = if url.path().starts_with("/v1/package-contents/") {
-                // HACK: The wally registry rejects requests without a sufficiently recent `Wally-Version` header.
-                request.header("Wally-Version", wally::WALLY_VERSION)
-            } else {
-                request
-            };
+            let request = wally::apply_content_headers(request, url);
             let response = request.send().await?.error_for_status()?.bytes().await?;
             let hash = response.hash().await.map_err(FetchSrcError::Hash)?;
             let file_name = url

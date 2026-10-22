@@ -1,6 +1,3 @@
-mod index;
-mod modules;
-
 use std::{
     collections::BTreeMap,
     fmt::{self, Display},
@@ -14,13 +11,9 @@ use serde::{de::Error as _, ser::Serializer, Deserialize, Deserializer, Serializ
 use thiserror::Error;
 use url::Url;
 
-pub(crate) use index::{WallyIndex, WallyIndexError};
-pub(crate) use modules::{modules_from_zip, WallyModulesError};
+use crate::lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue};
 
 pub(crate) const MANIFEST_FILE_NAME: &str = "wally.toml";
-
-/// The official wally package index.
-pub(crate) const DEFAULT_INDEX_URL: &str = "https://github.com/UpliftGames/wally-index";
 
 /// The wally client version advertised when downloading package contents.
 /// The registry rejects requests without a sufficiently recent `Wally-Version` header.
@@ -304,12 +297,30 @@ pub(crate) struct PlaceInfo {
     pub(crate) server_packages: Option<String>,
 }
 
+impl DisplayAsLuaKV for PackageReq {
+    fn display_lua(&self) -> DisplayLuaKV {
+        DisplayLuaKV {
+            key: "wally".to_string(),
+            value: DisplayLuaValue::String(self.to_string()),
+        }
+    }
+}
+
+/// Adds the `Wally-Version` header required by wally registries for content requests.
+pub(crate) fn apply_content_headers(
+    request: reqwest::RequestBuilder,
+    url: &Url,
+) -> reqwest::RequestBuilder {
+    if url.path().starts_with("/v1/package-contents/") {
+        request.header("Wally-Version", WALLY_VERSION)
+    } else {
+        request
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-
-    use crate::lua_rockspec::{LuaModule, ModuleSpec};
 
     const MANIFEST: &str = r#"
 [package]
@@ -382,125 +393,5 @@ testez = "roblox/testez@0.4.1"
         assert!("snake_case".parse::<PackageNamePart>().is_err());
         assert!("hello/world/foo".parse::<PackageName>().is_err());
         assert!("hello/world".parse::<PackageName>().is_ok());
-    }
-
-    fn package(version: Version) -> Manifest {
-        Manifest {
-            package: Package {
-                name: "evaera/promise".parse().unwrap(),
-                version,
-                registry: Url::parse("https://github.com/UpliftGames/wally-index").unwrap(),
-                realm: Realm::Shared,
-                description: None,
-                license: None,
-                authors: Vec::new(),
-                include: Vec::new(),
-                exclude: Vec::new(),
-                private: false,
-                homepage: None,
-                repository: None,
-            },
-            place: PlaceInfo::default(),
-            dependencies: BTreeMap::new(),
-            server_dependencies: BTreeMap::new(),
-            dev_dependencies: BTreeMap::new(),
-        }
-    }
-
-    #[test]
-    fn resolves_from_index() {
-        let dir = assert_fs::TempDir::new().unwrap();
-        std::fs::write(
-            dir.path().join("config.json"),
-            r#"{"api":"https://api.wally.run"}"#,
-        )
-        .unwrap();
-        let pkg_path = dir.path().join("evaera").join("promise");
-        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
-        let jsonl = [Version::new(2, 4, 0), Version::new(3, 1, 0)]
-            .into_iter()
-            .map(|version| serde_json::to_string(&package(version)).unwrap())
-            .collect::<Vec<_>>()
-            .join("\n");
-        std::fs::write(pkg_path, format!("{jsonl}\n")).unwrap();
-
-        let index = WallyIndex::new(dir.path().to_path_buf()).unwrap();
-        assert_eq!(
-            index.config().api,
-            Url::parse("https://api.wally.run").unwrap()
-        );
-
-        let req: PackageReq = "evaera/promise@2".parse().unwrap();
-        assert_eq!(
-            index.find(&req).unwrap().unwrap().package.version,
-            Version::new(2, 4, 0)
-        );
-    }
-
-    #[test]
-    fn opens_local_index() {
-        let remote = assert_fs::TempDir::new().unwrap();
-        std::fs::write(
-            remote.path().join("config.json"),
-            r#"{"api":"https://api.wally.run"}"#,
-        )
-        .unwrap();
-        let pkg_path = remote.path().join("evaera").join("promise");
-        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
-        let jsonl = serde_json::to_string(&package(Version::new(1, 0, 0))).unwrap();
-        std::fs::write(&pkg_path, format!("{jsonl}\n")).unwrap();
-
-        let repo = git2::Repository::init(remote.path()).unwrap();
-        {
-            let mut index = repo.index().unwrap();
-            index
-                .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
-                .unwrap();
-            index.write().unwrap();
-            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
-            let sig = git2::Signature::now("test", "test@example.com").unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
-                .unwrap();
-        }
-
-        let cache = assert_fs::TempDir::new().unwrap();
-        let url = Url::from_directory_path(remote.path()).unwrap();
-        let index = WallyIndex::open(&url, cache.path()).unwrap();
-        let req: PackageReq = "evaera/promise@1".parse().unwrap();
-        assert_eq!(
-            index.find(&req).unwrap().unwrap().package.version,
-            Version::new(1, 0, 0)
-        );
-    }
-
-    #[test]
-    fn computes_modules_from_zip() {
-        let mut bytes = Vec::new();
-        {
-            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));
-            let options = zip::write::SimpleFileOptions::default();
-            for entry in [
-                "init.luau",
-                "init.test.luau",
-                "src/foo.luau",
-                "src/bar/baz.luau",
-                "sub/init.lua",
-                "foo.spec.lua",
-                "wally.toml",
-            ] {
-                zip.start_file(entry, options).unwrap();
-                zip.write_all(b"").unwrap();
-            }
-            zip.finish().unwrap();
-        }
-
-        let modules = modules_from_zip(&bytes).unwrap();
-        let mut names: Vec<_> = modules.keys().map(|module| module.to_string()).collect();
-        names.sort();
-        assert_eq!(names, vec!["bar.baz", "foo", "init", "sub.init"]);
-        assert_eq!(
-            modules.get(&LuaModule::from_str("foo").unwrap()),
-            Some(&ModuleSpec::SourcePath("src/foo.luau".into()))
-        );
     }
 }

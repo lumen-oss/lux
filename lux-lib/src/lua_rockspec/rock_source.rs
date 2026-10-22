@@ -175,7 +175,7 @@ impl DisplayAsLuaKV for RockSourceSpec {
                     value: DisplayLuaValue::Table(source_tbl),
                 }
             }
-            RockSourceSpec::Wally(_) => unimplemented!(),
+            RockSourceSpec::Wally(req) => req.display_lua(),
         }
     }
 }

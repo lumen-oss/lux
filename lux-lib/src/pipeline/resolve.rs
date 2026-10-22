@@ -24,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    discover::{DiscoverError, FoundPackage},
+    discover::{Discover, DiscoverError, FoundPackage},
     materialise::PackageSource,
     Artifacts,
 };
@@ -261,8 +261,8 @@ impl Resolver {
             let config = Arc::clone(&self.config);
             let task_spec = spec.clone();
             self.joinset.spawn(async move {
-                let result = package_db
-                    .resolve(&task_spec, &config)
+                let result = Discover::new(package_db, &config)
+                    .discover(&task_spec)
                     .await
                     .map_err(ResolveError::Discover);
                 (key, spec, result)
