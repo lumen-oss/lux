@@ -137,6 +137,12 @@ pub enum FetchSrcError {
         "check that no process is using the directory and you have write permissions."
     ))]
     CleanGitDir(#[source] io::Error),
+    #[error("failed to resolve wally package '{0}'")]
+    #[diagnostic(
+        code(lux_lib::wally::unresolved_source),
+        help("this is a bug, please report it.")
+    )]
+    WallySource(String),
     #[error("unable to compute hash")]
     Hash(#[source] io::Error),
     #[error(transparent)]
@@ -372,7 +378,9 @@ async fn fetch_src_impl<R: Rockspec>(
                 source_url: RemotePackageSourceUrl::Url { url: url.clone() },
             }
         }
-        RockSourceSpec::Wally(_) => unimplemented!(),
+        RockSourceSpec::Wally(_) => {
+            return Err(FetchSrcError::WallySource(rockspec.package().to_string()))
+        }
         RockSourceSpec::File(path) => {
             tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 

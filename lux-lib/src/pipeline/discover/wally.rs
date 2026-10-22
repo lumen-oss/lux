@@ -8,6 +8,7 @@ use std::{
 use bytes::Bytes;
 use git2::Repository;
 use miette::Diagnostic;
+use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
@@ -34,19 +35,45 @@ const DEFAULT_INDEX_URL: &str = "https://github.com/UpliftGames/wally-index";
 #[non_exhaustive]
 pub enum WallyDiscoverError {
     #[error("failed to resolve wally package")]
+    #[diagnostic(help(
+        "check your network connection and that the wally registry URL is correct."
+    ))]
     Index(#[from] WallyIndexError),
     #[error("failed to inspect wally package contents")]
+    #[diagnostic(help(
+        "the registry may have returned a corrupt package archive; try again, or report it to the package author."
+    ))]
     Modules(#[from] WallyModulesError),
     #[error("failed to parse wally package version")]
+    #[diagnostic(help(
+        "the package manifest contains an invalid version; report it to the package author."
+    ))]
     Version(#[from] PackageVersionParseError),
     #[error("wally package '{0}' was not found in any registry")]
+    #[diagnostic(help(
+        "check the package name and version, or add its registry to `extra_wally_registries` in your Lux config."
+    ))]
     NotFound(WallyPackageReq),
     #[error("failed to construct the wally package content URL '{url}'")]
+    #[diagnostic(help("the registry's `config.json` may contain an invalid `api` URL."))]
     Url {
         url: String,
         #[source]
         source: url::ParseError,
     },
+    #[error("wally package '{0}' is missing its content URL in the lockfile")]
+    #[diagnostic(help("the lockfile may be outdated; regenerate it."))]
+    MissingSourceUrl(String),
+    #[error("failed to determine the wally package name from '{0}'")]
+    #[diagnostic(help(
+        "the lockfile may contain an invalid wally source; run `lx update` to regenerate it."
+    ))]
+    InvalidSourceUrl(String),
+    #[error("failed to parse the wally package requirement")]
+    #[diagnostic(help(
+        "the lockfile may contain an invalid wally version; regenerate it."
+    ))]
+    Requirement(#[from] semver::Error),
     #[error("client error")]
     #[diagnostic(transparent)]
     Request(#[from] RequestError),
@@ -58,7 +85,7 @@ impl From<reqwest::Error> for WallyDiscoverError {
     }
 }
 
-/// Resolve and download a wally package from the configured registries.
+/// Discover a wally package from the configured registries.
 pub(crate) async fn discover(
     package_req: &PackageReq,
     wally_req: &WallyPackageReq,
@@ -76,6 +103,48 @@ pub(crate) async fn discover(
         return found_package(package_req, manifest, content_url, &contents, registry);
     }
     Err(WallyDiscoverError::NotFound(wally_req.clone()))
+}
+
+/// Discover a wally package that is pinned in a lockfile.
+pub(crate) async fn discover_locked(
+    remote: &RemotePackage,
+    index_url: &Url,
+    config: &Config,
+) -> Result<FoundPackage, WallyDiscoverError> {
+    let package_req = remote.spec.clone().into_package_req();
+    let wally_req = wally_req_from_locked(remote)?;
+    let index = WallyIndex::open(index_url, config.cache_dir())?;
+    let manifest = index
+        .find(&wally_req)?
+        .ok_or_else(|| WallyDiscoverError::NotFound(wally_req.clone()))?;
+    let content_url = content_url(&index, &wally_req, &manifest)?;
+    let contents = fetch_contents(&content_url, config).await?;
+    found_package(&package_req, manifest, content_url, &contents, index_url)
+}
+
+fn wally_req_from_locked(remote: &RemotePackage) -> Result<WallyPackageReq, WallyDiscoverError> {
+    let content_url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote.source_url {
+        url
+    } else {
+        return Err(WallyDiscoverError::MissingSourceUrl(
+            remote.spec.name().to_string(),
+        ));
+    };
+    let mut segments = content_url.path_segments().into_iter().flatten().rev();
+    let _version = segments.next();
+    let name = segments.next();
+    let scope = segments.next();
+    let (Some(scope), Some(name)) = (scope, name) else {
+        return Err(WallyDiscoverError::InvalidSourceUrl(
+            content_url.to_string(),
+        ));
+    };
+    let name: WallyPackageName = format!("{scope}/{name}")
+        .parse()
+        .map_err(|_| WallyDiscoverError::InvalidSourceUrl(content_url.to_string()))?;
+    let version_req =
+        VersionReq::parse(&format!("={}", remote.spec.version().to_version_string()))?;
+    Ok(WallyPackageReq::new(name, version_req))
 }
 
 fn content_url(
@@ -438,5 +507,105 @@ mod tests {
             modules.get(&LuaModule::from_str("foo").unwrap()),
             Some(&ModuleSpec::SourcePath("src/foo.luau".into()))
         );
+    }
+
+    #[test]
+    fn derives_wally_requirement_from_locked_package() {
+        let remote = RemotePackage::new(
+            PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
+            RemotePackageSource::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
+            Some(RemotePackageSourceUrl::Url {
+                url: Url::parse("https://api.wally.run/v1/package-contents/evaera/promise/1.0.0")
+                    .unwrap(),
+            }),
+        );
+
+        let req = wally_req_from_locked(&remote).unwrap();
+        assert_eq!(req.name().to_string(), "evaera/promise");
+        assert_eq!(req.version_req(), &VersionReq::parse("=1.0.0").unwrap());
+    }
+
+    #[test]
+    fn rejects_locked_package_without_content_url() {
+        let remote = RemotePackage::new(
+            PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
+            RemotePackageSource::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
+            None,
+        );
+
+        assert!(matches!(
+            wally_req_from_locked(&remote),
+            Err(WallyDiscoverError::MissingSourceUrl(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn resolves_locked_package_from_registry() {
+        use httptest::{matchers::request, responders::status_code, Expectation, Server};
+
+        use crate::config::ConfigBuilder;
+
+        let server = Server::run();
+        let api_url = Url::parse(&server.url("/").to_string()).unwrap();
+        let index_dir = assert_fs::TempDir::new().unwrap();
+        std::fs::write(
+            index_dir.path().join("config.json"),
+            format!(r#"{{"api":"{api_url}"}}"#),
+        )
+        .unwrap();
+        let pkg_path = index_dir.path().join("evaera").join("promise");
+        std::fs::create_dir_all(pkg_path.parent().unwrap()).unwrap();
+        let manifest = serde_json::to_string(&package(Version::new(1, 0, 0))).unwrap();
+        std::fs::write(pkg_path, format!("{manifest}\n")).unwrap();
+
+        let repo = git2::Repository::init(index_dir.path()).unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index
+                .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+                .unwrap();
+            index.write().unwrap();
+            let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+            let sig = git2::Signature::now("test", "test@example.com").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+                .unwrap();
+        }
+
+        let mut zip_bytes = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut zip_bytes));
+            let options = zip::write::SimpleFileOptions::default();
+            for entry in ["init.luau", "src/foo.luau"] {
+                zip.start_file(entry, options).unwrap();
+                zip.write_all(b"return {}").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+
+        let content_path = "/v1/package-contents/evaera/promise/1.0.0";
+        server.expect(
+            Expectation::matching(request::method_path("GET", content_path))
+                .respond_with(status_code(200).body(zip_bytes)),
+        );
+
+        let index_url = Url::from_directory_path(index_dir.path()).unwrap();
+        let content_url = Url::parse(&server.url(content_path).to_string()).unwrap();
+        let remote = RemotePackage::new(
+            PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
+            RemotePackageSource::Wally(index_url.clone()),
+            Some(RemotePackageSourceUrl::Url { url: content_url }),
+        );
+        let cache = assert_fs::TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .cache_dir(Some(cache.path().to_path_buf()))
+            .build()
+            .unwrap();
+
+        let found = discover_locked(&remote, &index_url, &config).await.unwrap();
+        assert_eq!(found.remote.spec.name().to_string(), "promise");
+        assert_eq!(found.remote.spec.version().to_version_string(), "1.0.0");
+        assert_eq!(found.remote.source, RemotePackageSource::Wally(index_url));
+        assert!(found.artifact.is_none());
     }
 }
