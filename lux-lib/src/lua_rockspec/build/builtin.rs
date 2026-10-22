@@ -170,6 +170,22 @@ impl TryFrom<ModuleSpecInternal> for ModuleSpec {
     }
 }
 
+impl From<ModuleSpec> for ModuleSpecInternal {
+    fn from(spec: ModuleSpec) -> Self {
+        match spec {
+            ModuleSpec::SourcePath(path) => Self::SourcePath(path),
+            ModuleSpec::SourcePaths(paths) => Self::SourcePaths(paths),
+            ModuleSpec::ModulePaths(paths) => Self::ModulePaths(paths.into()),
+        }
+    }
+}
+
+impl DisplayAsLuaValue for ModuleSpec {
+    fn display_lua_value(&self) -> DisplayLuaValue {
+        ModuleSpecInternal::from(self.clone()).display_lua_value()
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSpecInternal {
     SourcePath(PathBuf),
@@ -321,6 +337,18 @@ impl TryFrom<ModulePathsInternal> for ModulePaths {
 
     fn try_from(internal: ModulePathsInternal) -> Result<Self, Self::Error> {
         Self::from_internal(internal)
+    }
+}
+
+impl From<ModulePaths> for ModulePathsInternal {
+    fn from(paths: ModulePaths) -> Self {
+        Self {
+            sources: paths.sources,
+            libraries: paths.libraries,
+            defines: paths.defines,
+            incdirs: paths.incdirs,
+            libdirs: paths.libdirs,
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{Cursor, Read},
     path::PathBuf,
     string::FromUtf8Error,
@@ -189,7 +190,12 @@ impl RemoteRockDownload {
                 ))
             }
         });
-        let rockspec = RemoteLuaRockspec::from_package_and_source_spec(package_spec, source_spec);
+        let rockspec = RemoteLuaRockspec::from_source_spec(
+            package_spec,
+            source_spec,
+            Vec::new(),
+            HashMap::new(),
+        );
         let rockspec_content = rockspec
             .to_lua_remote_rockspec_string()
             .expect("the infallible happened");

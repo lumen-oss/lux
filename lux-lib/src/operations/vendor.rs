@@ -563,9 +563,11 @@ mod tests {
 
         let src_dir = TempDir::new().unwrap();
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
-        let rockspec = RemoteLuaRockspec::from_package_and_source_spec(
+        let rockspec = RemoteLuaRockspec::from_source_spec(
             "rockspec-only-url@1.0.0".parse().unwrap(),
             crate::lua_rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
+            Vec::new(),
+            HashMap::new(),
         );
         let artifact = PackageSource::SourceDir(src_dir.path().to_path_buf());
         let package = make_downloaded_package(
@@ -604,9 +606,11 @@ mod tests {
 
         let src_dir = TempDir::new().unwrap();
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
-        let rockspec = RemoteLuaRockspec::from_package_and_source_spec(
+        let rockspec = RemoteLuaRockspec::from_source_spec(
             "rockspec-only-url@1.0.0".parse().unwrap(),
             crate::lua_rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
+            Vec::new(),
+            HashMap::new(),
         );
         let artifact = PackageSource::SourceDir(src_dir.path().to_path_buf());
         let package = make_downloaded_package(

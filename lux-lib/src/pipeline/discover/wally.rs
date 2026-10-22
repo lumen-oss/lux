@@ -191,9 +191,10 @@ fn found_package(
     let version = PackageVersion::parse(&manifest.package.version.to_string())?;
     let package_spec = PackageSpec::new(package_req.name().clone(), version);
     let modules = modules_from_zip(contents)?;
-    let rockspec = RemoteLuaRockspec::from_wally(
+    let source_spec = RockSourceSpec::Url(content_url.clone());
+    let rockspec = RemoteLuaRockspec::from_source_spec(
         package_spec.clone(),
-        content_url.clone(),
+        source_spec,
         dependencies(manifest),
         modules,
     );

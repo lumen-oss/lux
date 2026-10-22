@@ -479,142 +479,93 @@ impl RemoteLuaRockspec {
         })
     }
 
-    pub fn from_package_and_source_spec(
+    /// Builds a rockspec from a source spec and dependencies.
+    ///
+    /// With no modules, the rockspec uses the `source` build backend.
+    /// Otherwise, it uses the `builtin` build backend with the given modules.
+    pub(crate) fn from_source_spec(
         package_spec: PackageSpec,
         source_spec: RockSourceSpec,
-    ) -> Self {
-        Self::from_source_spec(package_spec, source_spec, Vec::new())
-    }
-
-    /// Build a rockspec for a wally package, whose contents are fetched from
-    /// `content_url`, whose dependencies come from the package's manifest
-    pub fn from_wally(
-        package_spec: PackageSpec,
-        content_url: Url,
         dependencies: Vec<LuaDependencySpec>,
         modules: HashMap<LuaModule, ModuleSpec>,
     ) -> Self {
         let version = package_spec.version().clone();
         let rockspec_format = RockspecFormat::default();
-        let source_spec = RockSourceSpec::Url(content_url);
+        let (build_backend, build_lua) = if modules.is_empty() {
+            (BuildBackendSpec::Source, r#"type = "source""#.to_string())
+        } else {
+            let modules_lua = modules_lua(&modules);
+            (
+                BuildBackendSpec::Builtin(BuiltinBuildSpec { modules }),
+                format!("type = \"builtin\",\n  modules = {{\n{modules_lua}\n  }}"),
+            )
+        };
+        let build_spec = BuildSpec {
+            build_backend: Some(build_backend),
+            ..Default::default()
+        };
+        let raw_content = rockspec_content(&package_spec, &source_spec, &build_lua);
+        let source: RemoteRockSource = source_spec.into();
 
-        let mut module_entries: Vec<_> = modules.iter().collect();
-        module_entries.sort_by_key(|(module, _)| module.as_str());
-        let modules_lua = module_entries
+        let local = LocalLuaRockspec {
+            rockspec_format: Some(rockspec_format),
+            package: package_spec.name().clone(),
+            version,
+            description: RockDescription::default(),
+            supported_platforms: PlatformSupport::default(),
+            lua: PackageVersionReq::Any,
+            dependencies: PerPlatform::new(dependencies),
+            build_dependencies: PerPlatform::default(),
+            external_dependencies: PerPlatform::default(),
+            test_dependencies: PerPlatform::default(),
+            build: PerPlatform::new(build_spec),
+            source: PerPlatform::new(source.clone()),
+            test: PerPlatform::default(),
+            deploy: PerPlatform::default(),
+            raw_content,
+        };
+        Self {
+            local,
+            source: PerPlatform::new(source),
+        }
+    }
+}
+
+fn rockspec_content(
+    package_spec: &PackageSpec,
+    source_spec: &RockSourceSpec,
+    build_lua: &str,
+) -> String {
+    format!(
+        r#"
+rockspec_format = "{}"
+package = "{}"
+version = "{}"
+{}
+build = {{
+{}
+}}"#,
+        RockspecFormat::default(),
+        package_spec.name(),
+        package_spec.version(),
+        source_spec.display_lua(),
+        build_lua,
+    )
+}
+
+fn modules_lua(modules: &HashMap<LuaModule, ModuleSpec>) -> String {
+    let mut entries: Vec<_> = modules.iter().collect();
+    entries.sort_by_key(|(module, _)| module.as_str());
+    DisplayLuaValue::Table(
+        entries
             .into_iter()
-            .map(|(module, spec)| {
-                let path = match spec {
-                    ModuleSpec::SourcePath(path) => path,
-                    _ => unreachable!(),
-                };
-                format!(
-                    "    [\"{module}\"] = \"{}\",",
-                    path.to_string_lossy().replace('\\', "/")
-                )
+            .map(|(module, spec)| DisplayLuaKV {
+                key: module.to_string(),
+                value: spec.display_lua_value(),
             })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let raw_content = format!(
-            r#"
-rockspec_format = "{}"
-package = "{}"
-version = "{}"
-{}
-build = {{
-  type = "builtin",
-  modules = {{
-{}
-  }}
-}}"#,
-            rockspec_format,
-            package_spec.name(),
-            version,
-            source_spec.display_lua(),
-            modules_lua,
-        );
-
-        let source: RemoteRockSource = source_spec.into();
-
-        let local = LocalLuaRockspec {
-            rockspec_format: Some(rockspec_format),
-            package: package_spec.name().clone(),
-            version,
-            description: RockDescription::default(),
-            supported_platforms: PlatformSupport::default(),
-            lua: PackageVersionReq::Any,
-            dependencies: PerPlatform::new(dependencies),
-            build_dependencies: PerPlatform::default(),
-            external_dependencies: PerPlatform::default(),
-            test_dependencies: PerPlatform::default(),
-            build: PerPlatform::new(BuildSpec {
-                build_backend: Some(BuildBackendSpec::Builtin(BuiltinBuildSpec { modules })),
-                install: InstallSpec::default(),
-                copy_directories: Vec::new(),
-                patches: HashMap::new(),
-            }),
-            source: PerPlatform::new(source.clone()),
-            test: PerPlatform::default(),
-            deploy: PerPlatform::default(),
-            raw_content,
-        };
-        Self {
-            local,
-            source: PerPlatform::new(source),
-        }
-    }
-
-    fn from_source_spec(
-        package_spec: PackageSpec,
-        source_spec: RockSourceSpec,
-        dependencies: Vec<LuaDependencySpec>,
-    ) -> Self {
-        let version = package_spec.version().clone();
-        let rockspec_format = RockspecFormat::default();
-        let raw_content = format!(
-            r#"
-rockspec_format = "{}"
-package = "{}"
-version = "{}"
-{}
-build = {{
-  type = "source"
-}}"#,
-            rockspec_format,
-            package_spec.name(),
-            version,
-            source_spec.display_lua(),
-        );
-
-        let source: RemoteRockSource = source_spec.into();
-
-        let local = LocalLuaRockspec {
-            rockspec_format: Some(rockspec_format),
-            package: package_spec.name().clone(),
-            version,
-            description: RockDescription::default(),
-            supported_platforms: PlatformSupport::default(),
-            lua: PackageVersionReq::Any,
-            dependencies: PerPlatform::new(dependencies),
-            build_dependencies: PerPlatform::default(),
-            external_dependencies: PerPlatform::default(),
-            test_dependencies: PerPlatform::default(),
-            build: PerPlatform::new(BuildSpec {
-                build_backend: Some(BuildBackendSpec::Source),
-                install: InstallSpec::default(),
-                copy_directories: Vec::new(),
-                patches: HashMap::new(),
-            }),
-            source: PerPlatform::new(source.clone()),
-            test: PerPlatform::default(),
-            deploy: PerPlatform::default(),
-            raw_content,
-        };
-        Self {
-            local,
-            source: PerPlatform::new(source),
-        }
-    }
+            .collect(),
+    )
+    .to_string()
 }
 
 impl Rockspec for RemoteLuaRockspec {
@@ -1911,8 +1862,12 @@ mod tests {
             git_ref: Some(GitRef::Tag("1.0.5".into())),
         };
         let source_spec = RockSourceSpec::Git(source);
-        let rockspec =
-            RemoteLuaRockspec::from_package_and_source_spec(package_req, source_spec.clone());
+        let rockspec = RemoteLuaRockspec::from_source_spec(
+            package_req,
+            source_spec.clone(),
+            Vec::new(),
+            HashMap::new(),
+        );
         let generated_rockspec_str = rockspec.local.raw_content;
         let rockspec2 = RemoteLuaRockspec::new(&generated_rockspec_str).unwrap();
         assert_eq!(rockspec2.local.package, "foo".into());
