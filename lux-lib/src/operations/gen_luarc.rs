@@ -13,7 +13,7 @@ use path_slash::PathBufExt;
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
@@ -87,8 +87,9 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LockedPackageLockType::Regular)
         .rocks()
         .values()
-        .map(|dependency| dependency_tree.layout_for(&dependency.spec).src)
-        .filter(|dir| dir.is_dir())
+        .map(|dependency| dependency_tree.layout_for(&dependency.spec))
+        .flat_map(|layout| [layout.src, layout.lib])
+        .filter(|dir| is_non_empty_dir(dir))
         .filter_map(|dependency_dir| diff_paths(dependency_dir, workspace.root()));
 
     let test_dependency_tree = workspace.test_tree(config)?;
@@ -96,8 +97,9 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
         .local_pkg_lock(&LockedPackageLockType::Test)
         .rocks()
         .values()
-        .map(|dependency| test_dependency_tree.layout_for(&dependency.spec).src)
-        .filter(|dir| dir.is_dir())
+        .map(|dependency| test_dependency_tree.layout_for(&dependency.spec))
+        .flat_map(|layout| [layout.src, layout.lib])
+        .filter(|dir| is_non_empty_dir(dir))
         .filter_map(|test_dependency_dir| diff_paths(test_dependency_dir, workspace.root()));
 
     let library_dirs = dependency_dirs
@@ -131,6 +133,10 @@ fn update_luarc_content(
         .for_each(|path_str| luarc.workspace.library.push(path_str));
 
     serde_json::to_string_pretty(&luarc).map_err(|err| GenLuaRcError::Serialize(err.to_string()))
+}
+
+fn is_non_empty_dir(dir: &Path) -> bool {
+    fs::sync::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
 }
 
 #[cfg(test)]
