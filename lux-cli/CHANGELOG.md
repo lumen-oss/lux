@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.0](https://github.com/lumen-oss/lux/compare/v0.47.0...v0.48.0) `lux-cli` - 2026-10-22
+
+### Added
+- [**breaking**] lazy manifest loading ([#2053](https://github.com/lumen-oss/lux/pull/2053))
+- *(doc)* support selecting from multiple packages ([#2057](https://github.com/lumen-oss/lux/pull/2057))
+- feat!(doc): change `lx doc <package>` to `lx doc -p <package>` ([#2051](https://github.com/lumen-oss/lux/pull/2051))
+- *(doc)* improve error diagnostics ([#2056](https://github.com/lumen-oss/lux/pull/2056))
+- *(project/add)* pin version by `~>` ([#2044](https://github.com/lumen-oss/lux/pull/2044))
+- *(doc)* use workspace tree if cwd is a workspace ([#2047](https://github.com/lumen-oss/lux/pull/2047))
+- *(cli)* add `lx generate-lockfile` (closes #1924)
+- *(cli)* make all top-level flags global
+- *(cli)* [**breaking**] make `lx update` use the current project by default, remove `--toml`
+- [**breaking**] support the manifest cache
+- [**breaking**] unify Sync operation across codebase
+- feat!(resolve): do not reinstall already existing packages, rebuild project on source change
+- [**breaking**] granularize BuildBehaviour
+- *(lockfile)* use atomic writes to prevent corruption during multithreading
+- [**breaking**] pipeline implementation
+
+### Fixed
+- *(doc)* respect `--no-prompt` ([#2059](https://github.com/lumen-oss/lux/pull/2059))
+- *(doc)* support opening nested document ([#2055](https://github.com/lumen-oss/lux/pull/2055))
+- *(cli/new)* allow `--main none`
+- *(TargetSet)* use constructors instead of explicit construction
+- *(outdated)* [**breaking**] do not sync the project when running the command
+- more fixes, cleanup
+- multiple small fixes and refactors
+- *(sync)* use `Sync` in `SyncWorkspace` instead of `InstallWorkspaceDependencies`
+
+### Other
+- *(README)* touch up wording in readme
+
 ## [0.47.0](https://github.com/lumen-oss/lux/compare/v0.46.0...v0.47.0) `lux-cli` - 2026-10-05
 
 ### Added

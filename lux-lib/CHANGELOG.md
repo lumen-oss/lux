@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.66.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.65.0...lux-lib-v0.66.0) `lux-lib` - 2026-10-22
+
+### Added
+- [**breaking**] lazy manifest loading ([#2053](https://github.com/lumen-oss/lux/pull/2053))
+- *(project/add)* pin version by `~>` ([#2044](https://github.com/lumen-oss/lux/pull/2044))
+- *(cli)* add `lx generate-lockfile` (closes #1924)
+- *(cli)* [**breaking**] make `lx update` use the current project by default, remove `--toml`
+- [**breaking**] support the manifest cache
+- *(lockfile)* auto-migrate lockfiles with default layout ([#1998](https://github.com/lumen-oss/lux/pull/1998))
+- [**breaking**] unify Sync operation across codebase
+- feat!(resolve): do not reinstall already existing packages, rebuild project on source change
+- [**breaking**] granularize BuildBehaviour
+- [**breaking**] unify install_rockspec logic with new pipeline
+- [**breaking**] unify search and resolution into RemotePackageDB
+- *(lockfile)* use atomic writes to prevent corruption during multithreading
+- paralellize build step
+- [**breaking**] parallelize resolve and build
+- [**breaking**] pipeline implementation
+
+### Fixed
+- *(update)* preserve requirements, persist lockfile updates ([#2052](https://github.com/lumen-oss/lux/pull/2052))
+- *(add)* don't persist non-existent packages to `lux.toml` ([#2062](https://github.com/lumen-oss/lux/pull/2062))
+- *(resolve)* support transitive workspace dependencies ([#2048](https://github.com/lumen-oss/lux/pull/2048))
+- accidental regression of #1880
+- *(ci)* make CI happy
+- properly gate impure tests for CI
+- *(TargetSet)* use constructors instead of explicit construction
+- *(build)* force install unavailable packages
+- `lint` command reinstalling `luacheck` each time
+- [**breaking**] don't include lux-generated files project hashes
+- more fixes, cleanup
+- multiple small fixes and refactors
+- *(vendor)* deduplicate code in vendor logic
+- remove `dyn` errors
+- *(BuildProject)* only read project dependencies not all workspace dependencies
+- `EmitLockfile` -> `LockfileHandle`
+- collapse artifact types into single `Artifact`
+- *(pack)* preserve sibling files in nested `rock_manifest` directories ([#2036](https://github.com/lumen-oss/lux/pull/2036))
+- *(generate-rockspec)* source `file://` prefix typo ([#2023](https://github.com/lumen-oss/lux/pull/2023))
+
+### Other
+- *(README)* touch up wording in readme
+
 ## [0.65.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.64.2...lux-lib-v0.65.0) `lux-lib` - 2026-10-05
 
 ### Added
