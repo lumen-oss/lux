@@ -102,9 +102,13 @@ struct BuildOpts {
 
 fn features(opts: &BuildOpts) -> Vec<String> {
     #[cfg(not(target_env = "msvc"))]
-    let mut features = vec!["gpgme".to_string(), "luau-transpile".to_string()];
+    let mut features = vec![
+        "gpgme".to_string(),
+        "luau-transpile".to_string(),
+        "wally".to_string(),
+    ];
     #[cfg(target_env = "msvc")]
-    let mut features = vec!["luau-transpile".to_string()];
+    let mut features = vec!["luau-transpile".to_string(), "wally".to_string()];
 
     if opts.vendored {
         features.push("vendored".to_string());

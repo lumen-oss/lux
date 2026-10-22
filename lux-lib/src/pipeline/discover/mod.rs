@@ -1,3 +1,4 @@
+#[cfg(feature = "wally")]
 pub(crate) mod wally;
 
 use std::path::PathBuf;
@@ -81,9 +82,14 @@ pub enum DiscoverError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalRockspec(#[from] crate::project::IntoLocalRockspecError),
+    #[cfg(feature = "wally")]
     #[error(transparent)]
     #[diagnostic(transparent)]
     Wally(#[from] wally::WallyDiscoverError),
+    #[cfg(not(feature = "wally"))]
+    #[error("wally support is disabled in this build")]
+    #[diagnostic(help("this build of Lux was compiled without the `wally` feature"))]
+    WallyDisabled,
 }
 
 #[derive(Builder)]
@@ -132,15 +138,18 @@ fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, D
 async fn discover_source_spec(
     spec: &PackageInstallSpec,
     source: &RockSourceSpec,
-    config: &Config,
+    _config: &Config,
 ) -> Result<FoundPackage, DiscoverError> {
     match source {
         RockSourceSpec::Git(_) | RockSourceSpec::File(_) | RockSourceSpec::Url(_) => {
             discover_fetchable_source(spec, source.clone())
         }
-        RockSourceSpec::Wally(wally_req) => wally::discover(&spec.package, wally_req, config)
+        #[cfg(feature = "wally")]
+        RockSourceSpec::Wally(wally_req) => wally::discover(&spec.package, wally_req, _config)
             .await
             .map_err(DiscoverError::Wally),
+        #[cfg(not(feature = "wally"))]
+        RockSourceSpec::Wally(_) => Err(DiscoverError::WallyDisabled),
     }
 }
 
@@ -188,49 +197,51 @@ async fn download_remote(
 ) -> Result<FoundPackage, DiscoverError> {
     if package_db.has_remote_sources() {
         let mut remote = package_db.find(&spec.package, None).await?;
+        #[cfg(feature = "wally")]
         if let RemotePackageSource::Wally(index_url) = &remote.source {
-            wally::discover_locked(&remote, index_url, config)
+            return wally::discover_locked(&remote, index_url, config)
                 .await
-                .map_err(DiscoverError::Wally)
-        } else {
-            let download = if let Some(vendor_dir) = config.vendor_dir() {
-                FetchVendored::new()
-                    .vendor_dir(vendor_dir)
-                    .package(&spec.package)
-                    .package_db(package_db)
-                    .fetch_vendored_rock()
-                    .await
-                    .map_err(|err| {
-                        DiscoverError::FetchVendored(spec.package.clone(), Box::new(err))
-                    })?
-            } else {
-                Download::new(&spec.package, config)
-                    .package_db(package_db)
-                    .download_remote_rock()
-                    .await
-                    .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?
-            };
-            let rockspec = download.rockspec().clone();
-            let artifact = match &download {
-                RemoteRockDownload::SrcRock {
-                    src_rock,
-                    source_url,
-                    ..
-                } => {
-                    remote.source_url = Some(source_url.clone());
-                    Some(PackageSource::Archive(src_rock.clone()))
-                }
-                RemoteRockDownload::BinaryRock { packed_rock, .. } => {
-                    Some(PackageSource::Archive(packed_rock.clone()))
-                }
-                RemoteRockDownload::RockspecOnly { .. } => None,
-            };
-            Ok(FoundPackage {
-                remote,
-                rockspec,
-                artifact,
-            })
+                .map_err(DiscoverError::Wally);
         }
+        #[cfg(not(feature = "wally"))]
+        if let RemotePackageSource::Wally(_) = &remote.source {
+            return Err(DiscoverError::WallyDisabled);
+        }
+        let download = if let Some(vendor_dir) = config.vendor_dir() {
+            FetchVendored::new()
+                .vendor_dir(vendor_dir)
+                .package(&spec.package)
+                .package_db(package_db)
+                .fetch_vendored_rock()
+                .await
+                .map_err(|err| DiscoverError::FetchVendored(spec.package.clone(), Box::new(err)))?
+        } else {
+            Download::new(&spec.package, config)
+                .package_db(package_db)
+                .download_remote_rock()
+                .await
+                .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?
+        };
+        let rockspec = download.rockspec().clone();
+        let artifact = match &download {
+            RemoteRockDownload::SrcRock {
+                src_rock,
+                source_url,
+                ..
+            } => {
+                remote.source_url = Some(source_url.clone());
+                Some(PackageSource::Archive(src_rock.clone()))
+            }
+            RemoteRockDownload::BinaryRock { packed_rock, .. } => {
+                Some(PackageSource::Archive(packed_rock.clone()))
+            }
+            RemoteRockDownload::RockspecOnly { .. } => None,
+        };
+        Ok(FoundPackage {
+            remote,
+            rockspec,
+            artifact,
+        })
     } else {
         Err(DiscoverError::Search(SearchError::RockNotFound(
             spec.package.clone(),

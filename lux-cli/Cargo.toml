@@ -79,9 +79,10 @@ path = "../lux-lib/"
 features = ["clap"]
 
 [features]
-default = ["gpgme", "luau-transpile"]
+default = ["gpgme", "luau-transpile", "wally"]
 gpgme = ["lux-lib/gpgme"]
 luau-transpile = ["lux-lib/luau-transpile"]
+wally = ["lux-lib/wally"]
 vendored = ["lux-lib/vendored"]
 ssh-tests = ["lux-lib/ssh-tests"]
 impure_tests = ["lux-lib/impure_tests"]

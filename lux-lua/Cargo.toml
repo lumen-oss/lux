@@ -34,8 +34,9 @@ zip = { workspace = true }
 flaky_test = "0.2"
 
 [features]
-default = ["luau-transpile"]
+default = ["luau-transpile", "wally"]
 luau-transpile = ["lux-lib/luau-transpile"]
+wally = ["lux-lib/wally"]
 module = ["mlua/module"]
 lua51 = ["mlua/lua51"]
 lua52 = ["mlua/lua52"]

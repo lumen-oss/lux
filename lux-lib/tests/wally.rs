@@ -1,3 +1,5 @@
+#![cfg(feature = "wally")]
+
 use std::path::PathBuf;
 
 use assert_fs::{prelude::PathCopy, TempDir};

@@ -124,6 +124,7 @@ default = [
 clap = ["dep:clap"]
 gpgme = ["dep:gpgme"]
 luau-transpile = ["dep:kalua"]
+wally = []
 vendored = ["vendored-openssl", "vendored-libgit2"]
 vendored-openssl = ["openssl/vendored", "reqwest/native-tls-vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
