@@ -839,7 +839,7 @@ impl ConfigBuilder {
             .lua_version
             .or(crate::lua_installation::detect_installed_lua_version());
 
-        Ok(Config {
+        Ok(normalise_base_urls(Config {
             enable_development_packages: self.enable_development_packages.unwrap_or(false),
             server: self.server.unwrap_or_else(|| unsafe {
                 Url::parse("https://luarocks.org/").unwrap_unchecked()
@@ -885,7 +885,7 @@ impl ConfigBuilder {
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
             package_types: self.package_types.unwrap_or_default(),
             no_tfa: self.no_tfa.unwrap_or(false),
-        })
+        }))
     }
 }
 
@@ -944,6 +944,24 @@ fn default_variables() -> impl Iterator<Item = (String, String)> {
         ("LIBFLAG".into(), utils::default_libflag().into()),
     ]
     .into_iter()
+}
+
+fn normalise_base_url(mut url: Url) -> Url {
+    if !url.path().ends_with('/') {
+        url.set_path(&format!("{}/", url.path()));
+    }
+    url
+}
+
+fn normalise_base_urls(mut config: Config) -> Config {
+    config.server = normalise_base_url(config.server);
+    config.extra_servers = config
+        .extra_servers
+        .into_iter()
+        .map(normalise_base_url)
+        .collect();
+    config.manifest_cache_url = config.manifest_cache_url.map(normalise_base_url);
+    config
 }
 
 fn deserialize_url<'de, D>(deserializer: D) -> Result<Option<Url>, D::Error>
@@ -1028,6 +1046,33 @@ mod tests {
             String::from_utf8_lossy(&output.stdout).trim(),
             "--prefix world"
         );
+    }
+
+    #[test]
+    fn base_urls_resolve_relative_paths() {
+        let config = ConfigBuilder::default()
+            .server(Some(Url::parse("https://example.com/texrocks").unwrap()))
+            .extra_servers(Some(vec![
+                Url::parse("https://example.com/texrocks").unwrap()
+            ]))
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            config.server().join("manifest-5.1.zip").unwrap().as_str(),
+            "https://example.com/texrocks/manifest-5.1.zip"
+        );
+        assert_eq!(
+            config.extra_servers()[0]
+                .join("manifest-5.1.zip")
+                .unwrap()
+                .as_str(),
+            "https://example.com/texrocks/manifest-5.1.zip"
+        );
+
+        let rebuilt = ConfigBuilder::from(config.clone()).build().unwrap();
+        assert_eq!(rebuilt.server(), config.server());
+        assert_eq!(rebuilt.extra_servers(), config.extra_servers());
     }
 
     #[test]
