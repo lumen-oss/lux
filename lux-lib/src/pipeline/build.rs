@@ -120,7 +120,10 @@ where
                     .deploy()
                     .await
                     .map_err(|err| {
-                        BuildError::Build(rockspec.package().to_string(), Box::new(err))
+                        BuildError::Build(
+                            format!("{}-{}", rockspec.package(), rockspec.version()),
+                            Box::new(err),
+                        )
                     })?,
                 PackageSource::Archive(bytes) => BinaryRockInstall::new(
                     &rockspec,
