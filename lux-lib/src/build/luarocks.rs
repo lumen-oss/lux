@@ -14,7 +14,7 @@ use crate::{
     luarocks::luarocks_installation::{ExecLuaRocksError, LuaRocksError, LuaRocksInstallation},
 };
 
-use super::utils::recursive_copy_dir;
+use super::utils::{recursive_copy_dir, recursive_copy_executable_dir};
 use crate::fs::tempfile::tempdir;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -98,7 +98,7 @@ async fn install<R: Rockspec, T: InstallTree>(
         .join(format!("{}", rockspec.package()))
         .join(format!("{}", rockspec.version()));
     recursive_copy_dir(&package_dir.join("doc"), &layout.doc).await?;
-    recursive_copy_dir(&luarocks_tree.join("bin"), &tree.bin()).await?;
+    recursive_copy_executable_dir(&luarocks_tree.join("bin"), &tree.bin()).await?;
     let src_dir = luarocks_tree.join("share").join("lua").join(&lua_version);
     recursive_copy_dir(&src_dir, &layout.src).await?;
     let lib_dir = luarocks_tree.join("lib").join("lua").join(&lua_version);

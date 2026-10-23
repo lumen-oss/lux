@@ -99,6 +99,21 @@ pub(crate) async fn make_writable(_path: &Path) -> Result<(), fs::FsError> {
     Ok(())
 }
 
+/// Ensures the file at `path` is executable, leaving any other permission bits intact.
+#[cfg(unix)]
+pub(crate) async fn make_executable(path: &Path) -> Result<(), fs::FsError> {
+    let mut perms = fs::tokio::metadata(path).await?.permissions();
+    perms.set_mode(perms.mode() | 0o111);
+    fs::tokio::set_permissions(path, perms).await?;
+    Ok(())
+}
+
+/// See [`make_executable`].
+#[cfg(not(unix))]
+pub(crate) async fn make_executable(_path: &Path) -> Result<(), fs::FsError> {
+    Ok(())
+}
+
 /// See [`make_writable`].
 #[cfg(unix)]
 pub(crate) fn make_writable_sync(path: &Path) -> Result<(), fs::FsError> {
@@ -125,6 +140,21 @@ pub(crate) fn make_writable_sync(_path: &Path) -> Result<(), fs::FsError> {
 /// This respects ignore files and excludes hidden files and directories.
 #[tracing::instrument(level = "trace")]
 pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), fs::FsError> {
+    copy_project_files(src, dest, false).await
+}
+
+/// Like [`recursive_copy_dir`], but marks the copied files as executable.
+/// Anything that ends up in a tree's `bin` directory must be runnable, but the
+/// `install.bin` artifacts produced by LuaRocks do not always carry an exec bit.
+#[tracing::instrument(level = "trace")]
+pub(crate) async fn recursive_copy_executable_dir(
+    src: &PathBuf,
+    dest: &Path,
+) -> Result<(), fs::FsError> {
+    copy_project_files(src, dest, true).await
+}
+
+async fn copy_project_files(src: &PathBuf, dest: &Path, exec: bool) -> Result<(), fs::FsError> {
     if src.exists() {
         for file in project_files(src) {
             let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src)
@@ -135,6 +165,9 @@ pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(),
             }
             fs::tokio::copy(&file, &target).await?;
             make_writable(&target).await?;
+            if exec {
+                make_executable(&target).await?;
+            }
         }
     }
     Ok(())
@@ -1019,5 +1052,25 @@ mod tests {
             .status()
             .await
             .is_ok_and(|status| status.success()));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_recursive_copy_executable_dir() {
+        use std::fs::Permissions;
+
+        let src = assert_fs::TempDir::new().unwrap();
+        let dest = assert_fs::TempDir::new().unwrap();
+        let script = src.path().join("tool");
+        fs::sync::write(&script, "#!/bin/sh\necho hello\n").unwrap();
+        std::fs::set_permissions(&script, Permissions::from_mode(0o644)).unwrap();
+
+        recursive_copy_executable_dir(&src.path().to_path_buf(), dest.path())
+            .await
+            .unwrap();
+
+        let copied = dest.path().join("tool");
+        let mode = std::fs::metadata(copied).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
     }
 }
