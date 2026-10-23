@@ -1,7 +1,8 @@
 use std::{env, io};
 
+use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::operations::SearchAndDownloadError;
-use crate::package::SpecRevIterator;
+use crate::package::{PackageName, PackageVersion, SpecRevIterator};
 use crate::package_db::PackageDB;
 use crate::project::project_toml::{ProjectTomlError, RemoteProjectTomlValidationError};
 use crate::rockspec::Rockspec;
@@ -47,6 +48,29 @@ where
     pub async fn upload_to_luarocks(self) -> Result<(), UploadError> {
         let args = self._build();
         upload_from_project(args).await
+    }
+}
+
+/// An uploader for an existing `.rockspec` file.
+#[derive(Builder)]
+#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
+pub struct RockspecUpload<'a> {
+    rockspec: &'a RemoteLuaRockspec,
+    api_key: Option<ApiKey>,
+    tfa_code: Option<String>,
+    #[cfg(feature = "gpgme")]
+    sign_protocol: SignatureProtocol,
+    config: &'a Config,
+}
+
+impl<State> RockspecUploadBuilder<'_, State>
+where
+    State: rockspec_upload_builder::State + rockspec_upload_builder::IsComplete,
+{
+    /// Upload a rockspec to a luarocks server.
+    pub async fn upload_to_luarocks(self) -> Result<(), UploadError> {
+        let args = self._build();
+        upload_from_rockspec(args).await
     }
 }
 
@@ -325,12 +349,10 @@ impl From<SignatureProtocol> for gpgme::Protocol {
 async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError> {
     let project = args.project;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
-    #[cfg(feature = "gpgme")]
-    let protocol = args.sign_protocol;
     let config = args.config;
     let package_db = args.package_db;
 
-    let client = crate::reqwest::https_client(args.config)?;
+    let client = crate::reqwest::https_client(config)?;
 
     helpers::ensure_tool_version(client, config.server()).await?;
     helpers::ensure_user_exists(client, &api_key, config.server()).await?;
@@ -338,35 +360,107 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     let (rockspec, rockspec_content) =
         helpers::generate_rockspec(project, client, &api_key, config, package_db).await?;
 
-    #[cfg(not(feature = "gpgme"))]
-    let signed: Option<String> = None;
-
     #[cfg(feature = "gpgme")]
-    let signed = if let SignatureProtocol::None = protocol {
-        None
-    } else {
-        let mut ctx = Context::from_protocol(protocol.into())?;
-        let mut signature = Data::new()?;
+    let protocol = args.sign_protocol;
+    #[cfg(not(feature = "gpgme"))]
+    let protocol = SignatureProtocol::None;
 
-        ctx.set_armor(true);
-        ctx.sign_detached(rockspec_content.clone(), &mut signature)?;
+    let signed = sign_rockspec(&rockspec_content, protocol)?;
 
-        let mut signature_str = String::new();
-        signature.read_to_string(&mut signature_str)?;
+    upload_rockspec_content(
+        config,
+        client,
+        &api_key,
+        PreparedRockspec {
+            package: rockspec.package().clone(),
+            version: rockspec.version().clone(),
+            content: rockspec_content,
+        },
+        signed,
+        args.tfa_code,
+    )
+    .await
+}
 
-        Some(signature_str)
-    };
+#[tracing::instrument(
+    name = "Uploading",
+    level = "info",
+    skip_all,
+    fields(package = args.rockspec.package().to_string()),
+)]
+async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<(), UploadError> {
+    let rockspec = args.rockspec;
+    let api_key = args.api_key.unwrap_or(ApiKey::new()?);
+    #[cfg(feature = "gpgme")]
+    let protocol = args.sign_protocol;
+    #[cfg(not(feature = "gpgme"))]
+    let protocol = SignatureProtocol::None;
+    let config = args.config;
 
-    let rockspec = Part::text(rockspec_content)
+    let client = crate::reqwest::https_client(config)?;
+
+    helpers::ensure_tool_version(client, config.server()).await?;
+    helpers::ensure_user_exists(client, &api_key, config.server()).await?;
+
+    if let PackageVersion::StringVer(ver) = rockspec.version() {
+        return Err(UploadError::UnsupportedVersion(ver.to_string()));
+    }
+
+    if helpers::rock_exists(
+        client,
+        &api_key,
+        rockspec.package(),
+        rockspec.version(),
+        config.server(),
+    )
+    .await?
+    {
+        return Err(UploadError::RockExists(config.server().clone()));
+    }
+
+    let rockspec_content = rockspec
+        .to_lua_remote_rockspec_string()
+        .expect("remote rockspec serialization is infallible");
+    let signed = sign_rockspec(&rockspec_content, protocol)?;
+
+    upload_rockspec_content(
+        config,
+        client,
+        &api_key,
+        PreparedRockspec {
+            package: rockspec.package().clone(),
+            version: rockspec.version().clone(),
+            content: rockspec_content,
+        },
+        signed,
+        args.tfa_code,
+    )
+    .await
+}
+
+struct PreparedRockspec {
+    package: PackageName,
+    version: PackageVersion,
+    content: String,
+}
+
+async fn upload_rockspec_content(
+    config: &Config,
+    client: &reqwest::Client,
+    api_key: &ApiKey,
+    rockspec: PreparedRockspec,
+    signed: Option<String>,
+    tfa_code: Option<String>,
+) -> Result<(), UploadError> {
+    let part = Part::text(rockspec.content)
         .file_name(format!(
             "{}-{}.rockspec",
-            rockspec.package(),
-            rockspec.version()
+            rockspec.package, rockspec.version
         ))
         .mime_str("application/octet-stream")?;
 
     let multipart = {
-        let multipart = Form::new().part("rockspec_file", rockspec);
+        let multipart = Form::new().part("rockspec_file", part);
 
         match signed {
             Some(signature) => {
@@ -378,11 +472,11 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     };
 
     let mut request = client
-        .post(unsafe { helpers::url_for_method(config.server(), &api_key, "upload")? })
+        .post(unsafe { helpers::url_for_method(config.server(), api_key, "upload")? })
         .multipart(multipart);
 
-    if let Some(code) = args.tfa_code {
-        let token = helpers::verify_tfa_code(client, config.server(), &api_key, &code).await?;
+    if let Some(code) = tfa_code {
+        let token = helpers::verify_tfa_code(client, config.server(), api_key, &code).await?;
         request = request.header(TFA_TOKEN_HEADER, unsafe { token.get() });
     }
 
@@ -398,6 +492,35 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
         let errors = response.errors.into_iter().join("\n");
         Err(UploadError::Client(config.server().clone(), errors))
     }
+}
+
+#[cfg(feature = "gpgme")]
+fn sign_rockspec(
+    rockspec_content: &str,
+    protocol: SignatureProtocol,
+) -> Result<Option<String>, UploadError> {
+    if let SignatureProtocol::None = protocol {
+        return Ok(None);
+    }
+
+    let mut ctx = Context::from_protocol(protocol.into())?;
+    let mut signature = Data::new()?;
+
+    ctx.set_armor(true);
+    ctx.sign_detached(rockspec_content.to_owned(), &mut signature)?;
+
+    let mut signature_str = String::new();
+    signature.read_to_string(&mut signature_str)?;
+
+    Ok(Some(signature_str))
+}
+
+#[cfg(not(feature = "gpgme"))]
+fn sign_rockspec(
+    _rockspec_content: &str,
+    _protocol: SignatureProtocol,
+) -> Result<Option<String>, UploadError> {
+    Ok(None)
 }
 
 mod helpers {
@@ -553,7 +676,7 @@ mod helpers {
     }
 
     #[tracing::instrument(level = "trace", skip(client, api_key))]
-    async fn rock_exists(
+    pub(crate) async fn rock_exists(
         client: &Client,
         api_key: &ApiKey,
         name: &PackageName,
