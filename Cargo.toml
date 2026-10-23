@@ -32,6 +32,9 @@ git2 = { version = "0.21", features = ["ssh", "https"] }
 ignore = "0.4"
 itertools = "0.15"
 lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
+rustix = { version = "1.1", features = ["process"] }
+check_elevation = "0.3"
+ci_env = "0.5"
 lux-macros = { version = "0.2", path = "./lux-macros" }
 kalua = { version = "0.1.0", path = "./kalua" }
 miette = { version = "7.6", features = ["derive"] }

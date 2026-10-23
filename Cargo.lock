@@ -750,6 +750,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "check_elevation"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8bd5a44e782b910d9336320487a74e7a8256741c1485332608d014d3c2864e7"
+dependencies = [
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -775,6 +784,15 @@ dependencies = [
  "stacker",
  "unicode-ident",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "ci_env"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc568278debc89cf04144427c021e6412cfc4f9d112a488a0a11a496bb3f2c06"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -3828,6 +3846,8 @@ version = "0.49.0"
 dependencies = [
  "assert_fs",
  "base32",
+ "check_elevation",
+ "ci_env",
  "clap 4.6.4",
  "clap_complete",
  "clap_mangen",
@@ -3851,6 +3871,7 @@ dependencies = [
  "path-absolutize",
  "path-slash",
  "pathdiff",
+ "rustix 1.1.4",
  "serde_json",
  "serial_test",
  "shlex",

@@ -182,11 +182,16 @@ pub struct Cli {
     /// Use `--preset nvim` instead.
     #[arg(long, global = true, conflicts_with = "preset")]
     pub nvim: bool,
+
     /// Disable prompts for two-factor authentication (2FA) codes.{n}
     /// It is strongly recommended to enable 2FA instead
     /// see (https://luarocks.org/settings/two-factor-auth).
     #[arg(long, global = true)]
     pub no_tfa: bool,
+
+    /// Allow Lux to run as root (linux) or Administrator (windows).
+    #[arg(long, global = true)]
+    pub allow_root: bool,
 
     /// Timeout on network operations, in seconds.{n}
     /// 0 means no timeout (wait forever). Default is 30.

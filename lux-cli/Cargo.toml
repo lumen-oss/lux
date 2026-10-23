@@ -50,6 +50,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 tracing-indicatif = "0.3.14"
 indicatif = "0.18"
 content_inspector = "0.2"
+ci_env = { workspace = true }
 clap_complete = { workspace = true }
 clap_mangen = { workspace = true }
 itertools = { workspace = true }
@@ -77,6 +78,12 @@ flaky_test = "0.2"
 version = "0.67.0"
 path = "../lux-lib/"
 features = ["clap", "schema"]
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+check_elevation = { workspace = true }
 
 [features]
 default = ["gpgme", "luau-transpile", "wally"]
