@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.48.0...lux-lsp-v0.49.0) `lux-lsp` - 2026-10-23
+
+### Added
+- generate schema for lux.toml & config ([#1989](https://github.com/lumen-oss/lux/pull/1989))
+
 ## [0.48.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.47.0...lux-lsp-v0.48.0) `lux-lsp` - 2026-10-22
 
 ### Other
