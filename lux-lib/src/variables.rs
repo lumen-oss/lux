@@ -4,7 +4,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, Diagnostic)]
 #[non_exhaustive]
 pub enum VariableSubstitutionError {
-    #[error("unable to substitute variables")]
+    #[error("unable to substitute variables: {}", .0.join(", "))]
     #[diagnostic(help(
         r#"check that all $(VAR) references refer to defined variables
 in the lux.toml or rockspec."#
