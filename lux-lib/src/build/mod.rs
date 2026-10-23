@@ -482,10 +482,13 @@ mod tests {
         prelude::{PathChild, PathCopy},
     };
 
+    use is_executable::IsExecutable;
+
     use crate::{
         config::ConfigBuilder,
-        lockfile::{LockConstraint, LockedPackageHashes},
+        lockfile::{LockConstraint, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
         lua_installation::{detect_installed_lua_version, LuaInstallation},
+        lua_rockspec::RemoteLuaRockspec,
         lua_version::LuaVersion,
         package::PackageSpec,
         project::Project,
@@ -576,6 +579,63 @@ mod tests {
         bin_file.assert(predicate::path::is_file());
         bin_file.assert(predicate::str::contains("#!/usr/bin/env bash"));
         bin_file.assert(predicate::str::contains("echo \"Hello\""));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_install_bin_sets_executable_permissions() {
+        let rockspec = RemoteLuaRockspec::new(
+            r#"
+rockspec_format = "3.0"
+package = "test-builtin-bin"
+version = "1.0-1"
+source = { url = "https://github.com/lumen-oss/luarocks-stub" }
+build = {
+    type = "builtin",
+    install = { bin = { mytool = "mytool" } },
+}
+deploy = { wrap_bin_scripts = false }
+"#,
+        )
+        .unwrap();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let tree_dir = assert_fs::TempDir::new().unwrap();
+        let build_dir = assert_fs::TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(lua_version)
+            .user_tree(Some(tree_dir.to_path_buf()))
+            .build()
+            .unwrap();
+        let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        let tree = config
+            .user_tree(config.lua_version().cloned().unwrap())
+            .unwrap();
+        let package = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
+            LockConstraint::Unconstrained,
+            Vec::new(),
+            Vec::new(),
+            &PinnedState::default(),
+            &OptState::default(),
+        );
+        tree.prepare(&package).unwrap();
+        crate::fs::tokio::write(build_dir.path().join("mytool"), "#!/bin/sh\necho hi\n")
+            .await
+            .unwrap();
+        install(
+            &rockspec,
+            &tree,
+            &package,
+            &lua,
+            build_dir.path(),
+            &EntryType::Entrypoint,
+            &config,
+        )
+        .await
+        .unwrap();
+        assert!(tree.bin().join("mytool").is_executable());
     }
 
     #[cfg(feature = "impure_tests")]
