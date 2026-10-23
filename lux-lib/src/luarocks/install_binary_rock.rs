@@ -190,7 +190,7 @@ where
                     &layout.src,
                 )
                 .await?;
-                install_manifest_entries(
+                install_bin_manifest_entries(
                     &rock_manifest.bin.entries,
                     &unpack_dir.path().join("bin"),
                     &self.tree.bin(),
@@ -255,10 +255,26 @@ async fn install_manifest_entries<T>(
     Ok(())
 }
 
+async fn install_bin_manifest_entries(
+    entries: &HashMap<PathBuf, String>,
+    src: &Path,
+    dest: &Path,
+) -> Result<(), InstallBinaryRockError> {
+    install_manifest_entries(entries, src, dest).await?;
+    #[cfg(unix)]
+    for relative_src_path in entries.keys() {
+        crate::build::utils::set_executable_permissions(&dest.join(relative_src_path)).await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 
-    use io::Read;
+    use assert_fs::TempDir;
+    use io::{Read, Write};
+    use is_executable::IsExecutable;
+    use zip::write::SimpleFileOptions;
 
     use crate::{
         config::ConfigBuilder,
@@ -322,6 +338,65 @@ mod tests {
             .join("foo")
             .join("bar.lua");
         assert!(foo_bar_module.is_file());
+    }
+
+    fn packed_rock_with_bin() -> Vec<u8> {
+        let rockspec = r#"
+rockspec_format = "3.0"
+package = "test-binary-bin"
+version = "1.0-1"
+source = { url = "https://example.com/test-binary-bin.zip" }
+"#;
+        let manifest = r#"rock_manifest = { bin = { mytool = "0" } }"#;
+        let mut buf = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(Cursor::new(&mut buf));
+            let options = SimpleFileOptions::default();
+            for (name, content) in [
+                ("test-binary-bin-1.0-1.rockspec", rockspec.as_bytes()),
+                ("bin/mytool", b"#!/bin/sh\necho hi\n".as_slice()),
+                ("rock_manifest", manifest.as_bytes()),
+            ] {
+                zip.start_file(name, options).unwrap();
+                zip.write_all(content).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buf
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn install_binary_rock_makes_bin_executable() {
+        let rock = DownloadedPackedRockBytes {
+            name: "test-binary-bin".into(),
+            version: "1.0-1".parse().unwrap(),
+            bytes: Bytes::from(packed_rock_with_bin()),
+            file_name: "test-binary-bin-1.0-1.all.rock".into(),
+            url: "https://test.org".parse().unwrap(),
+        };
+        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let install_root = TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(install_root.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config
+            .user_tree(config.lua_version().unwrap().clone())
+            .unwrap();
+        BinaryRockInstall::new(
+            &rockspec,
+            RemotePackageSource::Test,
+            rock.bytes,
+            tree::EntryType::Entrypoint,
+            &config,
+            &tree,
+        )
+        .install()
+        .await
+        .unwrap();
+        assert!(tree.bin().join("mytool").is_executable());
     }
 
     /// This relatively large integration test case tests the following:

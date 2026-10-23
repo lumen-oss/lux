@@ -833,9 +833,9 @@ exit /b %ERRORLEVEL%
 
 #[cfg(unix)]
 #[tracing::instrument(level = "trace")]
-async fn set_executable_permissions(script: &Path) -> Result<(), fs::FsError> {
+pub(crate) async fn set_executable_permissions(script: &Path) -> Result<(), fs::FsError> {
     let mut perms = fs::tokio::metadata(&script).await?.permissions();
-    perms.set_mode(0o744);
+    perms.set_mode(perms.mode() | 0o111);
     fs::tokio::set_permissions(&script, perms).await?;
     Ok(())
 }
