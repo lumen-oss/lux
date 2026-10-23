@@ -314,18 +314,15 @@ fn modules_from_zip(bytes: &[u8]) -> Result<HashMap<LuaModule, ModuleSpec>, Wall
     let mut modules = HashMap::new();
     for index in 0..archive.len() {
         let file = archive.by_index(index)?;
-        let name = file.name().to_string();
-        if name.ends_with('/') {
+        if file.is_dir() {
             continue;
         }
-        let path = Path::new(&name);
-        if !is_lua_path(path) || is_test_file(path) {
-            continue;
+        match file.enclosed_name() {
+            Some(path) if is_lua_path(&path) && !is_test_file(&path) => {
+                modules.insert(lua_module_from_entry(&path)?, ModuleSpec::SourcePath(path));
+            }
+            _ => {}
         }
-        modules.insert(
-            lua_module_from_entry(path)?,
-            ModuleSpec::SourcePath(path.to_path_buf()),
-        );
     }
     Ok(modules)
 }
