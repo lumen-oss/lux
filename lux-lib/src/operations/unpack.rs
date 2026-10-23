@@ -30,28 +30,32 @@ pub enum UnpackError {
     UnknownMimeType,
 }
 
-#[tracing::instrument(name = "Unpacking src.rock", skip_all)]
 pub async fn unpack_src_rock<R: Read + Seek + Send + 'static>(
     rock_src: R,
     destination: PathBuf,
 ) -> Result<PathBuf, UnpackError> {
-    let dest = tokio::task::spawn_blocking(move || {
-        let mut zip = zip::ZipArchive::new(rock_src)?;
-        zip.extract(&destination)?;
-        Ok::<PathBuf, UnpackError>(destination)
-    })
-    .await
-    .map_err(|err| UnpackError::Io(io::Error::other(err)))??;
-    Ok(dest)
+    unpack(
+        Some("application/zip"),
+        rock_src,
+        true,
+        "src.rock".to_string(),
+        &destination,
+    )
+    .await?;
+    Ok(destination)
 }
 
-#[tracing::instrument(name = "Unpacking file", skip_all)]
+#[tracing::instrument(
+    name = "Unpacking file",
+    skip_all,
+    fields(file_name = %file_name)
+)]
 #[async_recursion]
 pub(crate) async fn unpack<R>(
     mime_type: Option<&str>,
     reader: R,
     extract_nested_archive: bool,
-    _file_name: String,
+    file_name: String,
     dest_dir: &Path,
 ) -> Result<(), UnpackError>
 where
@@ -255,6 +259,29 @@ mod tests {
         let file = File::open(&test_rock_path).unwrap();
         let dest = TempDir::new().unwrap();
         unpack_src_rock(file, dest.to_path_buf()).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_unpack_src_rock_extracts_nested_archive() {
+        let source_archive = make_zip(&[("foo-1.0/lua/foo.lua", b"return {}")]);
+        let src_rock = make_zip(&[
+            (
+                "foo-1.0-1.rockspec",
+                br#"package = 'foo'
+version = '1.0-1'
+source = { url = 'https://example.com/foo.zip', dir = 'foo-1.0' }
+"#,
+            ),
+            ("foo-1.0.zip", &source_archive),
+        ]);
+        let dest = TempDir::new().unwrap();
+
+        unpack_src_rock(Cursor::new(src_rock), dest.to_path_buf())
+            .await
+            .unwrap();
+
+        assert!(dest.path().join("foo-1.0/lua/foo.lua").is_file());
+        assert!(!dest.path().join("foo-1.0.zip").exists());
     }
 
     #[test]
