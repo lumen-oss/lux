@@ -10,6 +10,7 @@ use lux_lib::{
     lua_installation::{LuaBinary, LuaInstallation},
     lua_version::LuaVersion,
     operations,
+    path::LuaEnvironment,
     workspace::Workspace,
 };
 
@@ -44,6 +45,17 @@ pub struct RunLua {
     #[arg(long)]
     no_loader: bool,
 
+    /// Only load packages from the current project.
+    /// Does not inherit user-installed packages or system Lua paths.
+    /// This is the default when running inside a project.
+    #[arg(long, conflicts_with = "impure")]
+    pure: bool,
+
+    /// Also expose user-installed packages and system Lua paths.
+    /// This is the default when running outside a project.
+    #[arg(long, conflicts_with = "pure")]
+    impure: bool,
+
     #[clap(flatten)]
     build_args: Build,
 
@@ -54,6 +66,11 @@ pub struct RunLua {
 
 pub async fn run_lua(run_lua: RunLua, config: Config) -> Result<()> {
     let workspace = Workspace::current()?;
+    let environment = if run_lua.pure || (workspace.is_some() && !run_lua.impure) {
+        LuaEnvironment::Pure
+    } else {
+        LuaEnvironment::Impure
+    };
     let (lua_version, root, tree, mut welcome_message) = match &workspace {
         Some(workspace) => {
             let package_names = workspace
@@ -119,6 +136,7 @@ To exit type 'exit()' or <C-d>.
         .prepend_test_paths(run_lua.test)
         .prepend_build_paths(run_lua.build)
         .disable_loader(run_lua.no_loader)
+        .environment(environment)
         .lua_init("exit = os.exit".to_string())
         .welcome_message(welcome_message)
         .run_lua()
@@ -152,7 +170,11 @@ Arguments:
 
 Options:
   --lua       Path to the Lua interpreter to use
+  --pure      Only load packages from the current project
+  --impure    Also expose user-installed packages and system Lua paths
   -h, --help  Print help
+
+The default environment is pure inside a project and impure outside one.
 
 Build options (if running a repl for a project):
   --test      Prepend test dependencies to the LUA_PATH and LUA_CPATH

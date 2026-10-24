@@ -1,5 +1,6 @@
 use crate::{
     build::utils::c_dylib_extension,
+    config::Config,
     lua_version::LuaVersion,
     tree::{InstallTree, TreeError},
 };
@@ -12,6 +13,15 @@ use thiserror::Error;
 
 const LUA_PATH_SEPARATOR: &str = ";";
 const LUA_INIT: &str = "require('lux').loader()";
+
+/// Whether Lua should only see the current tree's packages (pure mode)
+/// or also user-installed packages and system paths (impure).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LuaEnvironment {
+    #[default]
+    Pure,
+    Impure,
+}
 
 #[derive(PartialEq, Eq, Debug, Serialize)]
 pub struct Paths {
@@ -67,6 +77,25 @@ impl Paths {
         Ok(paths)
     }
 
+    pub fn for_environment<T: InstallTree>(
+        tree: &T,
+        config: &Config,
+        environment: LuaEnvironment,
+    ) -> Result<Self, PathsError> {
+        let tree_paths = Self::new(tree)?;
+        match environment {
+            LuaEnvironment::Pure => Ok(tree_paths),
+            LuaEnvironment::Impure => {
+                let user_tree = config
+                    .user_tree(tree.version().clone())
+                    .map_err(PathsError::from)?;
+                let mut paths = Self::new(&user_tree)?;
+                paths.prepend(&tree_paths);
+                Ok(paths)
+            }
+        }
+    }
+
     /// Get the `package.path`
     pub fn package_path(&self) -> &PackagePath {
         &self.src
@@ -94,6 +123,36 @@ impl Paths {
         lua_cpath
     }
 
+    pub fn lua_path(&self, environment: LuaEnvironment) -> String {
+        self.lua_package_path(self.package_path(), environment, "LUA_PATH")
+    }
+
+    pub fn lua_cpath(&self, environment: LuaEnvironment) -> String {
+        self.lua_package_path(self.package_cpath(), environment, "LUA_CPATH")
+    }
+
+    pub fn lua_env_vars(
+        &self,
+        environment: LuaEnvironment,
+        lua_init: &str,
+    ) -> Vec<(String, String)> {
+        let lua_path = self.lua_path(environment);
+        let lua_cpath = self.lua_cpath(environment);
+        vec![
+            ("LUA_PATH".into(), lua_path.clone()),
+            (self.versioned_env_var("LUA_PATH"), lua_path),
+            ("LUA_CPATH".into(), lua_cpath.clone()),
+            (self.versioned_env_var("LUA_CPATH"), lua_cpath),
+            ("LUA_INIT".into(), lua_init.to_string()),
+            (self.versioned_env_var("LUA_INIT"), lua_init.to_string()),
+        ]
+    }
+
+    /// The Lua version these paths belong to.
+    pub fn version(&self) -> &LuaVersion {
+        &self.version
+    }
+
     /// Get the `$PATH`
     pub fn path(&self) -> &BinPath {
         &self.bin
@@ -115,6 +174,51 @@ impl Paths {
         self.src.prepend(&other.src);
         self.lib.prepend(&other.lib);
         self.bin.prepend(&other.bin);
+    }
+}
+
+impl Paths {
+    fn lua_package_path(
+        &self,
+        tree: &PackagePath,
+        environment: LuaEnvironment,
+        var: &str,
+    ) -> String {
+        match environment {
+            LuaEnvironment::Pure => tree.joined(),
+            LuaEnvironment::Impure => {
+                let mut paths = self.inherited_package_path(var);
+                paths.prepend(tree);
+                format!("{};;", paths.joined())
+            }
+        }
+    }
+
+    fn inherited_package_path(&self, var: &str) -> PackagePath {
+        env::var(self.versioned_env_var(var))
+            .or_else(|_| env::var(var))
+            .ok()
+            .and_then(|value| PackagePath::from_str(&value).ok())
+            .unwrap_or_default()
+    }
+
+    fn versioned_env_var(&self, var: &str) -> String {
+        format!(
+            "{var}_{}",
+            self.version.version_compatibility_str().replace('.', "_")
+        )
+    }
+}
+
+#[cfg(test)]
+impl Paths {
+    pub(crate) fn test(version: LuaVersion, src: PackagePath, lib: PackagePath) -> Self {
+        Self {
+            src,
+            lib,
+            bin: BinPath::default(),
+            version,
+        }
     }
 }
 
@@ -214,6 +318,39 @@ impl Display for BinPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::ffi::OsString;
+
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = env::var_os(key);
+            env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => env::set_var(self.key, value),
+                None => env::remove_var(self.key),
+            }
+        }
+    }
+
+    fn test_paths(version: LuaVersion, src: &[&str], lib: &[&str]) -> Paths {
+        Paths {
+            src: PackagePath(src.iter().map(|path| PathBuf::from(*path)).collect()),
+            lib: PackagePath(lib.iter().map(|path| PathBuf::from(*path)).collect()),
+            bin: BinPath::default(),
+            version,
+        }
+    }
 
     #[test]
     fn package_path_leading_trailing_delimiters() {
@@ -231,6 +368,54 @@ mod tests {
         assert_eq!(
             format!("{path}"),
             "/path/to/some/lib/lua/5.1/?.so;/path/to/another/lib/lua/5.1/?.so"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn pure_lua_path_ignores_inherited_paths() {
+        let _base = EnvGuard::set("LUA_PATH", "/system/?.lua");
+        let _versioned = EnvGuard::set("LUA_PATH_5_4", "/system54/?.lua");
+        let paths = test_paths(LuaVersion::Lua54, &["/project/?.lua"], &[]);
+
+        assert_eq!(paths.lua_path(LuaEnvironment::Pure), "/project/?.lua");
+    }
+
+    #[test]
+    #[serial]
+    fn impure_lua_path_prefers_versioned_env_and_appends_defaults() {
+        let _base = EnvGuard::set("LUA_PATH", "/system/?.lua");
+        let _versioned = EnvGuard::set("LUA_PATH_5_4", "/system54/?.lua");
+        let paths = test_paths(LuaVersion::Lua54, &["/project/?.lua"], &[]);
+
+        assert_eq!(
+            paths.lua_path(LuaEnvironment::Impure),
+            "/project/?.lua;/system54/?.lua;;"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn impure_lua_path_falls_back_to_unversioned_env() {
+        let _base = EnvGuard::set("LUA_PATH", "/system/?.lua");
+        let _versioned = EnvGuard::set("LUA_PATH_5_3", "/system53/?.lua");
+        let paths = test_paths(LuaVersion::Lua54, &["/project/?.lua"], &[]);
+
+        assert_eq!(
+            paths.lua_path(LuaEnvironment::Impure),
+            "/project/?.lua;/system/?.lua;;"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn impure_lua_cpath_merges_inherited_paths() {
+        let _versioned = EnvGuard::set("LUA_CPATH_5_4", "/system54/?.so");
+        let paths = test_paths(LuaVersion::Lua54, &[], &["/project/?.so"]);
+
+        assert_eq!(
+            paths.lua_cpath(LuaEnvironment::Impure),
+            "/project/?.so;/system54/?.so;;"
         );
     }
 }

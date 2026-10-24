@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use lux_lib::{build::BuildBehaviour, config::Config, operations, workspace::Workspace};
+use lux_lib::{
+    build::BuildBehaviour, config::Config, operations, path::LuaEnvironment, workspace::Workspace,
+};
 use miette::Result;
 
 use crate::build::{self, Build};
@@ -18,6 +20,10 @@ pub struct Run {
     #[arg(long)]
     no_loader: bool,
 
+    /// Also expose user-installed packages and system Lua paths.
+    #[arg(long)]
+    impure: bool,
+
     /// Path in which to run the command.{n}
     /// Defaults to the project root.
     #[arg(long)]
@@ -29,6 +35,11 @@ pub struct Run {
 
 pub async fn run(run_args: Run, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
+    let environment = if run_args.impure {
+        LuaEnvironment::Impure
+    } else {
+        LuaEnvironment::Pure
+    };
 
     let package = run_args.build.package.clone();
     build::build_with_behaviour(run_args.build, config.clone(), BuildBehaviour::Ignore).await?;
@@ -39,6 +50,7 @@ pub async fn run(run_args: Run, config: Config) -> Result<()> {
         .args(&run_args.args)
         .config(&config)
         .disable_loader(run_args.no_loader)
+        .environment(environment)
         .run()
         .await?;
 

@@ -8,7 +8,6 @@ use crate::{
     config::Config,
     lua_installation::{LuaInstallation, LuaInstallationError},
     lua_version::LuaVersion,
-    path::{BinPath, PackagePath},
     tree::InstallTree,
 };
 
@@ -24,7 +23,7 @@ use tokio::process::Command;
 
 use crate::{
     lua_installation::{LuaBinary, LuaBinaryError},
-    path::{Paths, PathsError},
+    path::{LuaEnvironment, Paths, PathsError},
     tree::Tree,
     tree::TreeError,
 };
@@ -70,6 +69,7 @@ pub struct RunLua<'a> {
     disable_loader: Option<bool>,
     lua_init: Option<String>,
     welcome_message: Option<String>,
+    environment: LuaEnvironment,
 }
 
 impl<State> RunLuaBuilder<'_, State>
@@ -78,7 +78,7 @@ where
 {
     pub async fn run_lua(self) -> Result<(), RunLuaError> {
         let args = self._build();
-        let mut paths = Paths::new(args.tree)?;
+        let mut paths = Paths::for_environment(args.tree, args.config, args.environment)?;
 
         if args.prepend_test_paths.unwrap_or(false) {
             let test_tree_path = args.tree.test_tree(args.config)?;
@@ -101,7 +101,7 @@ where
         let loader_init = if args.tree.version().is_luau() || args.disable_loader.unwrap_or(false) {
             "".to_string()
         } else {
-            let is_lux_lua_available = detect_lux_lua(&lua_cmd, &paths).await;
+            let is_lux_lua_available = detect_lux_lua(&lua_cmd, &paths, args.environment).await;
             if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
                 tracing::warn!("lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.");
                 "".to_string()
@@ -123,9 +123,7 @@ where
             .current_dir(args.root)
             .args(args.args)
             .env("PATH", paths.path_prepended().joined())
-            .env("LUA_PATH", paths.package_path().joined())
-            .env("LUA_CPATH", paths.package_cpath().joined())
-            .env("LUA_INIT", lua_init)
+            .envs(paths.lua_env_vars(args.environment, &lua_init))
             .status()
             .await
         {
@@ -151,23 +149,15 @@ where
 /// in nixpkgs using `lua.withPackages (ps: [ps.lux-lua])`.
 /// If the command fails for any reason (including not being able to find the 'lux' module),
 /// this function evaluates to `false`.
-async fn detect_lux_lua(lua_cmd: &Path, paths: &Paths) -> bool {
-    detect_lua_module(
-        lua_cmd,
-        &paths.package_path_prepended(),
-        &paths.package_cpath_prepended(),
-        &paths.path_prepended(),
-        "lux",
-    )
-    .await
+async fn detect_lux_lua(lua_cmd: &Path, paths: &Paths, environment: LuaEnvironment) -> bool {
+    detect_lua_module(lua_cmd, "lux", paths, environment).await
 }
 
 async fn detect_lua_module(
     lua_cmd: &Path,
-    lua_path: &PackagePath,
-    lua_cpath: &PackagePath,
-    path: &BinPath,
     module: &str,
+    paths: &Paths,
+    environment: LuaEnvironment,
 ) -> bool {
     Command::new(lua_cmd)
         .arg("-e")
@@ -177,9 +167,8 @@ async fn detect_lua_module(
         ))
         .stderr(Stdio::null())
         .stdout(Stdio::null())
-        .env("LUA_PATH", lua_path.joined())
-        .env("LUA_CPATH", lua_cpath.joined())
-        .env("PATH", path.joined())
+        .envs(paths.lua_env_vars(environment, ""))
+        .env("PATH", paths.path_prepended().joined())
         .status()
         .await
         .is_ok_and(|status| status.success())
@@ -211,6 +200,7 @@ mod tests {
 
     use super::*;
     use crate::fs;
+    use crate::path::PackagePath;
     use assert_fs::prelude::{PathChild, PathCreateDir};
     use assert_fs::TempDir;
     use path_slash::PathBufExt;
@@ -227,21 +217,14 @@ mod tests {
         let package_path =
             PackagePath::from_str(lux_path_expr.to_slash_lossy().to_string().as_str()).unwrap();
         let package_cpath = PackagePath::default();
-        let path = BinPath::default();
+        let paths = Paths::test(LuaVersion::Lua54, package_path, package_cpath);
         let lua_cmd = which("lua")
             .ok()
             .or(which("luajit").ok())
             .expect("lua not found");
-        let result = detect_lua_module(&lua_cmd, &package_path, &package_cpath, &path, "lux").await;
+        let result = detect_lua_module(&lua_cmd, "lux", &paths, LuaEnvironment::Pure).await;
         assert!(result, "detects module on the LUA_PATH");
-        let result = detect_lua_module(
-            &lua_cmd,
-            &package_path,
-            &package_cpath,
-            &path,
-            "lhflasdlkas",
-        )
-        .await;
+        let result = detect_lua_module(&lua_cmd, "lhflasdlkas", &paths, LuaEnvironment::Pure).await;
         assert!(!result, "does not detect non-existing module");
     }
 }

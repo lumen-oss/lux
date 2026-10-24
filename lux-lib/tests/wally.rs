@@ -8,6 +8,7 @@ use lux_lib::{
     config::ConfigBuilder,
     lua_version::LuaVersion,
     operations::{BuildWorkspace, Run},
+    path::LuaEnvironment,
     workspace::Workspace,
 };
 
@@ -37,6 +38,7 @@ async fn test_install_wally_dependency() {
         .workspace(&workspace)
         .config(&config)
         .args(&Vec::new())
+        .environment(LuaEnvironment::Pure)
         .run()
         .await
         .unwrap();

@@ -13,7 +13,7 @@ use crate::{
     lua_rockspec::LuaVersionError,
     operations::run_lua::{self, RunLua},
     package::PackageName,
-    path::{Paths, PathsError},
+    path::{LuaEnvironment, Paths, PathsError},
     project::project_toml::LocalProjectTomlValidationError,
     tree::InstallTree,
     workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
@@ -99,6 +99,7 @@ pub struct Run<'a> {
     args: &'a [String],
     config: &'a Config,
     disable_loader: Option<bool>,
+    environment: LuaEnvironment,
 }
 
 impl<State> RunBuilder<'_, State>
@@ -125,11 +126,31 @@ where
             args.extend(extra_args.iter().cloned());
         }
         let disable_loader = run.disable_loader.unwrap_or(false);
+        let environment = run.environment;
         match &run_spec.command {
             Some(command) => {
-                run_with_command(workspace, command, run.dir, disable_loader, &args, config).await
+                run_with_command(
+                    workspace,
+                    command,
+                    run.dir,
+                    disable_loader,
+                    &args,
+                    config,
+                    environment,
+                )
+                .await
             }
-            None => run_with_local_lua(workspace, run.dir, disable_loader, &args, config).await,
+            None => {
+                run_with_local_lua(
+                    workspace,
+                    run.dir,
+                    disable_loader,
+                    &args,
+                    config,
+                    environment,
+                )
+                .await
+            }
         }
     }
 }
@@ -140,6 +161,7 @@ async fn run_with_local_lua(
     disable_loader: bool,
     args: &Vec<String>,
     config: &Config,
+    environment: LuaEnvironment,
 ) -> Result<(), RunError> {
     let version = workspace.lua_version(config)?;
 
@@ -154,6 +176,7 @@ async fn run_with_local_lua(
         .lua_cmd(lua_cmd)
         .disable_loader(disable_loader)
         .args(args)
+        .environment(environment)
         .run_lua()
         .await?;
 
@@ -167,9 +190,10 @@ async fn run_with_command(
     disable_loader: bool,
     args: &[String],
     config: &Config,
+    environment: LuaEnvironment,
 ) -> Result<(), RunError> {
     let tree = workspace.tree(config)?;
-    let paths = Paths::new(&tree)?;
+    let paths = Paths::for_environment(&tree, config, environment)?;
 
     let lua_init = if tree.version().is_luau() || disable_loader {
         None
@@ -189,9 +213,7 @@ async fn run_with_command(
     match cmd
         .args(args.iter().cloned().collect_vec())
         .env("PATH", paths.path_prepended().joined())
-        .env("LUA_INIT", lua_init.unwrap_or_default())
-        .env("LUA_PATH", paths.package_path().joined())
-        .env("LUA_CPATH", paths.package_cpath().joined())
+        .envs(paths.lua_env_vars(environment, &lua_init.unwrap_or_default()))
         .status()
         .await?
         .code()

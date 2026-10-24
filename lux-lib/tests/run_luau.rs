@@ -1,7 +1,8 @@
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
 use lux_lib::{
-    config::ConfigBuilder, lua_version::LuaVersion, operations::Run, workspace::Workspace,
+    config::ConfigBuilder, lua_version::LuaVersion, operations::Run, path::LuaEnvironment,
+    workspace::Workspace,
 };
 use std::path::PathBuf;
 
@@ -26,6 +27,7 @@ async fn test_luau_run_entrypoint() {
         .workspace(&workspace)
         .config(&config)
         .args(&Vec::new())
+        .environment(LuaEnvironment::Pure)
         .run()
         .await
         .unwrap();
