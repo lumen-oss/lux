@@ -37,7 +37,7 @@ const LUA55_HASH: &str = "sha256-HEtAaNZwYfKiIxrStUIud6zqFIfqmJD2Mgr2FPQ3Pc4=";
 // XXX: there's no tag with lua 5.2 compatibility, so we have to use the v2.1 branch for now
 // this is unstable and might break the build.
 const LUAJIT_MM_VERSION: &str = "2.1";
-const LUAU_VERSION: &str = "0.743";
+const LUAU_VERSION: &str = "0.744";
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
