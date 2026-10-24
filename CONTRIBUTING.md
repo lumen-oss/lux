@@ -232,6 +232,8 @@ as well as the build/test/source structs they nest.
 > - Use double quotes for string values (e.g. `">= 5.1"`).
 > - Use backticks for identifiers, field names, commands and crates
 >   (e.g. `version`, `make`, `diffy`).
+> - Use `#[schemars(extend("x-lux-toml-example" = "..."))]` for TOML examples.
+>   They are rendered as code blocks on the documentation site.
 
 To preview the generated documentation:
 

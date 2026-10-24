@@ -23,7 +23,13 @@ pub fn lux_toml_schema() -> schemars::Schema {
     schema.insert("title".to_string(), "lux.toml".into());
     schema.insert(
         "description".to_string(),
-        "The TOML manifest for a Lux project.".into(),
+        r#"The TOML manifest for a Lux project.
+
+`lux.toml` is a subset of the [Lua rockspec format](https://github.com/luarocks/luarocks/blob/main/docs/rockspec_format.md),
+with some simplifications, represented in TOML.
+It does not support advanced specifications like platform overrides.
+Those can be declared with an [`extra.rockspec`](https://lux.lumen-labs.org/guides/rockspec)."#
+            .into(),
     );
     schema
 }
@@ -98,6 +104,12 @@ fn deref_schema<'a>(value: &'a Value, defs: &'a Map<String, Value>) -> &'a Value
     current
 }
 
+fn render_example(out: &mut String, example: &str) {
+    out.push_str("```toml\n");
+    out.push_str(example.trim());
+    out.push_str("\n```\n\n");
+}
+
 fn render_properties(
     out: &mut String,
     props: &Map<String, Value>,
@@ -121,6 +133,13 @@ fn render_properties(
         if let Some(desc) = desc {
             out.push_str(desc);
             out.push_str("\n\n");
+        }
+        if let Some(example) = raw
+            .get("x-lux-toml-example")
+            .and_then(Value::as_str)
+            .or_else(|| prop.get("x-lux-toml-example").and_then(Value::as_str))
+        {
+            render_example(out, example);
         }
 
         let resolved = deref_schema(prop, defs);
@@ -224,14 +243,17 @@ pub(crate) enum DependencyEntry {
 #[derive(JsonSchema)]
 pub(crate) struct DependencyTableEntry {
     /// The version requirement, e.g. "1.0".
+    /// Supports the same operators as `dependencies`.
     pub version: String,
-    /// Whether the dependency is optional.
+    /// Whether the dependency is optional. Default: `false`.
     pub opt: Option<bool>,
-    /// Whether the dependency should be pinned.
+    /// Whether the dependency should be pinned. Default: `false`.
     pub pin: Option<bool>,
     /// A git source. Supported shorthands: "github:owner/repo" (default if the
     /// prefix is omitted), "gitlab:owner/repo", "codeberg:owner/repo", and
     /// "sourcehut:owner/repo". Full HTTPS and SSH URLs are also accepted.
+    /// If `rev` is unset, `version` is used as the commit SHA or tag.
+    /// Git dependencies cannot be published to LuaRocks.
     pub git: Option<String>,
     /// A local path dependency.
     pub path: Option<String>,
@@ -266,4 +288,28 @@ pub(crate) struct ModulePathsSpec {
     pub incdirs: Vec<String>,
     /// Directories for library lookup.
     pub libdirs: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(JsonSchema)]
+    #[allow(dead_code)]
+    struct Example {
+        /// Example field.
+        #[schemars(extend("x-lux-toml-example" = "foo = \"bar\""))]
+        foo: String,
+    }
+
+    #[test]
+    fn renders_toml_examples() {
+        let schema = schema_for!(Example);
+        let markdown = to_markdown(&schema);
+        let json = serde_json::to_string_pretty(&schema).unwrap();
+        assert!(
+            markdown.contains("```toml\nfoo = \"bar\"\n```"),
+            "missing example in markdown:\n{markdown}\nschema:\n{json}"
+        );
+    }
 }

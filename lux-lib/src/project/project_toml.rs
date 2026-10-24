@@ -270,28 +270,74 @@ pub enum RemoteProjectTomlValidationError {
 #[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PartialProjectToml {
-    /// The name of the rock.
+    /// The name of the rock. Lux converts it to lower case when publishing.
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"package = "my-lua-project""#))
+    )]
     pub(crate) package: PackageName,
     /// The package version. If unset, Lux derives it from the current SemVer
-    /// git tag, falling back to "dev".
+    /// git tag (optional `v` prefix), falling back to "dev".
+    ///
+    /// Versions like `1.0` are corrected to `1.0.0`.
+    /// Non-SemVer versions (e.g. `1.0-rc1` instead of `1.0.0-rc1`) are treated
+    /// as Dev versions and cannot be compared with SemVer versions.
     #[serde(default, rename = "version")]
     #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"version = "1.0.0""#))
+    )]
     pub(crate) version_template: PackageVersionTemplate,
     /// How to build the project. See the build backend fields below.
+    ///
+    /// Rocks with C sources require a C compiler. Lux does not bundle one.
     #[serde(default)]
     pub(crate) build: BuildSpecInternal,
     /// The LuaRocks rockspec format version to write to the generated rockspec ("1.0", "2.0", or "3.0").
     /// Default: "3.0".
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"rockspec_format = "3.0""#))
+    )]
     pub(crate) rockspec_format: Option<RockspecFormat>,
     /// How to run the project with `lx run`.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[run]
+args = ["src/main.lua"]
+"#))
+    )]
     pub(crate) run: Option<RunSpec>,
     /// The Lua version requirement, e.g. ">= 5.1". Required to build a rockspec.
+    /// Set to "luau" to build and run the project with Luau.
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"lua = ">=5.1""#))
+    )]
     pub(crate) lua: Option<PackageVersionReq>,
     /// Metadata published to LuaRocks.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[description]
+summary = "A one-line description of the package"
+detailed = """
+A longer description of the package
+that often spans multiple lines.
+"""
+license = "GPLv2"
+homepage = "https://lumen-oss.github.io"
+issues_url = "https://github.com/lumen-oss/lux/issues"
+maintainer = "neorocks org"
+labels = ["neovim", "tls", "https"]
+"#))
+    )]
     pub(crate) description: Option<RockDescription>,
     /// Platforms this rock supports, mapping platform identifiers to `true` or
     /// `false` (e.g. `linux = true`).
@@ -300,16 +346,61 @@ pub struct PartialProjectToml {
         feature = "schema",
         schemars(with = "Option<std::collections::BTreeMap<String, bool>>")
     )]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[supported_platforms]
+linux = true
+windows = false
+"#))
+    )]
     pub(crate) supported_platforms: Option<HashMap<PlatformIdentifier, bool>>,
     /// Runtime Lua dependencies, mapping package names to a version requirement
     /// (e.g. `foo = "1.0"`) or to a detailed table with `version`, `opt`, `pin`,
     /// `git`, `rev`, and `path` keys.
+    ///
+    /// Version requirements support the operators `==`, `~=`, `<`, `>`, `<=`,
+    /// `>=`, and `~>`. `~> 2` means `>= 2, < 3`. An operator is optional;
+    /// without one, the requirement is treated as `==`. Version requirements
+    /// are mandatory.
+    ///
+    /// Dependencies are declared under `lua`, `[dependencies]`,
+    /// `[build_dependencies]`, `[test_dependencies]`, and
+    /// `[external_dependencies]`.
+    ///
+    /// Git dependencies support the `github:` (default), `gitlab:`,
+    /// `codeberg:`, and `sourcehut:` shorthands, as well as full HTTPS and SSH
+    /// URLs. If `rev` is unset, `version` is used as the commit SHA or tag.
+    /// Lux searches the repository root for a `lux.toml` or `.rockspec` to
+    /// determine the build specification, defaulting to `builtin` if none is
+    /// found. Rocks with git dependencies cannot be published to LuaRocks. Git
+    /// dependencies that require a custom LuaRocks build backend are not
+    /// supported.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
         feature = "schema",
         schemars(
             with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
         )
+    )]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[dependencies]
+luafilesystem = "1.0.0"
+
+[dependencies.argparse]
+version = "0.7"
+opt = true
+
+[dependencies.foo]
+version = "09511782201302ade916d4b250d01a6c61b56844"
+git = "github:lunarmodules/foo"
+
+[dependencies.bar]
+path = "../bar"
+version = "1.0.0"
+"#))
     )]
     pub(crate) dependencies: Option<Vec<LuaDependencySpec>>,
     /// Dependencies needed at build time. Same syntax as `dependencies`.
@@ -324,6 +415,14 @@ pub struct PartialProjectToml {
     /// System (C/FFI) dependencies, discovered via pkg-config. Each entry may
     /// set `header` and/or `library`.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[external_dependencies.OPENSSL]
+header = "openssl/ssl.h"
+library = "ssl"
+"#))
+    )]
     pub(crate) external_dependencies: Option<HashMap<String, ExternalDependencySpec>>,
     /// Dependencies needed when running `lx test`. Same syntax as `dependencies`.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
@@ -333,18 +432,67 @@ pub struct PartialProjectToml {
             with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
         )
     )]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[test_dependencies]
+busted = ">=2.0.0"
+nlua = "~>0.3"
+"#))
+    )]
     pub(crate) test_dependencies: Option<Vec<LuaDependencySpec>>,
     /// Templates for generating the source URL of a release.
+    ///
+    /// Variable substitutions:
+    /// - `$(PACKAGE)`: package name
+    /// - `$(VERSION)`: package version (from the git tag if not declared)
+    /// - `$(REF)`: git tag or revision (priority: SemVer tag, tag, commit SHA)
+    /// - `$(<VAR_NAME>)`: any environment variable
     #[serde(default, rename = "source")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[source]
+url = "https://host.com/owner/$(PACKAGE)/archive/refs/tags/$(REF).zip"
+dev = "git+https://host.com/owner/$(PACKAGE).git"
+"#))
+    )]
     pub(crate) source_template: RockSourceTemplate,
     /// How to run the test suite with `lx test`.
+    ///
+    /// The `busted` backend is used when a `.busted` file exists and no backend
+    /// is specified. `busted-nlua` is used when a `.busted` file exists or
+    /// `busted` and `nlua` are `test_dependencies`. The `busted-nlua` backend is
+    /// currently broken on macOS and Windows. Luau projects default to `tiniest`.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[test]
+type = "busted"
+flags = []
+"#))
+    )]
     pub(crate) test: Option<TestSpecInternal>,
     /// Additional install and deployment options.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[deploy]
+wrap_bin_scripts = false
+"#))
+    )]
     pub(crate) deploy: Option<DeploySpec>,
     /// Lux-specific project settings, ignored when generating a rockspec.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[project]
+root_dir = ".."
+"#))
+    )]
     pub(crate) project: ProjectSpec,
 
     /// Used to bind the TOML to the directory containing the `lux.toml`.

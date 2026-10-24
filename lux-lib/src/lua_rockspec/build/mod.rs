@@ -524,9 +524,24 @@ pub(crate) struct BuildSpecInternal {
     /// "command", "none", "rust-mlua", "rust-binary", or "treesitter-parser".
     /// Any other value is treated as a custom LuaRocks build backend.
     /// Default: "builtin".
+    ///
+    /// `make` requires Make, `cmake` requires CMake, and `rust-mlua`/`rust-binary`
+    /// require a Rust toolchain. Set `type = "none"` to copy source files
+    /// without building.
+    ///
+    /// For Luau projects, `builtin` auto-detects `.luau` modules. Native
+    /// dependencies are not supported. Luau modules are transpiled to Lua when
+    /// the project targets a Lua runtime.
     #[serde(rename = "type", default)]
     #[display_lua(rename = "type")]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "builtin"
+"#))
+    )]
     pub(crate) build_type: Option<BuildType>,
     /// Modules to build, mapping module names (as used by `require`) to a source
     /// path, a list of C sources, or a table with `sources`, `libraries`,
@@ -541,9 +556,39 @@ pub(crate) struct BuildSpecInternal {
         feature = "schema",
         schemars(with = "Option<std::collections::BTreeMap<String, crate::schema::ModuleSpec>>")
     )]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build.modules]
+"foo.main" = "lua/foo.lua"
+"foo.bla" = ["src/bla.c"]
+
+[build.modules."foo.core"]
+sources = ["src/core.c", "src/extra.c"]
+libraries = ["ssl"]
+defines = ["FOO=bar", "USE_BLA"]
+incdirs = []
+libdirs = []
+"#))
+    )]
     pub(crate) builtin_spec: Option<HashMap<LuaTableKey, ModuleSpecInternal>>,
     /// Makefile to use. Default: "Makefile" ("Makefile.win" on Windows).
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "make"
+makefile = "Makefile"
+build_target = ""
+build_pass = true
+install_target = "install"
+install_pass = true
+build_variables = {}
+install_variables = {}
+variables = {}
+"#))
+    )]
     pub(crate) makefile: Option<PathBuf>,
     /// Target passed to `make` during the build pass. Default: empty.
     #[serde(rename = "build_target", default)]
@@ -572,34 +617,104 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) variables: Option<HashMap<String, String>>,
     /// Contents of the generated "CMakeLists.txt". If unset, the project's own
     /// file is used.
+    ///
+    /// Environment variables: `CMAKE_MODULE_PATH`, `CMAKE_INCLUDE_PATH`,
+    /// `CMAKE_LIBRARY_PATH`.
     #[serde(rename = "cmake", default)]
     #[display_lua(rename = "cmake")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "cmake"
+cmake = """
+<content>
+"""
+"#))
+    )]
     pub(crate) cmake_lists_content: Option<String>,
     /// Command to run to build the package.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "command"
+build_command = "make"
+install_command = "make install"
+"#))
+    )]
     pub(crate) build_command: Option<String>,
     /// Command to run to install the package.
     #[serde(default)]
     pub(crate) install_command: Option<String>,
     /// Files to install, by category ("lua", "lib", "conf", "bin").
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build.install.lua]
+"foo.bar" = "src/bar.lua"
+
+[build.install.lib]
+"foo.bar" = "lib/bar.so"
+
+[build.install.conf]
+
+[build.install.bin]
+"#))
+    )]
     pub(crate) install: Option<InstallSpec>,
     /// Directories in the source tree to copy as-is into the rock's "etc" tree.
     /// Do not use "lua", "lib", "rock_manifest", or the rockspec file name.
     #[serde(default, deserialize_with = "deserialize_copy_directories")]
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+copy_directories = ["plugin", "ftplugin"]
+"#))
+    )]
     pub(crate) copy_directories: Option<Vec<PathBuf>>,
     /// Patches to apply before building, mapping file names to patch contents.
     /// Lux accepts any format supported by the [`diffy`](https://docs.rs/diffy/latest/diffy/) crate.
+    /// LuaRocks only supports unified diff.
     #[serde(default)]
     #[display_lua(convert_with = "display_path_string_map")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<std::collections::BTreeMap<String, String>>")
     )]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build.patches]
+"lua51-support.diff" = """
+--- old/mymodule.c....
+"""
+"#))
+    )]
     pub(crate) patches: Option<HashMap<PathBuf, String>>,
     /// The cargo target directory, if it is not `<source>/target`.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "rust-mlua"
+target_path = "target"
+default_features = false
+features = []
+cargo_extra_args = []
+
+[build.modules]
+"foo.main" = "alt_name"
+
+[build.include]
+"relative/path/to/file.lua" = "target-file.lua"
+"#))
+    )]
     pub(crate) target_path: Option<PathBuf>,
     /// Whether to build a cargo package with default features. Default: `true`.
     #[serde(default)]
@@ -624,6 +739,22 @@ pub(crate) struct BuildSpecInternal {
     pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
     /// The parser language, e.g. "haskell". Required for "treesitter-parser".
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "treesitter-parser"
+lang = "haskell"
+parser = true
+generate = true
+location = "libs/tree-sitter-haskell"
+
+[build.queries."highlights.scm"] = """
+(signature
+  name: (variable) @function)
+"""
+"#))
+    )]
     pub(crate) lang: Option<String>,
     /// Whether to build the tree-sitter parser. Set to `false` for query-only packages.
     /// Default: `false`.

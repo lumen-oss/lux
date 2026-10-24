@@ -322,9 +322,27 @@ pub(crate) struct TestSpecInternal {
     pub(crate) flags: Option<Vec<String>>,
     /// Shell command to run as the test suite. Mutually exclusive with `script`.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[test]
+type = "command"
+command = "make"
+flags = ["test"]
+"#))
+    )]
     pub(crate) command: Option<String>,
     /// Lua script to run as the test suite. Mutually exclusive with `command`.
     #[serde(default, rename = "script", alias = "lua_script")]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[test]
+type = "script"
+script = "tests.lua"
+flags = []
+"#))
+    )]
     pub(crate) lua_script: Option<PathBuf>,
 }
 
