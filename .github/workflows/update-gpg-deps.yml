@@ -1,5 +1,5 @@
 ---
-name: update-libgpg-error
+name: update-gpg-deps
 on:
   schedule:
     - cron: '0 5 * * *'
@@ -13,12 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Update libgpg-error
-        run: ./scripts/update-libgpg-error.sh
+      - name: Update GnuPG dependencies
+        run: ./scripts/update-gpg-deps.sh
       - uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.PAT }}
-          branch: update-libgpg-error
-          title: "chore: update libgpg-error"
-          commit-message: "chore: update libgpg-error"
+          branch: update-gpg-deps
+          title: "chore: update GnuPG dependencies"
+          commit-message: "chore: update GnuPG dependencies"
           delete-branch: true

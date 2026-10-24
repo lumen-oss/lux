@@ -68,14 +68,6 @@ jobs:
           target: ${{ matrix.target }}
         if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.target, '-musl')
 
-      - name: Install build dependencies (Linux)
-        if: "startsWith(matrix.os, 'ubuntu')"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgpgme11-dev \
-            libgpg-error-dev \
-
       - name: Install build dependencies (macOS)
         if: "startsWith(matrix.os, 'macos')"
         run: brew install gpgme
@@ -84,11 +76,14 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         if: startsWith(matrix.os, 'macos') || endsWith(matrix.target, 'windows-msvc')
 
-      - name: Build static libgpg-error (macOS)
-        if: startsWith(matrix.os, 'macos')
+      - name: Build static GnuPG dependencies
+        if: contains(matrix.features, 'gpgme') && !contains(matrix.target, '-musl')
+        run: cargo xtask build-static-gpg
+
+      - name: Configure pkg-config for static GnuPG
+        if: contains(matrix.features, 'gpgme') && !contains(matrix.target, '-musl')
         run: |
-          cargo xtask build-static-libgpg-error
-          echo "PKG_CONFIG_PATH=${GITHUB_WORKSPACE}/target/static-libgpg-error/prefix/lib/pkgconfig" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${GITHUB_WORKSPACE}/target/static-gpg/prefix/lib/pkgconfig" >> "${GITHUB_ENV}"
 
       - name: Install MSVC Compiler Toolchain
         uses: ilammy/msvc-dev-cmd@v1

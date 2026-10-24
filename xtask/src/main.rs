@@ -14,7 +14,7 @@ use serde::Deserialize;
 use strum::IntoEnumIterator;
 use xtask_lua::LuaFeature;
 
-mod static_libgpg_error;
+mod static_gpg;
 
 type DynError = Box<dyn std::error::Error>;
 
@@ -57,8 +57,8 @@ fn try_main() -> Result<(), DynError> {
             vendored: false,
         })?,
         Some("gen-definitions") => gen_definitions()?,
-        Some("build-static-libgpg-error") => {
-            static_libgpg_error::ensure_installed()?;
+        Some("build-static-gpg") => {
+            static_gpg::ensure_installed()?;
         }
         _ => print_help(),
     }
@@ -73,8 +73,7 @@ fn print_help() {
 build               builds and links all libraries and the application
 dist-man            builds man pages
 dist-completions    builds shell completions
-build-static-libgpg-error
-                    builds a static libgpg-error for macOS
+build-static-gpg    builds static GnuPG dependencies
 dist-package        builds binary package distribution(s) for the current platform
 dist                builds everything, equivalent to build + dist-man + dist-completions
 gen-definitions     generates Lua/Luau type definition files into definitions/
@@ -146,7 +145,7 @@ fn build(opts: &BuildOpts) -> Result<(), DynError> {
 
     let mut command = Command::new(cargo);
     command.current_dir(project_root()).args(args);
-    static_libgpg_error::apply(&mut command)?;
+    static_gpg::apply(&mut command)?;
     let status = command.status()?;
 
     if !status.success() {
@@ -223,7 +222,7 @@ fn lx(lx_args: Vec<String>, opts: &BuildOpts) -> Result<(), DynError> {
 
     let mut command = Command::new(cargo);
     command.current_dir(project_root()).args(args);
-    static_libgpg_error::apply(&mut command)?;
+    static_gpg::apply(&mut command)?;
     let status = command.status()?;
 
     if !status.success() {
