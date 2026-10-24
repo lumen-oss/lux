@@ -1,6 +1,6 @@
 [package]
 name = "kalua"
-version = "0.1.0"
+version = "0.1.1"
 description = "Transpile Luau source code to Lua (kālua: cooking in an underground oven)."
 authors = ["vhyrro <vhyrro@gmail.com>", "mrcjkb <marc@jakobi.dev>"]
 repository = "https://github.com/lumen-oss/lux"

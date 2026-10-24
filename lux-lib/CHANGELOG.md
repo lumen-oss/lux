@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.67.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.0...lux-lib-v0.67.1) `lux-lib` - 2026-10-24
+
+### Fixed
+- *(release-artifacts)* ensure static linking of gpgme deps ([#2087](https://github.com/lumen-oss/lux/pull/2087))
+- convert `*` SemVer to any luarocks version requirement ([#2086](https://github.com/lumen-oss/lux/pull/2086))
+
 ## [0.67.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.66.0...lux-lib-v0.67.0) `lux-lib` - 2026-10-23
 
 ### Added
