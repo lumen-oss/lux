@@ -64,6 +64,10 @@ async fn pack_workspace(
             let mut build = build::Build::default();
             build.package = Some(package_name.clone());
             build::build(build, config.clone())
+                .await?
+                .into_iter()
+                .filter(|package| package.name() == package_name)
+                .collect_vec()
         }
         // Pack all workspace members
         None => {
@@ -74,9 +78,17 @@ async fn pack_workspace(
                     .to_lua_remote_rockspec_string()?;
             }
             build::build(build::Build::default(), config.clone())
+                .await?
+                .into_iter()
+                .filter(|package| {
+                    workspace
+                        .members()
+                        .iter()
+                        .any(|member| member.toml().package() == package.name())
+                })
+                .collect_vec()
         }
-    }
-    .await?;
+    };
 
     if packages.is_empty() {
         return Err(miette!("build did not produce a package"));
