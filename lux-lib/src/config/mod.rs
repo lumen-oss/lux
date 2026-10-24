@@ -76,6 +76,7 @@ pub struct Config {
     wrap_bin_scripts: bool,
     package_types: RemotePackageTypeFilterSpec,
     no_tfa: bool,
+    allow_root: bool,
 }
 
 impl Config {
@@ -367,6 +368,11 @@ impl Config {
     pub fn no_tfa(&self) -> bool {
         self.no_tfa
     }
+
+    /// Whether Lux is allowed to run as root.
+    pub fn allow_root(&self) -> bool {
+        self.allow_root
+    }
 }
 
 impl HasVariables for Config {
@@ -504,6 +510,10 @@ pub struct ConfigBuilder {
     /// Whether to disable prompts for two-factor authentication (2FA) codes.
     /// Default: `false`.
     no_tfa: Option<bool>,
+    /// Whether to allow Lux to run as root.
+    /// Default: `false`.
+    #[serde(skip)] // do not allow persisting this flag
+    allow_root: Option<bool>,
 }
 
 /// A builder for the lux `Config`.
@@ -769,6 +779,15 @@ impl ConfigBuilder {
         }
     }
 
+    /// Whether to allow Lux to run as root.
+    /// Default: `false`.
+    pub fn allow_root(self, allow_root: Option<bool>) -> Self {
+        Self {
+            allow_root: allow_root.or(self.allow_root),
+            ..self
+        }
+    }
+
     /// The command prefix with which to wrap all build commands.
     ///
     /// If set, every command spawned by the build backends (`make`, `cmake`,
@@ -889,6 +908,7 @@ impl ConfigBuilder {
             wrap_bin_scripts: other.wrap_bin_scripts.or(self.wrap_bin_scripts),
             package_types: other.package_types.or(self.package_types),
             no_tfa: other.no_tfa.or(self.no_tfa),
+            allow_root: other.allow_root.or(self.allow_root),
         }
     }
 
@@ -949,6 +969,7 @@ impl ConfigBuilder {
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
             package_types: self.package_types.unwrap_or_default(),
             no_tfa: self.no_tfa.unwrap_or(false),
+            allow_root: self.allow_root.unwrap_or(false),
         }))
     }
 }
@@ -992,6 +1013,7 @@ impl From<Config> for ConfigBuilder {
             wrap_bin_scripts: Some(value.wrap_bin_scripts),
             package_types: Some(value.package_types),
             no_tfa: Some(value.no_tfa),
+            allow_root: Some(value.allow_root),
         }
     }
 }
@@ -1150,5 +1172,17 @@ mod tests {
         let debug = format!("{config:?}");
         assert!(!debug.contains("supersecret"));
         assert!(debug.contains("access_tokens"));
+    }
+
+    #[test]
+    fn allow_root_cannot_be_set_from_config_file() {
+        let config = toml::from_str::<ConfigBuilder>("allow_root = true\n")
+            .unwrap()
+            .build()
+            .unwrap();
+        assert!(!config.allow_root());
+
+        let serialized = toml::to_string(&ConfigBuilder::default().allow_root(Some(true))).unwrap();
+        assert!(!serialized.contains("allow_root"));
     }
 }

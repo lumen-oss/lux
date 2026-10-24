@@ -104,6 +104,7 @@ async fn main() -> Result<()> {
         ))
         .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())))
         .no_tfa(Some(cli.no_tfa))
+        .allow_root(cli.allow_root.then_some(true))
         .build_profile(cli.profile);
 
     if let Some(preset) = preset {
@@ -111,6 +112,13 @@ async fn main() -> Result<()> {
     }
 
     let config = config_builder.build()?;
+
+    if !config.allow_root() && running_as_root() {
+        return Err(miette::miette!(
+            help = "installing rocks with root privileges is dangerous. Pass `--allow-root` to bypass this check (not recommended)",
+            "refusing to run Lux with elevated privileges (root/administrator)"
+        ));
+    }
 
     if config.verbose() {
         std::env::set_var("CC_ENABLE_DEBUG_OUTPUT", "1");
@@ -220,6 +228,22 @@ async fn main() -> Result<()> {
         Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
     }
     Ok(())
+}
+
+/// Whether the current process is running with root/administrator privileges.
+fn running_as_root() -> bool {
+    #[cfg(unix)]
+    {
+        rustix::process::geteuid().is_root()
+    }
+    #[cfg(windows)]
+    {
+        check_elevation::is_elevated().unwrap_or(false)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
 }
 
 fn restore_appimage_original_working_directory() -> Result<()> {
