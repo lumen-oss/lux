@@ -86,14 +86,6 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         if: "startsWith(matrix.os, 'windows')"
 
-      - name: Install build dependencies (Linux)
-        if: "startsWith(matrix.os, 'ubuntu')"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgpgme11-dev \
-            libgpg-error-dev \
-
       - name: Install build dependencies (macOS)
         if: "startsWith(matrix.os, 'macos')"
         run: brew install gpgme

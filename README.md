@@ -175,16 +175,23 @@ If building with the `vendored` feature:
 To link `gpgme` statically on Linux and macOS, set the environment variable
 `SYSTEM_DEPS_LINK=static`.
 
-On macOS, Homebrew's `libgpg-error` is built with `gettext`, which is not part of
-the system libraries. The `cargo xtask build` and `cargo xtask dist-package`
-tasks automatically install a static, NLS-disabled build of `libgpg-error` when
-`SYSTEM_DEPS_LINK=static` is set. To build it manually:
+The `cargo xtask build` and `cargo xtask dist-package` tasks automatically
+install a static, NLS-disabled build of `libgpg-error` on macOS and a static
+build of `libgpg-error`, `libassuan` and `gpgme` on Linux when
+`SYSTEM_DEPS_LINK=static` is set.
+To build the dependencies manually:
 
 ```bash
-cargo xtask build-static-libgpg-error
-PKG_CONFIG_PATH="$PWD/target/static-libgpg-error/prefix/lib/pkgconfig" \
+cargo xtask build-static-gpg
+PKG_CONFIG_PATH="$PWD/target/static-gpg/prefix/lib/pkgconfig" \
   SYSTEM_DEPS_LINK="static" cargo build --locked --profile release --features vendored
 ```
+
+> [!NOTE] Why we build the GnuPG dependencies from source
+>
+> `system-deps` ignores static archives under the system root (e.g. `/usr`),
+> and distribution archives are usually built without `-fPIC`,
+> so they cannot be linked into a position-independent executable.
 
 We usually recommend building with the `vendored` feature enabled,
 to statically link `libgit2` and `openssl`:
