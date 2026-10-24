@@ -746,7 +746,8 @@ impl FromStr for PackageVersionReq {
         let trimmed = text.trim_start_matches('=').trim_start_matches('@').trim();
 
         match parse_version_req(&text) {
-            Ok(_) => Ok(PackageVersionReq::SemVer(parse_version_req(&text)?)),
+            Ok(ver) if ver.comparators.is_empty() => Ok(PackageVersionReq::Any),
+            Ok(ver) => Ok(PackageVersionReq::SemVer(ver)),
             Err(_) => match trimmed {
                 "scm" => Ok(PackageVersionReq::DevVer(DevVersion::Scm)),
                 "dev" => Ok(PackageVersionReq::DevVer(DevVersion::Dev)),
@@ -844,7 +845,7 @@ fn parse_version_req(version_constraints: &str) -> Result<VersionReq, Error> {
         s if s.starts_with("@") => format!("={}", &s[1..]),
         // The semver crate only understands "= version", unlike luarocks which understands "== version".
         s if s.starts_with("==") => s[1..].to_string(),
-        s if s // semver parses no constraint prefix as ^ (equivalent to ~>)
+        s if s // semver parses no constraint prefix as ^, unlike luarocks which reads it as "=="
             .find(|c: char| c.is_alphanumeric())
             .is_some_and(|idx| idx == 0) =>
         {
@@ -1150,6 +1151,14 @@ mod tests {
         assert_eq!(
             PackageVersionReq::parse("> 2.1.0.10, < 2.1.1").unwrap(),
             PackageVersionReq::SemVer("> 2.1.0-10, < 2.1.1".parse().unwrap())
+        );
+    }
+
+    #[test]
+    fn parse_any_version_req() {
+        assert_eq!(
+            PackageVersionReq::parse("*").unwrap(),
+            PackageVersionReq::Any
         );
     }
 

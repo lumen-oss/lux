@@ -523,6 +523,28 @@ mod tests {
     }
 
     #[test]
+    pub fn display_package_req() {
+        let package_req = PackageReq::new("foo".into(), Some("1.0.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo==1.0.0");
+        let package_req = PackageReq::new("foo".into(), Some(">=1.0.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo>=1.0.0");
+        let package_req = PackageReq::new("foo".into(), Some(">1.0.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo>1.0.0");
+        let package_req = PackageReq::new("foo".into(), Some("<=1.0.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo<=1.0.0");
+        let package_req = PackageReq::new("foo".into(), Some("<1.0.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo<1.0.0");
+        let package_req = PackageReq::new("foo".into(), Some("~>1.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo>=1.0.0, <1.1.0");
+        let package_req = PackageReq::new("foo".into(), Some(">=1.0.0, <1.1.0".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo>=1.0.0, <1.1.0");
+        let package_req = PackageReq::new("foo".into(), None).unwrap();
+        assert_eq!(package_req.to_string(), "foo");
+        let package_req = PackageReq::new("foo".into(), Some("*".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo");
+    }
+
+    #[test]
     pub fn remote_package_type_priorities() {
         let rock_types = vec![
             RemotePackageType::Binary,
