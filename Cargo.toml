@@ -15,7 +15,7 @@ default-members = ["lux-cli", "lux-lib", "kalua"]
 resolver = "2"
 
 [workspace.package]
-version = "0.49.1"
+version = "0.49.2"
 
 [workspace.dependencies]
 clap_mangen = "0.3"
