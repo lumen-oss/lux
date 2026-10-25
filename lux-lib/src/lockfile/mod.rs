@@ -1713,14 +1713,14 @@ fn migrate_entrypoints(
     if let Some(old_entrypoints) = section.get("entrypoints") {
         for id in old_entrypoints
             .as_array()
-            .ok_or_else(&conflicting_entrypoints)?
+            .ok_or_else(conflicting_entrypoints)?
         {
             let id = id.as_str().ok_or_else(conflicting_entrypoints)?;
             let name = rocks
                 .and_then(|rocks| rocks.get(id))
                 .and_then(|package| package.get("name"))
                 .and_then(|name| name.as_str())
-                .ok_or_else(&conflicting_entrypoints)?;
+                .ok_or_else(conflicting_entrypoints)?;
             if entrypoints.contains_key(name) {
                 return Err(conflicting_entrypoints());
             }
