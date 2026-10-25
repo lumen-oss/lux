@@ -680,9 +680,22 @@ impl PartialProjectToml {
         &self,
         specrev: Option<SpecRev>,
     ) -> Result<RemoteProjectToml, RemoteProjectTomlValidationError> {
-        let version = self
-            .version_template
-            .try_generate(&self.lux_toml_dir, specrev)?;
+        self.into_remote_with_version(None, specrev)
+    }
+
+    /// Like [`Self::into_remote`] but generates the rockspec for a specified
+    /// target version.
+    pub fn into_remote_with_version(
+        &self,
+        version: Option<PackageVersion>,
+        specrev: Option<SpecRev>,
+    ) -> Result<RemoteProjectToml, RemoteProjectTomlValidationError> {
+        let version = match version {
+            Some(version) => version,
+            None => self
+                .version_template
+                .try_generate(&self.lux_toml_dir, specrev)?,
+        };
         let source =
             self.source_template
                 .try_generate(&self.lux_toml_dir, &self.package, &version)?;

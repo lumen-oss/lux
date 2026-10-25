@@ -1,5 +1,10 @@
 use clap::Args;
-use lux_lib::{package::PackageName, project::Project, rockspec::Rockspec, workspace::Workspace};
+use lux_lib::{
+    package::{PackageName, PackageVersion},
+    project::Project,
+    rockspec::Rockspec,
+    workspace::Workspace,
+};
 use miette::{IntoDiagnostic, Result};
 use std::path::PathBuf;
 
@@ -10,6 +15,11 @@ pub struct GenerateRockspec {
     /// Package to generate the rockspec for.
     #[arg(short, long, visible_short_alias = 'p')]
     pub(crate) package: Option<PackageName>,
+
+    /// Version to generate the rockspec for (e.g. `dev`, `scm` or `1.2.3`).{n}
+    /// Defaults to the version in `lux.toml`.
+    #[arg(long)]
+    pub(crate) version: Option<PackageVersion>,
 
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,
@@ -26,7 +36,7 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     let mut generated_paths = Vec::new();
 
     for project in targets {
-        let path = generate_project_rockspec(project).await?;
+        let path = generate_project_rockspec(project, data.version.as_ref()).await?;
 
         if data.output_format == OutputFormat::Text {
             println!("Wrote rockspec to {}", path.display());
@@ -45,8 +55,13 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
     Ok(())
 }
 
-async fn generate_project_rockspec(project: &Project) -> Result<PathBuf> {
-    let toml = project.toml().into_remote(None)?;
+async fn generate_project_rockspec(
+    project: &Project,
+    version: Option<&PackageVersion>,
+) -> Result<PathBuf> {
+    let toml = project
+        .toml()
+        .into_remote_with_version(version.cloned(), None)?;
     let rockspec = toml.to_lua_remote_rockspec_string()?;
 
     let path = project
