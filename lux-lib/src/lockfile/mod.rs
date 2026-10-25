@@ -1715,7 +1715,7 @@ fn migrate_entrypoints(
             .as_array()
             .ok_or_else(&conflicting_entrypoints)?
         {
-            let id = id.as_str().ok_or_else(&conflicting_entrypoints)?;
+            let id = id.as_str().ok_or_else(conflicting_entrypoints)?;
             let name = rocks
                 .and_then(|rocks| rocks.get(id))
                 .and_then(|package| package.get("name"))
