@@ -80,7 +80,10 @@ impl RequestBuilderExt for reqwest::RequestBuilder {
 }
 
 fn client(https_only: bool, config: &Config) -> Result<&Client, reqwest::Error> {
-    let cache = if https_only {
+    // Allow HTTP requests in tests to support mock HTTP servers
+    let enforce_https = https_only && !cfg!(test);
+
+    let cache = if enforce_https {
         &HTTPS_CLIENT
     } else {
         &HTTP_CLIENT
@@ -89,7 +92,7 @@ fn client(https_only: bool, config: &Config) -> Result<&Client, reqwest::Error> 
         Ok(client)
     } else {
         let mut builder = Client::builder();
-        if https_only {
+        if enforce_https {
             builder = builder.https_only(true);
         }
         let client = builder.user_agent(config.user_agent()).build()?;

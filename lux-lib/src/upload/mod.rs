@@ -463,7 +463,7 @@ mod helpers {
     ) -> Result<TfaToken, UploadError> {
         let response = client
             .get(unsafe { url_for_method(server_url, api_key, "verify_tfa")? })
-            .query(&("code", tfa_code.to_string()))
+            .query(&[("code", tfa_code)])
             .send()
             .await?;
         let status = response.status();
@@ -583,6 +583,14 @@ mod helpers {
 mod test {
     use super::*;
 
+    use crate::config::ConfigBuilder;
+    use crate::lua_version::LuaVersion;
+    use assert_fs::prelude::*;
+    use httptest::matchers::{contains, request};
+    use httptest::responders::{json_encoded, status_code, Responder};
+    use httptest::{Expectation, Server};
+    use serial_test::serial;
+
     #[test]
     fn test_deserialize_tfa_success() {
         let response_str = r#"{
@@ -623,5 +631,228 @@ mod test {
 "#;
         let result = serde_json::from_str(response_str).unwrap();
         assert!(matches!(result, LuarocksErrorResponse { .. }));
+    }
+
+    const API_KEY: &str = "test-api-key";
+    const TOOL_VERSION_PATH: &str = "/api/tool_version";
+    const STATUS_PATH: &str = "/api/1/test-api-key/status";
+    const CHECK_ROCKSPEC_PATH: &str = "/api/1/test-api-key/check_rockspec";
+    const VERIFY_TFA_PATH: &str = "/api/1/test-api-key/verify_tfa";
+    const UPLOAD_PATH: &str = "/api/1/test-api-key/upload";
+
+    async fn ready(
+        server: &Server,
+    ) -> (
+        assert_fs::TempDir,
+        assert_fs::TempDir,
+        Project,
+        Config,
+        PackageDB,
+    ) {
+        std::env::set_var("LUX_API_KEY", API_KEY);
+        let project_dir = assert_fs::TempDir::new().unwrap();
+        project_dir
+            .child("lux.toml")
+            .write_str(
+                r#"
+package = "foo"
+version = "1.0.0"
+lua = ">=5.1"
+
+[source]
+url = "https://example.com/foo.zip"
+
+[build]
+type = "builtin"
+"#,
+            )
+            .unwrap();
+        let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
+
+        let config_dir = assert_fs::TempDir::new().unwrap();
+        let config = ConfigBuilder::default()
+            .server(Some(Url::parse(&server.url_str("/")).unwrap()))
+            .data_dir(Some(config_dir.path().to_path_buf()))
+            .cache_dir(Some(config_dir.path().to_path_buf()))
+            .no_manifest_cache(Some(true))
+            .lua_version(Some(LuaVersion::Lua51))
+            .build()
+            .unwrap();
+        let package_db = PackageDB::from_config(&config).await.unwrap();
+
+        (project_dir, config_dir, project, config, package_db)
+    }
+
+    fn expect_tool_version(server: &Server, version: &str) {
+        server.expect(
+            Expectation::matching(request::path(TOOL_VERSION_PATH))
+                .respond_with(json_encoded(serde_json::json!({ "version": version }))),
+        );
+    }
+
+    fn expect_status(server: &Server, status: u16) {
+        server.expect(
+            Expectation::matching(request::path(STATUS_PATH)).respond_with(status_code(status)),
+        );
+    }
+
+    fn expect_rock_missing(server: &Server) {
+        server.expect(
+            Expectation::matching(request::path(CHECK_ROCKSPEC_PATH))
+                .respond_with(json_encoded(serde_json::json!({}))),
+        );
+    }
+
+    fn expect_upload(server: &Server, responder: impl Responder + 'static) {
+        server.expect(Expectation::matching(request::path(UPLOAD_PATH)).respond_with(responder));
+    }
+
+    async fn upload(
+        project: &Project,
+        config: &Config,
+        package_db: &PackageDB,
+        tfa_code: Option<String>,
+    ) -> Result<(), UploadError> {
+        let upload = ProjectUpload::new()
+            .project(project)
+            .config(config)
+            .api_key(ApiKey::from(API_KEY))
+            .maybe_tfa_code(tfa_code)
+            .package_db(package_db);
+        #[cfg(feature = "gpgme")]
+        let upload = upload.sign_protocol(SignatureProtocol::None);
+        upload.upload_to_luarocks().await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_to_mock_server() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        expect_upload(&server, status_code(200));
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        upload(&project, &config, &package_db, None).await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_forwards_tfa_token_header() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        server.expect(
+            Expectation::matching(request::path(VERIFY_TFA_PATH)).respond_with(json_encoded(
+                serde_json::json!({ "success": true, "tfa_token": "tfa-token-123" }),
+            )),
+        );
+        server.expect(
+            Expectation::matching(request::headers(contains(("x-tfa-token", "tfa-token-123"))))
+                .respond_with(status_code(200)),
+        );
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        upload(&project, &config, &package_db, Some("123456".into()))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_rejected_tfa_code() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        server.expect(
+            Expectation::matching(request::path(VERIFY_TFA_PATH)).respond_with(json_encoded(
+                serde_json::json!({ "errors": ["Invalid verification code"] }),
+            )),
+        );
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        let err = upload(&project, &config, &package_db, Some("000000".into()))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, UploadError::TfaCodeRejected(..)));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_server_error() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        expect_upload(&server, status_code(500));
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        let err = upload(&project, &config, &package_db, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UploadError::Server(_, StatusCode::INTERNAL_SERVER_ERROR)
+        ));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_client_error() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        expect_upload(
+            &server,
+            status_code(400)
+                .append_header("Content-Type", "application/json")
+                .body(r#"{"errors":["invalid rockspec"]}"#),
+        );
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        let err = upload(&project, &config, &package_db, None)
+            .await
+            .unwrap_err();
+        match err {
+            UploadError::Client(_, message) => assert_eq!(message, "invalid rockspec"),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_outdated_tool_version() {
+        let server = Server::run();
+        expect_tool_version(&server, "0.0.1");
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        let err = upload(&project, &config, &package_db, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UploadError::ToolCheck(ToolCheckError::ToolOutdated(..))
+        ));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_unknown_user() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 401);
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        let err = upload(&project, &config, &package_db, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UploadError::UserCheck(UserCheckError::UserNotFound)
+        ));
     }
 }
