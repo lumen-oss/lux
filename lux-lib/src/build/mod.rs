@@ -257,9 +257,17 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         for (target, source) in &install_spec.lib {
             let absolute_source = build_dir.join(source);
             let resolved_target = layout.lib.join(target);
-            fs::tokio::copy(&absolute_source, &resolved_target)
-                .instrument(tracing::trace_span!("copying target"))
-                .await?;
+            // NOTE: Some rockspecs have redundant module definitions,
+            // assuming that the linker outputs them to the build dir root.
+            // See https://github.com/lumen-oss/lux/issues/2101
+            if !resolved_target.exists() {
+                if let Some(parent) = resolved_target.parent() {
+                    fs::tokio::create_dir_all(&parent).await?;
+                }
+                fs::tokio::copy(&absolute_source, &resolved_target)
+                    .instrument(tracing::trace_span!("copying target"))
+                    .await?;
+            }
             utils::make_writable(&resolved_target).await?;
         }
     }

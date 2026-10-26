@@ -74,17 +74,20 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
     }
 }
 
-#[cfg(all(test, feature = "impure_tests"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
     use crate::{
-        config::ConfigBuilder, fs, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion, tree::InstallTree,
+        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
+        lua_version::LuaVersion,
     };
+    #[cfg(feature = "impure_tests")]
+    use crate::{fs, tree::InstallTree};
     use assert_fs::prelude::PathCopy;
     use std::path::PathBuf;
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     /// Non-regression for #980
     async fn builtin_build_autodetect_bin_scripts() {
@@ -126,6 +129,7 @@ mod tests {
         assert!(bin_dir.join("bar").is_file());
     }
 
+    #[cfg(feature = "impure_tests")]
     #[tokio::test]
     /// Non-regression for #1563
     async fn builtin_build_support_src_init_lua() {
@@ -159,5 +163,31 @@ mod tests {
         let tree = workspace.tree(&config).unwrap();
         let src_dir = tree.layout_for(&package.spec).src;
         assert!(src_dir.join("init.lua").is_file());
+    }
+
+    #[tokio::test]
+    /// Non-regression for #2101
+    async fn build_install_post_build_artifact() {
+        let data_dir: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
+        let project_root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/c-src/");
+        let temp_dir = assert_fs::TempDir::new().unwrap();
+        temp_dir.copy_from(&project_root, &["**"]).unwrap();
+        let project_root = temp_dir.path();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .data_dir(Some(data_dir))
+            .lua_version(lua_version)
+            .build()
+            .unwrap();
+        let workspace = Workspace::from_exact(project_root).unwrap().unwrap();
+        // TODO: Investigate if build::utils::compile is outputting the .so to a different directory
+        BuildWorkspace::new(&workspace, &config)
+            .no_lock(false)
+            .only_deps(false)
+            .build()
+            .await
+            .unwrap();
     }
 }

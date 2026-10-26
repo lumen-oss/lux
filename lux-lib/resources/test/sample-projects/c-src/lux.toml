@@ -14,4 +14,7 @@ args = ["src/main.lua"]
 type = "builtin"
 
 [build.modules]
-"foo" = ["src/foo.c"]
+foo = ["src/foo.c"]
+
+[build.install]
+lib = ["foo.so"]
