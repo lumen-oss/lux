@@ -19,7 +19,7 @@ use url::Url;
 use lux_lib::{
     build::BuildBehaviour,
     config::{Config, ConfigBuilder},
-    git::{GitRef, GitSource},
+    git::{shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, GitRef, GitSource},
     lockfile::{
         LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile,
         LockfileGuard, OptState, PinnedState, ReadOnly, ReadWrite,
@@ -941,6 +941,7 @@ impl TypedUserData for LockedPackageLua {
                 .map(|id| LockedPackageIdLua(id.clone()))
                 .collect::<Vec<_>>())
         });
+        methods.add_method("opt", |_, this, ()| Ok(OptStateLua(this.0.opt())));
         methods.add_method("constraint", |_, this, ()| {
             Ok(LockConstraintLua(this.0.constraint()))
         });
@@ -1455,11 +1456,113 @@ impl FromLua for LuaDependencySpecLua {
                     .map(LuaDependencySpecLua)
                     .into_lua_err()
             }
+            LuaValue::Table(ref table)
+                if table.contains_key("name")? || table.contains_key("package")? =>
+            {
+                parse_lua_dependency_spec_table(table).map(LuaDependencySpecLua)
+            }
             _ => {
                 let package_req: PackageReq = lua.from_value(value)?;
                 Ok(LuaDependencySpecLua(LuaDependencySpec::from(package_req)))
             }
         }
+    }
+}
+
+fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<LuaDependencySpec> {
+    let package: Option<String> = table.get("package")?;
+    let name: Option<String> = table.get("name")?;
+    let version: Option<String> = table.get("version")?;
+
+    let req = if let Some(package) = package {
+        package
+    } else if let Some(name) = name {
+        match version {
+            Some(version) => format!("{name} {version}"),
+            None => name,
+        }
+    } else {
+        return Err(LuaError::DeserializeError(
+            "expected a dependency table with `package` or `name`".to_string(),
+        ));
+    };
+    let package_req =
+        PackageReq::from_str(&req).map_err(|err| LuaError::DeserializeError(err.to_string()))?;
+
+    let opt = OptState::from(table.get::<Option<bool>>("opt")?.unwrap_or(false));
+    let pin = PinnedState::from(table.get::<Option<bool>>("pin")?.unwrap_or(false));
+
+    let git: Option<String> = table.get("git")?;
+    let path: Option<String> = table.get("path")?;
+    let rev: Option<String> = table.get("rev")?;
+
+    if git.is_some() && path.is_some() {
+        return Err(LuaError::DeserializeError(
+            "a dependency cannot specify both `git` and `path`".to_string(),
+        ));
+    }
+    if rev.is_some() && git.is_none() {
+        return Err(LuaError::DeserializeError(
+            "a dependency cannot specify `rev` without `git`".to_string(),
+        ));
+    }
+
+    let source = if let Some(git) = git {
+        let shorthand = git
+            .parse::<RemoteGitUrlShorthand>()
+            .map_err(|err| LuaError::DeserializeError(err.to_string()))?;
+        let url: RemoteGitUrl = shorthand.into();
+        Some(RockSourceSpec::Git(GitSource {
+            url,
+            git_ref: rev.map(GitRef::Tag),
+        }))
+    } else {
+        path.map(|path| RockSourceSpec::File(PathBuf::from(path)))
+    };
+
+    Ok(LuaDependencySpec::new(package_req, pin, opt, source))
+}
+
+#[derive(Clone, Debug)]
+pub enum AddDependencyLua {
+    PackageReq(PackageReq),
+    GitShorthand(RemoteGitUrlShorthand),
+    Spec(LuaDependencySpec),
+}
+
+impl Typed for AddDependencyLua {
+    fn ty() -> Type {
+        Type::any()
+    }
+}
+
+impl FromLua for AddDependencyLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        if let LuaValue::UserData(ref ud) = value {
+            if let Ok(spec) = ud.borrow::<LuaDependencySpecLua>() {
+                return Ok(Self::Spec(spec.0.clone()));
+            }
+            if let Ok(req) = ud.borrow::<PackageReqLua>() {
+                return Ok(Self::PackageReq(req.0.clone()));
+            }
+        }
+
+        if let LuaValue::Table(ref table) = value {
+            if table.contains_key("name")? || table.contains_key("package")? {
+                return parse_lua_dependency_spec_table(table).map(Self::Spec);
+            }
+        }
+
+        let s = String::from_lua(value, lua)?;
+        if let Ok(shorthand) = RemoteGitUrlShorthand::parse_with_prefix(&s) {
+            return Ok(Self::GitShorthand(shorthand));
+        }
+        if let Ok(shorthand) = s.parse::<RemoteGitUrlShorthand>() {
+            return Ok(Self::GitShorthand(shorthand));
+        }
+        s.parse::<PackageReq>()
+            .map(Self::PackageReq)
+            .map_err(|err| LuaError::DeserializeError(err.to_string()))
     }
 }
 
@@ -1478,6 +1581,11 @@ impl TypedUserData for LuaDependencySpecLua {
         });
         methods.add_method("package_req", |_, this, ()| {
             Ok(PackageReqLua(this.0.package_req().clone()))
+        });
+        methods.add_method("opt", |_, this, ()| Ok(OptStateLua(*this.0.opt())));
+        methods.add_method("pin", |_, this, ()| Ok(PinnedStateLua(*this.0.pin())));
+        methods.add_method("source", |_, this, ()| {
+            Ok(this.0.source().clone().map(RockSourceSpecLua))
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -2856,6 +2964,26 @@ impl TypedUserData for LockfileReadOnlyLua {
         methods.add_method("get", |_, this, id: LockedPackageIdLua| {
             Ok(this.0.get(&id.0).cloned().map(LockedPackageLua))
         });
+        methods.add_method("entrypoints", |_, this, ()| {
+            Ok(this
+                .0
+                .entrypoints()
+                .into_iter()
+                .map(|(name, package)| (name.to_string(), LockedPackageLua(package.clone())))
+                .collect::<HashMap<_, _>>())
+        });
+        methods.param("id", "Package ID");
+        methods.add_method("is_entrypoint", |_, this, id: LockedPackageIdLua| {
+            Ok(this.0.is_entrypoint(&id.0))
+        });
+        methods.add_method("reachable_rocks", |_, this, ()| {
+            Ok(this
+                .0
+                .reachable_rocks()
+                .into_iter()
+                .map(LockedPackageLua)
+                .collect::<Vec<_>>())
+        });
 
         methods.document(
             "Converts the current lockfile into a writeable one, executes `f` and flushes",
@@ -2957,13 +3085,9 @@ impl TypedUserData for LockfileReadWriteLua {
                 .collect::<HashMap<_, _>>())
         });
 
-        methods.param("id", "");
-        methods.add_method("get", |_, this, id: String| {
-            Ok(this
-                .0
-                .get(unsafe { &LockedPackageId::from_unchecked(id) })
-                .cloned()
-                .map(LockedPackageLua))
+        methods.param("id", "Package ID");
+        methods.add_method("get", |_, this, id: LockedPackageIdLua| {
+            Ok(this.0.get(&id.0).cloned().map(LockedPackageLua))
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -3141,14 +3265,13 @@ impl TypedUserData for ProjectLua {
         methods.param("config", "Lux config");
         methods.add_async_method_mut(
             "add",
-            |_, mut this, (deps, config): (DependencyTypeLua<PackageReqLua>, ConfigLua)| async move {
+            |_, mut this, (deps, config): (LuaDependencyTypeLua<AddDependencyLua>, ConfigLua)| async move {
                 let _guard = lux_lib::lua::lua_runtime().enter();
-                let deps = map_dependency_type(deps.0);
                 let package_db =
                     PackageDB::from_config(&config.0)
                         .await
                         .into_lua_err()?;
-                this.0.add(deps.as_ref(), &package_db).await.into_lua_err()
+                project_add_dependencies(&mut this.0, deps.0, &package_db, &config.0).await
             },
         );
 
@@ -3318,6 +3441,119 @@ pub(crate) fn map_dependency_type_names(
         DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
         DependencyType::External(m) => DependencyType::External(m),
     }
+}
+
+fn split_add_deps(
+    deps: Vec<AddDependencyLua>,
+) -> LuaResult<(Vec<PackageReq>, Vec<RemoteGitUrlShorthand>)> {
+    let mut packages = Vec::new();
+    let mut git = Vec::new();
+    for dep in deps {
+        match dep {
+            AddDependencyLua::PackageReq(req) => packages.push(req),
+            AddDependencyLua::GitShorthand(shorthand) => git.push(shorthand),
+            AddDependencyLua::Spec(spec) => {
+                if *spec.opt() != OptState::Required || *spec.pin() != PinnedState::Unpinned {
+                    return Err(LuaError::RuntimeError(
+                        "opt/pin dependencies must be declared directly in lux.toml".to_string(),
+                    ));
+                }
+                match spec.source() {
+                    None => packages.push(spec.package_req().clone()),
+                    Some(RockSourceSpec::Git(git_source)) => {
+                        if git_source.git_ref.is_some() {
+                            return Err(LuaError::RuntimeError(
+                                "git revisions in add tables must be declared directly in lux.toml"
+                                    .to_string(),
+                            ));
+                        }
+                        git.push(git_source.url.clone().into());
+                    }
+                    Some(_) => {
+                        return Err(LuaError::RuntimeError(
+                            "path and URL dependencies must be declared directly in lux.toml"
+                                .to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok((packages, git))
+}
+
+enum AddDependencyKind {
+    Regular,
+    Build,
+    Test,
+}
+
+async fn add_dependencies_for_variant(
+    project: &mut Project,
+    kind: AddDependencyKind,
+    deps: Vec<AddDependencyLua>,
+    package_db: &PackageDB,
+    config: &Config,
+) -> LuaResult<()> {
+    let (packages, git) = split_add_deps(deps)?;
+    if !packages.is_empty() {
+        let packages = match kind {
+            AddDependencyKind::Regular => DependencyType::Regular(packages.iter().collect()),
+            AddDependencyKind::Build => DependencyType::Build(packages.iter().collect()),
+            AddDependencyKind::Test => DependencyType::Test(packages.iter().collect()),
+        };
+        project.add(packages, package_db).await.into_lua_err()?;
+    }
+    if !git.is_empty() {
+        let git = match kind {
+            AddDependencyKind::Regular => LuaDependencyType::Regular(git.iter().collect()),
+            AddDependencyKind::Build => LuaDependencyType::Build(git.iter().collect()),
+            AddDependencyKind::Test => LuaDependencyType::Test(git.iter().collect()),
+        };
+        project.add_git(git, config).await.into_lua_err()?;
+    }
+    Ok(())
+}
+
+pub(crate) async fn project_add_dependencies(
+    project: &mut Project,
+    deps: LuaDependencyType<AddDependencyLua>,
+    package_db: &PackageDB,
+    config: &Config,
+) -> LuaResult<()> {
+    match deps {
+        LuaDependencyType::Regular(deps) => {
+            add_dependencies_for_variant(
+                project,
+                AddDependencyKind::Regular,
+                deps,
+                package_db,
+                config,
+            )
+            .await?;
+        }
+        LuaDependencyType::Build(deps) => {
+            add_dependencies_for_variant(
+                project,
+                AddDependencyKind::Build,
+                deps,
+                package_db,
+                config,
+            )
+            .await?;
+        }
+        LuaDependencyType::Test(deps) => {
+            add_dependencies_for_variant(
+                project,
+                AddDependencyKind::Test,
+                deps,
+                package_db,
+                config,
+            )
+            .await?;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Deserialize_enum_str, Serialize_enum_str, Default)]

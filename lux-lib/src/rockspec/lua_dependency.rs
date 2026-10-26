@@ -29,6 +29,20 @@ pub struct LuaDependencySpec {
 }
 
 impl LuaDependencySpec {
+    pub fn new(
+        package_req: PackageReq,
+        pin: PinnedState,
+        opt: OptState,
+        source: Option<RockSourceSpec>,
+    ) -> Self {
+        Self {
+            package_req,
+            pin,
+            opt,
+            source,
+        }
+    }
+
     pub fn package_req(&self) -> &PackageReq {
         &self.package_req
     }
