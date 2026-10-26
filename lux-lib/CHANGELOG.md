@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.67.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.2...lux-lib-v0.67.3) `lux-lib` - 2026-10-26
+
+### Added
+- *(cli)* `--version` flag for `lx generate-rockspec` (closes #2097)
+- *(cli)* `lx upload` with a path parameter for uploading rockspecs
+- *(cli)* add `--pure` and `--impure` flags to `lx lua` and `lx run`
+
+### Other
+- update flake.lock ([#2095](https://github.com/lumen-oss/lux/pull/2095))
+- update luau ([#2088](https://github.com/lumen-oss/lux/pull/2088))
+
 ## [0.67.2](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.1...lux-lib-v0.67.2) `lux-lib` - 2026-10-24
 
 ### Added

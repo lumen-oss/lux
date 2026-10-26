@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.3](https://github.com/lumen-oss/lux/compare/v0.49.2...v0.49.3) `lux-cli` - 2026-10-26
+
+### Added
+- *(cli)* `--version` flag for `lx generate-rockspec` (closes #2097)
+- *(cli)* `lx upload` with a path parameter for uploading rockspecs
+- *(cli)* add `--pure` and `--impure` flags to `lx lua` and `lx run`
+
+### Fixed
+- *(no_prompt)* enable when in non-interactive terminal
+
 ## [0.49.2](https://github.com/lumen-oss/lux/compare/v0.49.1...v0.49.2) `lux-cli` - 2026-10-24
 
 ### Added
