@@ -640,10 +640,10 @@ impl PartialProjectToml {
             deploy: PerPlatform::new(project_toml.deploy.clone().unwrap_or_default()),
             rockspec_format: project_toml.rockspec_format.clone(),
 
-            source: PerPlatform::new(RemoteRockSource {
-                local: LocalRockSource::default(),
-                source_spec: RockSourceSpec::File(self.project.root.to_path_buf()),
-            }),
+            source: PerPlatform::new(RemoteRockSource::new(
+                LocalRockSource::default(),
+                RockSourceSpec::File(self.project.root.to_path_buf()),
+            )),
         };
 
         let rockspec_file_name = format!("{}-{}.rockspec", validated.package, validated.version);

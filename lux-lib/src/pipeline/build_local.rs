@@ -77,7 +77,7 @@ where
         &build.opt,
     );
     // Pin the futures otherwise they fill up the stack quite a bit
-    let (package, temp_dir) = Box::pin(fetch_and_hash_source(
+    let (package, _temp_dir, source_root) = Box::pin(fetch_and_hash_source(
         rockspec,
         spec,
         build.source_spec,
@@ -90,7 +90,7 @@ where
         Deploy::new(rockspec, build.tree)
             .package(package)
             .lua(lua)
-            .source_root(temp_dir.path())
+            .source_root(&source_root)
             .entry_type(build.entry_type)
             .config(build.config)
             .behaviour(build.behaviour)

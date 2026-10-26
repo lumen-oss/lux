@@ -11,7 +11,14 @@ pub use crate::git::GitRef;
 use miette::Diagnostic;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
-use std::{convert::Infallible, fmt::Display, fs, io, ops::Deref, path::PathBuf, str::FromStr};
+use std::{
+    convert::Infallible,
+    fmt::Display,
+    fs, io,
+    ops::Deref,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use thiserror::Error;
 
 use super::{
@@ -33,12 +40,46 @@ pub struct RemoteRockSource {
     pub source_spec: RockSourceSpec,
 }
 
+impl RemoteRockSource {
+    /// Builds a remote rock source, normalising a Git rock's `source.dir` to its
+    /// effective source root.
+    ///
+    /// The repository name is the final path component of the Git URL, with any
+    /// `.git` suffix removed.
+    ///
+    /// Luarocks clones Git sources into a `<repository>` directory and resolves
+    /// `source.dir` relative to its parent.
+    /// Lux clones directly into the fetch root, which results in the same
+    /// NAR hash as is used by `fetchgit` (Nix).
+    ///
+    /// For a repository named `foo`:
+    ///
+    /// | input `source.dir` | resulting directory |
+    /// |--------------------|---------------------|
+    /// | `nil`              | `.`                 |
+    /// | `foo`              | `.`                 |
+    /// | `foo/src`          | `src`               |
+    /// | `src`              | `src`               |
+    pub(crate) fn new(mut local: LocalRockSource, source_spec: RockSourceSpec) -> Self {
+        if let RockSourceSpec::Git(git) = &source_spec {
+            let repo = git.url.repo();
+            let normalised = match local.unpack_dir.take() {
+                Some(dir) if dir == Path::new(repo) => ".".into(),
+                Some(dir) => match dir.strip_prefix(repo) {
+                    Ok(stripped) => stripped.to_path_buf(),
+                    Err(_) => dir,
+                },
+                None => PathBuf::from("."),
+            };
+            local.unpack_dir = Some(normalised);
+        }
+        Self { local, source_spec }
+    }
+}
+
 impl From<RockSourceSpec> for RemoteRockSource {
     fn from(source_spec: RockSourceSpec) -> Self {
-        Self {
-            local: LocalRockSource::default(),
-            source_spec,
-        }
+        Self::new(LocalRockSource::default(), source_spec)
     }
 }
 
@@ -94,7 +135,7 @@ impl TryFrom<RockSourceInternal> for RemoteRockSource {
             _ => Err(RockSourceError::InvalidCombination),
         }?;
 
-        Ok(RemoteRockSource { source_spec, local })
+        Ok(RemoteRockSource::new(local, source_spec))
     }
 }
 
@@ -403,6 +444,31 @@ mod tests {
         let lua = source.display_lua().to_string();
         let restored: RockSourceInternal = eval_lua_global(&lua, "source");
         assert_eq!(source, restored);
+    }
+
+    #[test]
+    pub fn normalises_git_source_dir() {
+        let parse = |url: &str, dir: Option<&str>| {
+            RemoteRockSource::try_from(RockSourceInternal {
+                url: Some(url.into()),
+                file: None,
+                dir: dir.map(Into::into),
+                tag: None,
+                branch: None,
+            })
+            .unwrap()
+            .local
+            .unpack_dir
+        };
+        let git = "git+https://github.com/lumen-oss/foo";
+        assert_eq!(parse(git, None), Some(".".into()));
+        assert_eq!(parse(git, Some("foo")), Some(".".into()));
+        assert_eq!(parse(git, Some("foo/src")), Some("src".into()));
+        assert_eq!(parse(git, Some("src")), Some("src".into()));
+        assert_eq!(
+            parse("https://example.com/repo-1.0.tar.gz", Some("repo-1.0")),
+            Some("repo-1.0".into())
+        );
     }
 
     #[tokio::test]

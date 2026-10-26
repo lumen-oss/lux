@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::io::Cursor;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bon::Builder;
 use bytes::Bytes;
@@ -19,8 +19,10 @@ use crate::{
         LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
         RemotePackageSourceUrl,
     },
-    lua_rockspec::RemoteLuaRockspec,
-    operations::{unpack_src_rock, FetchSrc, RemotePackageSourceMetadata},
+    lua_rockspec::{RemoteLuaRockspec, RockSourceSpec},
+    operations::{
+        single_non_rockspec_entry, unpack_src_rock, FetchSrc, RemotePackageSourceMetadata,
+    },
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
@@ -163,18 +165,12 @@ async fn materialise(
                 let source_url = source_url
                     .clone()
                     .ok_or_else(|| Error::MissingSourceUrl(name.clone()))?;
-                let (package, dir) = fetch_and_hash_source(
-                    &rockspec,
-                    spec,
-                    Some(RemotePackageSourceSpec::SrcRock(SrcRockSource {
-                        bytes,
-                        source_url,
-                    })),
-                    Some(source),
-                    config,
-                )
-                .await?;
-                let artifact = PackageSource::SourceDir(dir.path().to_path_buf());
+                let source_spec =
+                    RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url });
+                let (package, dir, source_root) =
+                    fetch_and_hash_source(&rockspec, spec, Some(source_spec), Some(source), config)
+                        .await?;
+                let artifact = PackageSource::SourceDir(source_root);
                 (package, artifact, Some(dir))
             }
         },
@@ -195,15 +191,11 @@ async fn materialise(
             (package, PackageSource::SourceDir(path), None)
         }
         None => {
-            let (package, dir) = fetch_and_hash_source(
-                &rockspec,
-                spec,
-                Some(RemotePackageSourceSpec::RockSpec(source_url)),
-                Some(source),
-                config,
-            )
-            .await?;
-            let artifact = PackageSource::SourceDir(dir.path().to_path_buf());
+            let source_spec = RemotePackageSourceSpec::RockSpec(source_url);
+            let (package, dir, source_root) =
+                fetch_and_hash_source(&rockspec, spec, Some(source_spec), Some(source), config)
+                    .await?;
+            let artifact = PackageSource::SourceDir(source_root);
             (package, artifact, Some(dir))
         }
     };
@@ -218,14 +210,55 @@ async fn materialise(
     })
 }
 
+fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
+    match source_url {
+        RemotePackageSourceUrl::Url { url } => url.path().ends_with(".src.rock"),
+        RemotePackageSourceUrl::File { path } => path.to_string_lossy().ends_with(".src.rock"),
+        RemotePackageSourceUrl::Git { .. } => false,
+    }
+}
+
+/// Resolves the source root inside an unpacked source rock.
+///
+/// The source root is `<unpacked>/<repository>` when that directory is the only
+/// entry besides the rockspec. Otherwise the source root is the unpacked root.
+///
+/// This matches the wrapper directory luarocks adds when packing a Git source rock,
+/// while leaving unwrapped source trees untouched.
+///
+/// For a git source rock containing `foo/`:
+///
+/// | unpacked contents        | returned source root |
+/// |--------------------------|----------------------|
+/// | `foo/` and the rockspec  | `<unpacked>/foo`     |
+/// | source files at the root | `<unpacked>`         |
+fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> PathBuf {
+    if let RockSourceSpec::Git(git) = &rockspec.source().current_platform().source_spec {
+        let repo_dir = unpacked_root.join(git.url.repo());
+        if let Ok(Some(entry)) = single_non_rockspec_entry(unpacked_root) {
+            if entry == repo_dir && entry.is_dir() {
+                return repo_dir;
+            }
+        }
+    }
+    unpacked_root.to_path_buf()
+}
+
 pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     rockspec: &R,
     spec: LockedPackageSpec,
     source_spec: Option<RemotePackageSourceSpec>,
     source: Option<RemotePackageSource>,
     config: &Config,
-) -> Result<(LockedPackage, TempDir), BuildError> {
+) -> Result<(LockedPackage, TempDir, PathBuf), BuildError> {
     let temp_dir = fs::tempfile::tempdir()?;
+    let is_src_rock = match &source_spec {
+        Some(RemotePackageSourceSpec::SrcRock(_)) => true,
+        Some(RemotePackageSourceSpec::RockSpec(Some(source_url))) => {
+            config.vendor_dir().is_none() && is_src_rock_url(source_url)
+        }
+        _ => false,
+    };
 
     let source_metadata = match source_spec {
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
@@ -268,5 +301,11 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
         hashes,
     );
 
-    Ok((package, temp_dir))
+    let source_root = if is_src_rock {
+        src_rock_source_root(rockspec, temp_dir.path())
+    } else {
+        temp_dir.path().to_path_buf()
+    };
+
+    Ok((package, temp_dir, source_root))
 }
