@@ -16,7 +16,7 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       - name: Update Lua
         run: nix run .#update-lua
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.PAT }}
           branch: update-lua
