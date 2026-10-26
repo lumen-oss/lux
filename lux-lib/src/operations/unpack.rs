@@ -197,36 +197,40 @@ fn is_single_tar_directory<R: Read + Seek + Send>(reader: R) -> io::Result<bool>
     }
 }
 
-fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)>, io::Error> {
+pub(crate) fn single_non_rockspec_entry(dir: &Path) -> Result<Option<PathBuf>, io::Error> {
     let entries = fs::sync::read_dir(dir)
         .map_err(io::Error::other)?
         .filter_map(Result::ok)
         .filter_map(|f| {
-            let f = f.path();
-            f.extension()
+            let path = f.path();
+            path.extension()
                 .is_none_or(|ext| ext != "rockspec")
-                .then_some(f)
+                .then_some(path)
         })
         .collect_vec();
-    if entries.len() != 1 {
-        return Ok(None);
+    if entries.len() == 1 {
+        Ok(entries.into_iter().next())
+    } else {
+        Ok(None)
     }
-    match entries.first() {
-        Some(entry) if entry.is_file() => {
+}
+
+fn get_single_archive_entry(dir: &Path) -> Result<Option<(PathBuf, Option<&str>)>, io::Error> {
+    if let Some(entry) = single_non_rockspec_entry(dir)? {
+        if entry.is_file() {
             if let mt @ Some(mime_type) =
-                infer::get_from_path(entry)?.map(|file_type| file_type.mime_type())
+                infer::get_from_path(&entry)?.map(|file_type| file_type.mime_type())
             {
                 if matches!(
                     mime_type,
                     "application/zip" | "application/x-tar" | "application/gzip"
                 ) {
-                    return Ok(Some((entry.clone(), mt)));
+                    return Ok(Some((entry, mt)));
                 }
             }
-            Ok(None)
         }
-        _ => Ok(None),
     }
+    Ok(None)
 }
 
 #[cfg(test)]

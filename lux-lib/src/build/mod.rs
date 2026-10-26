@@ -520,7 +520,11 @@ async fn recursive_copy_doc_dir(target_doc_dir: &Path, build_dir: &Path) -> Resu
 mod tests {
     use super::*;
     use predicates::prelude::*;
-    use std::path::PathBuf;
+    use std::{
+        io::{Cursor, Write},
+        path::PathBuf,
+    };
+    use zip::write::SimpleFileOptions;
 
     use assert_fs::{
         assert::PathAssert,
@@ -529,6 +533,7 @@ mod tests {
 
     use is_executable::IsExecutable;
 
+    use crate::pipeline::build_local::Build;
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
@@ -542,7 +547,6 @@ mod tests {
     #[cfg(feature = "impure_tests")]
     use crate::{
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
-        pipeline::build_local::Build,
         tree::Tree,
     };
 
@@ -681,6 +685,76 @@ deploy = { wrap_bin_scripts = false }
         .await
         .unwrap();
         assert!(tree.bin().join("mytool").is_executable());
+    }
+
+    #[tokio::test]
+    async fn git_src_rock_with_repo_directory_builds() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .user_tree(Some(dir.to_path_buf()))
+            .lua_version(lua_version)
+            .build()
+            .unwrap();
+        let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        let tree = config.user_tree(lua.version.clone()).unwrap();
+
+        let rockspec_content = r#"
+package = "git-src-rock"
+version = "1.0.0-1"
+source = { url = "git+https://example.com/example/git-src-rock.git" }
+dependencies = { "lua >= 5.1" }
+build = {
+    type = "builtin",
+    modules = { ["git_src_rock"] = "lua/git_src_rock.lua" },
+}
+"#;
+        let rockspec = RemoteLuaRockspec::new(rockspec_content).unwrap();
+
+        let mut archive = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut archive);
+            zip.start_file(
+                "git-src-rock-1.0.0-1.rockspec",
+                SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(rockspec_content.as_bytes()).unwrap();
+            zip.start_file(
+                "git-src-rock/lua/git_src_rock.lua",
+                SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(b"return {}").unwrap();
+            zip.finish().unwrap();
+        }
+        let bytes = Bytes::from(archive.into_inner());
+
+        let package = Build::new()
+            .rockspec(&rockspec)
+            .lua(&lua)
+            .tree(&tree)
+            .entry_type(EntryType::Entrypoint)
+            .config(&config)
+            .behaviour(BuildBehaviour::Force)
+            .source_spec(RemotePackageSourceSpec::SrcRock(SrcRockSource {
+                bytes,
+                source_url: RemotePackageSourceUrl::Url {
+                    url: "https://example.org/git-src-rock-1.0.0-1.src.rock"
+                        .parse()
+                        .unwrap(),
+                },
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(tree
+            .layout_for(package.spec())
+            .src
+            .join("git_src_rock.lua")
+            .is_file());
     }
 
     #[tokio::test]

@@ -149,4 +149,57 @@ mod tests {
         .await
         .unwrap()
     }
+
+    /// Non-regression for https://github.com/lumen-oss/lux/issues/2098
+    #[tokio::test]
+    async fn test_install_rockspec_with_git_source_dir() {
+        let vendor_dir = TempDir::new().unwrap();
+        let repo_dir = vendor_dir.child("lubmin@1.0.0-1");
+        repo_dir.child("lub").create_dir_all().unwrap();
+        repo_dir
+            .child("lub/Template.lua")
+            .write_str("return {}")
+            .unwrap();
+        let temp_dir = TempDir::new().unwrap();
+        let rockspec = temp_dir.child("lubmin-1.0.0-1.rockspec");
+        rockspec
+            .write_str(
+                r#"
+                package = 'lubmin'
+                version = '1.0.0-1'
+                source = {
+                    url = 'git+https://github.com/lubyk/lub',
+                    tag = 'REL-1.1.0',
+                    dir = 'lub',
+                }
+                dependencies = {
+                    'lua >= 5.1',
+                }
+                build = {
+                    type = 'builtin',
+                    modules = {
+                        ['lub.Template'] = 'lub/Template.lua',
+                    },
+                }
+            "#,
+            )
+            .unwrap();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .vendor_dir(Some(vendor_dir.to_path_buf()))
+            .lua_version(lua_version)
+            .user_tree(Some(temp_dir.to_path_buf()))
+            .build()
+            .unwrap();
+        install_rockspec(
+            InstallRockspec {
+                rockspec_path: rockspec.to_path_buf(),
+                pin: false,
+            },
+            config,
+        )
+        .await
+        .unwrap();
+    }
 }
