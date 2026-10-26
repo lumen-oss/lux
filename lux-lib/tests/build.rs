@@ -273,7 +273,7 @@ async fn test_build_local_project_no_source() {
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
-    let project_toml = workspace.members().first().toml().into_local().unwrap();
+    let rockspec = workspace.members().first().local_remote_rockspec().unwrap();
 
     let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
 
@@ -288,7 +288,7 @@ async fn test_build_local_project_no_source() {
     let lua = LuaInstallation::new_from_config(&config).await.unwrap();
 
     let package = Build::new()
-        .rockspec(&project_toml)
+        .rockspec(&rockspec)
         .lua(&lua)
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
@@ -304,6 +304,28 @@ async fn test_build_local_project_no_source() {
 
     let plugin_file = layout.etc.join("plugin").join("foo.lua");
     assert!(plugin_file.is_file());
+
+    let packed_rockspec = std::fs::read_to_string(layout.rockspec_path()).unwrap();
+    RemoteLuaRockspec::new(&packed_rockspec).unwrap();
+}
+
+#[test]
+fn local_project_rockspec_keeps_lua_text() {
+    let sample_project =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-projects/no-source/");
+    let project_root = TempDir::new().unwrap();
+    project_root.copy_from(&sample_project, &["**"]).unwrap();
+
+    let project = lux_lib::project::Project::from_exact(project_root.path())
+        .unwrap()
+        .unwrap();
+    let content = project
+        .local_remote_rockspec()
+        .unwrap()
+        .to_lua_remote_rockspec_string()
+        .unwrap();
+
+    RemoteLuaRockspec::new(&content).unwrap();
 }
 
 #[flaky_test(tokio, times = 5)]

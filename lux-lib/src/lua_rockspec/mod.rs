@@ -207,9 +207,9 @@ impl<'gc> HasRockspecKey<'gc> for ottavino::Table<'gc> {
 
 impl LocalLuaRockspec {
     /// Builds a [`LocalLuaRockspec`] from an already-parsed project.
-    /// FIXME(vhyrro): investigate if necessary or can be deduplicated
     pub(crate) fn from_project_toml(
         project: &crate::project::project_toml::LocalProjectToml,
+        raw_content: String,
     ) -> Self {
         use crate::rockspec::Rockspec;
 
@@ -228,7 +228,7 @@ impl LocalLuaRockspec {
             source: project.source().clone(),
             test: project.test().clone(),
             deploy: project.deploy().clone(),
-            raw_content: String::new(),
+            raw_content,
         }
     }
 
