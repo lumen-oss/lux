@@ -965,7 +965,18 @@ impl LocalProjectToml {
     /// Renders the rockspec for local builds, using the rockspec's own version
     /// and its source pointing at the project root.
     pub fn to_local_rockspec(&self) -> Result<RemoteLuaRockspec, LuaRockspecError> {
-        Ok(LocalLuaRockspec::from_project_toml(self).into_remote_with_source(self.source.clone()))
+        let content = self.to_lua_local_rockspec_string()?;
+        Ok(LocalLuaRockspec::from_project_toml(self, content)
+            .into_remote_with_source(self.source.clone()))
+    }
+
+    /// Like [`Rockspec::to_lua_remote_rockspec_string`], but pointing at the project root,
+    /// so projects without a release URL can still render a rockspec.
+    fn to_lua_local_rockspec_string(&self) -> Result<String, ProjectTomlError> {
+        self.render_rockspec(
+            &self.version,
+            Some(self.source.current_platform().source_spec.display_lua()),
+        )
     }
 
     fn render_rockspec(
