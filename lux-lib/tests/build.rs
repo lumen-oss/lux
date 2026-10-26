@@ -62,6 +62,48 @@ async fn builtin_build() {
 }
 
 #[flaky_test(tokio, times = 5)]
+async fn builtin_build_git_source_with_repo_named_dir() {
+    let dir = TempDir::new().unwrap();
+
+    let content = String::from_utf8(
+        std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/test/lubmin-1.0.0-1.rockspec"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+
+    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+
+    let config = ConfigBuilder::new()
+        .unwrap()
+        .user_tree(Some(dir.to_path_buf()))
+        .lua_version(lua_version)
+        .build()
+        .unwrap();
+
+    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+
+    let tree = config.user_tree(lua.version.clone()).unwrap();
+
+    let package = Build::new()
+        .rockspec(&rockspec)
+        .lua(&lua)
+        .tree(&tree)
+        .entry_type(tree::EntryType::Entrypoint)
+        .config(&config)
+        .behaviour(Force)
+        .build()
+        .await
+        .unwrap();
+
+    let layout = tree.layout_for(package.spec());
+    assert!(layout.src.join("lub").join("Template.lua").is_file());
+}
+
+#[flaky_test(tokio, times = 5)]
 async fn make_build() {
     let dir = TempDir::new().unwrap();
 

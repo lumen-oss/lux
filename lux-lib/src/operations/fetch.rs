@@ -267,7 +267,8 @@ async fn fetch_src_impl<R: Rockspec>(
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
             let clone_url = url.clone();
-            let clone_dir = dest_dir.to_path_buf();
+            let clone_dir = dest_dir.join(git.url.repo());
+            let git_dir = clone_dir.join(".git");
             let host = git.url.host().to_string();
             let no_prompt = config.no_prompt();
             let access_token = config.access_token(&host);
@@ -330,7 +331,7 @@ async fn fetch_src_impl<R: Rockspec>(
             .await??;
 
             // The .git directory is not deterministic
-            remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
+            remove_dir_all(git_dir).map_err(FetchSrcError::CleanGitDir)?;
             let hash = dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
