@@ -201,9 +201,10 @@ fn add_rock_entry(
     source_dir: &Path,
     zip_dir: &Path,
 ) -> Result<(PathBuf, String), PackError> {
-    let relative_path: PathBuf = unsafe {
-        pathdiff::diff_paths(source_dir.join(file.clone()), source_dir).unwrap_unchecked()
-    };
+    let relative_path: PathBuf = file
+        .strip_prefix(source_dir)
+        .unwrap_or(file.as_path())
+        .to_path_buf();
     let mut f = fs::sync::open(file)?;
     let mut buffer = Vec::new();
     f.read_to_end(&mut buffer)?;
@@ -305,5 +306,56 @@ mod tests {
                 ])),
             )])
         );
+    }
+
+    // non-regression for https://github.com/lumen-oss/lux/issues/2116
+    #[cfg(unix)]
+    #[test]
+    fn add_rock_entries_with_relative_source_dir() -> Result<(), PackError> {
+        let temp = fs::tempfile::tempdir()?;
+        let abs_source_dir = temp.path().join("src");
+        fs::sync::create_dir_all(abs_source_dir.join("sub"))?;
+        fs::sync::write(abs_source_dir.join("plainp.lua"), b"-- plainp")?;
+        fs::sync::write(abs_source_dir.join("sub").join("mod.lua"), b"-- mod")?;
+
+        // Express the source dir relative to the cwd, as `--tree ./tree` does.
+        let relative_source_dir = pathdiff::diff_paths(&abs_source_dir, std::env::current_dir()?)
+            .unwrap_or_else(|| unreachable!("temp dir and cwd share a root on unix"));
+        assert!(relative_source_dir.is_dir());
+
+        let expected_entries = HashMap::from([
+            (
+                PathBuf::from("plainp.lua"),
+                DirOrFileEntry::FileEntry(format!("{:x}", md5::compute(b"-- plainp"))),
+            ),
+            (
+                PathBuf::from("sub"),
+                DirOrFileEntry::DirEntry(HashMap::from([(
+                    PathBuf::from("mod.lua"),
+                    DirOrFileEntry::FileEntry(format!("{:x}", md5::compute(b"-- mod"))),
+                )])),
+            ),
+        ]);
+
+        // The relative case is the regression, the absolute one the mainline behaviour.
+        let source_dirs = [&relative_source_dir, &abs_source_dir];
+        for (index, source_dir) in source_dirs.into_iter().enumerate() {
+            let zip_path = temp.path().join(format!("out-{}.rock", index));
+            let mut zip = ZipWriter::new(fs::sync::create(&zip_path)?);
+            let entries = add_rock_entries(&mut zip, source_dir, "lua".into())?;
+            zip.finish()?;
+
+            let mut archive = zip::ZipArchive::new(fs::sync::open(&zip_path)?)?;
+            assert_eq!(archive.len(), 2);
+            assert!(archive.by_name("lua/plainp.lua").is_ok());
+            let mut contents = Vec::new();
+            let mut mod_file = archive.by_name("lua/sub/mod.lua")?;
+            mod_file.read_to_end(&mut contents)?;
+            assert_eq!(contents, b"-- mod");
+
+            assert_eq!(entries, expected_entries);
+        }
+
+        Ok(())
     }
 }
