@@ -1023,6 +1023,14 @@ impl<P: LockfilePermissions> Lockfile<P> {
         self.lock.entrypoint(name)
     }
 
+    pub fn entrypoints(&self) -> Vec<(&PackageName, &LockedPackage)> {
+        self.lock
+            .entrypoints
+            .iter()
+            .filter_map(|(name, id)| self.lock.get(id).map(|package| (name, package)))
+            .collect()
+    }
+
     /// Returns all rocks in the lockfile that are reachable from an entrypoint
     /// via the dependency graph.
     pub fn reachable_rocks(&self) -> Vec<LockedPackage> {

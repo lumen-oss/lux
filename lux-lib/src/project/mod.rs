@@ -320,6 +320,17 @@ impl Project {
         self.toml().lua_version_matches(config)
     }
 
+    async fn write_toml(&mut self, project_toml: DocumentMut) -> Result<(), ProjectEditError> {
+        let toml_content = project_toml.to_string();
+        fs::tokio::write(self.toml_path(), &toml_content).await?;
+        self.toml = PartialProjectToml::new(
+            self.toml_path().to_str().unwrap_or("<lux.toml>"),
+            &toml_content,
+            self.lux_toml_dir.clone(),
+        )?;
+        Ok(())
+    }
+
     pub async fn add(
         &mut self,
         dependencies: DependencyType<&PackageReq>,
@@ -368,14 +379,7 @@ impl Project {
             }
         };
 
-        let toml_content = project_toml.to_string();
-        fs::tokio::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(
-            self.toml_path().to_str().unwrap_or("<lux.toml>"),
-            &toml_content,
-            self.lux_toml_dir.clone(),
-        )?;
-
+        self.write_toml(project_toml).await?;
         Ok(())
     }
 
@@ -420,13 +424,7 @@ impl Project {
             }
         }
 
-        let toml_content = project_toml.to_string();
-        fs::tokio::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(
-            self.toml_path().to_str().unwrap_or("<lux.toml>"),
-            &toml_content,
-            self.lux_toml_dir.clone(),
-        )?;
+        self.write_toml(project_toml).await?;
 
         Ok(())
     }
@@ -466,13 +464,7 @@ impl Project {
             }
         };
 
-        let toml_content = project_toml.to_string();
-        fs::tokio::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(
-            self.toml_path().to_str().unwrap_or("<lux.toml>"),
-            &toml_content,
-            self.lux_toml_dir.clone(),
-        )?;
+        self.write_toml(project_toml).await?;
 
         Ok(())
     }
@@ -503,13 +495,7 @@ impl Project {
             }
         }
 
-        let toml_content = project_toml.to_string();
-        fs::tokio::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(
-            self.toml_path().to_str().unwrap_or("<lux.toml>"),
-            &toml_content,
-            self.lux_toml_dir.clone(),
-        )?;
+        self.write_toml(project_toml).await?;
 
         Ok(())
     }

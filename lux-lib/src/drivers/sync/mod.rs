@@ -324,6 +324,8 @@ pub(crate) fn gather_dependencies(
                         EntryType::Entrypoint,
                     )
                     .build_behaviour(BuildBehaviour::Ignore)
+                    .pin(*dependency.pin())
+                    .opt(*dependency.opt())
                     .maybe_source(dependency.source().clone())
                     .build(),
                 );

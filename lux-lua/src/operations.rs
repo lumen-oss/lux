@@ -6,28 +6,24 @@ use std::{collections::HashMap, path::PathBuf};
 use itertools::Itertools;
 use lux_lib::tree::InstallTree;
 use lux_lib::{
-    build::BuildBehaviour,
     drivers::install_packages::InstallPackages,
     drivers::sync::{Sync, SyncMode, TargetSet},
     lockfile::LockedPackageId,
     lua::lua_runtime,
-    operations::{
-        set_pinned_state, BuildWorkspace, DistProjectBin, Download, PackageInstallSpec, Uninstall,
-        Update,
-    },
+    operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
     package::{PackageName, PackageReq},
     package_db::PackageDB,
     rockspec::lua_dependency::DependencyType,
-    tree::{EntryType, RockMatches, Tree},
+    tree::{RockMatches, Tree},
 };
 use mlua::prelude::*;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use path_slash::PathBufExt;
 
 use crate::lua_impls::{
-    self, ConfigLua, DependencyTypeLua, DownloadedRockspecLua, LockedPackageIdLua,
-    LockedPackageLua, PackageInstallSpecLua, PackageNameLua, PackageReqLua, PinnedStateLua,
-    ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
+    self, AddDependencyLua, ConfigLua, DependencyTypeLua, DownloadedRockspecLua,
+    LockedPackageIdLua, LockedPackageLua, LuaDependencyTypeLua, PackageInstallSpecLua,
+    PackageNameLua, PinnedStateLua, ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone)]
@@ -52,6 +48,32 @@ impl TypedUserData for OperationsModule {
             |_, (query, config): (String, ConfigLua)| async move {
                 let _runtime = lua_runtime().enter();
                 search(query, config).await
+            },
+        );
+
+        methods.document("List installed packages that have newer versions available");
+        methods.param("workspace", "Workspace to inspect");
+        methods.param("config", "Lux config");
+        methods.add_async_function(
+            "outdated",
+            |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
+                let _runtime = lua_runtime().enter();
+                let tree = workspace.0.tree(&config.0).into_lua_err()?;
+                let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
+                let rocks = tree.as_rock_list().into_lua_err()?;
+                let mut outdated: HashMap<String, Vec<HashMap<String, String>>> = HashMap::new();
+                for rock in rocks.iter() {
+                    if let Ok(Some(latest)) = rock.to_package().has_update(&package_db).await {
+                        outdated
+                            .entry(rock.name().to_string())
+                            .or_default()
+                            .push(HashMap::from([
+                                ("current".to_string(), rock.version().to_string()),
+                                ("latest".to_string(), latest.to_string()),
+                            ]));
+                    }
+                }
+                Ok(outdated)
             },
         );
 
@@ -139,34 +161,35 @@ impl TypedUserData for OperationsModule {
             |_,
              (mut workspace, deps, config): (
                 WorkspaceLua,
-                DependencyTypeLua<PackageReqLua>,
+                LuaDependencyTypeLua<AddDependencyLua>,
                 ConfigLua,
             )| async move {
                 let _runtime = lua_runtime().enter();
-                let deps = lua_impls::map_dependency_type(deps.0);
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
 
-                let install_specs = deps_to_specs(&deps);
-
-                if install_specs.is_empty() {
-                    return Ok(Vec::new());
+                {
+                    let project = workspace
+                        .0
+                        .single_member_or_select_mut(&None)
+                        .into_lua_err()?;
+                    lua_impls::project_add_dependencies(project, deps.0, &package_db, &config.0)
+                        .await?;
                 }
-                workspace
-                    .0
-                    .single_member_or_select_mut(&None)
-                    .into_lua_err()?
-                    .add(deps.as_ref(), &package_db)
+
+                let report = Sync::new(&workspace.0, &config.0)
+                    .mode(SyncMode::Open)
+                    .targets(TargetSet::all(&workspace.0, true))
+                    .only_deps(true)
+                    .sync()
                     .await
                     .into_lua_err()?;
 
-                let tree = workspace.0.tree(&config.0).into_lua_err()?;
-                InstallPackages::new(&config.0, &tree)
-                    .package_db(package_db)
-                    .packages(install_specs)
-                    .install()
-                    .await
-                    .into_lua_err()
-                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
+                Ok(report
+                    .added()
+                    .iter()
+                    .cloned()
+                    .map(LockedPackageLua)
+                    .collect::<Vec<_>>())
             },
         );
 
@@ -371,21 +394,6 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
             )
         })
         .collect())
-}
-
-fn deps_to_specs(deps: &DependencyType<PackageReq>) -> Vec<PackageInstallSpec> {
-    let reqs = match deps {
-        DependencyType::Regular(d) | DependencyType::Build(d) | DependencyType::Test(d) => d,
-        DependencyType::External(_) => &Vec::default(),
-    };
-
-    reqs.iter()
-        .map(|r| {
-            PackageInstallSpec::new(r.clone(), EntryType::Entrypoint)
-                .build_behaviour(BuildBehaviour::Force)
-                .build()
-        })
-        .collect()
 }
 
 fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LockedPackageId> {
