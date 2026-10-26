@@ -297,7 +297,13 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         let _enter = span.enter();
         for (target, source) in &install_spec.conf {
             let absolute_source = build_dir.join(source);
-            let target = layout.conf.join(target);
+            let target = {
+                let joined = layout.conf.join(target);
+                match joined.file_name() {
+                    Some(_) => joined,
+                    None => joined.join(absolute_source.file_name().unwrap_or_default()),
+                }
+            };
             if let Some(parent_dir) = target.parent() {
                 fs::tokio::create_dir_all(parent_dir)
                     .instrument(tracing::trace_span!("creating configuration directory"))
@@ -675,6 +681,70 @@ deploy = { wrap_bin_scripts = false }
         .await
         .unwrap();
         assert!(tree.bin().join("mytool").is_executable());
+    }
+
+    #[tokio::test]
+    async fn test_install_conf_directory_target() {
+        let rockspec = RemoteLuaRockspec::new(
+            r#"
+rockspec_format = "3.0"
+package = "test-install-conf"
+version = "1.0-1"
+source = { url = "https://github.com/lumen-oss/luarocks-stub" }
+build = {
+    type = "builtin",
+    install = {
+        conf = {
+            [".."] = "shell.nix",
+            ["plain.conf"] = "plain.conf",
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let tree_dir = assert_fs::TempDir::new().unwrap();
+        let build_dir = assert_fs::TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(lua_version)
+            .user_tree(Some(tree_dir.to_path_buf()))
+            .build()
+            .unwrap();
+        let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        let tree = config
+            .user_tree(config.lua_version().cloned().unwrap())
+            .unwrap();
+        let package = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
+            LockConstraint::Unconstrained,
+            Vec::new(),
+            Vec::new(),
+            &PinnedState::default(),
+            &OptState::default(),
+        );
+        tree.prepare(&package).unwrap();
+        for file in ["shell.nix", "plain.conf"] {
+            crate::fs::tokio::write(build_dir.path().join(file), "return {}")
+                .await
+                .unwrap();
+        }
+        install(
+            &rockspec,
+            &tree,
+            &package,
+            &lua,
+            build_dir.path(),
+            &EntryType::Entrypoint,
+            &config,
+        )
+        .await
+        .unwrap();
+        let layout = tree.layout_for(&package);
+        assert!(layout.etc.join("shell.nix").is_file());
+        assert!(layout.conf.join("plain.conf").is_file());
     }
 
     #[cfg(feature = "impure_tests")]
