@@ -31,7 +31,7 @@ use crate::{
     package::SpecRev,
     package_db::PackageDB,
     rockspec::{
-        lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
+        lua_dependency::{DependencyType, LuaDependencyType},
         LuaVersionCompatibility,
     },
 };
@@ -547,10 +547,11 @@ impl Project {
         Ok(())
     }
 
-    pub async fn set_pinned_state(
+    async fn set_dependency_flag(
         &mut self,
         dependencies: LuaDependencyType<&PackageName>,
-        pin: PinnedState,
+        key: &str,
+        enabled: bool,
     ) -> Result<(), PinError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)
@@ -567,61 +568,24 @@ impl Project {
         };
 
         match dependencies {
-            LuaDependencyType::Regular(ref _deps) => {
-                self.toml.dependencies = Some(
-                    self.toml
-                        .dependencies
-                        .take()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|dep| LuaDependencySpec { pin, ..dep })
-                        .collect(),
-                )
-            }
-            LuaDependencyType::Build(ref _deps) => {
-                self.toml.build_dependencies = Some(
-                    self.toml
-                        .build_dependencies
-                        .take()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|dep| LuaDependencySpec { pin, ..dep })
-                        .collect(),
-                )
-            }
-            LuaDependencyType::Test(ref _deps) => {
-                self.toml.test_dependencies = Some(
-                    self.toml
-                        .test_dependencies
-                        .take()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|dep| LuaDependencySpec { pin, ..dep })
-                        .collect(),
-                )
-            }
-        }
-
-        match dependencies {
             LuaDependencyType::Regular(ref deps)
             | LuaDependencyType::Build(ref deps)
             | LuaDependencyType::Test(ref deps) => {
                 for dep in deps {
                     let mut dep_item = table[dep.to_string()].clone();
                     match dep_item {
-                        version @ Item::Value(_) => match &pin {
-                            PinnedState::Unpinned => {}
-                            PinnedState::Pinned => {
+                        version @ Item::Value(_) => {
+                            if enabled {
                                 if let Ok(mut dep_entry) = toml_edit::table().into_table() {
                                     dep_entry.set_implicit(true);
                                     dep_entry["version"] = version;
-                                    dep_entry["pin"] = toml_edit::value(true);
+                                    dep_entry[key] = toml_edit::value(true);
                                     table[dep.to_string()] = toml_edit::Item::Table(dep_entry);
                                 }
                             }
-                        },
+                        }
                         Item::Table(_) => {
-                            dep_item["pin".to_string()] = toml_edit::value(pin.as_bool());
+                            dep_item[key] = toml_edit::value(enabled);
                             table[dep.to_string()] = dep_item;
                         }
                         _ => {}
@@ -639,6 +603,24 @@ impl Project {
         )?;
 
         Ok(())
+    }
+
+    pub async fn set_pinned_state(
+        &mut self,
+        dependencies: LuaDependencyType<&PackageName>,
+        pin: PinnedState,
+    ) -> Result<(), PinError> {
+        self.set_dependency_flag(dependencies, "pin", pin.as_bool())
+            .await
+    }
+
+    pub async fn set_opt_state(
+        &mut self,
+        dependencies: LuaDependencyType<&PackageName>,
+        opt: OptState,
+    ) -> Result<(), PinError> {
+        self.set_dependency_flag(dependencies, "opt", opt.as_bool())
+            .await
     }
 
     pub fn project_files(&self) -> Vec<PathBuf> {
@@ -1072,6 +1054,50 @@ type = "builtin"
         // check again after reloading lux.toml
         let reloaded_project = Project::from_exact(&project_root).unwrap().unwrap();
         check(&reloaded_project);
+    }
+
+    #[tokio::test]
+    async fn test_set_opt_state() {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/dependencies/");
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+        let project_root: PathBuf = project_root.path().into();
+        let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+        let lua_cjson = "lua-cjson".into();
+        let plenary_nvim = "plenary.nvim".into();
+
+        project
+            .set_opt_state(
+                LuaDependencyType::Regular(vec![&lua_cjson]),
+                OptState::Optional,
+            )
+            .await
+            .unwrap();
+
+        let check = |project: &Project, opt: OptState| {
+            let dependencies = project.toml().dependencies.clone().unwrap_or_default();
+            assert!(dependencies
+                .iter()
+                .any(|dep| dep.name() == &lua_cjson && *dep.opt() == opt));
+            assert!(dependencies
+                .iter()
+                .any(|dep| dep.name() == &plenary_nvim && *dep.opt() == OptState::Required));
+        };
+        check(&project, OptState::Optional);
+        let reloaded_project = Project::from_exact(&project_root).unwrap().unwrap();
+        check(&reloaded_project, OptState::Optional);
+
+        project
+            .set_opt_state(
+                LuaDependencyType::Regular(vec![&lua_cjson]),
+                OptState::Required,
+            )
+            .await
+            .unwrap();
+        check(&project, OptState::Required);
+        let reloaded_project = Project::from_exact(&project_root).unwrap().unwrap();
+        check(&reloaded_project, OptState::Required);
     }
 
     #[tokio::test]
