@@ -1,0 +1,6 @@
+# NOTE: maintainers can bypass this via <create issue from...> (e.g. on an existing issue comment)
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/lumen-oss/lux/discussions/new?category=q-a
+    about: Ask questions about Lux
