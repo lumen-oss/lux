@@ -665,6 +665,7 @@ impl Project {
 pub(crate) fn project_files(src: &Path) -> Vec<PathBuf> {
     ignore::WalkBuilder::new(src)
         .add(src.join(".cargo"))
+        .parents(false)
         .follow_links(false)
         .build()
         .filter_map(Result::ok)
@@ -1096,6 +1097,23 @@ type = "builtin"
         fs::tokio::write(&cargo_config, "").await.unwrap();
         let project_files = project_files(&project_root);
         assert!(project_files.contains(&cargo_config.to_path_buf()));
+    }
+
+    #[tokio::test]
+    async fn project_files_ignores_parent_ignore_files() {
+        let tmp = assert_fs::TempDir::new().unwrap();
+        let parent = tmp.child("parent");
+        parent.create_dir_all().unwrap();
+        fs::tokio::write(parent.join(".ignore"), "*\n")
+            .await
+            .unwrap();
+        let src = parent.child("etc");
+        src.create_dir_all().unwrap();
+        let file = src.join("payload.txt");
+        fs::tokio::write(&file, "hello").await.unwrap();
+
+        let project_files = project_files(&src);
+        assert!(project_files.contains(&file.to_path_buf()));
     }
 
     #[tokio::test]
