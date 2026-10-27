@@ -136,6 +136,7 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
             output: args.output,
             warnings_as_errors: args.warnings_as_errors,
             verbose: config.verbose(),
+            severity: None,
         };
 
         emmylua_check::run_check(emmylua_check_args)
