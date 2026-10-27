@@ -1,0 +1,131 @@
+name: Bug Report
+description: Report a problem with Lux
+labels: [bug]
+type: bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before reporting:
+        - Search [existing issues](https://github.com/lumen-oss/lux/issues?q=is%3Aissue)
+        - Check [CONTRIBUTING.md](./CONTRIBUTING.md#strict-no-llm--no-ai-policy) for our AI policy
+        - Refer to [Installation](https://lux.lumen-labs.org/guides/installation), [Dependencies](https://lux.lumen-labs.org/guides/lux-toml), [CLI reference](https://lux.lumen-labs.org/reference/cli)
+
+  - type: checkboxes
+    attributes:
+      label: Have you read the docs and searched existing issues?
+      description: |
+        Please check all of the below before submitting.
+      options:
+        - label: I have read the [documentation](https://lux.lumen-labs.org), [existing issues](https://github.com/lumen-oss/lux/issues?q=is%3Aissue) and [discussions](https://github.com/lumen-oss/lux/discussions)
+          required: true
+        - label: I am using the latest Lux version
+          required: true
+        - label: This report was not generated or assisted by an LLM/AI tool
+          required: true
+        - label: I can reproduce the issue with a minimal example
+          required: true
+
+  - type: textarea
+    attributes:
+      label: Problem
+      description: Describe the problem concisely.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Provide exact, repeatable steps including `lux.toml` config or rockspec (if applicable) and commands.
+        - For build failures: include the exact `lx` commands and any compiler flags.
+        - For dependency resolution issues: include the version constraints.
+        - For runtime errors: include trace logs and error messages.
+      placeholder: |
+        lx new --name myproject
+        cd myproject
+        lx add some-package
+        lx build
+      render: console
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Minimal lux.toml
+      description: If applicable, provide a minimal `lux.toml` that reproduces the issue.
+      placeholder: |
+        [project]
+        name = "myproject"
+        version = "0.1.0"
+
+        [dependencies]
+      render: toml
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Minimal rockspec
+      description: If applicable, provide a minimal `rockspec` that reproduces the issue.
+      placeholder: |
+        package = "myproject"
+        version = "0.1.0-1"
+
+        dependencies = {
+          "lua >= 5.1",
+        }
+      render: lua
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen.
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Lua/Luau version
+      description: Run `lua -v` or `lx lua -- -v`
+      placeholder: "Lua 5.5.0"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Lux version
+      description: Run `lx --version`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: Installation method
+      options:
+        - Release artifact (AppImage/deb/dmg/msi)
+        - Nix flake
+        - Distro package manager
+        - cargo
+        - Built from source
+        - Other (describe in "Problem")
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Operating system/version
+      placeholder: "NixOS 26.05"
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Trace output
+      description: Run with `RUST_LOG=trace lx ...` and paste the output here, if applicable.
+      render: console
+    validations:
+      required: false

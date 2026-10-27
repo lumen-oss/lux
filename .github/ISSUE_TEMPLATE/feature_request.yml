@@ -1,0 +1,36 @@
+name: Feature Request
+description: Request an enhancement for Lux
+labels: [enhancement]
+type: feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before requesting:
+        - Search [existing feature requests](https://github.com/lumen-oss/lux/issues?q=is%3Aissue+type%3AFeature)
+        - Check [CONTRIBUTING.md](./CONTRIBUTING.md)
+        - Relevant docs: [lux.toml](https://lux.lumen-labs.org/guides/lux-toml), [Reference](https://lux.lumen-labs.org/reference)
+
+  - type: checkboxes
+    attributes:
+      label: Before requesting
+      description: Please check the below.
+      options:
+        - label: I have searched [existing feature requests](https://github.com/lumen-oss/lux/issues?q=is%3Aissue+type%3AFeature)
+          required: true
+        - label: This request was not generated or assisted by an LLM/AI tool
+          required: true
+
+  - type: textarea
+    attributes:
+      label: Problem
+      description: Describe the problem to be solved or pain point.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      description: Describe what the new feature or behavior would look like.
+    validations:
+      required: true
