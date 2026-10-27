@@ -12,9 +12,9 @@ use crate::{
     config::Config,
     lockfile::LockedPackageSpec,
     luarocks::luarocks_installation::{ExecLuaRocksError, LuaRocksError, LuaRocksInstallation},
+    luarocks::{install_rock_manifest, InstallRockManifestError, RockManifestSources},
 };
 
-use super::utils::recursive_copy_dir;
 use crate::fs::tempfile::tempdir;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -34,6 +34,9 @@ pub enum LuarocksBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] TreeError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InstallRockManifest(#[from] InstallRockManifestError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Rockspec(Box<dyn Diagnostic + Send + Sync>),
@@ -92,16 +95,142 @@ async fn install<R: Rockspec, T: InstallTree>(
     let lua_version = lua_version.version_compatibility_str();
     let package_dir = luarocks_tree
         .join("lib")
-        .join("lib")
         .join("luarocks")
-        .join(format!("lux-{}", lua_version))
+        .join(format!("rocks-{lua_version}"))
         .join(format!("{}", rockspec.package()))
         .join(format!("{}", rockspec.version()));
-    recursive_copy_dir(&package_dir.join("doc"), &layout.doc).await?;
-    recursive_copy_dir(&luarocks_tree.join("bin"), &tree.bin()).await?;
-    let src_dir = luarocks_tree.join("share").join("lua").join(&lua_version);
-    recursive_copy_dir(&src_dir, &layout.src).await?;
-    let lib_dir = luarocks_tree.join("lib").join("lua").join(&lua_version);
-    recursive_copy_dir(&lib_dir, &layout.lib).await?;
+    let sources = RockManifestSources {
+        root: package_dir,
+        lib: luarocks_tree.join("lib").join("lua").join(&lua_version),
+        lua: luarocks_tree.join("share").join("lua").join(&lua_version),
+        bin: luarocks_tree.join("bin"),
+    };
+    install_rock_manifest(sources, &layout, &tree.bin()).await?;
     Ok(BuildInfo::default())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use assert_fs::TempDir;
+
+    use crate::{
+        config::ConfigBuilder,
+        lockfile::{LockConstraint, LockedPackageSpec, OptState, PinnedState},
+        lua_rockspec::RemoteLuaRockspec,
+        lua_version::LuaVersion,
+        rockspec::Rockspec,
+        tree::InstallTree,
+    };
+
+    use super::install;
+
+    fn write_file(root: &Path, relative: &str, content: &str) {
+        let path = root.join(relative);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, content).unwrap();
+    }
+
+    #[tokio::test]
+    async fn installs_all_build_artifacts() {
+        let rockspec = RemoteLuaRockspec::new(
+            r#"
+rockspec_format = "3.0"
+package = "test-luarocks-backend"
+version = "1.0-1"
+source = { url = "https://github.com/lumen-oss/luarocks-stub" }
+build = { type = "test-custom" }
+"#,
+        )
+        .unwrap();
+        let tree_dir = TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(Some(LuaVersion::Lua51))
+            .user_tree(Some(tree_dir.path().to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let package = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
+            LockConstraint::Unconstrained,
+            Vec::new(),
+            Vec::new(),
+            &PinnedState::default(),
+            &OptState::default(),
+        );
+        tree.prepare(&package).unwrap();
+
+        let luarocks_tree = TempDir::new().unwrap();
+        let package_dir = luarocks_tree
+            .path()
+            .join("lib/luarocks/rocks-5.1/test-luarocks-backend/1.0-1");
+        write_file(
+            &package_dir,
+            "rock_manifest",
+            r#"
+rock_manifest = {
+    lib = { ["test_luarocks_backend.so"] = "00000000000000000000000000000000" },
+    lua = { ["test_luarocks_backend/init.lua"] = "00000000000000000000000000000000" },
+    bin = { tool = "00000000000000000000000000000000" },
+    doc = { ["README.md"] = "00000000000000000000000000000000" },
+    conf = { ["config.toml"] = "00000000000000000000000000000000" },
+    plugin = { ["foo.lua"] = "00000000000000000000000000000000" },
+    ["test-luarocks-backend-1.0-1.rockspec"] = "00000000000000000000000000000000",
+}
+"#,
+        );
+        write_file(
+            luarocks_tree.path(),
+            "lib/lua/5.1/test_luarocks_backend.so",
+            "",
+        );
+        write_file(
+            luarocks_tree.path(),
+            "share/lua/5.1/test_luarocks_backend/init.lua",
+            "return true",
+        );
+        write_file(
+            luarocks_tree.path(),
+            "share/lua/5.1/unlisted.lua",
+            "return true",
+        );
+        write_file(luarocks_tree.path(), "bin/tool", "#!/bin/sh\n");
+        write_file(&package_dir, "doc/README.md", "docs");
+        write_file(&package_dir, "conf/config.toml", "conf");
+        write_file(&package_dir, "plugin/foo.lua", "return true");
+        write_file(
+            &package_dir,
+            "test-luarocks-backend-1.0-1.rockspec",
+            "rockspec",
+        );
+        write_file(&package_dir, "unlisted.txt", "not in the manifest");
+
+        install(&rockspec, luarocks_tree.path(), &tree, &package, &config)
+            .await
+            .unwrap();
+
+        let layout = tree.layout_for(&package);
+        assert!(layout.lib.join("test_luarocks_backend.so").is_file());
+        assert!(layout
+            .src
+            .join("test_luarocks_backend")
+            .join("init.lua")
+            .is_file());
+        assert!(tree.bin().join("tool").is_file());
+        assert!(layout.doc.join("README.md").is_file());
+        assert!(layout.conf.join("config.toml").is_file());
+        assert!(layout.etc.join("plugin").join("foo.lua").is_file());
+        assert!(layout
+            .etc
+            .join("test-luarocks-backend-1.0-1.rockspec")
+            .is_file());
+        assert!(!layout.etc.join("rock_manifest").exists());
+        assert!(!layout.etc.join("unlisted.txt").exists());
+        assert!(!layout.src.join("unlisted.lua").exists());
+    }
 }

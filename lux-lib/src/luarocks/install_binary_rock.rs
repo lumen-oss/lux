@@ -1,13 +1,8 @@
-use std::{
-    collections::HashMap,
-    io::{self, Cursor},
-    path::{Path, PathBuf},
-};
+use std::io::{self, Cursor};
 
 use crate::{
     build::{
         external_dependency::{ExternalDependencyError, ExternalDependencyInfo},
-        utils::recursive_copy_dir,
         BuildBehaviour,
     },
     config::Config,
@@ -17,7 +12,6 @@ use crate::{
         OptState, PinnedState,
     },
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
-    luarocks::rock_manifest::RockManifest,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::{self, InstallTree, TreeError},
@@ -27,7 +21,7 @@ use bytes::Bytes;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::rock_manifest::RockManifestError;
+use super::{install_rock_manifest, InstallRockManifestError, RockManifestSources};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -51,17 +45,9 @@ pub enum InstallBinaryRockError {
     LuaVersionError(#[from] LuaVersionError),
     #[error("failed to unpack packed rock")]
     Zip(#[from] zip::result::ZipError),
-    #[error(
-        "rock_manifest not found. Cannot install rock files that were packed using LuaRocks version 1"
-    )]
-    RockManifestNotFound,
     #[error(transparent)]
     #[diagnostic(transparent)]
-    RockManifestError(#[from] RockManifestError),
-    #[error(
-        "the entry {0} listed in the `rock_manifest` is neither a file nor a directory: {1:?}"
-    )]
-    NotAFileOrDirectory(String, Box<std::fs::Metadata>),
+    InstallRockManifest(#[from] InstallRockManifestError),
 }
 
 pub(crate) struct BinaryRockInstall<'a, T>
@@ -165,49 +151,15 @@ where
                 let cursor = Cursor::new(self.rock_bytes);
                 let mut zip = zip::ZipArchive::new(cursor)?;
                 zip.extract(&unpack_dir)?;
-                // let lua_dir = unpack_dir.join("lua");
-                // if lua_dir.is_dir() {
-                //     let src_dir = unpack_dir.join("lua");
-                //     tokio::fs::rename(lua_dir, src_dir).await?;
-                // }
-                let rock_manifest_file = unpack_dir.path().join("rock_manifest");
-                if !rock_manifest_file.is_file() {
-                    return Err(InstallBinaryRockError::RockManifestNotFound);
-                }
-                let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
                 self.tree.prepare(&package.spec)?;
                 let layout = self.tree.layout_for(&package.spec);
-                let rock_manifest = RockManifest::new(&rock_manifest_content)?;
-                install_manifest_entries(
-                    &rock_manifest.lib.entries,
-                    &unpack_dir.path().join("lib"),
-                    &layout.lib,
-                )
-                .await?;
-                install_manifest_entries(
-                    &rock_manifest.lua.entries,
-                    &unpack_dir.path().join("lua"),
-                    &layout.src,
-                )
-                .await?;
-                install_bin_manifest_entries(
-                    &rock_manifest.bin.entries,
-                    &unpack_dir.path().join("bin"),
-                    &self.tree.bin(),
-                )
-                .await?;
-                install_manifest_entries(
-                    &rock_manifest.doc.entries,
-                    &unpack_dir.path().join("doc"),
-                    &layout.doc,
-                )
-                .await?;
-                install_manifest_entries(
-                    &rock_manifest.root.entries,
-                    unpack_dir.path(),
-                    &layout.etc,
-                )
-                .await?;
+                let sources = RockManifestSources {
+                    root: unpack_dir.path().to_path_buf(),
+                    lib: unpack_dir.path().join("lib"),
+                    lua: unpack_dir.path().join("lua"),
+                    bin: unpack_dir.path().join("bin"),
+                };
+                install_rock_manifest(sources, &layout, &self.tree.bin()).await?;
                 // rename <name>-<version>.rockspec
                 let rockspec_path =
                     layout
@@ -228,54 +180,17 @@ where
     }
 }
 
-#[tracing::instrument(level = "trace", skip(entry))]
-async fn install_manifest_entries<T>(
-    entry: &HashMap<PathBuf, T>,
-    src: &Path,
-    dest: &Path,
-) -> Result<(), InstallBinaryRockError> {
-    for relative_src_path in entry.keys() {
-        let target = dest.join(relative_src_path);
-        let src_path = src.join(relative_src_path);
-        if src_path.is_dir() {
-            recursive_copy_dir(&src_path, &target).await?;
-        } else if src_path.is_file() {
-            if let Some(target_parent_dir) = target.parent() {
-                fs::tokio::create_dir_all(target_parent_dir).await?;
-            }
-            fs::tokio::copy(src.join(relative_src_path), target).await?;
-        } else {
-            let metadata = fs::tokio::metadata(&src_path).await?;
-            return Err(InstallBinaryRockError::NotAFileOrDirectory(
-                src_path.to_string_lossy().to_string(),
-                Box::new(metadata),
-            ));
-        }
-    }
-    Ok(())
-}
-
-async fn install_bin_manifest_entries(
-    entries: &HashMap<PathBuf, String>,
-    src: &Path,
-    dest: &Path,
-) -> Result<(), InstallBinaryRockError> {
-    install_manifest_entries(entries, src, dest).await?;
-    #[cfg(unix)]
-    for relative_src_path in entries.keys() {
-        crate::build::utils::set_executable_permissions(&dest.join(relative_src_path)).await?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
 
     use assert_fs::TempDir;
     use io::{Read, Write};
     use is_executable::IsExecutable;
     use zip::write::SimpleFileOptions;
 
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "impure_tests"))]
+    use crate::luarocks::rock_manifest::RockManifest;
     use crate::{
         config::ConfigBuilder,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
