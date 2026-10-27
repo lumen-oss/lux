@@ -62,7 +62,7 @@ ssri = "9.2"
 tar = "0.4"
 thiserror = "2.0"
 toml_edit = "0.25"
-tree-sitter = "0.26"
+tree-sitter = "0.27"
 tree-sitter-config = "0.27"
 # NOTE: The default qjs-rt feature of tree-sitter-generate
 # includes a dependency on rquickjs, which brings in a dependency on libclang.
@@ -70,7 +70,7 @@ tree-sitter-generate = { version = "0.27", default-features = false, features = 
   "load",
   "pathdiff",
 ] }
-tree-sitter-loader = "0.26"
+tree-sitter-loader = "0.27"
 url = { version = "2.5", features = ["serde"] }
 vfs = "0.13"
 

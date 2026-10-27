@@ -80,11 +80,17 @@ pub(crate) type ResolvedArtifacts = Artifacts<HashMap<LockedPackageId, ResolvedP
 pub enum ResolveError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discover(#[from] DiscoverError),
+    Discover(#[from] Box<DiscoverError>),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependency(String),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+}
+
+impl From<DiscoverError> for ResolveError {
+    fn from(err: DiscoverError) -> Self {
+        Self::Discover(Box::new(err))
+    }
 }
 
 #[derive(Builder)]
@@ -264,7 +270,7 @@ impl Resolver {
                 let result = Discover::new(package_db, &config)
                     .discover(&task_spec)
                     .await
-                    .map_err(ResolveError::Discover);
+                    .map_err(|err| err.into());
                 (key, spec, result)
             });
         }
