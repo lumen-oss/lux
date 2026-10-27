@@ -3275,6 +3275,36 @@ impl TypedUserData for ProjectLua {
             },
         );
 
+        methods.param("deps", "Dependencies to set the pinned state on");
+        methods.param("pinned", "Whether the dependencies should be pinned");
+        methods.add_async_method_mut(
+            "set_pinned_state",
+            |_,
+             mut this,
+             (deps, pinned): (LuaDependencyTypeLua<PackageNameLua>, PinnedStateLua)| async move {
+                let _guard = lux_lib::lua::lua_runtime().enter();
+                let deps = map_lua_dependency_type_names(deps.0);
+                this.0
+                    .set_pinned_state(lua_dependency_type_as_ref(&deps), pinned.0)
+                    .await
+                    .into_lua_err()
+            },
+        );
+
+        methods.param("deps", "Dependencies to set the optional state on");
+        methods.param("opt", "Whether the dependencies should be optional");
+        methods.add_async_method_mut(
+            "set_opt_state",
+            |_, mut this, (deps, opt): (LuaDependencyTypeLua<PackageNameLua>, OptStateLua)| async move {
+                let _guard = lux_lib::lua::lua_runtime().enter();
+                let deps = map_lua_dependency_type_names(deps.0);
+                this.0
+                    .set_opt_state(lua_dependency_type_as_ref(&deps), opt.0)
+                    .await
+                    .into_lua_err()
+            },
+        );
+
         methods.param("deps", "Dependencies to remove");
         methods.add_async_method_mut(
             "remove",
@@ -3443,21 +3473,49 @@ pub(crate) fn map_dependency_type_names(
     }
 }
 
+fn map_lua_dependency_type_names(
+    deps: LuaDependencyType<PackageNameLua>,
+) -> LuaDependencyType<PackageName> {
+    match deps {
+        LuaDependencyType::Regular(v) => {
+            LuaDependencyType::Regular(v.into_iter().map(|x| x.0).collect())
+        }
+        LuaDependencyType::Build(v) => {
+            LuaDependencyType::Build(v.into_iter().map(|x| x.0).collect())
+        }
+        LuaDependencyType::Test(v) => LuaDependencyType::Test(v.into_iter().map(|x| x.0).collect()),
+    }
+}
+
+fn lua_dependency_type_as_ref<T>(deps: &LuaDependencyType<T>) -> LuaDependencyType<&T> {
+    match deps {
+        LuaDependencyType::Regular(v) => LuaDependencyType::Regular(v.iter().collect()),
+        LuaDependencyType::Build(v) => LuaDependencyType::Build(v.iter().collect()),
+        LuaDependencyType::Test(v) => LuaDependencyType::Test(v.iter().collect()),
+    }
+}
+
+type AddDependencyFlags = Vec<(PackageName, OptState, PinnedState)>;
+
 fn split_add_deps(
     deps: Vec<AddDependencyLua>,
-) -> LuaResult<(Vec<PackageReq>, Vec<RemoteGitUrlShorthand>)> {
+) -> LuaResult<(
+    Vec<PackageReq>,
+    Vec<RemoteGitUrlShorthand>,
+    AddDependencyFlags,
+)> {
     let mut packages = Vec::new();
     let mut git = Vec::new();
+    let mut flags = Vec::new();
     for dep in deps {
         match dep {
             AddDependencyLua::PackageReq(req) => packages.push(req),
             AddDependencyLua::GitShorthand(shorthand) => git.push(shorthand),
             AddDependencyLua::Spec(spec) => {
-                if *spec.opt() != OptState::Required || *spec.pin() != PinnedState::Unpinned {
-                    return Err(LuaError::RuntimeError(
-                        "opt/pin dependencies must be declared directly in lux.toml".to_string(),
-                    ));
-                }
+                let name = spec.name().clone();
+                let opt = *spec.opt();
+                let pin = *spec.pin();
+
                 match spec.source() {
                     None => packages.push(spec.package_req().clone()),
                     Some(RockSourceSpec::Git(git_source)) => {
@@ -3476,12 +3534,17 @@ fn split_add_deps(
                         ));
                     }
                 }
+
+                if opt != OptState::Required || pin != PinnedState::Unpinned {
+                    flags.push((name, opt, pin));
+                }
             }
         }
     }
-    Ok((packages, git))
+    Ok((packages, git, flags))
 }
 
+#[derive(Clone, Copy)]
 enum AddDependencyKind {
     Regular,
     Build,
@@ -3495,7 +3558,7 @@ async fn add_dependencies_for_variant(
     package_db: &PackageDB,
     config: &Config,
 ) -> LuaResult<()> {
-    let (packages, git) = split_add_deps(deps)?;
+    let (packages, git, flags) = split_add_deps(deps)?;
     if !packages.is_empty() {
         let packages = match kind {
             AddDependencyKind::Regular => DependencyType::Regular(packages.iter().collect()),
@@ -3511,6 +3574,24 @@ async fn add_dependencies_for_variant(
             AddDependencyKind::Test => LuaDependencyType::Test(git.iter().collect()),
         };
         project.add_git(git, config).await.into_lua_err()?;
+    }
+    for (name, opt, pin) in flags {
+        if opt != OptState::Required {
+            let names = match kind {
+                AddDependencyKind::Regular => LuaDependencyType::Regular(vec![&name]),
+                AddDependencyKind::Build => LuaDependencyType::Build(vec![&name]),
+                AddDependencyKind::Test => LuaDependencyType::Test(vec![&name]),
+            };
+            project.set_opt_state(names, opt).await.into_lua_err()?;
+        }
+        if pin != PinnedState::Unpinned {
+            let names = match kind {
+                AddDependencyKind::Regular => LuaDependencyType::Regular(vec![&name]),
+                AddDependencyKind::Build => LuaDependencyType::Build(vec![&name]),
+                AddDependencyKind::Test => LuaDependencyType::Test(vec![&name]),
+            };
+            project.set_pinned_state(names, pin).await.into_lua_err()?;
+        }
     }
     Ok(())
 }
