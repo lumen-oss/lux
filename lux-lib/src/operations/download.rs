@@ -20,7 +20,7 @@ use crate::{
     luarocks,
     package::{
         PackageName, PackageReq, PackageSpec, PackageSpecFromPackageReqError, PackageVersion,
-        RemotePackageTypeFilterSpec,
+        RemotePackage, RemotePackageTypeFilterSpec,
     },
     package_db::{PackageDB, PackageDBError, SearchError},
     remote_package_source::RemotePackageSource,
@@ -161,6 +161,19 @@ impl RemoteRockDownload {
             } => rockspec_download,
         }
     }
+
+    fn into_rockspec_download(self) -> DownloadedRockspec {
+        match self {
+            Self::RockspecOnly { rockspec_download }
+            | Self::BinaryRock {
+                rockspec_download, ..
+            }
+            | Self::SrcRock {
+                rockspec_download, ..
+            } => rockspec_download,
+        }
+    }
+
     // Instead of downloading a rockspec, generate one from a `PackageReq` and a `RockSourceSpec`.
     pub(crate) fn from_package_req_and_source_spec(
         package_req: PackageReq,
@@ -240,20 +253,25 @@ async fn download_rockspec(
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<DownloadedRockspec, SearchAndDownloadError> {
-    let rockspec = match download_remote_rock(package_req, package_db, config).await? {
-        RemoteRockDownload::RockspecOnly {
-            rockspec_download: rockspec,
-        } => rockspec,
-        RemoteRockDownload::BinaryRock {
-            rockspec_download: rockspec,
-            ..
-        } => rockspec,
-        RemoteRockDownload::SrcRock {
-            rockspec_download: rockspec,
-            ..
-        } => rockspec,
+    Ok(download_remote_rock(package_req, package_db, config)
+        .await?
+        .into_rockspec_download())
+}
+
+pub(crate) async fn download_exact_rockspec(
+    package: &PackageSpec,
+    package_db: &PackageDB,
+    config: &Config,
+) -> Result<DownloadedRockspec, SearchAndDownloadError> {
+    let package_req = package.clone().into();
+    let remote = package_db.find(&package_req, None).await?;
+    let remote_package = RemotePackage {
+        spec: package.clone(),
+        ..remote
     };
-    Ok(rockspec)
+    Ok(download_found_rock(remote_package, config)
+        .await?
+        .into_rockspec_download())
 }
 
 #[tracing::instrument(
@@ -268,6 +286,13 @@ async fn download_remote_rock(
     config: &Config,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     let remote_package = package_db.find(package_req, None).await?;
+    download_found_rock(remote_package, config).await
+}
+
+async fn download_found_rock(
+    remote_package: RemotePackage,
+    config: &Config,
+) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     match &remote_package.source {
         RemotePackageSource::LuarocksRockspec(url) => {
             let package = &remote_package.spec;

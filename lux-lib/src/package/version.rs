@@ -105,6 +105,15 @@ impl PackageVersion {
     pub(crate) fn default_dev_version_with_specrev(specrev: SpecRev) -> Self {
         Self::DevVer(DevVer::default_with_specrev(specrev))
     }
+
+    pub(crate) fn with_specrev(mut self, specrev: SpecRev) -> Self {
+        match &mut self {
+            Self::SemVer(version) => version.specrev = specrev,
+            Self::DevVer(version) => version.specrev = specrev,
+            Self::StringVer(version) => version.specrev = specrev,
+        }
+        self
+    }
 }
 
 impl TryFrom<PackageVersionReq> for PackageVersion {

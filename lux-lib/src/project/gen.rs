@@ -208,16 +208,18 @@ impl PackageVersionTemplate {
         project_root: &Path,
         specrev: Option<SpecRev>,
     ) -> Result<PackageVersion, GenerateVersionError> {
-        let specrev = specrev.unwrap_or_default();
         if let Some(version) = &self.0 {
-            Ok(version.clone())
+            return Ok(specrev.map_or_else(
+                || version.clone(),
+                |specrev| version.clone().with_specrev(specrev),
+            ));
+        }
+        let specrev = specrev.unwrap_or_default();
+        let repo = find_git_repo(project_root)?;
+        if let Some(version) = version_from_semver_tag(&repo, &specrev)? {
+            Ok(version)
         } else {
-            let repo = find_git_repo(project_root)?;
-            if let Some(version) = version_from_semver_tag(&repo, &specrev)? {
-                Ok(version)
-            } else {
-                Ok(PackageVersion::default_dev_version_with_specrev(specrev))
-            }
+            Ok(PackageVersion::default_dev_version_with_specrev(specrev))
         }
     }
 }
@@ -293,4 +295,20 @@ fn find_commit_id(repo: &Repository, tag_or_commit_oid: git2::Oid) -> Option<git
                 .map(|_| tag_or_commit_oid)
         })
         .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_version_uses_requested_specrev() {
+        for (version, specrev, expected) in [("0.0.3", 3u16, "0.0.3-3"), ("1", 2, "1-2")] {
+            let template = PackageVersionTemplate(Some(PackageVersion::parse(version).unwrap()));
+            let generated = template
+                .try_generate(Path::new("."), Some(specrev.into()))
+                .unwrap();
+            assert_eq!(generated.to_string(), expected);
+        }
+    }
 }
