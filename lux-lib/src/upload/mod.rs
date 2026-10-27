@@ -26,6 +26,14 @@ use std::io::Read;
 
 const TFA_TOKEN_HEADER: &str = "X-TFA-Token";
 
+/// Whether to perform the upload or only report what would be uploaded.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Mode {
+    #[default]
+    Upload,
+    DryRun,
+}
+
 /// A rocks package uploader, providing fine-grained control
 /// over how a package should be uploaded.
 #[derive(Builder)]
@@ -38,6 +46,8 @@ pub struct ProjectUpload<'a> {
     sign_protocol: SignatureProtocol,
     config: &'a Config,
     package_db: &'a PackageDB,
+    #[builder(default)]
+    mode: Mode,
 }
 
 impl<State> ProjectUploadBuilder<'_, State>
@@ -45,7 +55,7 @@ where
     State: project_upload_builder::State + project_upload_builder::IsComplete,
 {
     /// Upload a package to a luarocks server.
-    pub async fn upload_to_luarocks(self) -> Result<(), UploadError> {
+    pub async fn upload_to_luarocks(self) -> Result<PreparedRockspec, UploadError> {
         let args = self._build();
         upload_from_project(args).await
     }
@@ -61,6 +71,8 @@ pub struct RockspecUpload<'a> {
     #[cfg(feature = "gpgme")]
     sign_protocol: SignatureProtocol,
     config: &'a Config,
+    #[builder(default)]
+    mode: Mode,
 }
 
 impl<State> RockspecUploadBuilder<'_, State>
@@ -68,7 +80,7 @@ where
     State: rockspec_upload_builder::State + rockspec_upload_builder::IsComplete,
 {
     /// Upload a rockspec to a luarocks server.
-    pub async fn upload_to_luarocks(self) -> Result<(), UploadError> {
+    pub async fn upload_to_luarocks(self) -> Result<PreparedRockspec, UploadError> {
         let args = self._build();
         upload_from_rockspec(args).await
     }
@@ -346,7 +358,7 @@ impl From<SignatureProtocol> for gpgme::Protocol {
     skip_all,
     fields(project = args.project.toml().package().to_string()),
 )]
-async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError> {
+async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec, UploadError> {
     let project = args.project;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
     let config = args.config;
@@ -378,6 +390,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
         },
         signed,
         args.tfa_code,
+        args.mode,
     )
     .await
 }
@@ -388,7 +401,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<(), UploadError>
     skip_all,
     fields(package = args.rockspec.package().to_string()),
 )]
-async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<(), UploadError> {
+async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRockspec, UploadError> {
     let rockspec = args.rockspec;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
     #[cfg(feature = "gpgme")]
@@ -434,14 +447,17 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<(), UploadErro
         },
         signed,
         args.tfa_code,
+        args.mode,
     )
     .await
 }
 
-struct PreparedRockspec {
-    package: PackageName,
-    version: PackageVersion,
-    content: String,
+/// The rockspec that was or would have been uploaded.
+#[derive(Debug)]
+pub struct PreparedRockspec {
+    pub package: PackageName,
+    pub version: PackageVersion,
+    pub content: String,
 }
 
 async fn upload_rockspec_content(
@@ -451,8 +467,25 @@ async fn upload_rockspec_content(
     rockspec: PreparedRockspec,
     signed: Option<String>,
     tfa_code: Option<String>,
-) -> Result<(), UploadError> {
-    let part = Part::text(rockspec.content)
+    mode: Mode,
+) -> Result<PreparedRockspec, UploadError> {
+    let request =
+        prepare_upload_request(config, client, api_key, &rockspec, signed, tfa_code).await?;
+    if matches!(mode, Mode::Upload) {
+        send_upload_request(config, request).await?;
+    }
+    Ok(rockspec)
+}
+
+async fn prepare_upload_request(
+    config: &Config,
+    client: &reqwest::Client,
+    api_key: &ApiKey,
+    rockspec: &PreparedRockspec,
+    signed: Option<String>,
+    tfa_code: Option<String>,
+) -> Result<reqwest::RequestBuilder, UploadError> {
+    let part = Part::text(rockspec.content.clone())
         .file_name(format!(
             "{}-{}.rockspec",
             rockspec.package, rockspec.version
@@ -480,6 +513,13 @@ async fn upload_rockspec_content(
         request = request.header(TFA_TOKEN_HEADER, unsafe { token.get() });
     }
 
+    Ok(request)
+}
+
+async fn send_upload_request(
+    config: &Config,
+    request: reqwest::RequestBuilder,
+) -> Result<(), UploadError> {
     let response = request.send().await?;
 
     let status = response.status();
@@ -848,7 +888,7 @@ type = "builtin"
         config: &Config,
         package_db: &PackageDB,
         tfa_code: Option<String>,
-    ) -> Result<(), UploadError> {
+    ) -> Result<PreparedRockspec, UploadError> {
         let upload = ProjectUpload::new()
             .project(project)
             .config(config)
