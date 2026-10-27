@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.49.4](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.49.3...lux-lsp-v0.49.4) `lux-lsp` - 2026-10-27
+
+### Other
+- update Cargo.lock dependencies
+
+## [0.67.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.3...lux-lib-v0.67.4) `lux-lib` - 2026-10-27
+
+### Fixed
+- *(upload)* properly resolve specrev for fixed-version projects ([#2124](https://github.com/lumen-oss/lux/pull/2124))
+- *(pack)* don't create empty rockspec when packing project ([#2120](https://github.com/lumen-oss/lux/pull/2120))
+- *(pack)* generate correct paths when using `--tree ./` ([#2118](https://github.com/lumen-oss/lux/pull/2118))
+- *(build)* `build.install.conf`'s key can be a directory ([#2117](https://github.com/lumen-oss/lux/pull/2117))
+- *(install)* handle redundant `install.lib` declarations ([#2109](https://github.com/lumen-oss/lux/pull/2109))
+
+## [0.49.4](https://github.com/lumen-oss/lux/compare/v0.49.3...v0.49.4) `lux-cli` - 2026-10-27
+
+### Other
+- update Cargo.lock dependencies
+
 ## [0.67.3](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.2...lux-lib-v0.67.3) `lux-lib` - 2026-10-26
 
 ### Added
