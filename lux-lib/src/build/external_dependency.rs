@@ -110,7 +110,7 @@ impl ExternalDependencyInfo {
                 info.link_paths.first().cloned()
             };
             let lib_dir = lib_dir.or_else(|| {
-                pkg_config::get_variable(name, "libdir")
+                pkg_config::get_variable(&name.to_lowercase(), "libdir")
                     .ok()
                     .map(PathBuf::from)
                     .filter(|dir| dir.is_dir())
