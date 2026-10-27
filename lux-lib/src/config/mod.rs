@@ -1151,4 +1151,19 @@ mod tests {
         assert!(!debug.contains("supersecret"));
         assert!(debug.contains("access_tokens"));
     }
+
+    #[test]
+    fn external_deps_prefixes_default_empty() {
+        let config = toml::from_str::<ConfigBuilder>(
+            "[external_deps]\nlib_subdirs = [\"lib/x86_64-linux-gnu\"]\n",
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+        assert!(config.external_deps().prefixes.is_empty());
+        assert_eq!(
+            config.external_deps().lib_subdirs,
+            vec![PathBuf::from("lib/x86_64-linux-gnu")]
+        );
+    }
 }

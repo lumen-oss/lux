@@ -30,6 +30,7 @@ pub struct ExternalDependencySearchConfig {
     pub(crate) search_prefixes: Vec<PathBuf>,
     /// Known installation prefixes for specific dependencies.
     /// These can also be set via environment variables.
+    #[serde(default)]
     pub(crate) prefixes: HashMap<String, PathBuf>,
 }
 
