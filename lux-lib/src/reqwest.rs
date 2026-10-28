@@ -102,7 +102,7 @@ fn client(https_only: bool, config: &Config) -> Result<&Client, reqwest::Error> 
 }
 
 /// Returns a pre-configured HTTPS-only client.
-pub(crate) fn https_client(config: &Config) -> Result<&Client, reqwest::Error> {
+pub fn https_client(config: &Config) -> Result<&Client, reqwest::Error> {
     client(true, config)
 }
 

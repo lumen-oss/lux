@@ -28,7 +28,7 @@ pub mod which;
 pub mod workspace;
 
 pub(crate) mod remote_package_source;
-pub(crate) mod reqwest;
+pub mod reqwest;
 pub(crate) mod variables;
 #[cfg_attr(not(feature = "wally"), allow(dead_code))]
 pub(crate) mod wally;
