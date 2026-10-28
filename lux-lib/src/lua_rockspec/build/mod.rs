@@ -186,7 +186,7 @@ impl BuildSpec {
                     lang: internal
                         .lang
                         .ok_or(BuildSpecInternalError::NoTreesitterParserLanguageSpecified)?,
-                    parser: internal.parser.unwrap_or(false),
+                    parser: internal.parser.unwrap_or(true),
                     generate: internal.generate.unwrap_or(false),
                     location: internal.location,
                     queries: internal.queries.unwrap_or_default(),
