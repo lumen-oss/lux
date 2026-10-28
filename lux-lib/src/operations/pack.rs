@@ -124,7 +124,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
             let binary_path = tree.bin().join(binary_name);
             if binary_path.is_file() {
                 let (path, digest) =
-                    add_rock_entry(&mut zip, binary_path, &tree.bin(), &PathBuf::default())?;
+                    add_rock_entry(&mut zip, binary_path, &tree.bin(), Path::new("bin"))?;
                 bin_entries.insert(path, digest);
             }
         }
