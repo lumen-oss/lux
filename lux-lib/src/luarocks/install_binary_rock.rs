@@ -7,10 +7,7 @@ use crate::{
     },
     config::Config,
     hash::HasIntegrity,
-    lockfile::{
-        self, LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageSpec, OptState,
-        PinnedState,
-    },
+    lockfile::{self, LockedPackage, LockedPackageHashes, LockedPackageSpec},
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
@@ -55,12 +52,10 @@ where
     T: InstallTree,
 {
     rockspec: &'a RemoteLuaRockspec,
+    spec: LockedPackageSpec,
     rock_bytes: Bytes,
     source: RemotePackageSource,
-    pin: PinnedState,
-    opt: OptState,
     entry_type: tree::EntryType,
-    constraint: LockConstraint,
     behaviour: BuildBehaviour,
     config: &'a Config,
     tree: &'a T,
@@ -72,36 +67,23 @@ where
 {
     pub(crate) fn new(
         rockspec: &'a RemoteLuaRockspec,
-        source: RemotePackageSource,
+        spec: LockedPackageSpec,
         rock_bytes: Bytes,
+        source: RemotePackageSource,
         entry_type: tree::EntryType,
         config: &'a Config,
         tree: &'a T,
     ) -> Self {
         Self {
             rockspec,
+            spec,
             rock_bytes,
             source,
             config,
             tree,
-            constraint: LockConstraint::default(),
-            behaviour: BuildBehaviour::Ignore,
-            pin: PinnedState::default(),
-            opt: OptState::default(),
             entry_type,
+            behaviour: BuildBehaviour::Ignore,
         }
-    }
-
-    pub(crate) fn pin(self, pin: PinnedState) -> Self {
-        Self { pin, ..self }
-    }
-
-    pub(crate) fn opt(self, opt: OptState) -> Self {
-        Self { opt, ..self }
-    }
-
-    pub(crate) fn constraint(self, constraint: LockConstraint) -> Self {
-        Self { constraint, ..self }
     }
 
     pub(crate) fn behaviour(self, behaviour: BuildBehaviour) -> Self {
@@ -127,16 +109,7 @@ where
             }
             _ => None,
         };
-        let spec = LockedPackageSpec::new(
-            rockspec.package(),
-            rockspec.version(),
-            self.constraint,
-            Vec::new(),
-            Vec::new(),
-            &self.pin,
-            &self.opt,
-        );
-        let package = LockedPackage::new(spec, self.source, source_url, hashes);
+        let package = LockedPackage::new(self.spec, self.source, source_url, hashes);
         match self.tree.lockfile()?.get(&package.id()) {
             Some(package)
                 if matches!(
@@ -193,12 +166,29 @@ mod tests {
     use crate::luarocks::rock_manifest::RockManifest;
     use crate::{
         config::ConfigBuilder,
+        lockfile::{LockConstraint, LockedPackageId, OptState, PinnedState},
+        lua_version::LuaVersion,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        package::PackageName,
     };
 
     use super::*;
     #[cfg(feature = "impure_tests")]
     use flaky_test::flaky_test;
+
+    impl RemoteLuaRockspec {
+        fn to_locked_package_spec(&self) -> LockedPackageSpec {
+            LockedPackageSpec::new(
+                self.package(),
+                self.version(),
+                LockConstraint::Unconstrained,
+                Vec::new(),
+                Vec::new(),
+                &PinnedState::default(),
+                &OptState::default(),
+            )
+        }
+    }
 
     #[tokio::test]
     async fn install_binary_rock() {
@@ -232,8 +222,9 @@ mod tests {
             .unwrap();
         let local_package = BinaryRockInstall::new(
             &rockspec,
-            RemotePackageSource::Test,
+            rockspec.to_locked_package_spec(),
             rock.bytes,
+            RemotePackageSource::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -302,8 +293,9 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             .unwrap();
         BinaryRockInstall::new(
             &rockspec,
-            RemotePackageSource::Test,
+            rockspec.to_locked_package_spec(),
             rock.bytes,
+            RemotePackageSource::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -312,6 +304,57 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         .await
         .unwrap();
         assert!(tree.bin().join("mytool").is_executable());
+    }
+
+    #[tokio::test]
+    async fn install_binary_rock_preserves_dependencies() {
+        let rock = DownloadedPackedRockBytes {
+            name: "test-binary-bin".into(),
+            version: "1.0-1".parse().unwrap(),
+            bytes: Bytes::from(packed_rock_with_bin()),
+            file_name: "test-binary-bin-1.0-1.all.rock".into(),
+            url: "https://test.org".parse().unwrap(),
+        };
+        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let dependency = LockedPackageId::new(
+            &PackageName::from("transitive-dependency"),
+            &"1.0-1".parse().unwrap(),
+            PinnedState::default(),
+            OptState::default(),
+            LockConstraint::Unconstrained,
+        );
+        let spec = LockedPackageSpec::new(
+            rockspec.package(),
+            rockspec.version(),
+            LockConstraint::Unconstrained,
+            vec![dependency.clone()],
+            Vec::new(),
+            &PinnedState::default(),
+            &OptState::default(),
+        );
+        let install_root = TempDir::new().unwrap();
+        let config = ConfigBuilder::new()
+            .unwrap()
+            .lua_version(Some(LuaVersion::Lua51))
+            .user_tree(Some(install_root.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+
+        let installed = BinaryRockInstall::new(
+            &rockspec,
+            spec,
+            rock.bytes,
+            RemotePackageSource::Test,
+            tree::EntryType::Entrypoint,
+            &config,
+            &tree,
+        )
+        .install()
+        .await
+        .unwrap();
+
+        assert_eq!(installed.dependencies(), vec![&dependency]);
     }
 
     /// This relatively large integration test case tests the following:
@@ -360,8 +403,9 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             .unwrap();
         let local_package = BinaryRockInstall::new(
             &rockspec,
-            RemotePackageSource::Test,
+            rockspec.to_locked_package_spec(),
             rock.bytes,
+            RemotePackageSource::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -419,8 +463,9 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         let rockspec = unpack_rockspec(&rock).await.unwrap();
         let local_package = BinaryRockInstall::new(
             &rockspec,
-            RemotePackageSource::Test,
+            rockspec.to_locked_package_spec(),
             rock.bytes,
+            RemotePackageSource::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,

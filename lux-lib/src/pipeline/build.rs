@@ -105,9 +105,6 @@ where
             } = downloaded;
 
             let is_entrypoint = entry_type.is_entrypoint();
-            let constraint = package.spec.constraint();
-            let pin = package.spec.pinned();
-            let opt = package.spec.opt();
 
             let pkg = match artifact {
                 PackageSource::SourceDir(path) => Deploy::new(&rockspec, args.tree)
@@ -127,15 +124,13 @@ where
                     })?,
                 PackageSource::Archive(bytes) => BinaryRockInstall::new(
                     &rockspec,
-                    package.source().clone(),
+                    package.spec().clone(),
                     bytes,
+                    package.source().clone(),
                     entry_type,
                     args.config,
                     args.tree,
                 )
-                .pin(pin)
-                .opt(opt)
-                .constraint(constraint)
                 .behaviour(package_behaviour)
                 .install()
                 .await
