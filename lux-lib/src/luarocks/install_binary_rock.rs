@@ -169,7 +169,7 @@ mod tests {
         lockfile::{LockConstraint, LockedPackageId, OptState, PinnedState},
         lua_version::LuaVersion,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
-        package::PackageName,
+        package::Name,
     };
 
     use super::*;
