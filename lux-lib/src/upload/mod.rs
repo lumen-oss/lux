@@ -1,8 +1,9 @@
+use crate::package;
 use std::{env, io};
 
 use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::operations::SearchAndDownloadError;
-use crate::package::{PackageName, PackageVersion, SpecRevIterator};
+use crate::package::SpecRevIterator;
 use crate::package_db::PackageDB;
 use crate::project::project_toml::{self, RemoteProjectTomlValidationError};
 use crate::rockspec::Rockspec;
@@ -415,7 +416,7 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
     helpers::ensure_tool_version(client, config.server()).await?;
     helpers::ensure_user_exists(client, &api_key, config.server()).await?;
 
-    if let PackageVersion::StringVer(ver) = rockspec.version() {
+    if let package::Version::StringVer(ver) = rockspec.version() {
         return Err(Error::UnsupportedVersion(ver.to_string()));
     }
 
@@ -455,8 +456,8 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
 /// The rockspec that was or would have been uploaded.
 #[derive(Debug)]
 pub struct PreparedRockspec {
-    pub package: PackageName,
-    pub version: PackageVersion,
+    pub package: package::Name,
+    pub version: package::Version,
     pub content: String,
 }
 
@@ -569,7 +570,6 @@ mod helpers {
     use super::*;
     use crate::hash::HasIntegrity;
     use crate::operations;
-    use crate::package::{PackageName, PackageSpec, PackageVersion};
     use crate::project::project_toml::RemoteProjectToml;
     use crate::upload::RockCheckError;
     use crate::upload::{ToolCheckError, UserCheckError};
@@ -677,7 +677,7 @@ mod helpers {
 
             let rockspec_content = rockspec.to_lua_remote_rockspec_string()?;
 
-            if let PackageVersion::StringVer(ver) = rockspec.version() {
+            if let package::Version::StringVer(ver) = rockspec.version() {
                 return Err(Error::UnsupportedVersion(ver.to_string()));
             }
             if helpers::rock_exists(
@@ -690,7 +690,7 @@ mod helpers {
             .await?
             {
                 let package =
-                    PackageSpec::new(rockspec.package().clone(), rockspec.version().clone());
+                    package::Spec::new(rockspec.package().clone(), rockspec.version().clone());
                 let existing_rockspec =
                     operations::download_exact_rockspec(&package, package_db, config)
                         .await?
@@ -712,8 +712,8 @@ mod helpers {
     pub(crate) async fn rock_exists(
         client: &Client,
         api_key: &ApiKey,
-        name: &PackageName,
-        version: &PackageVersion,
+        name: &package::Name,
+        version: &package::Version,
         server: &Url,
     ) -> Result<bool, RockCheckError> {
         let server_response_raw_json = client

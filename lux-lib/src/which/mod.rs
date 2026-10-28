@@ -1,10 +1,10 @@
+use crate::package;
 use std::{io, path::PathBuf};
 
 use crate::{
     config::Config,
     lua_rockspec::LuaModule,
     lua_version::{LuaVersion, LuaVersionUnset},
-    package::PackageReq,
     tree::{self, InstallTree},
 };
 use bon::Builder;
@@ -21,19 +21,19 @@ pub struct Which<'a> {
     #[builder(start_fn)]
     config: &'a Config,
     #[builder(field)]
-    packages: Vec<PackageReq>,
+    packages: Vec<package::Req>,
 }
 
 impl<State> WhichBuilder<'_, State>
 where
     State: which_builder::State,
 {
-    pub fn package(mut self, package: PackageReq) -> Self {
+    pub fn package(mut self, package: package::Req) -> Self {
         self.packages.push(package);
         self
     }
 
-    pub fn packages(mut self, packages: impl IntoIterator<Item = PackageReq>) -> Self {
+    pub fn packages(mut self, packages: impl IntoIterator<Item = package::Req>) -> Self {
         self.packages.extend(packages);
         self
     }

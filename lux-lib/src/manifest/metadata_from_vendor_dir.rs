@@ -1,11 +1,9 @@
+use crate::package;
 use std::{collections::HashMap, path::Path, str::FromStr};
 
 use walkdir::WalkDir;
 
-use crate::{
-    manifest::ManifestMetadata,
-    package::{PackageSpec, RemotePackageType},
-};
+use crate::{manifest::ManifestMetadata, package::RemotePackageType};
 
 /// Construct manifest metadata from a vendor directory.
 #[tracing::instrument(level = "trace")]
@@ -28,8 +26,8 @@ pub(crate) fn manifest_from_vendor_dir(vendor_dir: &Path) -> ManifestMetadata {
                 file.to_path_buf()
             };
             let file_name = file_name.file_name().unwrap_or_default();
-            // NOTE: We silently ignore entries if we can't parse a `PackageSpec` from them.
-            let package = PackageSpec::from_str(file_name.to_string_lossy().as_ref()).ok()?;
+            // NOTE: We silently ignore entries if we can't parse a `Spec` from them.
+            let package = package::Spec::from_str(file_name.to_string_lossy().as_ref()).ok()?;
             Some((package, package_type))
         })
     {

@@ -1,8 +1,8 @@
 use clap::Args;
+use lux_lib::package;
 use lux_lib::{
     config::Config,
     operations::{self, TestEnv},
-    package::PackageName,
     workspace::Workspace,
 };
 use miette::Result;
@@ -22,7 +22,7 @@ pub struct Test {
 
     /// Package to run tests for.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 pub async fn test(test: Test, config: Config) -> Result<()> {

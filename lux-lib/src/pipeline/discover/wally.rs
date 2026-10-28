@@ -1,3 +1,4 @@
+use crate::package;
 use std::{
     collections::HashMap,
     io,
@@ -8,7 +9,6 @@ use std::{
 use bytes::Bytes;
 use git2::Repository;
 use miette::Diagnostic;
-use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
@@ -17,14 +17,11 @@ use crate::{
     config::Config,
     lockfile::{OptState, PinnedState, RemotePackageSourceUrl},
     lua_rockspec::{LuaModule, ModuleSpec, ParseLuaModuleError, RemoteLuaRockspec, RockSourceSpec},
-    package::{
-        wally::{self, Manifest, PackageName as WallyPackageName, PackageReq as WallyPackageReq},
-        PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, RemotePackage,
-        VersionParseError,
-    },
+    package::RemotePackage,
     remote_package_source::RemotePackageSource,
     reqwest::RequestError,
     rockspec::lua_dependency::LuaDependencySpec,
+    wally,
 };
 
 use super::FoundPackage;
@@ -48,12 +45,12 @@ pub enum WallyDiscoverError {
     #[diagnostic(help(
         "the package manifest contains an invalid version; report it to the package author."
     ))]
-    Version(#[from] VersionParseError),
+    Version(#[from] package::version::ParseError),
     #[error("wally package '{0}' was not found in any registry")]
     #[diagnostic(help(
         "check the package name and version, or add its registry to `extra_wally_registries` in your Lux config."
     ))]
-    NotFound(WallyPackageReq),
+    NotFound(wally::package::Req),
     #[error("failed to construct the wally package content URL '{url}'")]
     #[diagnostic(help("the registry's `config.json` may contain an invalid `api` URL."))]
     Url {
@@ -85,8 +82,8 @@ impl From<reqwest::Error> for WallyDiscoverError {
 
 /// Discover a wally package from the configured registries.
 pub(crate) async fn discover(
-    package_req: &PackageReq,
-    wally_req: &WallyPackageReq,
+    package_req: &package::Req,
+    wally_req: &wally::package::Req,
     config: &Config,
 ) -> Result<FoundPackage, WallyDiscoverError> {
     let mut registries = config.extra_wally_registries().clone();
@@ -120,7 +117,9 @@ pub(crate) async fn discover_locked(
     found_package(&package_req, manifest, content_url, &contents, index_url)
 }
 
-fn wally_req_from_locked(remote: &RemotePackage) -> Result<WallyPackageReq, WallyDiscoverError> {
+fn wally_req_from_locked(
+    remote: &RemotePackage,
+) -> Result<wally::package::Req, WallyDiscoverError> {
     let content_url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote.source_url {
         url
     } else {
@@ -137,18 +136,18 @@ fn wally_req_from_locked(remote: &RemotePackage) -> Result<WallyPackageReq, Wall
             content_url.to_string(),
         ));
     };
-    let name: WallyPackageName = format!("{scope}/{name}")
+    let name: wally::package::Name = format!("{scope}/{name}")
         .parse()
         .map_err(|_| WallyDiscoverError::InvalidSourceUrl(content_url.to_string()))?;
     let version_req =
-        VersionReq::parse(&format!("={}", remote.spec.version().to_version_string()))?;
-    Ok(WallyPackageReq::new(name, version_req))
+        semver::VersionReq::parse(&format!("={}", remote.spec.version().to_version_string()))?;
+    Ok(wally::package::Req::new(name, version_req))
 }
 
 fn content_url(
     index: &WallyIndex,
-    wally_req: &WallyPackageReq,
-    manifest: &Manifest,
+    wally_req: &wally::package::Req,
+    manifest: &wally::package::Manifest,
 ) -> Result<Url, WallyDiscoverError> {
     index
         .config()
@@ -165,14 +164,14 @@ fn content_url(
         })
 }
 
-fn dependencies(manifest: Manifest) -> Vec<LuaDependencySpec> {
+fn dependencies(manifest: wally::package::Manifest) -> Vec<LuaDependencySpec> {
     manifest
         .dependencies
         .into_iter()
         .map(|(alias, dep_req)| LuaDependencySpec {
-            package_req: PackageReq {
-                name: PackageName::new(alias),
-                version_req: PackageVersionReq::SemVer(dep_req.version_req().clone()),
+            package_req: package::Req {
+                name: package::Name::new(alias),
+                version_req: package::VersionReq::SemVer(dep_req.version_req().clone()),
             },
             pin: PinnedState::default(),
             opt: OptState::default(),
@@ -182,14 +181,14 @@ fn dependencies(manifest: Manifest) -> Vec<LuaDependencySpec> {
 }
 
 fn found_package(
-    package_req: &PackageReq,
-    manifest: Manifest,
+    package_req: &package::Req,
+    manifest: wally::package::Manifest,
     content_url: Url,
     contents: &[u8],
     registry: &Url,
 ) -> Result<FoundPackage, WallyDiscoverError> {
-    let version = PackageVersion::parse(&manifest.package.version.to_string())?;
-    let package_spec = PackageSpec::new(package_req.name().clone(), version);
+    let version = package::Version::parse(&manifest.package.version.to_string())?;
+    let package_spec = package::Spec::new(package_req.name().clone(), version);
     let modules = modules_from_zip(contents)?;
     let source_spec = RockSourceSpec::Url(content_url.clone());
     let rockspec = RemoteLuaRockspec::from_source_spec(
@@ -246,14 +245,17 @@ impl WallyIndex {
         &self.config
     }
 
-    fn versions(&self, name: &WallyPackageName) -> Result<Vec<Manifest>, WallyIndexError> {
+    fn versions(
+        &self,
+        name: &wally::package::Name,
+    ) -> Result<Vec<wally::package::Manifest>, WallyIndexError> {
         let path = self.path.join(name.scope()).join(name.name());
         let content = match std::fs::read_to_string(path) {
             Ok(content) => content,
             Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
             Err(err) => return Err(err.into()),
         };
-        let mut versions: Vec<Manifest> = content
+        let mut versions: Vec<wally::package::Manifest> = content
             .lines()
             .filter(|line| !line.trim().is_empty())
             .map(|line| serde_json::from_str(line).map_err(WallyIndexError::from))
@@ -262,7 +264,10 @@ impl WallyIndex {
         Ok(versions)
     }
 
-    fn find(&self, req: &WallyPackageReq) -> Result<Option<Manifest>, WallyIndexError> {
+    fn find(
+        &self,
+        req: &wally::package::Req,
+    ) -> Result<Option<wally::package::Manifest>, WallyIndexError> {
         Ok(self
             .versions(req.name())?
             .into_iter()
@@ -386,11 +391,11 @@ mod tests {
 
     use crate::{
         config::ConfigBuilder,
-        package::wally::{Package, PlaceInfo, Realm},
+        wally::package::{Package, PlaceInfo, Realm},
     };
 
-    fn package(version: Version) -> Manifest {
-        Manifest {
+    fn package(version: Version) -> wally::package::Manifest {
+        wally::package::Manifest {
             package: Package {
                 name: "evaera/promise".parse().unwrap(),
                 version,
@@ -478,7 +483,7 @@ mod tests {
             Url::parse("https://api.wally.run").unwrap()
         );
 
-        let req: WallyPackageReq = "evaera/promise@2".parse().unwrap();
+        let req: wally::package::Req = "evaera/promise@2".parse().unwrap();
         assert_eq!(
             index.find(&req).unwrap().unwrap().package.version,
             Version::new(2, 4, 0)
@@ -514,7 +519,7 @@ mod tests {
         let cache = assert_fs::TempDir::new().unwrap();
         let url = Url::from_directory_path(remote.path()).unwrap();
         let index = WallyIndex::open(&url, cache.path()).unwrap();
-        let req: WallyPackageReq = "evaera/promise@1".parse().unwrap();
+        let req: wally::package::Req = "evaera/promise@1".parse().unwrap();
         assert_eq!(
             index.find(&req).unwrap().unwrap().package.version,
             Version::new(1, 0, 0)
@@ -555,7 +560,7 @@ mod tests {
     #[test]
     fn derives_wally_requirement_from_locked_package() {
         let remote = RemotePackage::new(
-            PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
+            package::Spec::parse("promise".into(), "1.0.0".into()).unwrap(),
             RemotePackageSource::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
             Some(RemotePackageSourceUrl::Url {
                 url: Url::parse("https://api.wally.run/v1/package-contents/evaera/promise/1.0.0")
@@ -565,13 +570,16 @@ mod tests {
 
         let req = wally_req_from_locked(&remote).unwrap();
         assert_eq!(req.name().to_string(), "evaera/promise");
-        assert_eq!(req.version_req(), &VersionReq::parse("=1.0.0").unwrap());
+        assert_eq!(
+            req.version_req(),
+            &semver::VersionReq::parse("=1.0.0").unwrap()
+        );
     }
 
     #[test]
     fn rejects_locked_package_without_content_url() {
         let remote = RemotePackage::new(
-            PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
+            package::Spec::parse("promise".into(), "1.0.0".into()).unwrap(),
             RemotePackageSource::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
             None,
         );
@@ -596,7 +604,7 @@ mod tests {
 
         let content_url = Url::parse(&server.url(content_path).to_string()).unwrap();
         let remote = RemotePackage::new(
-            PackageSpec::parse("promise".into(), "1.0.0".into()).unwrap(),
+            package::Spec::parse("promise".into(), "1.0.0".into()).unwrap(),
             RemotePackageSource::Wally(index_url.clone()),
             Some(RemotePackageSourceUrl::Url { url: content_url }),
         );
@@ -633,8 +641,8 @@ mod tests {
             .extra_wally_registries(Some(vec![index_url.clone()]))
             .build()
             .unwrap();
-        let package_req = PackageReq::new("promise".into(), Some("1.0.0".into())).unwrap();
-        let wally_req: WallyPackageReq = "evaera/promise@1".parse().unwrap();
+        let package_req = package::Req::new("promise".into(), Some("1.0.0".into())).unwrap();
+        let wally_req: wally::package::Req = "evaera/promise@1".parse().unwrap();
 
         let found = discover(&package_req, &wally_req, &config).await.unwrap();
         assert_eq!(found.remote.spec.name().to_string(), "promise");

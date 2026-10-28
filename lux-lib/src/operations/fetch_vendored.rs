@@ -1,3 +1,4 @@
+use crate::package;
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -5,7 +6,6 @@ use crate::{
     lockfile::RemotePackageSourceUrl,
     lua_rockspec::{self, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
-    package::{PackageReq, PackageSpec},
     package_db::{PackageDB, SearchError},
     remote_package_source::RemotePackageSource,
 };
@@ -18,7 +18,7 @@ use thiserror::Error;
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub(crate) struct FetchVendored<'a> {
     vendor_dir: &'a Path,
-    package: &'a PackageReq,
+    package: &'a package::Req,
     package_db: &'a PackageDB,
 }
 
@@ -31,14 +31,14 @@ pub enum FetchVendoredError {
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
     #[error("could not find a vendored RockSpec for package '{0}' in vendor directory '{1}'.")]
-    RockspecNotFound(PackageSpec, String),
+    RockspecNotFound(package::Spec, String),
     #[error("could not parse vendored RockSpec '{rockspec_path}'")]
     ParseRockspec {
         rockspec_path: String,
         source: Box<lua_rockspec::Error>,
     },
     #[error("could not find a source or .rock archive for {0} in vendor directory {1}.")]
-    PackageNotFound(PackageSpec, String),
+    PackageNotFound(package::Spec, String),
     #[error("unable to read binary rock: {0}:\n{1}")]
     ReadBinaryRock(String, fs::Error),
 }
@@ -110,7 +110,7 @@ async fn do_fetch_vendored_rock(
 )]
 async fn load_vendored_rockspec(
     vendor_dir: &Path,
-    package: &PackageSpec,
+    package: &package::Spec,
 ) -> Result<RemoteLuaRockspec, FetchVendoredError> {
     let rockspec_path =
         vendor_dir.join(format!("{}-{}.rockspec", package.name(), package.version()));
@@ -134,7 +134,7 @@ async fn load_vendored_rockspec(
 #[allow(clippy::result_large_err)] // This is ok because it's just a Deserialize helper
 fn load_vendored_package(
     vendor_dir: &Path,
-    package: &PackageSpec,
+    package: &package::Spec,
 ) -> Result<VendoredPackage, FetchVendoredError> {
     let source_path = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
     if source_path.is_dir() || source_path.is_file() {
@@ -177,7 +177,7 @@ mod tests {
         "#,
             )
             .unwrap();
-        let package_spec = PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap());
+        let package_spec = package::Spec::new("foo".into(), "1.0.0-1".parse().unwrap());
         let rockspec = load_vendored_rockspec(vendor_dir.path(), &package_spec).await;
         assert!(rockspec.is_ok());
     }
@@ -187,7 +187,7 @@ mod tests {
         let vendor_dir = TempDir::new().unwrap();
         let foo_dir = vendor_dir.child("foo@1.0.0-1");
         foo_dir.create_dir_all().unwrap();
-        let package_spec = PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap());
+        let package_spec = package::Spec::new("foo".into(), "1.0.0-1".parse().unwrap());
         assert!(matches!(
             load_vendored_package(vendor_dir.path(), &package_spec),
             Ok(VendoredPackage::Source { .. })
@@ -195,7 +195,7 @@ mod tests {
 
         let bar_rock = vendor_dir.child("bar@1.0.0-1.rock");
         bar_rock.touch().unwrap();
-        let package_spec = PackageSpec::new("bar".into(), "1.0.0-1".parse().unwrap());
+        let package_spec = package::Spec::new("bar".into(), "1.0.0-1".parse().unwrap());
         assert!(matches!(
             load_vendored_package(vendor_dir.path(), &package_spec),
             Ok(VendoredPackage::BinaryRock { .. })

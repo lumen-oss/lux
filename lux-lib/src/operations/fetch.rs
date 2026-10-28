@@ -4,10 +4,11 @@ use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
-use crate::package::{wally, PackageSpec};
+use crate::package;
 use crate::project;
 use crate::reqwest::{RequestBuilderExt, RequestError};
 use crate::rockspec::Rockspec;
+use crate::wally;
 use crate::{fs, operations};
 use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
@@ -89,7 +90,7 @@ where
             }
             Err(err) => match &fetch.rockspec.source().current_platform().source_spec {
                 RockSourceSpec::Git(_) | RockSourceSpec::Url(_) => {
-                    let package = PackageSpec::new(
+                    let package = package::Spec::new(
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
                     );
@@ -162,7 +163,7 @@ impl From<reqwest::Error> for FetchSrcError {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 struct FetchSrcRock<'a> {
     #[builder(start_fn)]
-    package: &'a PackageSpec,
+    package: &'a package::Spec,
     #[builder(start_fn)]
     dest_dir: &'a Path,
     #[builder(start_fn)]

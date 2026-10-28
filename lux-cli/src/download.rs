@@ -1,11 +1,12 @@
 use clap::Args;
-use lux_lib::{config::Config, operations, package::PackageReq};
+use lux_lib::package;
+use lux_lib::{config::Config, operations};
 
 use miette::Result;
 
 #[derive(Args)]
 pub struct Download {
-    package_req: PackageReq,
+    package_req: package::Req,
 }
 
 pub async fn download(dl_data: Download, config: Config) -> Result<()> {

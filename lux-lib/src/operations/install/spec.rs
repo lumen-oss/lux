@@ -1,10 +1,10 @@
+use crate::package;
 use bon::Builder;
 
 use crate::{
     build::BuildBehaviour,
     lockfile::{LockConstraint, OptState, PinnedState},
     lua_rockspec::RockSourceSpec,
-    package::PackageReq,
     tree,
 };
 
@@ -13,7 +13,7 @@ use crate::{
 #[builder(start_fn = new, finish_fn(name = build, vis = "pub"))]
 pub struct PackageInstallSpec {
     #[builder(start_fn)]
-    pub(crate) package: PackageReq,
+    pub(crate) package: package::Req,
     #[builder(start_fn)]
     pub(crate) entry_type: tree::EntryType,
     pub(crate) build_behaviour: BuildBehaviour,

@@ -1,3 +1,4 @@
+use crate::package;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -5,7 +6,6 @@ use std::{
 
 use crate::{
     lua_rockspec::{RockSourceInternal, SourceUrl, SourceUrlError},
-    package::{PackageName, PackageSpec, PackageVersion, SpecRev, VersionParseError},
     variables::{self, Environment, GetVariableError, HasVariables, VariableSubstitutionError},
 };
 use ::serde::Deserialize;
@@ -104,20 +104,22 @@ impl RockSourceTemplate {
     pub(crate) fn try_generate(
         &self,
         project_root: &Path,
-        package: &PackageName,
-        version: &PackageVersion,
+        package: &package::Name,
+        version: &package::Version,
     ) -> Result<RockSourceInternal, GenerateSourceError> {
-        let package_spec = PackageSpec::new(package.clone(), version.clone());
+        let package_spec = package::Spec::new(package.clone(), version.clone());
         let url_template_str = match version {
-            PackageVersion::SemVer(ver) => self
+            package::Version::SemVer(ver) => self
                 .url
                 .as_ref()
                 .ok_or(GenerateSourceError::MissingReleaseUrl(ver.to_string())),
-            PackageVersion::DevVer(ver) => self
+            package::Version::DevVer(ver) => self
                 .dev
                 .as_ref()
                 .ok_or(GenerateSourceError::MissingDevUrl(ver.to_string())),
-            PackageVersion::StringVer(ver) => Err(GenerateSourceError::StringVer(ver.to_string())),
+            package::Version::StringVer(ver) => {
+                Err(GenerateSourceError::StringVer(ver.to_string()))
+            }
         }?;
         let url_str = variables::substitute(
             &[&package_spec, &Environment {}, &GitProject(project_root)],
@@ -191,7 +193,7 @@ impl RockSourceTemplate {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone, Default)]
-pub(crate) struct PackageVersionTemplate(Option<PackageVersion>);
+pub(crate) struct PackageVersionTemplate(Option<package::Version>);
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum GenerateVersionError {
@@ -199,15 +201,15 @@ pub enum GenerateVersionError {
     Git(#[from] git2::Error),
     #[error("error parsing version from git ref")]
     #[diagnostic(forward(0))]
-    PackageVersionParse(#[from] VersionParseError),
+    PackageVersionParse(#[from] package::version::ParseError),
 }
 
 impl PackageVersionTemplate {
     pub(crate) fn try_generate(
         &self,
         project_root: &Path,
-        specrev: Option<SpecRev>,
-    ) -> Result<PackageVersion, GenerateVersionError> {
+        specrev: Option<package::version::SpecRev>,
+    ) -> Result<package::Version, GenerateVersionError> {
         if let Some(version) = &self.0 {
             return Ok(specrev.map_or_else(
                 || version.clone(),
@@ -219,7 +221,7 @@ impl PackageVersionTemplate {
         if let Some(version) = version_from_semver_tag(&repo, &specrev)? {
             Ok(version)
         } else {
-            Ok(PackageVersion::default_dev_version_with_specrev(specrev))
+            Ok(package::Version::default_dev_version_with_specrev(specrev))
         }
     }
 }
@@ -227,8 +229,8 @@ impl PackageVersionTemplate {
 /// Searches the current HEAD for SemVer tags and returns the first one found.
 fn version_from_semver_tag(
     repo: &Repository,
-    specrev: &SpecRev,
-) -> Result<Option<PackageVersion>, git2::Error> {
+    specrev: &package::version::SpecRev,
+) -> Result<Option<package::Version>, git2::Error> {
     let head = repo.head()?;
     let current_rev = head
         .target()
@@ -242,7 +244,8 @@ fn version_from_semver_tag(
             if target_rev == current_rev {
                 let tag_name = tag_name.trim_start_matches("v");
                 let version_str = format!("{}-{specrev}", tag_name);
-                if let Ok(version @ PackageVersion::SemVer(_)) = PackageVersion::parse(&version_str)
+                if let Ok(version @ package::Version::SemVer(_)) =
+                    package::Version::parse(&version_str)
                 {
                     result = Some(version);
                     return false; // stop iteration
@@ -270,7 +273,7 @@ fn current_tag_or_revision(repo: &Repository) -> Result<String, git2::Error> {
         if let (Some(tag_name), Some(target_rev)) = (name, target) {
             let tag_name = tag_name.trim_start_matches("refs/tags/");
             if target_rev == current_rev {
-                if PackageVersion::parse(tag_name.trim_start_matches("v"))
+                if package::Version::parse(tag_name.trim_start_matches("v"))
                     .is_ok_and(|version| version.is_semver())
                 {
                     semver_tag = Some(tag_name.to_string());
@@ -304,7 +307,7 @@ mod tests {
     #[test]
     fn explicit_version_uses_requested_specrev() {
         for (version, specrev, expected) in [("0.0.3", 3u16, "0.0.3-3"), ("1", 2, "1-2")] {
-            let template = PackageVersionTemplate(Some(PackageVersion::parse(version).unwrap()));
+            let template = PackageVersionTemplate(Some(package::Version::parse(version).unwrap()));
             let generated = template
                 .try_generate(Path::new("."), Some(specrev.into()))
                 .unwrap();

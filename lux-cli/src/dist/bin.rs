@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::path::PathBuf;
 
 use clap::Args;
@@ -5,7 +6,6 @@ use lux_lib::{
     config::{Config, ConfigBuilder},
     lua_version::LuaVersion,
     operations::DistProjectBin,
-    package::PackageName,
     tree::FlatDistTree,
     workspace::Workspace,
 };
@@ -26,7 +26,7 @@ pub struct Bin {
     /// If not set, lux will attempt to compile the current project.{n}
     /// Must be set in multi-project workspaces.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,

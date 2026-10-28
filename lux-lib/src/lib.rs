@@ -32,6 +32,8 @@ pub mod workspace;
 pub(crate) mod remote_package_source;
 pub(crate) mod reqwest;
 pub(crate) mod variables;
+#[cfg_attr(not(feature = "wally"), allow(dead_code))]
+pub(crate) mod wally;
 
 /// An internal string describing the server-side API version that we support.
 /// Whenever we connect to a server (like `luarocks.org`), we ensure that these

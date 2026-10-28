@@ -1,3 +1,4 @@
+use crate::package;
 use std::io;
 use tokio::process::Command;
 
@@ -8,7 +9,6 @@ use crate::{
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildWorkspace, BuildWorkspaceError},
-    package::{PackageReq, VersionReqError},
     package_db::{self, PackageDB},
     path::{self, Paths},
     tree::{self, InstallTree},
@@ -120,7 +120,7 @@ impl From<InstallCommandError> for ExecError {
 #[error(transparent)]
 pub enum InstallCommandError {
     Install(#[from] Box<install_packages::Error>),
-    PackageVersionReqError(#[from] VersionReqError),
+    PackageVersionReqError(#[from] package::version::ReqError),
     PackageDB(#[from] package_db::Error),
     Tree(#[from] tree::Error),
     LuaVersionUnset(#[from] LuaVersionUnset),
@@ -222,7 +222,7 @@ To suppress this warning, set the `--no-loader` option."#
 /// Ensure that a command is installed.
 /// This defaults to the local project tree if cwd is a project root.
 async fn install_command(command: &str, config: &Config) -> Result<(), InstallCommandError> {
-    let package = PackageReq::new(command.into(), None)?;
+    let package = package::Req::new(command.into(), None)?;
     let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
 
     if tree

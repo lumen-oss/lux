@@ -5,8 +5,7 @@ use lux_lib::drivers::sync::{Sync, SyncMode, TargetSet};
 use lux_lib::lockfile::PinnedState;
 use lux_lib::lua_version::LuaVersion;
 use lux_lib::operations;
-use lux_lib::package::PackageName;
-use lux_lib::package::PackageReq;
+use lux_lib::package;
 use lux_lib::rockspec::lua_dependency;
 use lux_lib::tree::RockMatches;
 use lux_lib::workspace::Workspace;
@@ -20,20 +19,20 @@ pub struct ChangePin {
     /// Installed package or dependency to pin.
     /// If pinning a dependency in a project, this should
     /// be the package name.
-    package_req: Vec<PackageReq>,
+    package_req: Vec<package::Req>,
 
     /// Pin a development dependency.
     /// Also called `dev`.
     #[arg(short, long, alias = "dev", visible_short_aliases = ['d', 'b'])]
-    build: Option<Vec<PackageName>>,
+    build: Option<Vec<package::Name>>,
 
     /// Pin a test dependency.
     #[arg(short, long)]
-    test: Option<Vec<PackageName>>,
+    test: Option<Vec<package::Name>>,
 
     /// Project to modify.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState) -> Result<()> {

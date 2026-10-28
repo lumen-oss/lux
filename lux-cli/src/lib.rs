@@ -5,6 +5,7 @@ use crate::{
     project::NewProject,
     util::Util,
 };
+use lux_lib::package;
 use miette::Result;
 use std::error::Error;
 use std::path::PathBuf;
@@ -24,9 +25,7 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::{
-    config::ConfigBuilder, lua_version::LuaVersion, package::PackageName, workspace::Workspace,
-};
+use lux_lib::{config::ConfigBuilder, lua_version::LuaVersion, workspace::Workspace};
 use miette::IntoDiagnostic;
 use outdated::Outdated;
 use pack::Pack;
@@ -578,7 +577,7 @@ where
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
-fn project_lua_version(pkg: &Option<PackageName>) -> Option<LuaVersion> {
+fn project_lua_version(pkg: &Option<package::Name>) -> Option<LuaVersion> {
     let current_workspace = Workspace::current().ok().flatten()?;
     let project = current_workspace.single_member_or_select(pkg).ok()?;
     let lua = project.toml().lua()?;

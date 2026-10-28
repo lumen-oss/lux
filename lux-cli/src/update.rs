@@ -1,6 +1,6 @@
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::package::{PackageName, PackageReq};
+use lux_lib::package;
 
 use lux_lib::package_db::PackageDB;
 use lux_lib::rockspec::lua_dependency::LuaDependencyType;
@@ -16,22 +16,22 @@ pub struct Update {
 
     /// Packages to update.
     /// When updating a project, these must be package names.
-    packages: Option<Vec<PackageReq>>,
+    packages: Option<Vec<package::Req>>,
 
     /// Build dependencies to update.
     /// Also called `dev`.
     /// When updating a project, these must be package names.
     #[arg(short, long, alias = "dev", visible_short_aliases = ['d', 'b'])]
-    build: Option<Vec<PackageReq>>,
+    build: Option<Vec<package::Req>>,
 
     /// Build dependencies to update.
     /// When updating a project, these must be package names.
     #[arg(short, long)]
-    test: Option<Vec<PackageReq>>,
+    test: Option<Vec<package::Req>>,
 
     /// Project to modify.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 pub async fn update(args: Update, config: Config) -> Result<()> {
@@ -139,7 +139,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
     Ok(())
 }
 
-fn to_package_names(packages: Option<&Vec<PackageReq>>) -> Result<Option<Vec<PackageName>>> {
+fn to_package_names(packages: Option<&Vec<package::Req>>) -> Result<Option<Vec<package::Name>>> {
     if packages.is_some_and(|pkgs| !pkgs.iter().any(|pkg| pkg.version_req().is_any())) {
         let names_str = if packages.is_some_and(|pkgs| pkgs.len() == 1) {
             "package names"

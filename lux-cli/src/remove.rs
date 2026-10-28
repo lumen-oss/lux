@@ -1,8 +1,7 @@
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{
-    config::Config, package::PackageName, rockspec::lua_dependency, workspace::Workspace,
-};
+use lux_lib::package;
+use lux_lib::{config::Config, rockspec::lua_dependency, workspace::Workspace};
 
 use miette::{IntoDiagnostic, Result};
 
@@ -11,20 +10,20 @@ use crate::workspace::sync_dependencies_if_locked;
 #[derive(Args)]
 pub struct Remove {
     /// Package or list of packages to remove from the dependencies.
-    depencencies: Vec<PackageName>,
+    depencencies: Vec<package::Name>,
 
     /// Remove a development dependency.
     /// Also called `dev`.
     #[arg(short, long, alias = "dev", visible_short_aliases = ['d', 'b'])]
-    build: Option<Vec<PackageName>>,
+    build: Option<Vec<package::Name>>,
 
     /// Remove a test dependency.
     #[arg(short, long)]
-    test: Option<Vec<PackageName>>,
+    test: Option<Vec<package::Name>>,
 
     /// Package to remove from.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 pub async fn remove(data: Remove, config: Config) -> Result<()> {

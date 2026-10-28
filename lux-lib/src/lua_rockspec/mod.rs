@@ -7,6 +7,7 @@ mod rock_source;
 mod serde_util;
 mod test_spec;
 
+use crate::package;
 use std::{
     collections::HashMap, convert::Infallible, fmt::Display, io, path::PathBuf, str::FromStr,
 };
@@ -39,7 +40,6 @@ impl DisplayAsLuaValue for Url {
 use crate::{
     hash::HasIntegrity,
     lua_version::{LuaVersion, LuaVersionUnset},
-    package::{PackageName, PackageSpec, PackageVersion, PackageVersionReq},
     project::{project_toml, ProjectRoot},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
     ROCKSPEC_FUEL_LIMIT,
@@ -79,19 +79,19 @@ try reducing the number of dependencies or simplifying build instructions.
         code(lux_lib::lua_rockspec::off_spec_dependency),
         url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
     )]
-    OffSpecDependency(PackageName),
+    OffSpecDependency(package::Name),
     #[error("cannot create Lua rockspec with off-spec build dependency")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::off_spec_build_dependency),
         url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
     )]
-    OffSpecBuildDependency(PackageName),
+    OffSpecBuildDependency(package::Name),
     #[error("cannot create Lua rockspec with off-spec test dependency")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::off_spec_test_dependency),
         url("https://lux.lumen-labs.org/reference/lux-toml#dependencies")
     )]
-    OffSpecTestDependency(PackageName),
+    OffSpecTestDependency(package::Name),
     #[error(transparent)]
     #[diagnostic(transparent)]
     ProjectToml(#[from] project_toml::Error),
@@ -154,13 +154,13 @@ pub struct LocalLuaRockspec {
     /// The file format version. Example: "1.0"
     rockspec_format: Option<RockspecFormat>,
     /// The name of the package. Example: "luasocket"
-    package: PackageName,
+    package: package::Name,
     /// The version of the package, plus a suffix indicating the revision of the rockspec. Example: "2.0.1-1"
-    version: PackageVersion,
+    version: package::Version,
     description: RockDescription,
     supported_platforms: PlatformSupport,
     /// The Lua version requirement for this rock
-    lua: PackageVersionReq,
+    lua: package::VersionReq,
     dependencies: PerPlatform<Vec<LuaDependencySpec>>,
     build_dependencies: PerPlatform<Vec<LuaDependencySpec>>,
     external_dependencies: PerPlatform<HashMap<String, ExternalDependencySpec>>,
@@ -270,7 +270,7 @@ impl LocalLuaRockspec {
                     .find(|dep| dep.name().to_string() == "lua")
                     .cloned()
                     .map(|dep| dep.version_req().clone())
-                    .unwrap_or(PackageVersionReq::Any);
+                    .unwrap_or(package::VersionReq::Any);
 
                 fn strip_lua(
                     dependencies: PerPlatform<Vec<LuaDependencySpec>>,
@@ -353,11 +353,11 @@ impl LocalLuaRockspec {
 impl Rockspec for LocalLuaRockspec {
     type Error = Infallible;
 
-    fn package(&self) -> &PackageName {
+    fn package(&self) -> &package::Name {
         &self.package
     }
 
-    fn version(&self) -> &PackageVersion {
+    fn version(&self) -> &package::Version {
         &self.version
     }
 
@@ -369,7 +369,7 @@ impl Rockspec for LocalLuaRockspec {
         &self.supported_platforms
     }
 
-    fn lua(&self) -> &PackageVersionReq {
+    fn lua(&self) -> &package::VersionReq {
         &self.lua
     }
 
@@ -481,7 +481,7 @@ impl RemoteLuaRockspec {
     /// With no modules, the rockspec uses the `source` build backend.
     /// Otherwise, it uses the `builtin` build backend with the given modules.
     pub(crate) fn from_source_spec(
-        package_spec: PackageSpec,
+        package_spec: package::Spec,
         source_spec: RockSourceSpec,
         dependencies: Vec<LuaDependencySpec>,
         modules: HashMap<LuaModule, ModuleSpec>,
@@ -510,7 +510,7 @@ impl RemoteLuaRockspec {
             version,
             description: RockDescription::default(),
             supported_platforms: PlatformSupport::default(),
-            lua: PackageVersionReq::Any,
+            lua: package::VersionReq::Any,
             dependencies: PerPlatform::new(dependencies),
             build_dependencies: PerPlatform::default(),
             external_dependencies: PerPlatform::default(),
@@ -529,7 +529,7 @@ impl RemoteLuaRockspec {
 }
 
 fn rockspec_content(
-    package_spec: &PackageSpec,
+    package_spec: &package::Spec,
     source_spec: &RockSourceSpec,
     build_lua: &str,
 ) -> String {
@@ -568,11 +568,11 @@ fn modules_lua(modules: &HashMap<LuaModule, ModuleSpec>) -> String {
 impl Rockspec for RemoteLuaRockspec {
     type Error = Infallible;
 
-    fn package(&self) -> &PackageName {
+    fn package(&self) -> &package::Name {
         self.local.package()
     }
 
-    fn version(&self) -> &PackageVersion {
+    fn version(&self) -> &package::Version {
         self.local.version()
     }
 
@@ -584,7 +584,7 @@ impl Rockspec for RemoteLuaRockspec {
         self.local.supported_platforms()
     }
 
-    fn lua(&self) -> &PackageVersionReq {
+    fn lua(&self) -> &package::VersionReq {
         self.local.lua()
     }
 
@@ -671,7 +671,7 @@ HINT: If Lux has auto-detected an incompatible Lua installation,
       Valid versions are: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit', 'jit52' and 'luau'.
 "#
     )]
-    LuaVersionUnsupported(LuaVersion, PackageName, PackageVersion),
+    LuaVersionUnsupported(LuaVersion, package::Name, package::Version),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
@@ -823,7 +823,6 @@ mod tests {
 
     use crate::git::GitSource;
     use crate::lua_rockspec::PlatformIdentifier;
-    use crate::package::PackageSpec;
 
     use super::*;
 
@@ -980,21 +979,21 @@ mod tests {
             .local
             .supported_platforms
             .is_supported(&PlatformIdentifier::Windows));
-        let neorg = PackageSpec::parse("neorg".into(), "6.0.0".into()).unwrap();
+        let neorg = package::Spec::parse("neorg".into(), "6.0.0".into()).unwrap();
         assert!(rockspec
             .local
             .dependencies
             .default
             .into_iter()
             .any(|dep| dep.matches(&neorg)));
-        let foo = PackageSpec::parse("foo".into(), "1.0.0".into()).unwrap();
+        let foo = package::Spec::parse("foo".into(), "1.0.0".into()).unwrap();
         assert!(rockspec
             .local
             .build_dependencies
             .default
             .into_iter()
             .any(|dep| dep.matches(&foo)));
-        let busted = PackageSpec::parse("busted".into(), "2.2.0".into()).unwrap();
+        let busted = package::Spec::parse("busted".into(), "2.2.0".into()).unwrap();
         assert_eq!(
             *rockspec
                 .local
@@ -1312,9 +1311,9 @@ mod tests {
         "
         .to_string();
         let rockspec = RemoteLuaRockspec::new(&rockspec_content).unwrap();
-        let neorg_override = PackageSpec::parse("neorg".into(), "5.0.0".into()).unwrap();
-        let toml_edit = PackageSpec::parse("toml-edit".into(), "1.0.0".into()).unwrap();
-        let toml = PackageSpec::parse("toml".into(), "1.0.0".into()).unwrap();
+        let neorg_override = package::Spec::parse("neorg".into(), "5.0.0".into()).unwrap();
+        let toml_edit = package::Spec::parse("toml-edit".into(), "1.0.0".into()).unwrap();
+        let toml = package::Spec::parse("toml".into(), "1.0.0".into()).unwrap();
         assert_eq!(rockspec.local.dependencies.default.len(), 2);
         let per_platform = &rockspec.local.dependencies.per_platform;
         assert_eq!(

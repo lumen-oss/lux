@@ -1,6 +1,7 @@
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
 use itertools::Itertools;
+use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::ConfigBuilder,
@@ -10,7 +11,6 @@ use lux_lib::{
     lua_rockspec::RockSourceSpec,
     lua_version::LuaVersion,
     operations::{Exec, PackageInstallSpec},
-    package::PackageReq,
     package_db::PackageDB,
     tree::EntryType,
 };
@@ -62,7 +62,7 @@ async fn install_and_use_toml_edit() {
 }
 
 #[cfg(test)]
-async fn install_and_use(package: PackageReq, module_name: &str) {
+async fn install_and_use(package: package::Req, module_name: &str) {
     let install_spec = PackageInstallSpec::new(package, EntryType::Entrypoint)
         .build_behaviour(BuildBehaviour::Force)
         .build();

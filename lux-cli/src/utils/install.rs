@@ -1,18 +1,18 @@
 //! Utilities for converting a list of packages into a list with the correct build behaviour.
 
 use inquire::Confirm;
+use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
     lockfile::{OptState, PinnedState},
     operations::install::PackageInstallSpec,
-    package::PackageReq,
     tree::{self, InstallTree, Tree},
 };
 use miette::Result;
 
 pub fn apply_build_behaviour(
-    package_reqs: Vec<PackageReq>,
+    package_reqs: Vec<package::Req>,
     pin: PinnedState,
     force: bool,
     tree: &Tree,

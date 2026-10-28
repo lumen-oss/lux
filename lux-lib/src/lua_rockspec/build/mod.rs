@@ -5,6 +5,7 @@ mod rust_binary;
 mod rust_mlua;
 mod tree_sitter;
 
+use crate::package;
 pub use builtin::{BuiltinBuildSpec, LuaModule, ModulePaths, ModuleSpec, ParseLuaModuleError};
 pub use cmake::*;
 pub use make::*;
@@ -28,9 +29,7 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    lua_rockspec::per_platform_from_intermediate,
-    package::{PackageName, PackageReq},
-    rockspec::lua_dependency::LuaDependencySpec,
+    lua_rockspec::per_platform_from_intermediate, rockspec::lua_dependency::LuaDependencySpec,
 };
 
 use super::{
@@ -947,23 +946,23 @@ impl BuildType {
             | &BuildType::Command
             | &BuildType::None
             | &BuildType::Source => None,
-            BuildType::LuaRock(s) => Some(PackageName::new(format!("luarocks-build-{s}")).into()),
+            BuildType::LuaRock(s) => Some(package::Name::new(format!("luarocks-build-{s}")).into()),
             &BuildType::RustMlua => unsafe {
                 Some(
-                    PackageReq::parse("luarocks-build-rust-mlua >= 0.2.6")
+                    package::Req::parse("luarocks-build-rust-mlua >= 0.2.6")
                         .unwrap_unchecked()
                         .into(),
                 )
             },
             &BuildType::RustBinary => unsafe {
                 Some(
-                    PackageReq::parse("luarocks-build-rust-binary >= 4.0.0")
+                    package::Req::parse("luarocks-build-rust-binary >= 4.0.0")
                         .unwrap_unchecked()
                         .into(),
                 )
             },
             &BuildType::TreesitterParser => {
-                Some(PackageName::new("luarocks-build-treesitter-parser >= 6.1.0".into()).into())
+                Some(package::Name::new("luarocks-build-treesitter-parser >= 6.1.0".into()).into())
             } // IMPORTANT: If adding another luarocks build backend,
               // make sure to also add it to the filters in `operations::resolve::do_get_all_dependencies`.
         }

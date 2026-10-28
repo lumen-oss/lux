@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::{error::Error, path::PathBuf, str::FromStr};
 
 use clap::Args;
@@ -13,7 +14,6 @@ use spdx::LicenseId;
 use crate::utils::github_metadata::{self, RepoMetadata};
 use lux_lib::{
     config::Config,
-    package::PackageReq,
     project::{Project, PROJECT_TOML},
 };
 
@@ -68,7 +68,7 @@ pub struct NewProject {
     /// A version constraint on the required Lua version for this project.
     /// Examples: ">=5.1", "5.1"
     #[arg(long, value_parser = clap_parse_version)]
-    lua_versions: Option<PackageReq>,
+    lua_versions: Option<package::Req>,
 
     #[arg(long)]
     main: Option<SourceDirType>,
@@ -80,7 +80,7 @@ struct NewProjectValidated {
     description: String,
     maintainer: String,
     labels: Vec<String>,
-    lua_versions: PackageReq,
+    lua_versions: package::Req,
     main: SourceDirType,
     license: Option<LicenseId>,
     source_block: String,
@@ -95,8 +95,8 @@ fn clap_parse_license(s: &str) -> std::result::Result<LicenseId, String> {
     }
 }
 
-fn clap_parse_version(input: &str) -> std::result::Result<PackageReq, String> {
-    PackageReq::from_str(format!("lua {input}").as_str()).map_err(|err| err.to_string())
+fn clap_parse_version(input: &str) -> std::result::Result<package::Req, String> {
+    package::Req::from_str(format!("lua {input}").as_str()).map_err(|err| err.to_string())
 }
 
 fn clap_parse_list(input: &str) -> std::result::Result<Vec<String>, String> {

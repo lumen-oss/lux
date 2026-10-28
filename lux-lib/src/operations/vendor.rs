@@ -1,3 +1,4 @@
+use crate::package;
 use std::{
     collections::HashMap,
     io::{self, Cursor},
@@ -23,7 +24,6 @@ use crate::{
     lockfile::LockedPackageLockType,
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{self, PackageInstallSpec, UnpackError},
-    package::{PackageReq, PackageSpec},
     package_db::{self, PackageDB},
     pipeline::{
         materialise::{Error as MaterialiseError, Materialise, MaterialisedPackage, PackageSource},
@@ -177,7 +177,7 @@ async fn vendor_sources(
 /// Cargo-based build backends need their Cargo dependencies vendored too.
 fn cargo_dependencies(
     packages: &[MaterialisedPackage],
-) -> Vec<(PackageSpec, Option<PathBuf>, Vec<PathBuf>)> {
+) -> Vec<(package::Spec, Option<PathBuf>, Vec<PathBuf>)> {
     packages
         .iter()
         .filter_map(|package| {
@@ -274,7 +274,7 @@ fn push_dependencies<R: Rockspec>(
     rockspec: &R,
     install_specs: &mut Vec<PackageInstallSpec>,
 ) -> Result<(), LocalProjectTomlValidationError> {
-    let mut dependencies: Vec<PackageReq> = match lock_type {
+    let mut dependencies: Vec<package::Req> = match lock_type {
         LockedPackageLockType::Regular => rockspec
             .dependencies()
             .current_platform()
@@ -403,7 +403,7 @@ async fn vendor_target_cargo_deps(
 )]
 async fn vendor_package_cargo_deps(
     vendor_dir: &Path,
-    package: &PackageSpec,
+    package: &package::Spec,
     unpack_dir: &Option<PathBuf>,
     copy_dirs: &[PathBuf],
     config: &Config,

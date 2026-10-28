@@ -1,8 +1,8 @@
+use crate::package;
 use std::collections::HashMap;
 
 use crate::{
-    lua_rockspec::RockspecFormat, package::PackageName,
-    rockspec::lua_dependency::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT,
+    lua_rockspec::RockspecFormat, rockspec::lua_dependency::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT,
 };
 use miette::Diagnostic;
 use ottavino::{Closure, Executor, Fuel};
@@ -18,7 +18,7 @@ use super::{
 #[derive(Debug)]
 pub struct PartialLuaRockspec {
     pub(crate) rockspec_format: Option<RockspecFormat>,
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
     pub(crate) build: Option<BuildSpecInternal>,
     pub(crate) deploy: Option<DeploySpec>,
     pub(crate) description: Option<RockDescription>,

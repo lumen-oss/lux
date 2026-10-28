@@ -1,3 +1,4 @@
+use crate::package;
 use std::{collections::HashMap, io, path::PathBuf};
 
 use super::{EntryType, InstallTree, RockLayout, Tree};
@@ -6,7 +7,6 @@ use crate::{
     fs,
     lockfile::{LockedPackage, LockedPackageSpec, Lockfile, ReadOnly},
     lua_version::LuaVersion,
-    package::{PackageName, PackageVersion},
 };
 use miette::{Diagnostic, Result};
 use thiserror::Error;
@@ -21,9 +21,9 @@ version B: {version_b}
 "#
 )]
 struct ConflictingPackageError {
-    name: PackageName,
-    version_a: PackageVersion,
-    version_b: PackageVersion,
+    name: package::Name,
+    version_a: package::Version,
+    version_b: package::Version,
 }
 
 /// A staging tree with a flat hierarchy for distribution outside of Lux.
@@ -137,14 +137,11 @@ impl InstallTree for FlatDistTree {
         self.0.test_tree(config)
     }
 
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, super::Error> {
+    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, super::Error> {
         self.0.list()
     }
 
-    fn match_rocks(
-        &self,
-        req: &crate::package::PackageReq,
-    ) -> Result<super::RockMatches, super::Error> {
+    fn match_rocks(&self, req: &crate::package::Req) -> Result<super::RockMatches, super::Error> {
         self.0.match_rocks(req)
     }
 }

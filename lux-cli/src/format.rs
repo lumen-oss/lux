@@ -1,11 +1,9 @@
+use lux_lib::package;
 use std::path::{Path, PathBuf};
 
 use clap::Args;
 use emmylua_formatter as luafmt;
-use lux_lib::{
-    config::Config, lua_version::LuaVersion, package::PackageName, project::Project,
-    workspace::Workspace,
-};
+use lux_lib::{config::Config, lua_version::LuaVersion, project::Project, workspace::Workspace};
 use miette::{bail, miette, Context, IntoDiagnostic, Result};
 use path_slash::PathExt;
 use walkdir::WalkDir;
@@ -24,7 +22,7 @@ pub struct Fmt {
 
     /// Package to format.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]

@@ -1,4 +1,4 @@
-use crate::package::{PackageName, PackageReq, PackageSpec, PackageVersion};
+use crate::package;
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
 use crate::ROCKSPEC_FUEL_LIMIT;
 use itertools::Itertools;
@@ -10,7 +10,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ManifestMetadata {
-    pub repository: HashMap<PackageName, HashMap<PackageVersion, Vec<RemotePackageType>>>,
+    pub repository: HashMap<package::Name, HashMap<package::Version, Vec<RemotePackageType>>>,
 }
 
 impl<'de> serde::Deserialize<'de> for ManifestMetadata {
@@ -63,15 +63,15 @@ impl ManifestMetadata {
         Ok(manifest)
     }
 
-    pub fn has_rock(&self, rock_name: &PackageName) -> bool {
+    pub fn has_rock(&self, rock_name: &package::Name) -> bool {
         self.repository.contains_key(rock_name)
     }
 
     pub fn latest_match(
         &self,
-        lua_package_req: &PackageReq,
+        lua_package_req: &package::Req,
         filter: &RemotePackageTypeFilterSpec,
-    ) -> Option<(PackageSpec, RemotePackageType)> {
+    ) -> Option<(package::Spec, RemotePackageType)> {
         if !self.has_rock(lua_package_req.name()) {
             return None;
         }
@@ -101,7 +101,7 @@ impl ManifestMetadata {
             )?;
 
         Some((
-            PackageSpec::new(lua_package_req.name().clone(), version.clone()),
+            package::Spec::new(lua_package_req.name().clone(), version.clone()),
             rock_type.clone(),
         ))
     }
@@ -118,7 +118,7 @@ impl ManifestMetadata {
                     package_map
                         .into_iter()
                         .filter_map(|(version_str, entries)| {
-                            let version = PackageVersion::parse(version_str.as_str()).ok()?;
+                            let version = package::Version::parse(version_str.as_str()).ok()?;
                             let entries = entries
                                 .into_iter()
                                 .filter_map(|entry| RemotePackageType::try_from(entry).ok())
@@ -162,7 +162,7 @@ impl TryFrom<ManifestRockEntry> for RemotePackageType {
 #[derive(serde::Deserialize)]
 struct IntermediateManifest {
     /// The key of each package's HashMap is the version string
-    repository: HashMap<PackageName, HashMap<String, Vec<ManifestRockEntry>>>,
+    repository: HashMap<package::Name, HashMap<String, Vec<ManifestRockEntry>>>,
 }
 
 #[cfg(test)]
@@ -170,8 +170,6 @@ mod tests {
     use std::path::PathBuf;
 
     use tokio::fs;
-
-    use crate::package::PackageReq;
 
     use super::*;
 
@@ -201,7 +199,7 @@ mod tests {
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&manifest).unwrap();
 
-        let package_req: PackageReq = "30log > 1.3.0".parse().unwrap();
+        let package_req: package::Req = "30log > 1.3.0".parse().unwrap();
         assert!(metadata
             .latest_match(&package_req, &Default::default())
             .is_none());
@@ -212,7 +210,7 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&manifest).unwrap();
-        let package_req: PackageReq = "combine == 1.0-1".parse().unwrap();
+        let package_req: package::Req = "combine == 1.0-1".parse().unwrap();
         assert!(metadata
             .latest_match(&package_req, &Default::default())
             .is_some());
@@ -239,7 +237,7 @@ mod tests {
         "#
         .to_string();
         let metadata = ManifestMetadata::new(&manifest).unwrap();
-        let package_req: PackageReq = "testpkg == 1.0-1".parse().unwrap();
+        let package_req: package::Req = "testpkg == 1.0-1".parse().unwrap();
 
         let (_, rock_type) = metadata
             .latest_match(&package_req, &Default::default())

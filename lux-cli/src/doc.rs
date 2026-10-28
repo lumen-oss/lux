@@ -1,11 +1,11 @@
 use clap::Args;
 use inquire::{Confirm, Select};
 use itertools::Itertools;
+use lux_lib::package;
 use lux_lib::{
     config::Config,
     lockfile::{LockedPackage, OptState, PinnedState},
     lua_rockspec::RemoteLuaRockspec,
-    package::PackageReq,
     rockspec::Rockspec,
     tree::{InstallTree, RockMatches, Tree},
 };
@@ -23,7 +23,7 @@ pub struct Doc {
     /// If not set, lux will use the package installed in the tree,{n}
     /// or prompt to select one if the tree has many.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageReq>,
+    package: Option<package::Req>,
 
     /// Ignore local docs and open the package's homepage in a browser.
     #[arg(long)]
@@ -90,7 +90,7 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
                     .wrap_err("error selecting from multiple packages")?
                 }
             };
-            PackageReq::parse(&selected)?
+            package::Req::parse(&selected)?
         }
     };
     let lockfile = tree.lockfile()?;

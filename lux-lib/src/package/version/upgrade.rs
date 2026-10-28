@@ -1,16 +1,16 @@
 use semver::{Comparator, Op};
 
-use super::{comparator_component_count, PackageVersion, PackageVersionReq, SemVer};
+use super::{comparator_component_count, SemVer, Version, VersionReq};
 
-impl PackageVersion {
-    pub(crate) fn upgrade_version_req(&self, req: &PackageVersionReq) -> Option<String> {
-        let PackageVersion::SemVer(sem_ver) = self else {
+impl Version {
+    pub(crate) fn upgrade_version_req(&self, req: &VersionReq) -> Option<String> {
+        let Version::SemVer(sem_ver) = self else {
             return None;
         };
         if req.matches(self) {
             return None;
         }
-        let PackageVersionReq::SemVer(version_req) = req else {
+        let VersionReq::SemVer(version_req) = req else {
             return None;
         };
         let candidate = match version_req.comparators.as_slice() {
@@ -22,8 +22,8 @@ impl PackageVersion {
     }
 }
 
-fn validated_candidate(candidate: String, version: &PackageVersion) -> Option<String> {
-    PackageVersionReq::parse(&candidate)
+fn validated_candidate(candidate: String, version: &Version) -> Option<String> {
+    VersionReq::parse(&candidate)
         .ok()
         .filter(|parsed| parsed.matches(version))
         .map(|_| candidate)
@@ -200,8 +200,8 @@ mod tests {
             ("<= 2", "3.0.0", Some("<= 3")),
             ("*", "2.0.0", None),
         ] {
-            let req = PackageVersionReq::parse(req).unwrap();
-            let latest = PackageVersion::parse(latest).unwrap();
+            let req = VersionReq::parse(req).unwrap();
+            let latest = Version::parse(latest).unwrap();
             assert_eq!(
                 latest.upgrade_version_req(&req).as_deref(),
                 expected,
@@ -210,14 +210,14 @@ mod tests {
         }
 
         assert_eq!(
-            PackageVersion::parse("scm")
+            Version::parse("scm")
                 .unwrap()
-                .upgrade_version_req(&PackageVersionReq::parse("~> 1").unwrap()),
+                .upgrade_version_req(&VersionReq::parse("~> 1").unwrap()),
             None
         );
     }
 
-    fn semver_strategy() -> impl Strategy<Value = PackageVersion> {
+    fn semver_strategy() -> impl Strategy<Value = Version> {
         let pre = prop::option::of(prop_oneof![
             Just("1".to_string()),
             Just("alpha.1".to_string())
@@ -227,11 +227,11 @@ mod tests {
                 Some(pre) => format!("{major}.{minor}.{patch}-{pre}"),
                 None => format!("{major}.{minor}.{patch}"),
             };
-            PackageVersion::parse(&version).unwrap()
+            Version::parse(&version).unwrap()
         })
     }
 
-    fn supported_req_strategy() -> impl Strategy<Value = PackageVersionReq> {
+    fn supported_req_strategy() -> impl Strategy<Value = VersionReq> {
         let op = prop_oneof![Just("~>"), Just("~"), Just("^"), Just("=="), Just("")];
         (op, 0u64..4, 0u64..4, 0u64..4, 1usize..=3).prop_map(
             |(op, major, minor, patch, precision)| {
@@ -246,12 +246,12 @@ mod tests {
                 } else {
                     format!("{op}{num}")
                 };
-                PackageVersionReq::parse(&req).unwrap()
+                VersionReq::parse(&req).unwrap()
             },
         )
     }
 
-    fn non_upgradable_req_strategy() -> impl Strategy<Value = PackageVersionReq> {
+    fn non_upgradable_req_strategy() -> impl Strategy<Value = VersionReq> {
         let op = prop_oneof![Just(">="), Just(">"), Just("*")];
         (op, 0u64..4, 0u64..4, 0u64..4).prop_map(|(op, major, minor, patch)| {
             let req = if op == "*" {
@@ -259,11 +259,11 @@ mod tests {
             } else {
                 format!("{op} {major}.{minor}.{patch}")
             };
-            PackageVersionReq::parse(&req).unwrap()
+            VersionReq::parse(&req).unwrap()
         })
     }
 
-    fn single_upper_bound_strategy() -> impl Strategy<Value = PackageVersionReq> {
+    fn single_upper_bound_strategy() -> impl Strategy<Value = VersionReq> {
         let op = prop_oneof![Just("<"), Just("<=")];
         (op, 0u64..4, 0u64..4, 0u64..4, 1usize..=3).prop_map(
             |(op, major, minor, patch, precision)| {
@@ -273,12 +273,12 @@ mod tests {
                     .map(|component| component.to_string())
                     .collect::<Vec<_>>()
                     .join(".");
-                PackageVersionReq::parse(&format!("{op} {num}")).unwrap()
+                VersionReq::parse(&format!("{op} {num}")).unwrap()
             },
         )
     }
 
-    fn pessimistic_range_strategy() -> impl Strategy<Value = PackageVersionReq> {
+    fn pessimistic_range_strategy() -> impl Strategy<Value = VersionReq> {
         let reversed = any::<bool>();
         (
             reversed,
@@ -297,11 +297,11 @@ mod tests {
                 } else {
                     format!("{lower}, {upper}")
                 };
-                PackageVersionReq::parse(&req).unwrap()
+                VersionReq::parse(&req).unwrap()
             })
     }
 
-    fn explicit_range_strategy() -> impl Strategy<Value = PackageVersionReq> {
+    fn explicit_range_strategy() -> impl Strategy<Value = VersionReq> {
         let shape = prop_oneof![
             (Just(">="), Just("<=")),
             (Just(">"), Just("<")),
@@ -327,7 +327,7 @@ mod tests {
                     } else {
                         format!("{lower}, {upper}")
                     };
-                    PackageVersionReq::parse(&req).unwrap()
+                    VersionReq::parse(&req).unwrap()
                 },
             )
     }
@@ -339,8 +339,8 @@ mod tests {
         )
     }
 
-    fn range_shape(req: &PackageVersionReq) -> Option<(Comparator, &'static str, usize)> {
-        let PackageVersionReq::SemVer(version_req) = req else {
+    fn range_shape(req: &VersionReq) -> Option<(Comparator, &'static str, usize)> {
+        let VersionReq::SemVer(version_req) = req else {
             return None;
         };
         let (lower, upper) = range_bounds(&version_req.comparators)?;
@@ -351,8 +351,8 @@ mod tests {
         ))
     }
 
-    fn single_shape(req: &PackageVersionReq) -> Option<(&'static str, usize)> {
-        let PackageVersionReq::SemVer(version_req) = req else {
+    fn single_shape(req: &VersionReq) -> Option<(&'static str, usize)> {
+        let VersionReq::SemVer(version_req) = req else {
             return None;
         };
         let [comparator] = version_req.comparators.as_slice() else {
@@ -364,8 +364,8 @@ mod tests {
         ))
     }
 
-    fn req_operator(req: &PackageVersionReq) -> &'static str {
-        let PackageVersionReq::SemVer(version_req) = req else {
+    fn req_operator(req: &VersionReq) -> &'static str {
+        let VersionReq::SemVer(version_req) = req else {
             return "";
         };
         match version_req.comparators.as_slice() {
@@ -403,7 +403,7 @@ mod tests {
             latest in semver_strategy(),
         ) {
             if let Some(upgraded) = latest.upgrade_version_req(&req) {
-                let parsed = PackageVersionReq::parse(&upgraded).unwrap();
+                let parsed = VersionReq::parse(&upgraded).unwrap();
                 prop_assert!(parsed.matches(&latest));
             }
         }
@@ -419,7 +419,7 @@ mod tests {
             latest in semver_strategy(),
         ) {
             if let Some(upgraded) = latest.upgrade_version_req(&req) {
-                let parsed = PackageVersionReq::parse(&upgraded).unwrap();
+                let parsed = VersionReq::parse(&upgraded).unwrap();
                 prop_assert_eq!(latest.upgrade_version_req(&parsed), None);
             }
         }
@@ -458,7 +458,7 @@ mod tests {
             latest in semver_strategy(),
         ) {
             if let Some(upgraded) = latest.upgrade_version_req(&req) {
-                let parsed = PackageVersionReq::parse(&upgraded).unwrap();
+                let parsed = VersionReq::parse(&upgraded).unwrap();
                 prop_assert_eq!(range_shape(&parsed), range_shape(&req));
             }
         }
@@ -469,7 +469,7 @@ mod tests {
             latest in semver_strategy(),
         ) {
             if let Some(upgraded) = latest.upgrade_version_req(&req) {
-                let parsed = PackageVersionReq::parse(&upgraded).unwrap();
+                let parsed = VersionReq::parse(&upgraded).unwrap();
                 prop_assert_eq!(single_shape(&parsed), single_shape(&req));
             }
         }

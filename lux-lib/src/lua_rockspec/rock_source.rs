@@ -4,7 +4,7 @@ use crate::{
         GitSource,
     },
     lua_rockspec::per_platform_from_intermediate,
-    package::wally::PackageReq as WallyPackageReq,
+    wally,
 };
 
 pub use crate::git::GitRef;
@@ -154,7 +154,7 @@ pub enum RockSourceSpec {
     Git(GitSource),
     File(PathBuf),
     Url(Url),
-    Wally(WallyPackageReq),
+    Wally(wally::package::Req),
 }
 
 impl RockSourceSpec {

@@ -1,9 +1,9 @@
+use crate::package;
 use std::io;
 
 use crate::{
     fs,
     lockfile::{FlushLockfileError, LockedPackageId, PinnedState},
-    package::PackageSpec,
     tree::{self, InstallTree, Tree},
 };
 use fs_extra::dir::CopyOptions;
@@ -21,12 +21,12 @@ pub enum PinError {
     #[error("rock {rock} is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {
         pin_state: PinnedState,
-        rock: PackageSpec,
+        rock: package::Spec,
     },
     #[error("cannot change the pin state of '{rock}', since a second version of '{rock}' is already installed with 'pin: {}'", .pin_state.as_bool())]
     PinStateConflict {
         pin_state: PinnedState,
-        rock: PackageSpec,
+        rock: package::Spec,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -41,7 +41,7 @@ pub enum PinError {
     #[diagnostic(help(
         "Lux does not allow pinning dependencies, as doing so could break the version requirement in a future update."
     ))]
-    NotAnEntrypoint { rock: PackageSpec },
+    NotAnEntrypoint { rock: package::Spec },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),

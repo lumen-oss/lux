@@ -3,6 +3,7 @@
 //! Lua implementations for various types in lux-lib. These are used to convert between Lua and
 //! Rust types when calling Rust functions from Lua.
 
+use lux_lib::package;
 use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
 use itertools::Itertools;
@@ -34,7 +35,6 @@ use lux_lib::{
     },
     lua_version::LuaVersion,
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
-    package::{PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, SpecRev},
     package_db::PackageDB,
     project::{
         project_toml::{LocalProjectToml, PartialProjectToml, RemoteProjectToml},
@@ -118,7 +118,7 @@ impl IntoLua for LuaVersionLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageVersionLua(pub PackageVersion);
+pub struct PackageVersionLua(pub package::Version);
 
 impl Typed for PackageVersionLua {
     fn ty() -> Type {
@@ -135,14 +135,14 @@ impl IntoLua for PackageVersionLua {
 impl FromLua for PackageVersionLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
-        PackageVersion::from_str(&s)
+        package::Version::from_str(&s)
             .map(PackageVersionLua)
             .map_err(|err| LuaError::DeserializeError(err.to_string()))
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct SpecRevLua(pub SpecRev);
+pub struct SpecRevLua(pub package::version::SpecRev);
 
 impl Typed for SpecRevLua {
     fn ty() -> Type {
@@ -157,7 +157,7 @@ impl FromLua for SpecRevLua {
                 let u = u16::try_from(v).map_err(|err| {
                     LuaError::DeserializeError(format!("Error deserializing specrev {v}:\n{err}"))
                 })?;
-                Ok(SpecRevLua(SpecRev::from(u)))
+                Ok(SpecRevLua(package::version::SpecRev::from(u)))
             }
             v => Err(LuaError::DeserializeError(format!(
                 "Expected specrev to be an integer, but got {}",
@@ -168,7 +168,7 @@ impl FromLua for SpecRevLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageVersionReqLua(pub PackageVersionReq);
+pub struct PackageVersionReqLua(pub package::VersionReq);
 
 impl Typed for PackageVersionReqLua {
     fn ty() -> Type {
@@ -178,7 +178,7 @@ impl Typed for PackageVersionReqLua {
 
 impl FromLua for PackageVersionReqLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        PackageVersionReq::parse(&String::from_lua(value, lua)?)
+        package::VersionReq::parse(&String::from_lua(value, lua)?)
             .map(PackageVersionReqLua)
             .into_lua_err()
     }
@@ -191,7 +191,7 @@ impl IntoLua for PackageVersionReqLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageNameLua(pub PackageName);
+pub struct PackageNameLua(pub package::Name);
 
 impl Typed for PackageNameLua {
     fn ty() -> Type {
@@ -207,7 +207,7 @@ impl IntoLua for PackageNameLua {
 
 impl FromLua for PackageNameLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        Ok(PackageNameLua(PackageName::new(String::from_lua(
+        Ok(PackageNameLua(package::Name::new(String::from_lua(
             value, lua,
         )?)))
     }
@@ -759,7 +759,7 @@ impl FromLua for PackageInstallSpecLua {
                 build_behaviour,
             } => (package, entry_type.into(), pin, opt, build_behaviour),
         };
-        let req = PackageReq::parse(&package_str).into_lua_err()?;
+        let req = package::Req::parse(&package_str).into_lua_err()?;
         let spec = PackageInstallSpec::new(req, entry_type)
             .pin(PinnedState::from(pin))
             .opt(OptState::from(opt))
@@ -770,11 +770,11 @@ impl FromLua for PackageInstallSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageSpecLua(pub PackageSpec);
+pub struct PackageSpecLua(pub package::Spec);
 
 impl Typed for PackageSpecLua {
     fn ty() -> Type {
-        Type::named("PackageSpec")
+        Type::named("package.Spec")
     }
 }
 
@@ -822,18 +822,18 @@ impl mlua::UserData for PackageSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackageReqLua(pub PackageReq);
+pub struct PackageReqLua(pub package::Req);
 
 impl Typed for PackageReqLua {
     fn ty() -> Type {
-        Type::named("PackageReq")
+        Type::named("package.Req")
     }
 }
 
 impl FromLua for PackageReqLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let str: String = lua.from_value(value)?;
-        PackageReq::parse(&str).map(PackageReqLua).into_lua_err()
+        package::Req::parse(&str).map(PackageReqLua).into_lua_err()
     }
 }
 
@@ -1086,7 +1086,7 @@ impl TypedUserData for TreeLua {
         methods.add_method("rock_layout", |_, this, package: LockedPackageLua| {
             Ok(RockLayoutLua(this.0.layout_for(package.0.spec())))
         });
-        methods.document("Find installed rocks that match the given `PackageReq`");
+        methods.document("Find installed rocks that match the given `Req`");
         methods.param("req", "");
         methods.add_method("match_rocks", |lua, this, req: PackageReqLua| {
             this.0
@@ -1462,7 +1462,7 @@ impl FromLua for LuaDependencySpecLua {
                 parse_lua_dependency_spec_table(table).map(LuaDependencySpecLua)
             }
             _ => {
-                let package_req: PackageReq = lua.from_value(value)?;
+                let package_req: package::Req = lua.from_value(value)?;
                 Ok(LuaDependencySpecLua(LuaDependencySpec::from(package_req)))
             }
         }
@@ -1487,7 +1487,7 @@ fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<LuaDependencyS
         ));
     };
     let package_req =
-        PackageReq::from_str(&req).map_err(|err| LuaError::DeserializeError(err.to_string()))?;
+        package::Req::from_str(&req).map_err(|err| LuaError::DeserializeError(err.to_string()))?;
 
     let opt = OptState::from(table.get::<Option<bool>>("opt")?.unwrap_or(false));
     let pin = PinnedState::from(table.get::<Option<bool>>("pin")?.unwrap_or(false));
@@ -1539,7 +1539,7 @@ impl FromLua for AddDependenciesLua {
 
 #[derive(Clone, Debug)]
 pub enum AddDependencyLua {
-    PackageReq(PackageReq),
+    Req(package::Req),
     GitShorthand(RemoteGitUrlShorthand),
     Spec(LuaDependencySpec),
 }
@@ -1557,7 +1557,7 @@ impl FromLua for AddDependencyLua {
                 return Ok(Self::Spec(spec.0.clone()));
             }
             if let Ok(req) = ud.borrow::<PackageReqLua>() {
-                return Ok(Self::PackageReq(req.0.clone()));
+                return Ok(Self::Req(req.0.clone()));
             }
         }
 
@@ -1574,8 +1574,8 @@ impl FromLua for AddDependencyLua {
         if let Ok(shorthand) = s.parse::<RemoteGitUrlShorthand>() {
             return Ok(Self::GitShorthand(shorthand));
         }
-        s.parse::<PackageReq>()
-            .map(Self::PackageReq)
+        s.parse::<package::Req>()
+            .map(Self::Req)
             .map_err(|err| LuaError::DeserializeError(err.to_string()))
     }
 }
@@ -3420,8 +3420,8 @@ mod definitions_registry {
     }
 
     submit_definitions! {
-        "PackageSpec" => PackageSpecLua,
-        "PackageReq" => PackageReqLua,
+        "Spec" => PackageSpecLua,
+        "Req" => PackageReqLua,
         "LockedPackageHashes" => LockedPackageHashesLua,
         "LockedPackage" => LockedPackageLua,
         "RockLayout" => RockLayoutLua,
@@ -3551,7 +3551,7 @@ mod definitions_registry {
 
 pub(crate) fn map_dependency_type(
     deps: DependencyType<PackageReqLua>,
-) -> DependencyType<PackageReq> {
+) -> DependencyType<package::Req> {
     match deps {
         DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
         DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
@@ -3562,7 +3562,7 @@ pub(crate) fn map_dependency_type(
 
 pub(crate) fn map_dependency_type_names(
     deps: DependencyType<PackageNameLua>,
-) -> DependencyType<PackageName> {
+) -> DependencyType<package::Name> {
     match deps {
         DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
         DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
@@ -3573,7 +3573,7 @@ pub(crate) fn map_dependency_type_names(
 
 fn map_lua_dependency_type_names(
     deps: LuaDependencyType<PackageNameLua>,
-) -> LuaDependencyType<PackageName> {
+) -> LuaDependencyType<package::Name> {
     match deps {
         LuaDependencyType::Regular(v) => {
             LuaDependencyType::Regular(v.into_iter().map(|x| x.0).collect())
@@ -3593,12 +3593,12 @@ fn lua_dependency_type_as_ref<T>(deps: &LuaDependencyType<T>) -> LuaDependencyTy
     }
 }
 
-type AddDependencyFlags = Vec<(PackageName, OptState, PinnedState)>;
+type AddDependencyFlags = Vec<(package::Name, OptState, PinnedState)>;
 
 fn split_add_deps(
     deps: Vec<AddDependencyLua>,
 ) -> LuaResult<(
-    Vec<PackageReq>,
+    Vec<package::Req>,
     Vec<RemoteGitUrlShorthand>,
     AddDependencyFlags,
 )> {
@@ -3607,7 +3607,7 @@ fn split_add_deps(
     let mut flags = Vec::new();
     for dep in deps {
         match dep {
-            AddDependencyLua::PackageReq(req) => packages.push(req),
+            AddDependencyLua::Req(req) => packages.push(req),
             AddDependencyLua::GitShorthand(shorthand) => git.push(shorthand),
             AddDependencyLua::Spec(spec) => {
                 let name = spec.name().clone();

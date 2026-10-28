@@ -1,8 +1,6 @@
 use std::{
     collections::BTreeMap,
     fmt::{self, Display},
-    io,
-    path::Path,
     str::FromStr,
 };
 
@@ -13,8 +11,6 @@ use url::Url;
 
 use crate::lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue};
 
-pub(crate) const MANIFEST_FILE_NAME: &str = "wally.toml";
-
 /// The wally client version advertised when downloading package contents.
 /// The registry rejects requests without a sufficiently recent `Wally-Version` header.
 pub(crate) const WALLY_VERSION: &str = "0.3.2";
@@ -24,12 +20,12 @@ pub(crate) const WALLY_VERSION: &str = "0.3.2";
 /// Both parts contain only lowercase letters, digits, and dashes (`-`), and
 /// are at most 64 characters long.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct PackageName {
+pub(crate) struct Name {
     scope: PackageNamePart,
     name: PackageNamePart,
 }
 
-impl PackageName {
+impl Name {
     pub(crate) fn scope(&self) -> &str {
         self.scope.as_str()
     }
@@ -39,7 +35,7 @@ impl PackageName {
     }
 }
 
-/// A part of a [`PackageName`]: lowercase letters, digits, and dashes, 1-64 chars.
+/// A part of a [`Name`]: lowercase letters, digits, and dashes, 1-64 chars.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct PackageNamePart(String);
 
@@ -50,40 +46,40 @@ impl PackageNamePart {
 }
 
 impl FromStr for PackageNamePart {
-    type Err = PackageNameError;
+    type Err = NameError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let valid = s
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
         if !valid || s.is_empty() || s.len() > 64 {
-            return Err(PackageNameError::InvalidPart(s.to_string()));
+            return Err(NameError::InvalidPart(s.to_string()));
         }
         Ok(Self(s.to_string()))
     }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum PackageNameError {
+pub enum NameError {
     #[error("wally package name part '{0}' is invalid: it must contain only lowercase letters, digits and '-', and be 1-64 characters long")]
     InvalidPart(String),
     #[error("wally package name must be of the form SCOPE/NAME")]
     InvalidFormat,
 }
 
-impl Display for PackageName {
+impl Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}/{}", self.scope.as_str(), self.name.as_str())
     }
 }
 
-impl FromStr for PackageName {
-    type Err = PackageNameError;
+impl FromStr for Name {
+    type Err = NameError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (scope, name) = s.split_once('/').ok_or(PackageNameError::InvalidFormat)?;
+        let (scope, name) = s.split_once('/').ok_or(NameError::InvalidFormat)?;
         if name.contains('/') {
-            return Err(PackageNameError::InvalidFormat);
+            return Err(NameError::InvalidFormat);
         }
         Ok(Self {
             scope: scope.parse()?,
@@ -92,13 +88,13 @@ impl FromStr for PackageName {
     }
 }
 
-impl Serialize for PackageName {
+impl Serialize for Name {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
 
-impl<'de> Deserialize<'de> for PackageName {
+impl<'de> Deserialize<'de> for Name {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         String::deserialize(deserializer)?
             .parse()
@@ -110,17 +106,17 @@ impl<'de> Deserialize<'de> for PackageName {
 ///
 /// A bare version defaults to the `^` ("compatible") requirement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageReq {
-    name: PackageName,
+pub struct Req {
+    name: Name,
     version_req: VersionReq,
 }
 
-impl PackageReq {
-    pub(crate) fn new(name: PackageName, version_req: VersionReq) -> Self {
+impl Req {
+    pub(crate) fn new(name: Name, version_req: VersionReq) -> Self {
         Self { name, version_req }
     }
 
-    pub(crate) fn name(&self) -> &PackageName {
+    pub(crate) fn name(&self) -> &Name {
         &self.name
     }
 
@@ -128,26 +124,26 @@ impl PackageReq {
         &self.version_req
     }
 
-    pub(crate) fn matches(&self, name: &PackageName, version: &Version) -> bool {
+    pub(crate) fn matches(&self, name: &Name, version: &Version) -> bool {
         self.name == *name && self.version_req.matches(version)
     }
 }
 
-impl Display for PackageReq {
+impl Display for Req {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}@{}", self.name, self.version_req)
     }
 }
 
-impl FromStr for PackageReq {
-    type Err = PackageReqError;
+impl FromStr for Req {
+    type Err = ReqError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (name, req) = s.split_once('@').ok_or(PackageReqError::InvalidFormat)?;
+        let (name, req) = s.split_once('@').ok_or(ReqError::InvalidFormat)?;
         if req.is_empty() || req.chars().all(char::is_whitespace) {
-            return Err(PackageReqError::InvalidFormat);
+            return Err(ReqError::InvalidFormat);
         }
-        let name: PackageName = name.parse()?;
+        let name: Name = name.parse()?;
         let version_req = if Version::parse(req).is_ok() {
             VersionReq::parse(&format!("^{req}"))?
         } else {
@@ -158,22 +154,22 @@ impl FromStr for PackageReq {
 }
 
 #[derive(Debug, Error)]
-pub enum PackageReqError {
+pub enum ReqError {
     #[error("wally package requirements must be of the form SCOPE/NAME@VERSION_REQ")]
     InvalidFormat,
     #[error(transparent)]
-    Name(#[from] PackageNameError),
+    Name(#[from] NameError),
     #[error(transparent)]
     Version(#[from] semver::Error),
 }
 
-impl Serialize for PackageReq {
+impl Serialize for Req {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
 
-impl<'de> Deserialize<'de> for PackageReq {
+impl<'de> Deserialize<'de> for Req {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         String::deserialize(deserializer)?
             .parse()
@@ -193,15 +189,6 @@ pub(crate) enum Realm {
     Dev,
 }
 
-impl Realm {
-    pub(crate) fn is_dependency_valid(dep_type: Self, dep_realm: Self) -> bool {
-        matches!(
-            (dep_type, dep_realm),
-            (Self::Server, _) | (Self::Shared, Self::Shared) | (Self::Dev, _)
-        )
-    }
-}
-
 /// The contents of a `wally.toml` file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -212,39 +199,19 @@ pub(crate) struct Manifest {
     pub(crate) place: PlaceInfo,
 
     #[serde(default)]
-    pub(crate) dependencies: BTreeMap<String, PackageReq>,
+    pub(crate) dependencies: BTreeMap<String, Req>,
 
     #[serde(default)]
-    pub(crate) server_dependencies: BTreeMap<String, PackageReq>,
+    pub(crate) server_dependencies: BTreeMap<String, Req>,
 
     #[serde(default)]
-    pub(crate) dev_dependencies: BTreeMap<String, PackageReq>,
-}
-
-impl Manifest {
-    pub(crate) fn load(dir: &Path) -> Result<Self, ManifestError> {
-        let path = dir.join(MANIFEST_FILE_NAME);
-        let content = std::fs::read_to_string(path).map_err(ManifestError::Io)?;
-        Self::parse(&content)
-    }
-
-    pub(crate) fn parse(content: &str) -> Result<Self, ManifestError> {
-        Ok(toml::from_str(content)?)
-    }
-}
-
-#[derive(Debug, Error)]
-pub(crate) enum ManifestError {
-    #[error("failed to read {MANIFEST_FILE_NAME}")]
-    Io(#[source] io::Error),
-    #[error("failed to parse {MANIFEST_FILE_NAME}: {0}")]
-    Toml(#[from] toml::de::Error),
+    pub(crate) dev_dependencies: BTreeMap<String, Req>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Package {
     /// The scope and name of the package, e.g. `jsdotperf/roact`.
-    pub(crate) name: PackageName,
+    pub(crate) name: Name,
 
     /// The current SemVer version of the package.
     pub(crate) version: Version,
@@ -297,7 +264,7 @@ pub(crate) struct PlaceInfo {
     pub(crate) server_packages: Option<String>,
 }
 
-impl DisplayAsLuaKV for PackageReq {
+impl DisplayAsLuaKV for Req {
     fn display_lua(&self) -> DisplayLuaKV {
         DisplayLuaKV {
             key: "wally".to_string(),
@@ -306,21 +273,23 @@ impl DisplayAsLuaKV for PackageReq {
     }
 }
 
-/// Adds the `Wally-Version` header required by wally registries for content requests.
-pub(crate) fn apply_content_headers(
-    request: reqwest::RequestBuilder,
-    url: &Url,
-) -> reqwest::RequestBuilder {
-    if url.path().starts_with("/v1/package-contents/") {
-        request.header("Wally-Version", WALLY_VERSION)
-    } else {
-        request
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    impl Manifest {
+        fn parse(content: &str) -> Result<Self, toml::de::Error> {
+            toml::from_str(content)
+        }
+    }
+
+    impl Realm {
+        fn is_dependency_valid(dep_type: Self, dep_realm: Self) -> bool {
+            matches!(
+                (dep_type, dep_realm),
+                (Self::Server, _) | (Self::Shared, Self::Shared) | (Self::Dev, _)
+            )
+        }
+    }
 
     const MANIFEST: &str = r#"
 [package]
@@ -370,9 +339,9 @@ testez = "roblox/testez@0.4.1"
 
     #[test]
     fn bare_version_defaults_to_caret() {
-        let req: PackageReq = "sleitnick/signal@2.0.0".parse().unwrap();
+        let req: Req = "sleitnick/signal@2.0.0".parse().unwrap();
         assert_eq!(req.version_req(), &VersionReq::parse("^2.0.0").unwrap());
-        let name: PackageName = "sleitnick/signal".parse().unwrap();
+        let name: Name = "sleitnick/signal".parse().unwrap();
         assert!(req.matches(&name, &Version::new(2, 0, 0)));
         assert!(!req.matches(&name, &Version::new(3, 0, 0)));
     }
@@ -391,7 +360,7 @@ testez = "roblox/testez@0.4.1"
     fn test_parse_package_name() {
         assert!("Upper-Skewer".parse::<PackageNamePart>().is_err());
         assert!("snake_case".parse::<PackageNamePart>().is_err());
-        assert!("hello/world/foo".parse::<PackageName>().is_err());
-        assert!("hello/world".parse::<PackageName>().is_ok());
+        assert!("hello/world/foo".parse::<Name>().is_err());
+        assert!("hello/world".parse::<Name>().is_ok());
     }
 }

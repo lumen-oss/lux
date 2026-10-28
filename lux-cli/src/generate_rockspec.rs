@@ -1,10 +1,6 @@
 use clap::Args;
-use lux_lib::{
-    package::{PackageName, PackageVersion},
-    project::Project,
-    rockspec::Rockspec,
-    workspace::Workspace,
-};
+use lux_lib::package;
+use lux_lib::{project::Project, rockspec::Rockspec, workspace::Workspace};
 use miette::{IntoDiagnostic, Result};
 use std::path::PathBuf;
 
@@ -14,12 +10,12 @@ use crate::args::OutputFormat;
 pub struct GenerateRockspec {
     /// Package to generate the rockspec for.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 
     /// Version to generate the rockspec for (e.g. `dev`, `scm` or `1.2.3`).{n}
     /// Defaults to the version in `lux.toml`.
     #[arg(long)]
-    pub(crate) version: Option<PackageVersion>,
+    pub(crate) version: Option<package::Version>,
 
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,
@@ -57,7 +53,7 @@ pub async fn generate_rockspec(data: GenerateRockspec) -> Result<()> {
 
 async fn generate_project_rockspec(
     project: &Project,
-    version: Option<&PackageVersion>,
+    version: Option<&package::Version>,
 ) -> Result<PathBuf> {
     let toml = project
         .toml()

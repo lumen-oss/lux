@@ -1,3 +1,4 @@
+use crate::package;
 use std::{
     io,
     ops::Deref,
@@ -10,7 +11,6 @@ use crate::{
     lockfile::{self, ReadOnly, WorkspaceLockfile},
     lua_rockspec::LuaVersionError,
     lua_version::LuaVersion,
-    package::PackageName,
     project::{self, Project, TomlDeError, PROJECT_TOML},
     tree::{self, InstallTree, Tree},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
@@ -101,7 +101,7 @@ specify the package with '--package=[PACKAGE_NAME]'
     #[diagnostic(help(
         "make sure it is declared in your {WORKSPACE_TOML}'s '[workspace.members]'"
     ))]
-    PackageNotFound(PackageName, WorkspaceRoot),
+    PackageNotFound(package::Name, WorkspaceRoot),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -160,7 +160,7 @@ impl Workspace {
     }
 
     /// The package names of all workspace members.
-    pub fn member_names(&self) -> Result<NonEmpty<PackageName>, Error> {
+    pub fn member_names(&self) -> Result<NonEmpty<package::Name>, Error> {
         NonEmpty::from_vec(
             self.members()
                 .iter()
@@ -172,7 +172,7 @@ impl Workspace {
 
     /// Get a workspace member, defaulting to the first one if none is specified.
     /// Fails if a package name is specified, but not found.
-    pub fn single_member_or_select(&self, name: &Option<PackageName>) -> Result<&Project, Error> {
+    pub fn single_member_or_select(&self, name: &Option<package::Name>) -> Result<&Project, Error> {
         match name {
             Some(name) => self
                 .members()
@@ -187,7 +187,7 @@ impl Workspace {
     /// Fails if a package name is specified, but not found.
     pub fn single_member_or_select_mut(
         &mut self,
-        package: &Option<PackageName>,
+        package: &Option<package::Name>,
     ) -> Result<&mut Project, Error> {
         match package.as_ref() {
             Some(package) => self.select_member_mut(package),
@@ -214,7 +214,7 @@ impl Workspace {
     }
 
     /// Select a member of this workspace, failing if it is not found.
-    pub fn select_member(&self, package: &PackageName) -> Result<&Project, Error> {
+    pub fn select_member(&self, package: &package::Name) -> Result<&Project, Error> {
         let workspace_root = self.root.clone();
         self.members()
             .iter()
@@ -223,7 +223,7 @@ impl Workspace {
     }
 
     /// Select a mutable member of this workspace, failing if it is not found.
-    pub fn select_member_mut(&mut self, package: &PackageName) -> Result<&mut Project, Error> {
+    pub fn select_member_mut(&mut self, package: &package::Name) -> Result<&mut Project, Error> {
         let workspace_root = self.root.clone();
         self.members_mut()
             .iter_mut()

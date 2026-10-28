@@ -1,6 +1,7 @@
 #[cfg(feature = "wally")]
 pub(crate) mod wally;
 
+use crate::package;
 use std::path::PathBuf;
 
 use bon::Builder;
@@ -12,7 +13,7 @@ use crate::{
     lua_rockspec::{RemoteLuaRockspec, RockSourceSpec},
     operations,
     operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
-    package::{PackageReq, PackageSpec, RemotePackage},
+    package::RemotePackage,
     package_db::{PackageDB, SearchError},
     project::Project,
     remote_package_source::RemotePackageSource,
@@ -37,7 +38,7 @@ impl FoundPackage {
             .map(RemotePackageSource::RockspecContent)
             .unwrap_or(RemotePackageSource::Local);
         let remote = RemotePackage::new(
-            PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+            package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
             source,
             None,
         );
@@ -52,7 +53,7 @@ impl FoundPackage {
     /// project's own directory as the source.
     pub(crate) fn from_project_root(rockspec: RemoteLuaRockspec, root_dir: PathBuf) -> Self {
         let remote = RemotePackage::new(
-            PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+            package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
             RemotePackageSource::Local,
             None,
         );
@@ -72,10 +73,10 @@ pub enum Error {
     Search(#[from] SearchError),
     #[error("failed to acquire metadata for '{0}'")]
     #[diagnostic(forward(1))]
-    Download(PackageReq, Box<operations::SearchAndDownloadError>),
+    Download(package::Req, Box<operations::SearchAndDownloadError>),
     #[error("failed to fetch vendored package for '{0}'")]
     #[diagnostic(forward(1))]
-    FetchVendored(PackageReq, Box<operations::FetchVendoredError>),
+    FetchVendored(package::Req, Box<operations::FetchVendoredError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] crate::project::Error),
@@ -279,7 +280,7 @@ mod tests {
 
         let config = ConfigBuilder::new().unwrap().build().unwrap();
         let spec = PackageInstallSpec::new(
-            PackageReq::new("bar".into(), Some("1.0.0".into())).unwrap(),
+            package::Req::new("bar".into(), Some("1.0.0".into())).unwrap(),
             EntryType::DependencyOnly,
         )
         .build_behaviour(BuildBehaviour::Ignore)

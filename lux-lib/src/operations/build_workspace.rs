@@ -1,9 +1,9 @@
+use crate::package;
 use crate::{
     build::BuildBehaviour,
     config::Config,
     drivers::sync::{self, Sync, SyncMode, TargetSet},
     lockfile::LockedPackage,
-    package::PackageName,
     workspace::Workspace,
 };
 use bon::Builder;
@@ -34,7 +34,7 @@ pub struct BuildWorkspace<'a> {
     config: &'a Config,
 
     /// Package to build
-    package: Option<PackageName>,
+    package: Option<package::Name>,
 
     /// Ignore the project's lockfile and don't create one
     no_lock: bool,

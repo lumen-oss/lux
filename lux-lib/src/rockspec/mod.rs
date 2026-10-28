@@ -1,3 +1,4 @@
+use crate::package;
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -16,17 +17,16 @@ use crate::{
         PlatformSupport, RemoteRockSource, RockDescription, RockspecFormat, TestSpec,
     },
     lua_version::LuaVersion,
-    package::{PackageName, PackageVersion, PackageVersionReq},
 };
 
 pub trait Rockspec {
     type Error: miette::Diagnostic + Send + Sync + 'static;
 
-    fn package(&self) -> &PackageName;
-    fn version(&self) -> &PackageVersion;
+    fn package(&self) -> &package::Name;
+    fn version(&self) -> &package::Version;
     fn description(&self) -> &RockDescription;
     fn supported_platforms(&self) -> &PlatformSupport;
-    fn lua(&self) -> &PackageVersionReq;
+    fn lua(&self) -> &package::VersionReq;
     fn dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>>;
     fn build_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>>;
     fn external_dependencies(&self) -> &PerPlatform<HashMap<String, ExternalDependencySpec>>;

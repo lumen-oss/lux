@@ -1,4 +1,5 @@
 use self::reconcile::SyncReport;
+use crate::package;
 use bon::Builder;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
@@ -16,7 +17,6 @@ use crate::{
         GenLuaRc, GenLuaRcError, GenLuauRc, GenLuauRcError, InstallProject, InstallProjectError,
         PackageInstallSpec,
     },
-    package::PackageName,
     package_db::{self, PackageDB},
     project::project_toml::LocalProjectTomlValidationError,
     rockspec::Rockspec,
@@ -36,7 +36,7 @@ pub enum SyncMode {
 #[derive(Clone, Debug)]
 pub struct TargetSet {
     pub test: bool,
-    pub members: NonEmpty<PackageName>,
+    pub members: NonEmpty<package::Name>,
 }
 
 impl TargetSet {
@@ -50,7 +50,7 @@ impl TargetSet {
         }
     }
 
-    pub fn member(member: PackageName, test: bool) -> Self {
+    pub fn member(member: package::Name, test: bool) -> Self {
         Self {
             test,
             members: NonEmpty::new(member),
@@ -275,7 +275,7 @@ pub(crate) enum DependencyKind {
 pub(crate) fn gather_dependencies(
     workspace: &Workspace,
     kind: DependencyKind,
-    members: &NonEmpty<PackageName>,
+    members: &NonEmpty<package::Name>,
 ) -> Result<Vec<PackageInstallSpec>, Error> {
     let mut packages = Vec::new();
     for project in workspace.members() {
@@ -296,7 +296,7 @@ pub(crate) fn gather_dependencies(
                 );
             }
             for dependency in explicit {
-                if dependency.name().eq(&PackageName::new("lua".into())) {
+                if dependency.name().eq(&package::Name::new("lua".into())) {
                     continue;
                 }
                 packages.push(
@@ -346,13 +346,14 @@ async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, Error> {
 
 #[cfg(all(test, feature = "impure_tests"))]
 mod tests {
+    use crate::package;
     use std::path::PathBuf;
 
     use assert_fs::prelude::{FileWriteStr, PathChild, PathCopy};
 
     use crate::{
         config::ConfigBuilder, lockfile::LockedPackageLockType, lua_version::LuaVersion,
-        package::PackageName, package_db::PackageDB, tree::InstallTree, workspace::Workspace,
+        package_db::PackageDB, tree::InstallTree, workspace::Workspace,
     };
 
     use super::{Sync, SyncMode, TargetSet};
@@ -413,7 +414,7 @@ mod tests {
             .lua_version(Some(LuaVersion::Lua51))
             .build()
             .unwrap();
-        let name = PackageName::from("argparse");
+        let name = package::Name::from("argparse");
 
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
@@ -494,7 +495,7 @@ mod tests {
             .lua_version(Some(LuaVersion::Lua51))
             .build()
             .unwrap();
-        let name = PackageName::from("argparse");
+        let name = package::Name::from("argparse");
 
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
@@ -546,7 +547,7 @@ mod tests {
             .lua_version(Some(LuaVersion::Lua51))
             .build()
             .unwrap();
-        let name = PackageName::from("argparse");
+        let name = package::Name::from("argparse");
 
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)

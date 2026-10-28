@@ -35,7 +35,7 @@ fn add_dependency_parses_packages_and_git_shorthands() {
     let lua = Lua::new();
 
     let package: AddDependencyLua = lua.load(r#"return "foo >= 1.0""#).eval().unwrap();
-    assert!(matches!(package, AddDependencyLua::PackageReq(_)));
+    assert!(matches!(package, AddDependencyLua::Req(_)));
 
     let git: AddDependencyLua = lua.load(r#"return "github:foo/bar""#).eval().unwrap();
     assert!(matches!(git, AddDependencyLua::GitShorthand(_)));
