@@ -9,21 +9,21 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    build::{self, BuildError},
+    build,
     config::Config,
     fs,
     lua_installation::LuaInstallation,
     lua_version::{LuaVersion, LuaVersionUnset},
     operations::UnpackError,
-    path::{Paths, PathsError},
+    path::{self, Paths},
     tree::InstallTree,
     variables::{self, VariableSubstitutionError},
 };
 
 #[cfg(target_family = "unix")]
-use crate::tree::{self, Tree, TreeError};
+use crate::tree::{self, Tree};
 #[cfg(target_family = "windows")]
-use crate::tree::{Tree, TreeError};
+use crate::tree::{self, Tree};
 
 #[cfg(target_family = "unix")]
 use crate::pipeline::build_local::Build;
@@ -59,7 +59,7 @@ pub enum LuaRocksError {
     // Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -69,13 +69,13 @@ pub enum LuaRocksInstallError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildError(#[from] Box<BuildError>),
+    Build(#[from] Box<build::Error>),
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
@@ -85,9 +85,9 @@ pub enum LuaRocksInstallError {
     IntegrityMismatch { expected: Integrity, got: Integrity },
 }
 
-impl From<BuildError> for LuaRocksInstallError {
-    fn from(source: BuildError) -> Self {
-        Self::BuildError(Box::new(source))
+impl From<build::Error> for LuaRocksInstallError {
+    fn from(source: build::Error) -> Self {
+        Self::Build(Box::new(source))
     }
 }
 
@@ -106,10 +106,10 @@ pub enum ExecLuaRocksError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("error setting up luarocks paths")]
     #[diagnostic(forward(0))]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("luarocks binary not found at '{0}'")]
     #[diagnostic(help(
         "Lux successfully installed luarocks, but couldn't find the binary to execute"

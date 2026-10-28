@@ -3,19 +3,19 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{BuildBehaviour, BuildError},
+    build::{self, BuildBehaviour},
     config::Config,
-    drivers::install_packages::{InstallPackages, InstallPackagesError},
+    drivers::install_packages::{self, InstallPackages},
     lockfile::{LockedPackage, OptState, PinnedState},
-    lua_installation::LuaInstallationError,
+    lua_installation,
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
-    package_db::{PackageDB, PackageDBError},
+    package_db::{self, PackageDB},
     pipeline::discover::FoundPackage,
     rockspec::{LuaVersionCompatibility, Rockspec},
-    tree::{self, InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -23,27 +23,27 @@ use crate::{
 #[non_exhaustive]
 pub enum InstallRockspecError {
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
     #[diagnostic(transparent)]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[diagnostic(transparent)]
-    Install(#[from] Box<InstallPackagesError>),
+    Install(#[from] Box<install_packages::Error>),
     #[diagnostic(transparent)]
     LuaRocks(#[from] LuaRocksError),
     #[diagnostic(transparent)]
     LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[diagnostic(transparent)]
-    Build(#[from] Box<BuildError>),
+    Build(#[from] Box<build::Error>),
     #[error("package '{0}' was not installed")]
     PackageNotInstalled(PackageName),
 }
 
-impl From<InstallPackagesError> for InstallRockspecError {
-    fn from(source: InstallPackagesError) -> Self {
+impl From<install_packages::Error> for InstallRockspecError {
+    fn from(source: install_packages::Error) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -54,8 +54,8 @@ impl From<LuaRocksInstallError> for InstallRockspecError {
     }
 }
 
-impl From<BuildError> for InstallRockspecError {
-    fn from(source: BuildError) -> Self {
+impl From<build::Error> for InstallRockspecError {
+    fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
 }

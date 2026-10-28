@@ -3,7 +3,7 @@ use std::string::FromUtf8Error;
 
 use crate::{
     build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
-    lua_rockspec::{BuildBackendSpec, BuildSpec, LocalLuaRockspec, LuaRockspecError},
+    lua_rockspec::{self, BuildBackendSpec, BuildSpec, LocalLuaRockspec},
     project::{
         project_toml::{LocalProjectTomlValidationError, PartialProjectToml},
         ProjectRoot, TomlDeError, PROJECT_TOML,
@@ -15,17 +15,16 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use super::{
-    builtin::BuiltinBuildError, cmake::CMakeError, command::CommandError, make::MakeError,
-    rust_binary::RustBinaryError, rust_mlua::RustError, treesitter_parser::TreesitterBuildError,
+    builtin, cmake, command, make, rust_binary, rust_mlua, treesitter_parser,
     utils::recursive_copy_dir,
 };
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum SourceBuildError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     FromUtf8(#[from] FromUtf8Error),
     #[error(transparent)]
@@ -36,28 +35,28 @@ pub enum SourceBuildError {
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRockspec(#[from] LuaRockspecError),
+    LuaRockspec(#[from] lua_rockspec::Error),
     #[error("builtin build failed")]
     #[diagnostic(forward(0))]
-    Builtin(#[from] BuiltinBuildError),
+    Builtin(#[from] builtin::Error),
     #[error("cmake build failed")]
     #[diagnostic(forward(0))]
-    CMake(#[from] CMakeError),
+    CMake(#[from] cmake::Error),
     #[error("make build failed")]
     #[diagnostic(forward(0))]
-    Make(#[from] MakeError),
+    Make(#[from] make::Error),
     #[error("command build failed")]
     #[diagnostic(forward(0))]
-    Command(#[from] CommandError),
+    Command(#[from] command::Error),
     #[error("rust-mlua build failed")]
     #[diagnostic(forward(0))]
-    Rust(#[from] RustError),
+    Rust(#[from] rust_mlua::Error),
     #[error("rust-binary build failed")]
     #[diagnostic(forward(0))]
-    RustBinary(#[from] RustBinaryError),
+    RustBinary(#[from] rust_binary::Error),
     #[error("treesitter-parser build failed")]
     #[diagnostic(forward(0))]
-    TreesitterBuild(#[from] TreesitterBuildError),
+    TreesitterBuild(#[from] treesitter_parser::Error),
     #[error("cannot build from a project source that requires a luarocks build backend: '{0}'")]
     #[diagnostic(help(
         r#"lux does not support building from source with a luarocks build backend.
@@ -67,7 +66,7 @@ Use a pre-built rock or a different build backend."#
 }
 
 #[tracing::instrument(name = "source::build", skip_all, level = "debug")]
-pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, SourceBuildError>
+pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Error>
 where
     T: InstallTree + Sync,
 {
@@ -134,7 +133,7 @@ where
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::LuaRock(build_backend)) => return Err(SourceBuildError::UnsupportedLuarocksBuildBackend(build_backend)),
+        Some(BuildBackendSpec::LuaRock(build_backend)) => return Err(Error::UnsupportedLuarocksBuildBackend(build_backend)),
         Some(BuildBackendSpec::Source) | // This should not be possible. Let's ignore it.
         None => BuildInfo::default(),
     };

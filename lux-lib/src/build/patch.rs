@@ -17,28 +17,28 @@ impl<State> PatchBuilder<'_, State>
 where
     State: patch_builder::State + patch_builder::IsComplete,
 {
-    pub fn apply(self) -> Result<(), PatchError> {
+    pub fn apply(self) -> Result<(), Error> {
         do_apply(self._build())
     }
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum PatchError {
+pub enum Error {
     #[error("error parsing patch {0}: {1}")]
     Parse(PathBuf, ParsePatchError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("error applying patch {0}: {1}")]
     Apply(PathBuf, ApplyError),
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
+pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), Error> {
     for (path, patch_str) in args.patches {
-        let patch = diffy::Patch::from_str(patch_str)
-            .map_err(|err| PatchError::Parse(path.clone(), err))?;
+        let patch =
+            diffy::Patch::from_str(patch_str).map_err(|err| Error::Parse(path.clone(), err))?;
 
         let original_file = patch
             .original()
@@ -69,14 +69,14 @@ pub(crate) fn do_apply(args: Patch<'_>) -> Result<(), PatchError> {
             .map(|relative_path| args.dir.join(relative_path))
             .map(|modified_file| {
                 let modified_content = diffy::apply(&original_content, &patch)
-                    .map_err(|err| PatchError::Apply(path.clone(), err))?;
-                Ok::<_, PatchError>((modified_file, modified_content))
+                    .map_err(|err| Error::Apply(path.clone(), err))?;
+                Ok::<_, Error>((modified_file, modified_content))
             })
             .map_or(Ok(None), |v| v.map(Some))?
             .map(|(file, modified_content)| {
                 let parent = file.parent().unwrap_or(args.dir);
                 fs::sync::create_dir_all(parent)?;
-                Ok::<_, PatchError>(fs::sync::write(&file, modified_content)?)
+                Ok::<_, Error>(fs::sync::write(&file, modified_content)?)
             })
             .map_or(Ok(None), |v| v.map(Some))?;
 

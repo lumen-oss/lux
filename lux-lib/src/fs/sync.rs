@@ -3,21 +3,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::FsError;
-
 /// Wrapped [`fs::read_to_string`].
-pub(crate) fn read_to_string(path: impl AsRef<Path>) -> Result<String, FsError> {
+pub(crate) fn read_to_string(path: impl AsRef<Path>) -> Result<String, super::Error> {
     let path = path.as_ref();
-    fs::read_to_string(path).map_err(|source| FsError::ReadToString {
+    fs::read_to_string(path).map_err(|source| super::Error::ReadToString {
         path: path.to_path_buf(),
         source,
     })
 }
 
 /// Wrapped [`fs::write`].
-pub(crate) fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result<(), FsError> {
+pub(crate) fn write(
+    path: impl AsRef<Path>,
+    contents: impl AsRef<[u8]>,
+) -> Result<(), super::Error> {
     let path = path.as_ref();
-    fs::write(path, contents).map_err(|source| FsError::Write {
+    fs::write(path, contents).map_err(|source| super::Error::Write {
         path: path.to_path_buf(),
         source,
     })
@@ -31,7 +32,7 @@ pub(crate) fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Resul
 pub(crate) fn write_atomic(
     path: impl AsRef<Path>,
     contents: impl AsRef<[u8]>,
-) -> Result<(), FsError> {
+) -> Result<(), super::Error> {
     use std::io::Write;
 
     let path = path.as_ref();
@@ -40,17 +41,18 @@ pub(crate) fn write_atomic(
         .filter(|dir| !dir.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
 
-    let mut file = tempfile::NamedTempFile::new_in(dir).map_err(|source| FsError::FileCreate {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    file.write_all(contents.as_ref())
-        .and_then(|()| file.as_file().sync_all())
-        .map_err(|source| FsError::Write {
+    let mut file =
+        tempfile::NamedTempFile::new_in(dir).map_err(|source| super::Error::FileCreate {
             path: path.to_path_buf(),
             source,
         })?;
-    file.persist(path).map_err(|err| FsError::Write {
+    file.write_all(contents.as_ref())
+        .and_then(|()| file.as_file().sync_all())
+        .map_err(|source| super::Error::Write {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.persist(path).map_err(|err| super::Error::Write {
         path: path.to_path_buf(),
         source: err.error,
     })?;
@@ -58,10 +60,10 @@ pub(crate) fn write_atomic(
 }
 
 /// Wrapped [`fs::copy`].
-pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, FsError> {
+pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, super::Error> {
     let from = from.as_ref();
     let to = to.as_ref();
-    fs::copy(from, to).map_err(|source| FsError::Copy {
+    fs::copy(from, to).map_err(|source| super::Error::Copy {
         from: from.to_path_buf(),
         to: to.to_path_buf(),
         source,
@@ -69,10 +71,10 @@ pub(crate) fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64, 
 }
 
 /// Wrapped [`fs::hard_link`].
-pub(crate) fn hard_link(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), FsError> {
+pub(crate) fn hard_link(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), super::Error> {
     let from = from.as_ref();
     let to = to.as_ref();
-    fs::hard_link(from, to).map_err(|source| FsError::HardLink {
+    fs::hard_link(from, to).map_err(|source| super::Error::HardLink {
         from: from.to_path_buf(),
         to: to.to_path_buf(),
         source,
@@ -80,7 +82,7 @@ pub(crate) fn hard_link(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<
 }
 
 /// Recursively hard link the contents of a directory into `dest`.
-pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), FsError> {
+pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), super::Error> {
     create_dir_all(dest)?;
     for entry in read_dir(src)? {
         let entry = entry?;
@@ -96,27 +98,27 @@ pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), FsError> {
 }
 
 /// Wrapped [`fs::create_dir_all`].
-pub(crate) fn create_dir_all(path: impl AsRef<Path>) -> Result<(), FsError> {
+pub(crate) fn create_dir_all(path: impl AsRef<Path>) -> Result<(), super::Error> {
     let path = path.as_ref();
-    fs::create_dir_all(path).map_err(|source| FsError::CreateDirAll {
+    fs::create_dir_all(path).map_err(|source| super::Error::CreateDirAll {
         path: path.to_path_buf(),
         source,
     })
 }
 
 /// Wrapped [`fs::remove_file`].
-pub(crate) fn remove_file(path: impl AsRef<Path>) -> Result<(), FsError> {
+pub(crate) fn remove_file(path: impl AsRef<Path>) -> Result<(), super::Error> {
     let path = path.as_ref();
-    fs::remove_file(path).map_err(|source| FsError::RemoveFile {
+    fs::remove_file(path).map_err(|source| super::Error::RemoveFile {
         path: path.to_path_buf(),
         source,
     })
 }
 
 /// Wrapped [`fs::remove_dir_all`].
-pub(crate) fn remove_dir_all(path: impl AsRef<Path>) -> Result<(), FsError> {
+pub(crate) fn remove_dir_all(path: impl AsRef<Path>) -> Result<(), super::Error> {
     let path = path.as_ref();
-    fs::remove_dir_all(path).map_err(|source| FsError::RemoveDirAll {
+    fs::remove_dir_all(path).map_err(|source| super::Error::RemoveDirAll {
         path: path.to_path_buf(),
         source,
     })
@@ -125,10 +127,10 @@ pub(crate) fn remove_dir_all(path: impl AsRef<Path>) -> Result<(), FsError> {
 /// Wrapped [`fs::read_dir`].
 pub(crate) fn read_dir(
     path: impl AsRef<Path>,
-) -> Result<impl Iterator<Item = Result<DirEntry, FsError>>, FsError> {
+) -> Result<impl Iterator<Item = Result<DirEntry, super::Error>>, super::Error> {
     let path = path.as_ref();
     fs::read_dir(path)
-        .map_err(|source| FsError::ReadDir {
+        .map_err(|source| super::Error::ReadDir {
             path: path.to_path_buf(),
             source,
         })
@@ -136,7 +138,7 @@ pub(crate) fn read_dir(
             let path = path.to_path_buf();
 
             entries.map(move |entry| {
-                entry.map_err(|source| FsError::ReadDir {
+                entry.map_err(|source| super::Error::ReadDir {
                     path: path.clone(),
                     source,
                 })
@@ -145,27 +147,27 @@ pub(crate) fn read_dir(
 }
 
 /// Wrapped [`fs::File::open`].
-pub(crate) fn open(path: impl AsRef<Path>) -> Result<fs::File, FsError> {
+pub(crate) fn open(path: impl AsRef<Path>) -> Result<fs::File, super::Error> {
     let path = path.as_ref();
-    fs::File::open(path).map_err(|source| FsError::FileOpen {
+    fs::File::open(path).map_err(|source| super::Error::FileOpen {
         path: path.to_path_buf(),
         source,
     })
 }
 
 /// Wrapped [`fs::File::create`].
-pub(crate) fn create(path: impl AsRef<Path>) -> Result<fs::File, FsError> {
+pub(crate) fn create(path: impl AsRef<Path>) -> Result<fs::File, super::Error> {
     let path = path.as_ref();
-    fs::File::create(path).map_err(|source| FsError::FileCreate {
+    fs::File::create(path).map_err(|source| super::Error::FileCreate {
         path: path.to_path_buf(),
         source,
     })
 }
 
 /// Wrapped [`std::path::absolute`].
-pub(crate) fn absolute(path: impl AsRef<Path>) -> Result<PathBuf, FsError> {
+pub(crate) fn absolute(path: impl AsRef<Path>) -> Result<PathBuf, super::Error> {
     let path = path.as_ref();
-    std::path::absolute(path).map_err(|source| FsError::GetAbsolutePath {
+    std::path::absolute(path).map_err(|source| super::Error::GetAbsolutePath {
         path: path.to_path_buf(),
         source,
     })

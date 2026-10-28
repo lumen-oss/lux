@@ -16,20 +16,20 @@ use crate::{
         utils,
     },
     lua_rockspec::MakeBuildSpec,
-    path::{Paths, PathsError},
-    tree::{InstallTree, TreeError},
+    path::{self, Paths},
+    tree::{self, InstallTree},
     variables::VariableSubstitutionError,
 };
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum MakeError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("{name} step failed.\n\n{status}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")]
     CommandFailure {
         name: String,
@@ -53,7 +53,7 @@ pub enum MakeError {
 }
 
 impl BuildBackend for MakeBuildSpec {
-    type Err = MakeError;
+    type Err = Error;
 
     #[tracing::instrument(name = "make::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -114,7 +114,7 @@ impl BuildBackend for MakeBuildSpec {
                 {
                     Ok(output) if output.status.success() => utils::trace_command_output(&output),
                     Ok(output) => {
-                        return Err(MakeError::CommandFailure {
+                        return Err(Error::CommandFailure {
                             name: match self.build_target {
                                 Some(build_target) => {
                                     format!("{} {}", config.make_cmd(), build_target)
@@ -127,9 +127,9 @@ impl BuildBackend for MakeBuildSpec {
                             stderr: String::from_utf8_lossy(&output.stderr).into(),
                         });
                     }
-                    Err(err) => return Err(MakeError::Io(err)),
+                    Err(err) => return Err(Error::Io(err)),
                 },
-                Err(_) => return Err(MakeError::CommandNotFound(config.make_cmd().clone())),
+                Err(_) => return Err(Error::CommandNotFound(config.make_cmd().clone())),
             }
         };
 
@@ -168,14 +168,14 @@ impl BuildBackend for MakeBuildSpec {
             {
                 Ok(output) if output.status.success() => utils::trace_command_output(&output),
                 Ok(output) => {
-                    return Err(MakeError::CommandFailure {
+                    return Err(Error::CommandFailure {
                         name: format!("{} {}", config.make_cmd(), self.install_target),
                         status: output.status,
                         stdout: String::from_utf8_lossy(&output.stdout).into(),
                         stderr: String::from_utf8_lossy(&output.stderr).into(),
                     });
                 }
-                Err(err) => return Err(MakeError::Io(err)),
+                Err(err) => return Err(Error::Io(err)),
             }
         };
 

@@ -55,7 +55,7 @@ pub enum BuildLuaError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Unpack(#[from] UnpackError),

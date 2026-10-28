@@ -47,7 +47,7 @@ use crate::{
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LuaRockspecError {
+pub enum Error {
     #[error("manifest exceeds computational limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     #[diagnostic(
         code(lux_lib::lua_rockspec::fuel_limit_exceeded),
@@ -97,7 +97,7 @@ try reducing the number of dependencies or simplifying build instructions.
     ProjectToml(#[from] ProjectTomlError),
 }
 
-impl LuaRockspecError {
+impl Error {
     fn from_ottavino(cause: ottavino::ExternError, rockspec_content: &str) -> Self {
         let msg = match &cause {
             ottavino::ExternError::Runtime(rt) => rt.to_string(),
@@ -115,7 +115,7 @@ impl LuaRockspecError {
                 Some(span)
             }
         });
-        LuaRockspecError::ExecutionError {
+        Error::ExecutionError {
             cause: Box::new(msg),
             content: NamedSource::new("rockspec", rockspec_content.to_string()),
             pkg_span: find_value_span(rockspec_content, "package"),
@@ -126,7 +126,7 @@ impl LuaRockspecError {
 
 /// This error can be returned within `ottavino::Lua::try_enter`.
 /// ottavino wraps it in an [`ottavino::ExternError`], which Lux wraps inn
-/// a [`LuaRockspecError::ExecutionError`]
+/// a [`Error::ExecutionError`]
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 enum ParseLuaRockspecFieldError {
@@ -244,10 +244,7 @@ impl LocalLuaRockspec {
         }
     }
 
-    pub fn new(
-        rockspec_content: &str,
-        project_root: ProjectRoot,
-    ) -> Result<Self, LuaRockspecError> {
+    pub fn new(rockspec_content: &str, project_root: ProjectRoot) -> Result<Self, Error> {
         let mut lua = ottavino::Lua::core();
 
         let rockspec = lua
@@ -259,7 +256,7 @@ impl LocalLuaRockspec {
                 let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
                 if !output {
-                    return Ok(Err(LuaRockspecError::FuelLimitExceeded));
+                    return Ok(Err(Error::FuelLimitExceeded));
                 }
 
                 let globals = ctx.globals();
@@ -326,7 +323,7 @@ impl LocalLuaRockspec {
 
                 Ok(Ok(rockspec))
             })
-            .map_err(|cause| LuaRockspecError::from_ottavino(cause, rockspec_content))??;
+            .map_err(|cause| Error::from_ottavino(cause, rockspec_content))??;
 
         let rockspec_file_name = format!("{}-{}.rockspec", rockspec.package(), rockspec.version());
 
@@ -336,7 +333,7 @@ impl LocalLuaRockspec {
             .copy_directories
             .contains(&PathBuf::from(&rockspec_file_name))
         {
-            return Err(LuaRockspecError::CopyDirectoriesContainRockspecName(None));
+            return Err(Error::CopyDirectoriesContainRockspecName(None));
         }
 
         for (platform, build_override) in &rockspec.build().per_platform {
@@ -344,7 +341,7 @@ impl LocalLuaRockspec {
                 .copy_directories
                 .contains(&PathBuf::from(&rockspec_file_name))
             {
-                return Err(LuaRockspecError::CopyDirectoriesContainRockspecName(Some(
+                return Err(Error::CopyDirectoriesContainRockspecName(Some(
                     platform.to_string(),
                 )));
             }
@@ -448,7 +445,7 @@ pub struct RemoteLuaRockspec {
 }
 
 impl RemoteLuaRockspec {
-    pub fn new(rockspec_content: &str) -> Result<Self, LuaRockspecError> {
+    pub fn new(rockspec_content: &str) -> Result<Self, Error> {
         let mut lua = ottavino::Lua::core();
 
         let source = lua
@@ -460,7 +457,7 @@ impl RemoteLuaRockspec {
                 let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
                 if !output {
-                    return Ok(Err(LuaRockspecError::FuelLimitExceeded));
+                    return Ok(Err(Error::FuelLimitExceeded));
                 }
 
                 let globals = ctx.globals();
@@ -470,7 +467,7 @@ impl RemoteLuaRockspec {
 
                 Ok(Ok(source))
             })
-            .map_err(|cause| LuaRockspecError::from_ottavino(cause, rockspec_content))??;
+            .map_err(|cause| Error::from_ottavino(cause, rockspec_content))??;
 
         Ok(RemoteLuaRockspec {
             // NOTE: Calling this outside of `lua.try_enter` reduces error message repetition
@@ -2050,9 +2047,9 @@ external_dependencies = {
                 Ok(())
             })
             .unwrap_err();
-        let err = LuaRockspecError::from_ottavino(extern_err, rockspec_content);
+        let err = Error::from_ottavino(extern_err, rockspec_content);
         match err {
-            LuaRockspecError::ExecutionError {
+            Error::ExecutionError {
                 cause,
                 err_span: Some(span),
                 ..
@@ -2076,9 +2073,9 @@ external_dependencies = {
                 Ok(())
             })
             .unwrap_err();
-        let err = LuaRockspecError::from_ottavino(extern_err, rockspec_content);
+        let err = Error::from_ottavino(extern_err, rockspec_content);
         match err {
-            LuaRockspecError::ExecutionError {
+            Error::ExecutionError {
                 cause,
                 err_span: Some(span),
                 ..
@@ -2100,9 +2097,9 @@ external_dependencies = {
                 Ok(())
             })
             .unwrap_err();
-        let err = LuaRockspecError::from_ottavino(extern_err, rockspec_content);
+        let err = Error::from_ottavino(extern_err, rockspec_content);
         match err {
-            LuaRockspecError::ExecutionError {
+            Error::ExecutionError {
                 cause,
                 err_span: Some(span),
                 ..

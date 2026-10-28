@@ -96,7 +96,7 @@ pub enum DetectLuaVersionError {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LuaInstallationError {
+pub enum Error {
     #[error("could not find a Lua installation and failed to build Lua from source")]
     #[diagnostic(forward(0))]
     Build(#[from] BuildLuaError),
@@ -110,12 +110,12 @@ pub enum LuaInstallationError {
 
 impl LuaInstallation {
     #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn new_from_config(config: &Config) -> Result<Self, LuaInstallationError> {
+    pub async fn new_from_config(config: &Config) -> Result<Self, Error> {
         Self::new(LuaVersion::from(config)?, config).await
     }
 
     #[tracing::instrument(level = "trace", skip(config))]
-    pub async fn new(version: &LuaVersion, config: &Config) -> Result<Self, LuaInstallationError> {
+    pub async fn new(version: &LuaVersion, config: &Config) -> Result<Self, Error> {
         let _lock = NEW_MUTEX.lock().await;
         if let Some(lua_intallation) = Self::probe(version, config.external_deps()) {
             return Ok(lua_intallation);
@@ -211,10 +211,7 @@ impl LuaInstallation {
     }
 
     #[tracing::instrument(level = "trace", skip(config))]
-    pub async fn install(
-        version: &LuaVersion,
-        config: &Config,
-    ) -> Result<Self, LuaInstallationError> {
+    pub async fn install(version: &LuaVersion, config: &Config) -> Result<Self, Error> {
         let _lock = INSTALL_MUTEX.lock().await;
 
         let target = Self::root_dir(version, config);
@@ -227,8 +224,7 @@ impl LuaInstallation {
             .await?;
 
         if version.is_luau() {
-            return Self::luau_from_root_dir(&target)
-                .ok_or(LuaInstallationError::LuauBinaryNotFound);
+            return Self::luau_from_root_dir(&target).ok_or(Error::LuauBinaryNotFound);
         }
 
         let include_dir = target.join("include");

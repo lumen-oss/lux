@@ -11,9 +11,9 @@ use crate::luarocks::rock_manifest::RockManifestDoc;
 use crate::luarocks::rock_manifest::RockManifestLib;
 use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
+use crate::tree;
 use crate::tree::InstallTree;
 use crate::tree::Tree;
-use crate::tree::TreeError;
 use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
@@ -63,11 +63,11 @@ pub enum PackError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     Walkdir(#[from] walkdir::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error("expected a `package.rockspec` in the package root.")]
     MissingRockspec,
 }

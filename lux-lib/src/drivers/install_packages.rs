@@ -13,19 +13,19 @@ use crate::{
         FlushLockfileError, LockedPackage, LockedPackageId, LockedPackageLockType, Lockfile,
         ReadWrite,
     },
-    lua_installation::LuaInstallationError,
+    lua_installation,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     package::PackageNameList,
-    package_db::{PackageDB, PackageDBError},
-    tree::{self, InstallTree, TreeError},
+    package_db::{self, PackageDB},
+    tree::{self, InstallTree},
     workspace::WorkspaceTreeError,
 };
 
 use crate::pipeline::{
-    build::{Build as PipelineBuild, BuildError as PipelineBuildError},
+    build::{Build as PipelineBuild, Error as PipelineBuildError},
     emit_lockfile::LockfileHandle,
     materialise::{Error as MaterialiseError, Materialise},
-    resolve::{ResolveError, ResolvePackageDependencies},
+    resolve::{self, ResolvePackageDependencies},
 };
 
 use crate::operations::PackageInstallSpec;
@@ -84,9 +84,7 @@ where
     State: install_packages_builder::State + install_packages_builder::IsComplete,
     T: InstallTree + Send + Sync,
 {
-    pub async fn install(
-        self,
-    ) -> Result<(Vec<LockedPackage>, LockfileHandle), InstallPackagesError> {
+    pub async fn install(self) -> Result<(Vec<LockedPackage>, LockfileHandle), Error> {
         let args = self._build();
         if args.packages.is_empty()
             && args.build_packages.is_empty()
@@ -106,7 +104,7 @@ where
 
 async fn install_packages<T>(
     install: InstallPackages<'_, T>,
-) -> Result<(Vec<LockedPackage>, LockfileHandle), InstallPackagesError>
+) -> Result<(Vec<LockedPackage>, LockfileHandle), Error>
 where
     T: InstallTree + Send + Sync,
 {
@@ -122,9 +120,9 @@ where
         .collect_vec();
 
     if !duplicate_entrypoints.is_empty() {
-        return Err(InstallPackagesError::DuplicateEntrypoints(
-            PackageNameList::new(duplicate_entrypoints),
-        ));
+        return Err(Error::DuplicateEntrypoints(PackageNameList::new(
+            duplicate_entrypoints,
+        )));
     }
 
     let packages = install.packages;
@@ -207,9 +205,7 @@ where
     }
 
     if !unforced_conflicts.is_empty() {
-        return Err(InstallPackagesError::ConflictingEntrypoints(
-            unforced_conflicts.join("\n"),
-        ));
+        return Err(Error::ConflictingEntrypoints(unforced_conflicts.join("\n")));
     }
 
     // FIXME(vhyrro): non-transactional. If an error occurs this removes the conflicting package
@@ -274,19 +270,19 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum InstallPackagesError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] crate::lua_version::LuaVersionUnset),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
@@ -298,7 +294,7 @@ pub enum InstallPackagesError {
     LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(PackageNameList),
     #[error("cannot install conflicting entrypoints:\n{0}")]
@@ -308,7 +304,7 @@ pub enum InstallPackagesError {
     ConflictingEntrypoints(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Resolve(#[from] ResolveError),
+    Resolve(#[from] resolve::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Download(#[from] MaterialiseError),
@@ -317,7 +313,7 @@ pub enum InstallPackagesError {
     Build(#[from] PipelineBuildError),
 }
 
-impl From<LuaRocksInstallError> for InstallPackagesError {
+impl From<LuaRocksInstallError> for Error {
     fn from(source: LuaRocksInstallError) -> Self {
         Self::LuaRocksInstall(Box::new(source))
     }

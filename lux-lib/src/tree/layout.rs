@@ -1,5 +1,5 @@
 use crate::{
-    fs::{self, FsError},
+    fs,
     lockfile::{LockedPackageSpec, OptState},
     tree::{InstallTree, Tree},
 };
@@ -127,7 +127,7 @@ impl CustomRockLayout for RojoLayout {
                     fs::sync::hard_link(&entrypoint, content_dir.join(format!("init.{ext}")))?;
                 }
                 None => {
-                    return Err(FsError::Other(format!(
+                    return Err(fs::Error::Other(format!(
                         "no `init.luau`, `init.lua`, `{name}.luau`, or `{name}.lua` entrypoint found in `{}`",
                         layout.src.display()
                     )));
@@ -185,7 +185,7 @@ fn try_create_symlink(target: &Path, link: &Path) -> fs::Result<()> {
             .ok_or_else(|| unreachable!("missing parent directory"))?,
     )
     .ok_or_else(|| {
-        FsError::Other(format!(
+        fs::Error::Other(format!(
             "failed to compute relative path for symlink from {} to {}",
             link.display(),
             target.display()

@@ -3,7 +3,7 @@ use crate::{
     fs,
     lua_installation::LuaInstallation,
     lua_rockspec::{DeploySpec, LuaModule, ModulePaths},
-    path::{Paths, PathsError},
+    path::{self, Paths},
     project::project_files,
     tree::{InstallTree, RockLayout},
     variables::{self, Environment, VariableSubstitutionError},
@@ -65,7 +65,7 @@ pub(crate) fn copy_lua_to_module_path(
     source: &PathBuf,
     target_module: &LuaModule,
     target_dir: &Path,
-) -> Result<(), fs::FsError> {
+) -> Result<(), fs::Error> {
     // Some rockspecs abuse `install.lua` to install non-lua files, such as teal (`.tl`) files.
     let target_module_path = source
         .extension()
@@ -87,7 +87,7 @@ pub(crate) fn copy_lua_to_module_path(
 /// overwritten on a later install, even when the source is read-only
 /// (e.g. a vendored rock in a read-only Nix store).
 #[cfg(unix)]
-pub(crate) async fn make_writable(path: &Path) -> Result<(), fs::FsError> {
+pub(crate) async fn make_writable(path: &Path) -> Result<(), fs::Error> {
     let mut perms = fs::tokio::metadata(path).await?.permissions();
     perms.set_mode(perms.mode() | 0o200);
     fs::tokio::set_permissions(path, perms).await?;
@@ -95,21 +95,21 @@ pub(crate) async fn make_writable(path: &Path) -> Result<(), fs::FsError> {
 }
 
 #[cfg(not(unix))]
-pub(crate) async fn make_writable(_path: &Path) -> Result<(), fs::FsError> {
+pub(crate) async fn make_writable(_path: &Path) -> Result<(), fs::Error> {
     Ok(())
 }
 
 /// See [`make_writable`].
 #[cfg(unix)]
-pub(crate) fn make_writable_sync(path: &Path) -> Result<(), fs::FsError> {
+pub(crate) fn make_writable_sync(path: &Path) -> Result<(), fs::Error> {
     let mut perms = std::fs::metadata(path)
-        .map_err(|source| fs::FsError::Metadata {
+        .map_err(|source| fs::Error::Metadata {
             path: path.to_path_buf(),
             source,
         })?
         .permissions();
     perms.set_mode(perms.mode() | 0o200);
-    std::fs::set_permissions(path, perms).map_err(|source| fs::FsError::SetPermissions {
+    std::fs::set_permissions(path, perms).map_err(|source| fs::Error::SetPermissions {
         path: path.to_path_buf(),
         source,
     })?;
@@ -117,14 +117,14 @@ pub(crate) fn make_writable_sync(path: &Path) -> Result<(), fs::FsError> {
 }
 
 #[cfg(not(unix))]
-pub(crate) fn make_writable_sync(_path: &Path) -> Result<(), fs::FsError> {
+pub(crate) fn make_writable_sync(_path: &Path) -> Result<(), fs::Error> {
     Ok(())
 }
 
 /// Recursively copy a directory.
 /// This respects ignore files and excludes hidden files and directories.
 #[tracing::instrument(level = "trace")]
-pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), fs::FsError> {
+pub(crate) async fn recursive_copy_dir(src: &PathBuf, dest: &Path) -> Result<(), fs::Error> {
     if src.exists() {
         for file in project_files(src) {
             let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src)
@@ -147,7 +147,7 @@ pub(crate) async fn prepare_cargo_vendor_config(
     config: &Config,
     build_dir: &Path,
     cargo_vendor_dir: &Path,
-) -> Result<(), fs::FsError> {
+) -> Result<(), fs::Error> {
     let cargo_config_dir = build_dir.join(".cargo");
     fs::tokio::create_dir_all(&cargo_config_dir).await?;
     let cargo_config_path = cargo_config_dir.join("config.toml");
@@ -160,7 +160,7 @@ pub(crate) async fn prepare_cargo_vendor_config(
         .create(true)
         .append(true)
         .open(&cargo_config_path)
-        .map_err(|source| fs::FsError::FileOpen {
+        .map_err(|source| fs::Error::FileOpen {
             path: cargo_config_path.to_path_buf(),
             source,
         })?;
@@ -169,7 +169,7 @@ pub(crate) async fn prepare_cargo_vendor_config(
         "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"{}\"\n",
         cargo_vendor_dir.display()
     )
-    .map_err(|source| fs::FsError::Write {
+    .map_err(|source| fs::Error::Write {
         path: cargo_config_path.to_path_buf(),
         source,
     })?;
@@ -207,7 +207,7 @@ fn validate_output(output: &Output) -> Result<(), OutputValidationError> {
 pub enum CompileCFilesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("failed to compile intermediates from C files")]
     #[diagnostic(help(
         r#"check the compiler output above for missing headers or syntax errors.
@@ -318,7 +318,7 @@ fn mk_def_file(
     dir: &Path,
     output_file_name: &str,
     target_module: &LuaModule,
-) -> Result<PathBuf, fs::FsError> {
+) -> Result<PathBuf, fs::Error> {
     let mut def_file: PathBuf = dir.join(output_file_name);
     def_file.set_extension(".def");
     let exported_name = target_module.to_string().replace(".", "_");
@@ -387,7 +387,7 @@ pub(crate) fn default_libflag() -> &'static str {
 pub enum CompileCModulesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("failed to compile intermediates from C modules")]
     #[diagnostic(help(
         r#"check the compiler output above for missing headers or syntax errors.
@@ -415,7 +415,7 @@ pub enum LinkCModulesError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     CC(#[from] cc::Error),
     #[error("error compiling C modules (output validation failed)")]
@@ -693,10 +693,10 @@ fn add_variable_if_set(config: &Config, name: &str, cmd: &mut Command) {
 pub enum InstallBinaryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("error wrapping binary")]
     #[diagnostic(forward(0))]
     Wrap(#[from] WrapBinaryError),
@@ -706,7 +706,7 @@ pub enum InstallBinaryError {
 pub enum WrapBinaryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     Utf8(#[from] FromUtf8Error),
     #[error("no Lua executable found")]
@@ -833,7 +833,7 @@ exit /b %ERRORLEVEL%
 
 #[cfg(unix)]
 #[tracing::instrument(level = "trace")]
-pub(crate) async fn set_executable_permissions(script: &Path) -> Result<(), fs::FsError> {
+pub(crate) async fn set_executable_permissions(script: &Path) -> Result<(), fs::Error> {
     let mut perms = fs::tokio::metadata(&script).await?.permissions();
     perms.set_mode(perms.mode() | 0o111);
     fs::tokio::set_permissions(&script, perms).await?;

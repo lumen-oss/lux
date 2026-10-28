@@ -4,8 +4,8 @@ use crate::fs;
 use crate::lua_rockspec::LuaVersionError;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
+use crate::tree;
 use crate::tree::InstallTree;
-use crate::tree::TreeError;
 use std::path::Path;
 
 use crate::{
@@ -21,10 +21,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LuarocksBuildError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("error instantiating luarocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocksError(#[from] LuaRocksError),
@@ -33,7 +33,7 @@ pub enum LuarocksBuildError {
     ExecLuaRocksError(#[from] ExecLuaRocksError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallRockManifest(#[from] InstallRockManifestError),
@@ -54,7 +54,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     build_backend_name: &str,
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
-) -> Result<BuildInfo, LuarocksBuildError> {
+) -> Result<BuildInfo, Error> {
     let package = args.package;
     let lua = args.lua;
     let config = args.config;
@@ -71,7 +71,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
         &rockspec_file,
         rockspec
             .to_lua_remote_rockspec_string()
-            .map_err(|err| LuarocksBuildError::Rockspec(Box::new(err)))?,
+            .map_err(|err| Error::Rockspec(Box::new(err)))?,
     )
     .await?;
     let luarocks = LuaRocksInstallation::new(config, tree.build_tree(config)?)?;
@@ -88,7 +88,7 @@ async fn install<R: Rockspec, T: InstallTree>(
     tree: &T,
     package: &LockedPackageSpec,
     config: &Config,
-) -> Result<BuildInfo, LuarocksBuildError> {
+) -> Result<BuildInfo, Error> {
     let layout = tree.layout_for(package);
     let lua_version = rockspec.lua_version_matches(config)?;
     fs::tokio::create_dir_all(tree.bin()).await?;

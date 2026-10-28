@@ -24,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    discover::{Discover, DiscoverError, FoundPackage},
+    discover::{self, Discover, FoundPackage},
     materialise::PackageSource,
     Artifacts,
 };
@@ -77,18 +77,18 @@ pub(crate) type ResolvedArtifacts = Artifacts<HashMap<LockedPackageId, ResolvedP
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ResolveError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discover(#[from] Box<DiscoverError>),
+    Discover(#[from] Box<discover::Error>),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependency(String),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
 }
 
-impl From<DiscoverError> for ResolveError {
-    fn from(err: DiscoverError) -> Self {
+impl From<discover::Error> for Error {
+    fn from(err: discover::Error) -> Self {
         Self::Discover(Box::new(err))
     }
 }
@@ -133,7 +133,7 @@ where
     State: resolve_package_dependencies_builder::State
         + resolve_package_dependencies_builder::IsComplete,
 {
-    pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, ResolveError> {
+    pub(crate) async fn resolve(self) -> Result<ResolvedArtifacts, Error> {
         let args = self._build();
         Resolver::new(args.package_db, args.config, args.installed)
             .run(args.packages)
@@ -174,11 +174,7 @@ struct Resolver {
     package_db: PackageDB,
     config: Arc<Config>,
     max_concurrent: usize,
-    joinset: JoinSet<(
-        RequestKey,
-        PackageInstallSpec,
-        Result<FoundPackage, ResolveError>,
-    )>,
+    joinset: JoinSet<(RequestKey, PackageInstallSpec, Result<FoundPackage, Error>)>,
     pending: VecDeque<(RequestKey, PackageInstallSpec)>,
     seen: HashSet<RequestKey>,
     nodes: HashMap<RequestKey, Node>,
@@ -224,7 +220,7 @@ impl Resolver {
     async fn run(
         mut self,
         packages: Artifacts<Vec<PackageInstallSpec>>,
-    ) -> Result<ResolvedArtifacts, ResolveError> {
+    ) -> Result<ResolvedArtifacts, Error> {
         for (section, specs) in packages {
             let Some(specs) = specs else {
                 continue;
@@ -241,7 +237,7 @@ impl Resolver {
 
         self.spawn_ready();
         while let Some(joined) = self.joinset.join_next().await {
-            let (key, spec, result) = joined.map_err(ResolveError::Join)?;
+            let (key, spec, result) = joined.map_err(Error::Join)?;
             self.on_discovered(key, spec, result?);
             self.spawn_ready();
         }
@@ -456,7 +452,7 @@ fn push_child(
 }
 
 /// Graph colouring algorithm for cycle detection.
-fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> {
+fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), Error> {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Colour {
         /// Not yet visited
@@ -503,7 +499,7 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), ResolveError> 
                             .chain(std::iter::once(child.package.name().to_string()))
                             .collect_vec()
                             .join(" -> ");
-                        return Err(ResolveError::CyclicDependency(chain));
+                        return Err(Error::CyclicDependency(chain));
                     }
                     Colour::Black => {}
                 }
@@ -693,6 +689,6 @@ mod tests {
             .run(roots(install_spec("a")))
             .await;
 
-        assert!(matches!(result, Err(ResolveError::CyclicDependency(_))));
+        assert!(matches!(result, Err(Error::CyclicDependency(_))));
     }
 }

@@ -10,7 +10,7 @@ use lux_lib::{
     operations::{self, PackageInstallSpec},
     package::PackageReq,
     package_db::PackageDB,
-    tree::{self, InstallTree, RockMatches, TreeError},
+    tree::{self, InstallTree, RockMatches},
 };
 
 use miette::{miette, IntoDiagnostic, Result};
@@ -29,7 +29,7 @@ pub async fn uninstall(uninstall_args: Uninstall, config: Config) -> Result<()> 
         .packages
         .iter()
         .map(|package_req| tree.match_rocks(package_req))
-        .try_collect::<_, Vec<_>, TreeError>()?;
+        .try_collect::<_, Vec<_>, tree::Error>()?;
 
     let (packages, nonexistent_packages, duplicate_packages) = package_matches.into_iter().fold(
         (Vec::new(), Vec::new(), Vec::new()),

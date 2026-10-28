@@ -2,9 +2,7 @@ use crate::{
     build::utils::format_path,
     config::Config,
     fs,
-    lockfile::{
-        LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, LockfileError, ReadOnly,
-    },
+    lockfile::{self, LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageReq},
     variables::{GetVariableError, HasVariables},
@@ -46,30 +44,30 @@ pub trait InstallTree {
     /// The standard install layout for a package.
     fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout;
     /// Create a [`Lockfile`] for this tree.
-    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, TreeError>;
+    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error>;
     /// Get this tree's lockfile path.
     fn lockfile_path(&self) -> PathBuf;
     /// The tree in which to install build dependencies.
-    fn build_tree(&self, config: &Config) -> Result<Tree, TreeError>;
+    fn build_tree(&self, config: &Config) -> Result<Tree, Error>;
     /// The tree in which to install test dependencies.
-    fn test_tree(&self, config: &Config) -> Result<Tree, TreeError>;
+    fn test_tree(&self, config: &Config) -> Result<Tree, Error>;
     /// List the packages that are installed in this tree.
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, TreeError>;
+    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, Error>;
     /// Find installed rocks that match the given [`PackageReq`].
-    fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, TreeError>;
+    fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, Error>;
     /// Create the standard directories (src, lib, etc.) for a package.
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError>;
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error>;
     /// Apply the custom layout once a package has been fully installed.
     ///
     /// For entrypoints, this creates the symlinks for the custom layout, if one is configured.
     /// Must be called after the package's files have been written to the standard layout.
-    fn finalize(&self, _package: &LockedPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+    fn finalize(&self, _package: &LockedPackage, _entry_type: EntryType) -> Result<(), Error> {
         Ok(())
     }
     /// Remove the install layout directories.
     ///
     /// For entrypoints, this also applies the custom layout, if one is configured.
-    fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError>;
+    fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error>;
 }
 
 /// The standard install layout for a rock.
@@ -146,13 +144,13 @@ pub struct Tree {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum TreeError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lockfile(#[from] LockfileError),
+    Lockfile(#[from] lockfile::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
 }
@@ -174,11 +172,7 @@ impl HasVariables for RockLayout {
 impl Tree {
     /// NOTE: This is exposed for use by the config module.
     /// Use `Config::tree()`
-    pub(crate) fn new(
-        root: PathBuf,
-        version: LuaVersion,
-        config: &Config,
-    ) -> Result<Self, TreeError> {
+    pub(crate) fn new(root: PathBuf, version: LuaVersion, config: &Config) -> Result<Self, Error> {
         let version_dir = root.join(version.to_string());
         let test_tree_dir = version_dir.join("test_dependencies");
         let build_tree_dir = version_dir.join("build_dependencies");
@@ -191,7 +185,7 @@ impl Tree {
         build_tree_dir: PathBuf,
         version: LuaVersion,
         config: &Config,
-    ) -> Result<Self, TreeError> {
+    ) -> Result<Self, Error> {
         let path_with_version = root.join(version.to_string());
 
         // Ensure that the root and the version directory exist.
@@ -214,7 +208,7 @@ impl Tree {
         })
     }
 
-    pub fn match_rocks_and<F>(&self, req: &PackageReq, filter: F) -> Result<RockMatches, TreeError>
+    pub fn match_rocks_and<F>(&self, req: &PackageReq, filter: F) -> Result<RockMatches, Error>
     where
         F: Fn(&LockedPackage) -> bool,
     {
@@ -254,7 +248,7 @@ impl InstallTree for Tree {
         self.root_parent.join(self.version.to_string())
     }
 
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error> {
         let layout = self.layout_for(package);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
@@ -264,7 +258,7 @@ impl InstallTree for Tree {
         Ok(())
     }
 
-    fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError> {
+    fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
         if let Some(custom_layout) = &self.entrypoint_layout {
             if entry_type.is_entrypoint() || custom_layout.layout_dependencies() {
                 custom_layout.apply_layout(self, &package.spec)?;
@@ -274,7 +268,7 @@ impl InstallTree for Tree {
         Ok(())
     }
 
-    fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), TreeError> {
+    fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
         if let Some(layout) = &self.entrypoint_layout {
             if entry_type.is_entrypoint() || layout.layout_dependencies() {
                 layout.remove_layout(self, &package.spec)?;
@@ -307,7 +301,7 @@ impl InstallTree for Tree {
         Ok(())
     }
 
-    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, TreeError> {
+    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error> {
         Ok(Lockfile::new(self.lockfile_path())?)
     }
 
@@ -335,7 +329,7 @@ impl InstallTree for Tree {
         self.bin().join("unwrapped")
     }
 
-    fn test_tree(&self, config: &Config) -> Result<Self, TreeError> {
+    fn test_tree(&self, config: &Config) -> Result<Self, Error> {
         let test_tree_dir = self.test_tree_dir.clone();
         let build_tree_dir = self.build_tree_dir.clone();
         Self::new_with_paths(
@@ -347,7 +341,7 @@ impl InstallTree for Tree {
         )
     }
 
-    fn build_tree(&self, config: &Config) -> Result<Self, TreeError> {
+    fn build_tree(&self, config: &Config) -> Result<Self, Error> {
         let test_tree_dir = self.test_tree_dir.clone();
         let build_tree_dir = self.build_tree_dir.clone();
         Self::new_with_paths(
@@ -359,11 +353,11 @@ impl InstallTree for Tree {
         )
     }
 
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, TreeError> {
+    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, Error> {
         Ok(self.lockfile()?.list())
     }
 
-    fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, TreeError> {
+    fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, Error> {
         let found_packages = self.lockfile()?.find_rocks(req);
         Ok(match NonEmpty::try_from(found_packages) {
             Ok(found_packages) => {

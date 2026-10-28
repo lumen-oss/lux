@@ -9,11 +9,11 @@ pub mod unix;
 #[cfg(windows)]
 pub mod windows;
 
-pub type Result<T> = core::result::Result<T, FsError>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
-pub enum FsError {
+pub enum Error {
     #[error("failed to read file '{}'", path.display())]
     #[diagnostic(
         code(lux_lib::fs::read),

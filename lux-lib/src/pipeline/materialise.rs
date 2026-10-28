@@ -11,9 +11,9 @@ use tempfile::TempDir;
 use thiserror::Error;
 
 use crate::{
-    build::{BuildError, RemotePackageSourceSpec, SrcRockSource},
+    build::{self, RemotePackageSourceSpec, SrcRockSource},
     config::Config,
-    fs::{self, FsError},
+    fs,
     hash::HasIntegrity,
     lockfile::{
         LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
@@ -55,18 +55,18 @@ pub(crate) type MaterialiseArtifacts = Artifacts<HashMap<LockedPackageId, Materi
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Build(#[from] Box<BuildError>),
+    Build(#[from] Box<build::Error>),
     #[error("failed to hash the source for '{0}'")]
     Hash(String, #[source] io::Error),
     #[error("missing source url for '{0}'")]
     MissingSourceUrl(String),
 }
 
-impl From<BuildError> for Error {
-    fn from(source: BuildError) -> Self {
+impl From<build::Error> for Error {
+    fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
 }
@@ -250,7 +250,7 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     source_spec: Option<RemotePackageSourceSpec>,
     source: Option<RemotePackageSource>,
     config: &Config,
-) -> Result<(LockedPackage, TempDir, PathBuf), BuildError> {
+) -> Result<(LockedPackage, TempDir, PathBuf), build::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
     let is_src_rock = match &source_spec {
         Some(RemotePackageSourceSpec::SrcRock(_)) => true,
@@ -266,7 +266,7 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
             let cursor = Cursor::new(bytes);
             unpack_src_rock(cursor, temp_dir.path().to_path_buf())
                 .await
-                .map_err(BuildError::UnpackSrcRock)?;
+                .map_err(build::Error::UnpackSrcRock)?;
             RemotePackageSourceMetadata { hash, source_url }
         }
         Some(RemotePackageSourceSpec::RockSpec(source_url)) => {

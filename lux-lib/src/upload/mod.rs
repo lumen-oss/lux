@@ -55,7 +55,7 @@ where
     State: project_upload_builder::State + project_upload_builder::IsComplete,
 {
     /// Upload a package to a luarocks server.
-    pub async fn upload_to_luarocks(self) -> Result<PreparedRockspec, UploadError> {
+    pub async fn upload_to_luarocks(self) -> Result<PreparedRockspec, Error> {
         let args = self._build();
         upload_from_project(args).await
     }
@@ -80,7 +80,7 @@ where
     State: rockspec_upload_builder::State + rockspec_upload_builder::IsComplete,
 {
     /// Upload a rockspec to a luarocks server.
-    pub async fn upload_to_luarocks(self) -> Result<PreparedRockspec, UploadError> {
+    pub async fn upload_to_luarocks(self) -> Result<PreparedRockspec, Error> {
         let args = self._build();
         upload_from_rockspec(args).await
     }
@@ -148,7 +148,7 @@ if the issue persists, the server may be temporarily unavailable."#
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
-pub enum UploadError {
+pub enum Error {
     #[error("error parsing upload URL")]
     #[diagnostic(help("check your server configuration"))]
     ParseError(#[from] url::ParseError),
@@ -214,7 +214,7 @@ if the issue persists, the server may be temporarily unavailable."#
     TfaCodeRejected(String, String),
 }
 
-impl From<SearchAndDownloadError> for UploadError {
+impl From<SearchAndDownloadError> for Error {
     fn from(source: SearchAndDownloadError) -> Self {
         Self::SearchAndDownload(Box::new(source))
     }
@@ -358,7 +358,7 @@ impl From<SignatureProtocol> for gpgme::Protocol {
     skip_all,
     fields(project = args.project.toml().package().to_string()),
 )]
-async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec, UploadError> {
+async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec, Error> {
     let project = args.project;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
     let config = args.config;
@@ -401,7 +401,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec
     skip_all,
     fields(package = args.rockspec.package().to_string()),
 )]
-async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRockspec, UploadError> {
+async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRockspec, Error> {
     let rockspec = args.rockspec;
     let api_key = args.api_key.unwrap_or(ApiKey::new()?);
     #[cfg(feature = "gpgme")]
@@ -416,7 +416,7 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
     helpers::ensure_user_exists(client, &api_key, config.server()).await?;
 
     if let PackageVersion::StringVer(ver) = rockspec.version() {
-        return Err(UploadError::UnsupportedVersion(ver.to_string()));
+        return Err(Error::UnsupportedVersion(ver.to_string()));
     }
 
     if helpers::rock_exists(
@@ -428,7 +428,7 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
     )
     .await?
     {
-        return Err(UploadError::RockExists(config.server().clone()));
+        return Err(Error::RockExists(config.server().clone()));
     }
 
     let rockspec_content = rockspec
@@ -468,7 +468,7 @@ async fn upload_rockspec_content(
     signed: Option<String>,
     tfa_code: Option<String>,
     mode: Mode,
-) -> Result<PreparedRockspec, UploadError> {
+) -> Result<PreparedRockspec, Error> {
     let request =
         prepare_upload_request(config, client, api_key, &rockspec, signed, tfa_code).await?;
     if matches!(mode, Mode::Upload) {
@@ -484,7 +484,7 @@ async fn prepare_upload_request(
     rockspec: &PreparedRockspec,
     signed: Option<String>,
     tfa_code: Option<String>,
-) -> Result<reqwest::RequestBuilder, UploadError> {
+) -> Result<reqwest::RequestBuilder, Error> {
     let part = Part::text(rockspec.content.clone())
         .file_name(format!(
             "{}-{}.rockspec",
@@ -519,18 +519,18 @@ async fn prepare_upload_request(
 async fn send_upload_request(
     config: &Config,
     request: reqwest::RequestBuilder,
-) -> Result<(), UploadError> {
+) -> Result<(), Error> {
     let response = request.send().await?;
 
     let status = response.status();
     if status.is_server_error() {
-        Err(UploadError::Server(config.server().clone(), status))
+        Err(Error::Server(config.server().clone(), status))
     } else if status.is_success() {
         Ok(())
     } else {
         let response = response.json::<LuarocksErrorResponse>().await?;
         let errors = response.errors.into_iter().join("\n");
-        Err(UploadError::Client(config.server().clone(), errors))
+        Err(Error::Client(config.server().clone(), errors))
     }
 }
 
@@ -538,7 +538,7 @@ async fn send_upload_request(
 fn sign_rockspec(
     rockspec_content: &str,
     protocol: SignatureProtocol,
-) -> Result<Option<String>, UploadError> {
+) -> Result<Option<String>, Error> {
     if let SignatureProtocol::None = protocol {
         return Ok(None);
     }
@@ -559,7 +559,7 @@ fn sign_rockspec(
 fn sign_rockspec(
     _rockspec_content: &str,
     _protocol: SignatureProtocol,
-) -> Result<Option<String>, UploadError> {
+) -> Result<Option<String>, Error> {
     Ok(None)
 }
 
@@ -623,7 +623,7 @@ mod helpers {
         server_url: &Url,
         api_key: &ApiKey,
         tfa_code: &str,
-    ) -> Result<TfaToken, UploadError> {
+    ) -> Result<TfaToken, Error> {
         let response = client
             .get(unsafe { url_for_method(server_url, api_key, "verify_tfa")? })
             .query(&[("code", tfa_code)])
@@ -631,18 +631,15 @@ mod helpers {
             .await?;
         let status = response.status();
         if status.is_server_error() {
-            Err(UploadError::Server(server_url.clone(), status))
+            Err(Error::Server(server_url.clone(), status))
         } else {
             match response.json::<LuarocksTfaVerificationResponse>().await? {
                 LuarocksTfaVerificationResponse::Success(LuarocksTfaVerificationSuccess {
                     tfa_token,
                 }) => Ok(tfa_token),
-                LuarocksTfaVerificationResponse::Failure(LuarocksErrorResponse { errors }) => {
-                    Err(UploadError::TfaCodeRejected(
-                        tfa_code.to_string(),
-                        errors.into_iter().join("\n"),
-                    ))
-                }
+                LuarocksTfaVerificationResponse::Failure(LuarocksErrorResponse { errors }) => Err(
+                    Error::TfaCodeRejected(tfa_code.to_string(), errors.into_iter().join("\n")),
+                ),
             }
         }
     }
@@ -674,14 +671,14 @@ mod helpers {
         api_key: &ApiKey,
         config: &Config,
         package_db: &PackageDB,
-    ) -> Result<(RemoteProjectToml, String), UploadError> {
+    ) -> Result<(RemoteProjectToml, String), Error> {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;
 
             let rockspec_content = rockspec.to_lua_remote_rockspec_string()?;
 
             if let PackageVersion::StringVer(ver) = rockspec.version() {
-                return Err(UploadError::UnsupportedVersion(ver.to_string()));
+                return Err(Error::UnsupportedVersion(ver.to_string()));
             }
             if helpers::rock_exists(
                 client,
@@ -698,19 +695,18 @@ mod helpers {
                     operations::download_exact_rockspec(&package, package_db, config)
                         .await?
                         .rockspec;
-                let existing_rockspec_hash =
-                    existing_rockspec.hash().await.map_err(UploadError::Hash)?;
+                let existing_rockspec_hash = existing_rockspec.hash().await.map_err(Error::Hash)?;
                 if existing_rockspec_hash
                     .matches(&Integrity::from(&rockspec_content))
                     .is_some()
                 {
-                    return Err(UploadError::RockExists(config.server().clone()));
+                    return Err(Error::RockExists(config.server().clone()));
                 }
             } else {
                 return Ok((rockspec, rockspec_content));
             }
         }
-        Err(UploadError::MaxSpecRevsExceeded)
+        Err(Error::MaxSpecRevsExceeded)
     }
 
     pub(crate) async fn rock_exists(
@@ -888,7 +884,7 @@ type = "builtin"
         config: &Config,
         package_db: &PackageDB,
         tfa_code: Option<String>,
-    ) -> Result<PreparedRockspec, UploadError> {
+    ) -> Result<PreparedRockspec, Error> {
         let upload = ProjectUpload::new()
             .project(project)
             .config(config)
@@ -1023,7 +1019,7 @@ type = "builtin"
         let err = upload(&project, &config, &package_db, Some("000000".into()))
             .await
             .unwrap_err();
-        assert!(matches!(err, UploadError::TfaCodeRejected(..)));
+        assert!(matches!(err, Error::TfaCodeRejected(..)));
     }
 
     #[tokio::test]
@@ -1041,7 +1037,7 @@ type = "builtin"
             .unwrap_err();
         assert!(matches!(
             err,
-            UploadError::Server(_, StatusCode::INTERNAL_SERVER_ERROR)
+            Error::Server(_, StatusCode::INTERNAL_SERVER_ERROR)
         ));
     }
 
@@ -1064,7 +1060,7 @@ type = "builtin"
             .await
             .unwrap_err();
         match err {
-            UploadError::Client(_, message) => assert_eq!(message, "invalid rockspec"),
+            Error::Client(_, message) => assert_eq!(message, "invalid rockspec"),
             other => panic!("unexpected error: {other:?}"),
         }
     }
@@ -1081,7 +1077,7 @@ type = "builtin"
             .unwrap_err();
         assert!(matches!(
             err,
-            UploadError::ToolCheck(ToolCheckError::ToolOutdated(..))
+            Error::ToolCheck(ToolCheckError::ToolOutdated(..))
         ));
     }
 
@@ -1098,7 +1094,7 @@ type = "builtin"
             .unwrap_err();
         assert!(matches!(
             err,
-            UploadError::UserCheck(UserCheckError::UserNotFound)
+            Error::UserCheck(UserCheckError::UserNotFound)
         ));
     }
 }

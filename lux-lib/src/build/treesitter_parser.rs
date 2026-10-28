@@ -14,7 +14,7 @@ const DEFAULT_GENERATE_ABI_VERSION: usize = tree_sitter::LANGUAGE_VERSION;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum TreesitterBuildError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
@@ -31,11 +31,11 @@ pub enum TreesitterBuildError {
     TreesitterCompileError(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 impl BuildBackend for TreesitterParserBuildSpec {
-    type Err = TreesitterBuildError;
+    type Err = Error;
 
     #[tracing::instrument(name = "treesitter_parser::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -95,7 +95,7 @@ fn is_query_file(path: &Path) -> bool {
 async fn install_inline_queries(
     queries_dir: &Path,
     queries: std::collections::HashMap<PathBuf, String>,
-) -> Result<(), TreesitterBuildError> {
+) -> Result<(), Error> {
     fs::tokio::create_dir_all(queries_dir).await?;
     for (path, content) in queries {
         let dest = queries_dir.join(path);
@@ -108,13 +108,13 @@ async fn install_inline_queries(
 async fn install_source_queries(
     source_queries_dir: &Path,
     queries_dir: &Path,
-) -> Result<(), TreesitterBuildError> {
+) -> Result<(), Error> {
     fs::tokio::create_dir_all(queries_dir).await?;
     let mut entries = fs::tokio::read_dir(source_queries_dir).await?;
     while let Some(entry) = entries
         .next_entry()
         .await
-        .map_err(|source| fs::FsError::ReadDir {
+        .map_err(|source| fs::Error::ReadDir {
             path: source_queries_dir.to_path_buf(),
             source,
         })?
@@ -134,7 +134,7 @@ async fn install_queries(
     queries_dir: &Path,
     lang: &str,
     queries: std::collections::HashMap<PathBuf, String>,
-) -> Result<(), TreesitterBuildError> {
+) -> Result<(), Error> {
     if !queries.is_empty() {
         install_inline_queries(queries_dir, queries).await
     } else {
@@ -154,11 +154,7 @@ async fn install_queries(
     skip_all,
     fields(language = lang),
 )]
-async fn build_parser(
-    build_dir: &Path,
-    parser_dir: &Path,
-    lang: &str,
-) -> Result<(), TreesitterBuildError> {
+async fn build_parser(build_dir: &Path, parser_dir: &Path, lang: &str) -> Result<(), Error> {
     fs::tokio::create_dir_all(parser_dir).await?;
     let loader = tree_sitter_loader::Loader::with_parser_lib_path(build_dir.to_path_buf());
     let output_path = parser_dir.join(format!("{}.{}", lang, std::env::consts::DLL_EXTENSION));
@@ -170,5 +166,5 @@ async fn build_parser(
     std::env::set_var("CROSS_RUNNER", "");
     loader
         .compile_parser_at_path(build_dir, output_path, &[])
-        .map_err(|err| TreesitterBuildError::TreesitterCompileError(err.to_string()))
+        .map_err(|err| Error::TreesitterCompileError(err.to_string()))
 }

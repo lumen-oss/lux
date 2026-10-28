@@ -8,31 +8,31 @@ use crate::{
     build::Deploy,
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
-    lua_installation::{LuaInstallation, LuaInstallationError},
+    lua_installation::{self, LuaInstallation},
     lua_rockspec::BuildBackendSpec,
     luarocks::{
         install_binary_rock::{BinaryRockInstall, InstallBinaryRockError},
         luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     },
     rockspec::Rockspec,
-    tree::{InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 
 use super::materialise::{MaterialisedPackage, PackageSource};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum BuildError {
+pub enum Error {
     #[error("failed to build '{0}'")]
-    Build(String, #[source] Box<crate::build::BuildError>),
+    Build(String, #[source] Box<crate::build::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error("failed to install pre-built rock '{0}'")]
     InstallBinaryRock(String, #[source] Box<InstallBinaryRockError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[error("error instantiating LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocks(#[from] LuaRocksError),
@@ -41,7 +41,7 @@ pub enum BuildError {
     LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
 }
 
-impl From<LuaRocksInstallError> for BuildError {
+impl From<LuaRocksInstallError> for Error {
     fn from(source: LuaRocksInstallError) -> Self {
         Self::LuaRocksInstall(Box::new(source))
     }
@@ -76,7 +76,7 @@ where
     T: InstallTree + Send + Sync,
     State: build_builder::State + build_builder::IsComplete,
 {
-    pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, BuildError> {
+    pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, Error> {
         let args = self._build();
         let lua = LuaInstallation::new_from_config(args.config).await?;
 
@@ -120,7 +120,7 @@ where
                     .deploy()
                     .await
                     .map_err(|err| {
-                        BuildError::Build(
+                        Error::Build(
                             format!("{}-{}", rockspec.package(), rockspec.version()),
                             Box::new(err),
                         )
@@ -140,7 +140,7 @@ where
                 .install()
                 .await
                 .map_err(|err| {
-                    BuildError::InstallBinaryRock(rockspec.package().to_string(), Box::new(err))
+                    Error::InstallBinaryRock(rockspec.package().to_string(), Box::new(err))
                 })?,
             };
 

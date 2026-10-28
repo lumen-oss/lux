@@ -13,12 +13,12 @@ use crate::{
     build::utils::c_dylib_extension,
     config::Config,
     fs,
-    lua_installation::{LuaInstallation, LuaInstallationError},
+    lua_installation::{self, LuaInstallation},
     lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
     project::{project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
-    tree::{InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 
 /// Compile a Lux project and all its dependencies into a single
@@ -60,7 +60,7 @@ pub enum DistProjectBinError {
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[cfg(not(target_os = "linux"))]
     #[error(
         r#"Lua binary libraries are only linkable on Linux.
@@ -70,14 +70,14 @@ Cannot link the following binaries:
     CannotLinkBinaryLibs(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[error(transparent)]
     CC(#[from] cc::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("C compilation failed (exit {status}):\nstdout: {stdout}\nstderr: {stderr}")]
     CompilationFailed {
         status: std::process::ExitStatus,
@@ -247,7 +247,7 @@ async fn generate_c_source(
     entrypoint_module: &str,
     files: &InstalledFiles,
     lib_root: &Path,
-) -> Result<String, fs::FsError> {
+) -> Result<String, fs::Error> {
     let mut out = String::from(C_PREAMBLE);
 
     out.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");

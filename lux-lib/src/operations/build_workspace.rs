@@ -1,7 +1,7 @@
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::sync::{Sync, SyncError, SyncMode, TargetSet},
+    drivers::sync::{self, Sync, SyncMode, TargetSet},
     lockfile::LockedPackage,
     package::PackageName,
     workspace::Workspace,
@@ -15,11 +15,11 @@ use tracing::{info_span, Instrument};
 pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Sync(Box<SyncError>),
+    Sync(Box<sync::Error>),
 }
 
-impl From<SyncError> for BuildWorkspaceError {
-    fn from(source: SyncError) -> Self {
+impl From<sync::Error> for BuildWorkspaceError {
+    fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
 }

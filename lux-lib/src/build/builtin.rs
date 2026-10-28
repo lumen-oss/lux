@@ -15,7 +15,7 @@ use crate::{
     },
     fs,
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
-    tree::{InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 
 #[cfg(not(feature = "luau-transpile"))]
@@ -25,7 +25,7 @@ use super::utils::{CompileCFilesError, CompileCModulesError, InstallBinaryError}
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum BuiltinBuildError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CompileCFiles(#[from] CompileCFilesError),
@@ -40,10 +40,10 @@ pub enum BuiltinBuildError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error("module auto-detection failed")]
     #[diagnostic(transparent)]
     AutoDetectModules(#[from] AutoDetectModulesError),
@@ -55,7 +55,7 @@ pub enum BuiltinBuildError {
     #[cfg(feature = "luau-transpile")]
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuauTranspile(#[from] super::luau::LuauTranspileError),
+    LuauTranspile(#[from] super::luau::Error),
     #[cfg(not(feature = "luau-transpile"))]
     #[error("cannot install Luau module `{module}` on {lua_version}")]
     #[diagnostic(help(
@@ -68,7 +68,7 @@ pub enum BuiltinBuildError {
 }
 
 impl BuildBackend for BuiltinBuildSpec {
-    type Err = BuiltinBuildError;
+    type Err = Error;
 
     #[tracing::instrument(name = "builtin::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -95,7 +95,7 @@ impl BuildBackend for BuiltinBuildSpec {
                 ModuleSpec::SourcePaths(_) | ModuleSpec::ModulePaths(_) => true,
             });
             if has_native_modules {
-                return Err(BuiltinBuildError::LuauNativeDepsUnsupported);
+                return Err(Error::LuauNativeDepsUnsupported);
             }
         }
 
@@ -127,7 +127,7 @@ impl BuildBackend for BuiltinBuildSpec {
                             .await?;
                         }
                         #[cfg(not(feature = "luau-transpile"))]
-                        return Err(BuiltinBuildError::LuauTranspileDisabled {
+                        return Err(Error::LuauTranspileDisabled {
                             module: destination_path.to_string(),
                             lua_version: lua.version.clone(),
                         });
@@ -175,7 +175,7 @@ impl BuildBackend for BuiltinBuildSpec {
                 let installed_bin_script =
                     utils::install_binary(&bin_script, &file_name, tree, lua, args.deploy, config)
                         .await
-                        .map_err(|err| BuiltinBuildError::InstallBinary {
+                        .map_err(|err| Error::InstallBinary {
                             file_name: file_name.clone(),
                             source: err,
                         })?;

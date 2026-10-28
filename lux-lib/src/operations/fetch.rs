@@ -147,7 +147,7 @@ pub enum FetchSrcError {
     Hash(#[source] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 impl From<reqwest::Error> for FetchSrcError {
@@ -392,7 +392,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 let mut file = fs::sync::open(path)?;
                 let mut buffer = Vec::new();
                 file.read_to_end(&mut buffer)
-                    .map_err(|source| fs::FsError::Read {
+                    .map_err(|source| fs::Error::Read {
                         path: path.to_path_buf(),
                         source,
                     })?;

@@ -2,7 +2,7 @@ use crate::{
     build::utils::c_dylib_extension,
     config::Config,
     lua_version::LuaVersion,
-    tree::{InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -36,10 +36,10 @@ pub struct Paths {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum PathsError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
 }
 
 impl Paths {
@@ -52,7 +52,7 @@ impl Paths {
         }
     }
 
-    pub fn new(tree: &impl InstallTree) -> Result<Self, PathsError> {
+    pub fn new(tree: &impl InstallTree) -> Result<Self, Error> {
         let mut paths = Self::default(tree);
         for package in tree.list()?.values().flatten() {
             let layout = tree.layout_for(&package.spec);
@@ -81,14 +81,14 @@ impl Paths {
         tree: &T,
         config: &Config,
         environment: LuaEnvironment,
-    ) -> Result<Self, PathsError> {
+    ) -> Result<Self, Error> {
         let tree_paths = Self::new(tree)?;
         match environment {
             LuaEnvironment::Pure => Ok(tree_paths),
             LuaEnvironment::Impure => {
                 let user_tree = config
                     .user_tree(tree.version().clone())
-                    .map_err(PathsError::from)?;
+                    .map_err(Error::from)?;
                 let mut paths = Self::new(&user_tree)?;
                 paths.prepend(&tree_paths);
                 Ok(paths)

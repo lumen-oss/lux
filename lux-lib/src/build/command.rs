@@ -15,8 +15,8 @@ use crate::{
     config::Config,
     lua_installation::LuaInstallation,
     lua_rockspec::CommandBuildSpec,
-    path::{Paths, PathsError},
-    tree::{InstallTree, RockLayout, TreeError},
+    path::{self, Paths},
+    tree::{self, InstallTree, RockLayout},
     variables::VariableSubstitutionError,
 };
 
@@ -24,13 +24,13 @@ use super::external_dependency::ExternalDependencyInfo;
 use super::utils;
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum CommandError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("'build_command' and 'install_command' cannot be empty.")]
     #[diagnostic(
         help("set a command in the `build.build_command` or `build.install_command` field"),
@@ -65,7 +65,7 @@ pub enum CommandError {
 }
 
 impl BuildBackend for CommandBuildSpec {
-    type Err = CommandError;
+    type Err = Error;
 
     #[tracing::instrument(name = "command::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -123,7 +123,7 @@ async fn run_command(
     config: &Config,
     build_dir: &Path,
     build_paths: &Paths,
-) -> Result<(), CommandError> {
+) -> Result<(), Error> {
     let lua_path = build_paths.package_path_prepended().joined();
     let lua_cpath = build_paths.package_cpath_prepended().joined();
     let bin_path = build_paths.path_prepended().joined();
@@ -131,7 +131,7 @@ async fn run_command(
         utils::substitute_variables(command, output_paths, lua, external_dependencies, config)?;
 
     if substituted_cmd.is_empty() {
-        return Err(CommandError::EmptyCommand);
+        return Err(Error::EmptyCommand);
     }
 
     #[cfg(target_env = "msvc")]
@@ -150,7 +150,7 @@ async fn run_command(
         .spawn()
     {
         Err(err) => {
-            return Err(CommandError::Io {
+            return Err(Error::Io {
                 err,
                 command: substituted_cmd,
             });
@@ -165,7 +165,7 @@ async fn run_command(
         {
             Ok(output) if output.status.success() => utils::trace_command_output(&output),
             Ok(output) => {
-                return Err(CommandError::CommandFailure {
+                return Err(Error::CommandFailure {
                     command: substituted_cmd,
                     status: output.status,
                     stdout: String::from_utf8_lossy(&output.stdout).into(),
@@ -173,7 +173,7 @@ async fn run_command(
                 });
             }
             Err(err) => {
-                return Err(CommandError::Io {
+                return Err(Error::Io {
                     err,
                     command: substituted_cmd,
                 });

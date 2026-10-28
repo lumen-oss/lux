@@ -3,7 +3,7 @@ use std::io;
 use crate::fs;
 use crate::lockfile::{FlushLockfileError, LockedPackage, LockedPackageId};
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
-use crate::tree::{EntryType, InstallTree, TreeError};
+use crate::tree::{self, EntryType, InstallTree};
 use crate::{config::Config, tree::Tree};
 use bon::Builder;
 use futures::StreamExt;
@@ -18,10 +18,10 @@ pub enum RemoveError {
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),

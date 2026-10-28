@@ -18,7 +18,7 @@ use tracing::Instrument;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum RustError {
+pub enum Error {
     #[error("`cargo build` failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
     CargoBuild {
         status: ExitStatus,
@@ -32,13 +32,13 @@ pub enum RustError {
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("luau does not support rust-mlua dependencies")]
     LuauUnsupported,
 }
 
 impl BuildBackend for RustMluaBuildSpec {
-    type Err = RustError;
+    type Err = Error;
 
     #[tracing::instrument(name = "rust_mlua::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -59,7 +59,7 @@ impl BuildBackend for RustMluaBuildSpec {
             LuaVersion::Lua55 => "lua55",
             LuaVersion::LuaJIT => "luajit",
             LuaVersion::LuaJIT52 => "luajit",
-            LuaVersion::Luau => return Err(RustError::LuauUnsupported),
+            LuaVersion::Luau => return Err(Error::LuauUnsupported),
         };
         let features = self
             .features
@@ -101,13 +101,13 @@ impl BuildBackend for RustMluaBuildSpec {
             {
                 Ok(output) if output.status.success() => utils::trace_command_output(&output),
                 Ok(output) => {
-                    return Err(RustError::CargoBuild {
+                    return Err(Error::CargoBuild {
                         status: output.status,
                         stdout: String::from_utf8_lossy(&output.stdout).into(),
                         stderr: String::from_utf8_lossy(&output.stderr).into(),
                     });
                 }
-                Err(source) => return Err(RustError::RustBuild { source }),
+                Err(source) => return Err(Error::RustBuild { source }),
             }
         }
         fs::tokio::create_dir_all(&layout.lib).await?;
@@ -143,7 +143,7 @@ async fn install_rust_libs(
     build_dir: &Path,
     lib_dir: &Path,
     profile_dir: &str,
-) -> Result<(), fs::FsError> {
+) -> Result<(), fs::Error> {
     for (module, rust_lib) in modules {
         let src = build_dir.join(target_path).join(profile_dir).join(rust_lib);
         let mut dst: PathBuf = lib_dir.join(module);
@@ -158,7 +158,7 @@ async fn install_lua_libs(
     include: HashMap<PathBuf, PathBuf>,
     build_dir: &Path,
     src_dir: &Path,
-) -> Result<(), fs::FsError> {
+) -> Result<(), fs::Error> {
     for (from, to) in include {
         let src = build_dir.join(from);
         let dst = src_dir.join(to);

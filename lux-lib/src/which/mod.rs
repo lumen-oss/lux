@@ -5,7 +5,7 @@ use crate::{
     lua_rockspec::LuaModule,
     lua_version::{LuaVersion, LuaVersionUnset},
     package::PackageReq,
-    tree::{InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -39,7 +39,7 @@ where
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub fn search(self) -> Result<PathBuf, WhichError>
+    pub fn search(self) -> Result<PathBuf, Error>
     where
         State: which_builder::IsComplete,
     {
@@ -49,12 +49,12 @@ where
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum WhichError {
+pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
@@ -62,7 +62,7 @@ pub enum WhichError {
     ModuleNotFound(LuaModule),
 }
 
-fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
+fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
     let config = which.config;
     let lua_version = LuaVersion::from(config)?;
     let tree = config.user_tree(lua_version.clone())?;
@@ -110,7 +110,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, WhichError> {
             None
         })
         .next()
-        .ok_or(WhichError::ModuleNotFound(which.module))
+        .ok_or(Error::ModuleNotFound(which.module))
 }
 
 #[cfg(test)]
@@ -171,10 +171,10 @@ mod tests {
         let result = Which::new(LuaModule::from_str("foo.bar").unwrap(), &config)
             .package("lua-cjson".parse().unwrap())
             .search();
-        assert!(matches!(result, Err(WhichError::ModuleNotFound(_))));
+        assert!(matches!(result, Err(Error::ModuleNotFound(_))));
         let result = Which::new(LuaModule::from_str("foo.bar").unwrap(), &config)
             .package("neorg@8.1.1-1".parse().unwrap())
             .search();
-        assert!(matches!(result, Err(WhichError::ModuleNotFound(_))));
+        assert!(matches!(result, Err(Error::ModuleNotFound(_))));
     }
 }

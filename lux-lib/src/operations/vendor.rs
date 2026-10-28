@@ -24,16 +24,16 @@ use crate::{
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{self, PackageInstallSpec, UnpackError},
     package::{PackageReq, PackageSpec},
-    package_db::{PackageDB, PackageDBError},
+    package_db::{self, PackageDB},
     pipeline::{
         materialise::{Error as MaterialiseError, Materialise, MaterialisedPackage, PackageSource},
-        resolve::{luarocks_build_backend_name, ResolveError, ResolvePackageDependencies},
+        resolve::{self, luarocks_build_backend_name, ResolvePackageDependencies},
         Artifacts,
     },
     project::project_toml::LocalProjectTomlValidationError,
     rockspec::Rockspec,
     tree::EntryType,
-    workspace::{Workspace, WorkspaceError},
+    workspace::{self, Workspace},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -70,22 +70,22 @@ pub struct Vendor<'a> {
 pub enum VendorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error("project validation failed")]
     #[diagnostic(forward(0))]
     LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Resolve(#[from] ResolveError),
+    Resolve(#[from] resolve::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Download(#[from] MaterialiseError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("failed to vendor Lua RockSpec:\n{0}")]
     LuaRockSpec(String),
     #[error("failed to unpack src.rock")]
@@ -349,7 +349,7 @@ async fn vendor_package_sources(
             let mut file = fs::tokio::create(&rock_path).await?;
             file.write_all(bytes)
                 .await
-                .map_err(|source| fs::FsError::Write {
+                .map_err(|source| fs::Error::Write {
                     path: rock_path,
                     source,
                 })?;
