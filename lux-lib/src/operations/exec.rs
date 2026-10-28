@@ -8,11 +8,11 @@ use crate::{
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildWorkspace, BuildWorkspaceError},
-    package::{PackageReq, PackageVersionReqError},
+    package::{PackageReq, VersionReqError},
     package_db::{self, PackageDB},
     path::{self, Paths},
     tree::{self, InstallTree},
-    workspace::{Workspace, WorkspaceTreeError},
+    workspace::{TreeError, Workspace},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -99,7 +99,7 @@ pub enum ExecError {
     InstallCommand(#[from] Box<InstallCommandError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error("failed to execute '{0}':\n{1}")]
     Io(String, io::Error),
 }
@@ -120,7 +120,7 @@ impl From<InstallCommandError> for ExecError {
 #[error(transparent)]
 pub enum InstallCommandError {
     Install(#[from] Box<install_packages::Error>),
-    PackageVersionReqError(#[from] PackageVersionReqError),
+    PackageVersionReqError(#[from] VersionReqError),
     PackageDB(#[from] package_db::Error),
     Tree(#[from] tree::Error),
     LuaVersionUnset(#[from] LuaVersionUnset),

@@ -37,7 +37,7 @@ pub enum LuaVersion {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum LuaVersionError {
+pub enum Error {
     #[error("unsupported Lua version: '{0}'")]
     UnsupportedLuaVersion(PackageVersion),
 }
@@ -75,7 +75,7 @@ impl LuaVersion {
     }
 
     /// Get the LuaVersion from a version that has been parsed from the `lua -v` output
-    pub fn from_version(version: PackageVersion) -> Result<LuaVersion, LuaVersionError> {
+    pub fn from_version(version: PackageVersion) -> Result<LuaVersion, Error> {
         // NOTE: Special case. luajit -v outputs 2.x.y as a version
         let luajit_version_req: PackageVersionReq = unsafe { "~> 2".parse().unwrap_unchecked() };
         if luajit_version_req.matches(&version) {
@@ -91,7 +91,7 @@ impl LuaVersion {
         } else if LuaVersion::Lua55.as_version_req().matches(&version) {
             Ok(LuaVersion::Lua55)
         } else {
-            Err(LuaVersionError::UnsupportedLuaVersion(version))
+            Err(Error::UnsupportedLuaVersion(version))
         }
     }
 

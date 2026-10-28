@@ -11,7 +11,7 @@ use crate::{
     lua_installation::{self, LuaInstallation},
     lua_rockspec::BuildBackendSpec,
     luarocks::{
-        install_binary_rock::{BinaryRockInstall, InstallBinaryRockError},
+        install_binary_rock::{self, BinaryRockInstall},
         luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     },
     rockspec::Rockspec,
@@ -29,7 +29,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
     #[error("failed to install pre-built rock '{0}'")]
-    InstallBinaryRock(String, #[source] Box<InstallBinaryRockError>),
+    InstallBinaryRock(String, #[source] Box<install_binary_rock::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaInstallation(#[from] lua_installation::Error),

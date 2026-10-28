@@ -47,7 +47,7 @@ impl HasModRev for PackageVersion {
 }
 
 impl PackageVersion {
-    pub fn parse(text: &str) -> Result<Self, PackageVersionParseError> {
+    pub fn parse(text: &str) -> Result<Self, VersionParseError> {
         PackageVersion::from_str(text)
     }
     /// The package version without its spec revision.
@@ -163,7 +163,7 @@ impl TryFrom<PackageVersionReq> for PackageVersion {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum PackageVersionParseError {
+pub enum VersionParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Specrev(#[from] SpecrevParseError),
@@ -227,7 +227,7 @@ impl Ord for PackageVersion {
 }
 
 impl FromStr for PackageVersion {
-    type Err = PackageVersionParseError;
+    type Err = VersionParseError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let (modrev, specrev) = split_specrev(text)?;
@@ -665,7 +665,7 @@ pub(crate) trait HasModRev {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
-pub struct PackageVersionReqError(#[from] Error);
+pub struct VersionReqError(#[from] Error);
 
 /// **SemVer version** requirement as defined by <https://semver.org>.
 /// or a **Dev** version requirement, which can be one of "dev", "scm", or "git"
@@ -687,7 +687,7 @@ impl PackageVersionReq {
         PackageVersionReq::Any
     }
 
-    pub fn parse(text: &str) -> Result<Self, PackageVersionReqError> {
+    pub fn parse(text: &str) -> Result<Self, VersionReqError> {
         PackageVersionReq::from_str(text)
     }
 
@@ -747,7 +747,7 @@ impl<'de> Deserialize<'de> for PackageVersionReq {
 }
 
 impl FromStr for PackageVersionReq {
-    type Err = PackageVersionReqError;
+    type Err = VersionReqError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let text = correct_version_req_str(text);

@@ -5,7 +5,7 @@ use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
 pub(crate) mod tiniest;
 use crate::fs;
 use crate::tree::InstallTree;
-use crate::workspace::{self, WorkspaceTreeError};
+use crate::workspace::{self, TreeError};
 use crate::{
     build::BuildBehaviour,
     config::{self, Config},
@@ -110,7 +110,7 @@ pub enum RunTestsError {
     Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] WorkspaceTreeError),
+    Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     ProjectTomlValidation(#[from] LocalProjectTomlValidationError),

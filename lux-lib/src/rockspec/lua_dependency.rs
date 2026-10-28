@@ -5,7 +5,7 @@ use crate::{
     lua_rockspec::{
         ExternalDependencySpec, PartialOverride, PerPlatform, PlatformOverridable, RockSourceSpec,
     },
-    package::{PackageName, PackageReq, PackageReqParseError, PackageSpec, PackageVersionReq},
+    package::{PackageName, PackageReq, PackageSpec, PackageVersionReq, ReqParseError},
 };
 use miette::Diagnostic;
 use serde::{Deserialize, Deserializer};
@@ -13,10 +13,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LuaDependencySpecParseError {
+pub enum SpecParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageReq(#[from] PackageReqParseError),
+    PackageReq(#[from] ReqParseError),
 }
 
 /// Specification for a Lua dependency in a Lux project
@@ -92,9 +92,9 @@ impl From<PackageReq> for LuaDependencySpec {
 }
 
 impl FromStr for LuaDependencySpec {
-    type Err = LuaDependencySpecParseError;
+    type Err = SpecParseError;
 
-    fn from_str(str: &str) -> Result<Self, LuaDependencySpecParseError> {
+    fn from_str(str: &str) -> Result<Self, SpecParseError> {
         let package_req = PackageReq::from_str(str)?;
         Ok(Self {
             package_req,

@@ -173,7 +173,7 @@ where
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum ProjectTomlError {
+pub enum Error {
     #[error("error generating rockspec source")]
     #[diagnostic(forward(0))]
     GenerateSource(#[from] GenerateSourceError),
@@ -976,7 +976,7 @@ impl LocalProjectToml {
 
     /// Like [`Rockspec::to_lua_remote_rockspec_string`], but pointing at the project root,
     /// so projects without a release URL can still render a rockspec.
-    fn to_lua_local_rockspec_string(&self) -> Result<String, ProjectTomlError> {
+    fn to_lua_local_rockspec_string(&self) -> Result<String, Error> {
         self.render_rockspec(
             &self.version,
             Some(self.source.current_platform().source_spec.display_lua()),
@@ -987,7 +987,7 @@ impl LocalProjectToml {
         &self,
         version: &PackageVersion,
         source: Option<DisplayLuaKV>,
-    ) -> Result<String, ProjectTomlError> {
+    ) -> Result<String, Error> {
         let starter = format!(
             r#"
 rockspec_format = "{}"
@@ -1081,7 +1081,7 @@ version = "{}""#,
 }
 
 impl Rockspec for LocalProjectToml {
-    type Error = ProjectTomlError;
+    type Error = Error;
 
     fn package(&self) -> &PackageName {
         &self.package
@@ -1210,23 +1210,23 @@ fn build_spec_with_autodetected_modules(
     }
 }
 
-fn validate_generated_lua(lua_str: &str) -> Result<(), ProjectTomlError> {
+fn validate_generated_lua(lua_str: &str) -> Result<(), Error> {
     let mut lua = ottavino::Lua::core();
     lua.try_enter(|ctx| {
         let closure = ottavino::Closure::load(ctx, None, lua_str.as_bytes())?;
         let executor = ottavino::Executor::start(ctx, closure.into(), ());
         if !executor.step(ctx, &mut ottavino::Fuel::with(ROCKSPEC_FUEL_LIMIT))? {
-            return Ok(Err(ProjectTomlError::FuelLimitExceeded));
+            return Ok(Err(Error::FuelLimitExceeded));
         }
         Ok(Ok(()))
     })
-    .map_err(|err| ProjectTomlError::GeneratedInvalidLua(err.to_string()))?
+    .map_err(|err| Error::GeneratedInvalidLua(err.to_string()))?
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
-pub enum ProjectTomlIntegrityError {
+pub enum IntegrityError {
     LuaRockspec(#[from] lua_rockspec::Error),
     IoError(#[from] io::Error),
     #[error(transparent)]
@@ -1257,7 +1257,7 @@ impl RemoteProjectToml {
 }
 
 impl Rockspec for RemoteProjectToml {
-    type Error = ProjectTomlError;
+    type Error = Error;
 
     fn package(&self) -> &PackageName {
         self.local.package()

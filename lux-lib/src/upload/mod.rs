@@ -4,7 +4,7 @@ use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::operations::SearchAndDownloadError;
 use crate::package::{PackageName, PackageVersion, SpecRevIterator};
 use crate::package_db::PackageDB;
-use crate::project::project_toml::{ProjectTomlError, RemoteProjectTomlValidationError};
+use crate::project::project_toml::{self, RemoteProjectTomlValidationError};
 use crate::rockspec::Rockspec;
 use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
@@ -200,7 +200,7 @@ if the issue persists, the server may be temporarily unavailable."#
     UnsupportedVersion(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Rockspec(#[from] ProjectTomlError),
+    Rockspec(#[from] project_toml::Error),
     #[error("the maximum supported number of rockspec revisions per version has been exceeded")]
     #[diagnostic(help("bump the version to a version that has not yet been published"))]
     MaxSpecRevsExceeded,

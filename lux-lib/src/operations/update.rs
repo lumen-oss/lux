@@ -12,7 +12,7 @@ use crate::{
     package_db::{self, PackageDB},
     remote_package_source::RemotePackageSource,
     tree::{self, InstallTree, Tree},
-    workspace::{self, Workspace, WorkspaceTreeError},
+    workspace::{self, TreeError, Workspace},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -51,7 +51,7 @@ pub enum UpdateError {
     Tree(#[from] tree::Error),
     #[error("error initialising the workspace install tree")]
     #[diagnostic(forward(0))]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error("error syncing the workspace install tree")]
     #[diagnostic(forward(0))]
     Sync(#[from] Box<sync::Error>),

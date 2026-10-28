@@ -19,8 +19,8 @@ use crate::{
     lua_rockspec::{LuaModule, ModuleSpec, ParseLuaModuleError, RemoteLuaRockspec, RockSourceSpec},
     package::{
         wally::{self, Manifest, PackageName as WallyPackageName, PackageReq as WallyPackageReq},
-        PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionParseError,
-        PackageVersionReq, RemotePackage,
+        PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq, RemotePackage,
+        VersionParseError,
     },
     remote_package_source::RemotePackageSource,
     reqwest::RequestError,
@@ -48,7 +48,7 @@ pub enum WallyDiscoverError {
     #[diagnostic(help(
         "the package manifest contains an invalid version; report it to the package author."
     ))]
-    Version(#[from] PackageVersionParseError),
+    Version(#[from] VersionParseError),
     #[error("wally package '{0}' was not found in any registry")]
     #[diagnostic(help(
         "check the package name and version, or add its registry to `extra_wally_registries` in your Lux config."

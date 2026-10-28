@@ -19,8 +19,8 @@ use crate::{
     lua_rockspec::{self, RemoteLuaRockspec, RockSourceSpec},
     luarocks,
     package::{
-        PackageName, PackageReq, PackageSpec, PackageSpecFromPackageReqError, PackageVersion,
-        RemotePackage, RemotePackageTypeFilterSpec,
+        PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage,
+        RemotePackageTypeFilterSpec, SpecFromPackageReqError,
     },
     package_db::{self, PackageDB, SearchError},
     remote_package_source::RemotePackageSource,
@@ -433,7 +433,7 @@ check your network connection and rerun the command to re-download it."#
     RockspecNotFoundInPackedRock(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageSpecFromPackageReq(#[from] PackageSpecFromPackageReqError),
+    PackageSpecFromPackageReq(#[from] SpecFromPackageReqError),
     #[error("git source {0} without a revision or tag.")]
     #[diagnostic(help(
         r#"lux requires a pinned revision or tag to ensure reproducible builds.

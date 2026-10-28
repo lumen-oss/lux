@@ -24,7 +24,7 @@ pub(crate) struct RockManifest {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum RockManifestError {
+pub enum Error {
     #[error("could not parse rock_manifest")]
     Piccolo(#[from] ottavino::ExternError),
     #[error("could not deserialize rock_manifest")]
@@ -38,7 +38,7 @@ pub enum RockManifestError {
 }
 
 impl RockManifest {
-    pub fn new(rock_manifest_content: &str) -> Result<Self, RockManifestError> {
+    pub fn new(rock_manifest_content: &str) -> Result<Self, Error> {
         let mut lua = ottavino::Lua::core();
 
         Ok(lua
@@ -46,7 +46,7 @@ impl RockManifest {
                 let closure = Closure::load(ctx, None, rock_manifest_content.as_bytes())?;
                 let executor = Executor::start(ctx, closure.into(), ());
                 if !executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))? {
-                    return Ok(Err(RockManifestError::FuelLimitExceeded));
+                    return Ok(Err(Error::FuelLimitExceeded));
                 }
                 Ok(
                     from_value::<Option<Self>>(ctx.globals().get_value(ctx, "rock_manifest"))

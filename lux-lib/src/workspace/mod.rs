@@ -106,7 +106,7 @@ specify the package with '--package=[PACKAGE_NAME]'
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum WorkspaceTreeError {
+pub enum TreeError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
@@ -125,7 +125,7 @@ pub struct Workspace {
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error("error loading '{}'", .path.display())]
-pub struct WorkspaceConfigError {
+pub struct ConfigError {
     path: PathBuf,
     #[diagnostic(source)]
     source: Box<config::Error>,
@@ -251,7 +251,7 @@ impl Workspace {
         }
     }
 
-    pub fn tree(&self, config: &Config) -> Result<Tree, WorkspaceTreeError> {
+    pub fn tree(&self, config: &Config) -> Result<Tree, TreeError> {
         self.lua_version_tree(self.lua_version(config)?, config)
     }
 
@@ -268,7 +268,7 @@ impl Workspace {
         &self,
         lua_version: LuaVersion,
         config: &Config,
-    ) -> Result<Tree, WorkspaceTreeError> {
+    ) -> Result<Tree, TreeError> {
         let root_dir = config
             .workspace_tree()
             .map(|p| p.to_path_buf())
@@ -281,11 +281,11 @@ impl Workspace {
         self.root.join(LUX_DIR_NAME)
     }
 
-    pub fn test_tree(&self, config: &Config) -> Result<Tree, WorkspaceTreeError> {
+    pub fn test_tree(&self, config: &Config) -> Result<Tree, TreeError> {
         Ok(self.tree(config)?.test_tree(config)?)
     }
 
-    pub fn build_tree(&self, config: &Config) -> Result<Tree, WorkspaceTreeError> {
+    pub fn build_tree(&self, config: &Config) -> Result<Tree, TreeError> {
         Ok(self.tree(config)?.build_tree(config)?)
     }
 
@@ -296,11 +296,11 @@ impl Workspace {
 
     /// Load a [`ConfigBuilder`] from a config.toml that resides in [`Self::workspace_dir`],
     /// if present.
-    pub fn config(&self) -> Result<Option<ConfigBuilder>, WorkspaceConfigError> {
+    pub fn config(&self) -> Result<Option<ConfigBuilder>, ConfigError> {
         let config_file = self.config_file();
         if config_file.is_file() {
             Ok(Some(ConfigBuilder::from_file(&config_file).map_err(
-                |err| WorkspaceConfigError {
+                |err| ConfigError {
                     path: config_file.to_path_buf(),
                     source: Box::new(err),
                 },

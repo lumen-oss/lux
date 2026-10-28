@@ -23,7 +23,7 @@ use url::Url;
 use crate::fs;
 use crate::package::{
     PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq,
-    PackageVersionReqError, RemotePackageTypeFilterSpec,
+    RemotePackageTypeFilterSpec, VersionReqError,
 };
 use crate::remote_package_source::RemotePackageSource;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
@@ -623,7 +623,7 @@ impl From<PackageVersionReq> for LockConstraint {
 pub enum LockConstraintParseError {
     #[error("Invalid constraint in LuaPackage")]
     #[diagnostic(forward(0))]
-    LockConstraintParseError(#[from] PackageVersionReqError),
+    LockConstraintParseError(#[from] VersionReqError),
 }
 
 impl TryFrom<&Option<String>> for LockConstraint {
@@ -935,7 +935,7 @@ pub enum Error {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LockfileIntegrityError {
+pub enum IntegrityError {
     #[error(
         r#"rockspec integrity mismatch.
 - source: {src}
@@ -1095,7 +1095,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     pub(crate) fn validate_integrity(
         &self,
         expected_package: &LockedPackage,
-    ) -> Result<(), LockfileIntegrityError> {
+    ) -> Result<(), IntegrityError> {
         // NOTE: We can't query by ID, because when installing from a lockfile (e.g. during sync),
         // the constraint is always `==`.
         match self.list().get(expected_package.name()) {
@@ -1112,7 +1112,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
                         .matches(&installed_package.hashes.rockspec)
                         .is_none()
                     {
-                        return Err(LockfileIntegrityError::RockspecIntegrityMismatch {
+                        return Err(IntegrityError::RockspecIntegrityMismatch {
                             src: expected_package.source.to_string(),
                             expected: expected_package.hashes.rockspec.clone(),
                             got: installed_package.hashes.rockspec.clone(),
@@ -1124,7 +1124,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
                         .matches(&installed_package.hashes.source)
                         .is_none()
                     {
-                        return Err(LockfileIntegrityError::SourceIntegrityMismatch {
+                        return Err(IntegrityError::SourceIntegrityMismatch {
                             src: expected_package
                                 .source_url
                                 .as_ref()
@@ -1734,8 +1734,8 @@ fn migrate_entrypoints(
     Ok(())
 }
 
-fn integrity_err_not_found(package: &LockedPackage) -> LockfileIntegrityError {
-    LockfileIntegrityError::PackageNotFound(
+fn integrity_err_not_found(package: &LockedPackage) -> IntegrityError {
+    IntegrityError::PackageNotFound(
         package.name().clone(),
         Box::new(package.version().clone()),
         package.spec.pinned,

@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     lua_rockspec::{RockSourceInternal, SourceUrl, SourceUrlError},
-    package::{PackageName, PackageSpec, PackageVersion, PackageVersionParseError, SpecRev},
+    package::{PackageName, PackageSpec, PackageVersion, SpecRev, VersionParseError},
     variables::{self, Environment, GetVariableError, HasVariables, VariableSubstitutionError},
 };
 use ::serde::Deserialize;
@@ -199,7 +199,7 @@ pub enum GenerateVersionError {
     Git(#[from] git2::Error),
     #[error("error parsing version from git ref")]
     #[diagnostic(forward(0))]
-    PackageVersionParse(#[from] PackageVersionParseError),
+    PackageVersionParse(#[from] VersionParseError),
 }
 
 impl PackageVersionTemplate {
