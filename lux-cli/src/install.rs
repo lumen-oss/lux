@@ -8,7 +8,7 @@ use lux_lib::{
     operations,
     package::{PackageName, PackageReq},
     package_db::PackageDB,
-    workspace::{Workspace, WorkspaceError},
+    workspace::{self, Workspace},
 };
 
 use miette::Result;
@@ -53,7 +53,7 @@ async fn install_from_path(
     config: Config,
 ) -> Result<()> {
     let workspace =
-        Workspace::from(&path)?.ok_or_else(|| WorkspaceError::NoWorkspaceOrProject(path))?;
+        Workspace::from(&path)?.ok_or_else(|| workspace::Error::NoWorkspaceOrProject(path))?;
 
     let project = workspace.single_member_or_select(&package)?;
 

@@ -4,7 +4,7 @@ use crate::{
     lockfile::LockedPackageLockType,
     lua_version::LuaVersion,
     tree::InstallTree,
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError, LUX_DIR_NAME},
+    workspace::{self, Workspace, WorkspaceTreeError, LUX_DIR_NAME},
 };
 use bon::Builder;
 use miette::Diagnostic;
@@ -20,10 +20,10 @@ const LUAURC: &str = ".luaurc";
 pub enum GenLuauRcError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),

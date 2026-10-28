@@ -1,5 +1,3 @@
-use crate::build::utils;
-use crate::build::utils::c_dylib_extension;
 use crate::fs;
 use crate::lockfile::LockedPackage;
 use crate::luarocks;
@@ -11,9 +9,11 @@ use crate::luarocks::rock_manifest::RockManifestDoc;
 use crate::luarocks::rock_manifest::RockManifestLib;
 use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
+use crate::project;
+use crate::target::c_dylib_extension;
+use crate::tree;
 use crate::tree::InstallTree;
 use crate::tree::Tree;
-use crate::tree::TreeError;
 use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
@@ -63,11 +63,11 @@ pub enum PackError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     Walkdir(#[from] walkdir::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error("expected a `package.rockspec` in the package root.")]
     MissingRockspec,
 }
@@ -94,7 +94,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let conf_entries = add_rock_entries(&mut zip, &layout.conf, "conf".into())?;
     // We copy entries from `etc` to the root directory, as luarocks doesn't have an etc directory.
     let temp_root_dir = fs::tempfile::tempdir()?;
-    utils::recursive_copy_dir(&layout.etc, temp_root_dir.path()).await?;
+    project::copy_dir(&layout.etc, temp_root_dir.path()).await?;
     // prevent duplicate doc and conf entries
     let doc = temp_root_dir.path().join("doc");
     if doc.is_dir() {

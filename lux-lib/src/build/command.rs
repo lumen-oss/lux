@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     io,
     path::Path,
-    process::{ExitStatus, Stdio},
+    process::{ExitStatus, Output, Stdio},
 };
 use thiserror::Error;
 
@@ -11,26 +11,25 @@ use tracing::{info_span, Instrument};
 use which::which;
 
 use crate::{
-    build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
+    build::backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
     config::Config,
     lua_installation::LuaInstallation,
     lua_rockspec::CommandBuildSpec,
-    path::{Paths, PathsError},
-    tree::{InstallTree, RockLayout, TreeError},
+    path::{self, Paths},
+    tree::{self, InstallTree, RockLayout},
     variables::VariableSubstitutionError,
 };
 
 use super::external_dependency::ExternalDependencyInfo;
-use super::utils;
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum CommandError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("'build_command' and 'install_command' cannot be empty.")]
     #[diagnostic(
         help("set a command in the `build.build_command` or `build.install_command` field"),
@@ -63,9 +62,21 @@ pub enum CommandError {
     #[diagnostic(transparent)]
     VariableSubstitution(#[from] VariableSubstitutionError),
 }
+pub(crate) fn trace_output(output: &Output) {
+    if !output.stderr.is_empty() {
+        for line in String::from_utf8_lossy(&output.stderr).lines() {
+            tracing::debug!("{}", line);
+        }
+    }
+    if !output.stdout.is_empty() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            tracing::debug!("{}", line);
+        }
+    }
+}
 
 impl BuildBackend for CommandBuildSpec {
-    type Err = CommandError;
+    type Err = Error;
 
     #[tracing::instrument(name = "command::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -123,15 +134,15 @@ async fn run_command(
     config: &Config,
     build_dir: &Path,
     build_paths: &Paths,
-) -> Result<(), CommandError> {
+) -> Result<(), Error> {
     let lua_path = build_paths.package_path_prepended().joined();
     let lua_cpath = build_paths.package_cpath_prepended().joined();
     let bin_path = build_paths.path_prepended().joined();
     let substituted_cmd =
-        utils::substitute_variables(command, output_paths, lua, external_dependencies, config)?;
+        backend::substitute_variables(command, output_paths, lua, external_dependencies, config)?;
 
     if substituted_cmd.is_empty() {
-        return Err(CommandError::EmptyCommand);
+        return Err(Error::EmptyCommand);
     }
 
     #[cfg(target_env = "msvc")]
@@ -150,7 +161,7 @@ async fn run_command(
         .spawn()
     {
         Err(err) => {
-            return Err(CommandError::Io {
+            return Err(Error::Io {
                 err,
                 command: substituted_cmd,
             });
@@ -163,9 +174,9 @@ async fn run_command(
             ))
             .await
         {
-            Ok(output) if output.status.success() => utils::trace_command_output(&output),
+            Ok(output) if output.status.success() => trace_output(&output),
             Ok(output) => {
-                return Err(CommandError::CommandFailure {
+                return Err(Error::CommandFailure {
                     command: substituted_cmd,
                     status: output.status,
                     stdout: String::from_utf8_lossy(&output.stdout).into(),
@@ -173,7 +184,7 @@ async fn run_command(
                 });
             }
             Err(err) => {
-                return Err(CommandError::Io {
+                return Err(Error::Io {
                     err,
                     command: substituted_cmd,
                 });

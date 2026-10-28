@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{build::utils::recursive_copy_dir, fs, tree::RockLayout};
+use crate::{fs, project, tree::RockLayout};
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -27,7 +27,7 @@ pub(crate) fn current_platform_luarocks_identifier() -> String {
 pub enum InstallRockManifestError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("rock_manifest not found")]
     #[diagnostic(help("the rock may have been packed using LuaRocks version 1"))]
     RockManifestNotFound,
@@ -48,19 +48,19 @@ async fn install_manifest_entries<T>(
     entry: &HashMap<PathBuf, T>,
     src: &Path,
     dest: &Path,
-) -> Result<(), fs::FsError> {
+) -> Result<(), fs::Error> {
     for relative_src_path in entry.keys() {
         let target = dest.join(relative_src_path);
         let src_path = src.join(relative_src_path);
         if src_path.is_dir() {
-            recursive_copy_dir(&src_path, &target).await?;
+            project::copy_dir(&src_path, &target).await?;
         } else if src_path.is_file() {
             if let Some(target_parent_dir) = target.parent() {
                 fs::tokio::create_dir_all(target_parent_dir).await?;
             }
             fs::tokio::copy(&src_path, target).await?;
         } else {
-            return Err(fs::FsError::Other(format!(
+            return Err(fs::Error::Other(format!(
                 "the entry {} listed in the `rock_manifest` is neither a file nor a directory",
                 src_path.display()
             )));
@@ -73,11 +73,11 @@ async fn install_bin_manifest_entries(
     entries: &HashMap<PathBuf, String>,
     src: &Path,
     dest: &Path,
-) -> Result<(), fs::FsError> {
+) -> Result<(), fs::Error> {
     install_manifest_entries(entries, src, dest).await?;
     #[cfg(unix)]
     for relative_src_path in entries.keys() {
-        crate::build::utils::set_executable_permissions(&dest.join(relative_src_path)).await?;
+        fs::set_executable_permissions(&dest.join(relative_src_path)).await?;
     }
     Ok(())
 }

@@ -1,12 +1,13 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
-use crate::lockfile::{LockfileError, RemotePackageSourceUrl};
-use crate::lua_installation::LuaInstallationError;
+use crate::lockfile::{self, RemotePackageSourceUrl};
+use crate::lua_installation;
 use crate::lua_rockspec::LuaVersionError;
 use crate::lua_version::LuaVersion;
 use crate::operations::UnpackError;
+use crate::project;
 use crate::rockspec::Rockspec;
-use crate::tree::{EntryType, InstallTree, TreeError};
+use crate::tree::{self, EntryType, InstallTree};
 use bon::Builder;
 use bytes::Bytes;
 use std::collections::HashMap;
@@ -23,40 +24,32 @@ use crate::{
     lua_rockspec::BuildBackendSpec,
     operations::FetchSrcError,
 };
-use builtin::BuiltinBuildError;
-use cmake::CMakeError;
-use command::CommandError;
-use external_dependency::{ExternalDependencyError, ExternalDependencyInfo};
+use external_dependency::ExternalDependencyInfo;
 
 use itertools::Itertools;
-use luarocks::LuarocksBuildError;
-use make::MakeError;
 
 use miette::Diagnostic;
-use patch::{Patch, PatchError};
-use rust_binary::RustBinaryError;
-use rust_mlua::RustError;
-use source::SourceBuildError;
+use patch::Patch;
 use ssri::Integrity;
 use thiserror::Error;
-use treesitter_parser::TreesitterBuildError;
-use utils::{recursive_copy_dir, CompileCFilesError, InstallBinaryError};
 
-mod builtin;
-mod cmake;
-mod command;
-mod luarocks;
+pub mod builtin;
+pub mod cmake;
+pub mod command;
+pub mod compile;
+pub mod install;
+pub mod luarocks;
 #[cfg(feature = "luau-transpile")]
-mod luau;
-mod make;
-mod patch;
-mod rust_binary;
-mod rust_mlua;
-mod source;
-mod treesitter_parser;
+pub mod luau;
+pub mod make;
+pub mod patch;
+pub mod rust_binary;
+pub mod rust_mlua;
+pub mod source;
+pub mod treesitter_parser;
 
 pub(crate) mod backend;
-pub(crate) mod utils;
+pub(crate) mod cargo;
 pub(crate) use builtin::autodetect_modules;
 
 pub mod external_dependency;
@@ -76,34 +69,34 @@ pub(crate) struct SrcRockSource {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum BuildError {
+pub enum Error {
     #[error("builtin build failed")]
     #[diagnostic(forward(0))]
-    Builtin(#[from] BuiltinBuildError),
+    Builtin(#[from] builtin::Error),
     #[error("cmake build failed")]
     #[diagnostic(forward(0))]
-    CMake(#[from] CMakeError),
+    CMake(#[from] cmake::Error),
     #[error("make build failed")]
     #[diagnostic(forward(0))]
-    Make(#[from] MakeError),
+    Make(#[from] make::Error),
     #[error("command build failed")]
     #[diagnostic(forward(0))]
-    Command(#[from] CommandError),
+    Command(#[from] command::Error),
     #[error("rust-mlua build failed")]
     #[diagnostic(forward(0))]
-    Rust(#[from] RustError),
+    Rust(#[from] rust_mlua::Error),
     #[error("rust-binary build failed")]
     #[diagnostic(forward(0))]
-    RustBinary(#[from] RustBinaryError),
+    RustBinary(#[from] rust_binary::Error),
     #[error("treesitter-parser build failed")]
     #[diagnostic(forward(0))]
-    TreesitterBuild(#[from] TreesitterBuildError),
+    TreesitterBuild(#[from] treesitter_parser::Error),
     #[error("luarocks build failed")]
     #[diagnostic(forward(0))]
-    LuarocksBuild(#[from] LuarocksBuildError),
+    LuarocksBuild(#[from] luarocks::Error),
     #[error("building from rock source failed")]
     #[diagnostic(forward(0))]
-    SourceBuild(#[from] Box<SourceBuildError>),
+    SourceBuild(#[from] Box<source::Error>),
     #[error("unsupported build backend for luau")]
     #[diagnostic(help("lux can build luau packages with the following build backends: 'builtin', 'source' & 'none'"))]
     LuauUnsupportedBuildBackend,
@@ -114,23 +107,23 @@ pub enum BuildError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lockfile(#[from] LockfileError),
+    Lockfile(#[from] lockfile::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ExternalDependencyError(#[from] ExternalDependencyError),
+    ExternalDependency(#[from] external_dependency::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PatchError(#[from] PatchError),
+    Patch(#[from] patch::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CompileCFiles(#[from] CompileCFilesError),
+    CompileCFiles(#[from] compile::c_files::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
@@ -159,15 +152,15 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
     InstallBinary {
         file_name: String,
         #[diagnostic_source]
-        source: InstallBinaryError,
+        source: install::Error,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
 }
 
-impl From<SourceBuildError> for BuildError {
-    fn from(source: SourceBuildError) -> Self {
+impl From<source::Error> for Error {
+    fn from(source: source::Error) -> Self {
         Self::SourceBuild(Box::new(source))
     }
 }
@@ -188,7 +181,7 @@ pub enum BuildBehaviour {
 async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
-) -> Result<BuildInfo, BuildError> {
+) -> Result<BuildInfo, Error> {
     if args.tree.version() == &LuaVersion::Luau
         && rockspec
             .build()
@@ -202,7 +195,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
                 )
             })
     {
-        Err(BuildError::LuauUnsupportedBuildBackend)
+        Err(Error::LuauUnsupportedBuildBackend)
     } else {
         Ok(
             match rockspec.build().current_platform().build_backend.to_owned() {
@@ -239,7 +232,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     build_dir: &Path,
     entry_type: &EntryType,
     config: &Config,
-) -> Result<(), BuildError> {
+) -> Result<(), Error> {
     let install_spec = &rockspec.build().current_platform().install;
     let layout = tree.layout_for(package);
     {
@@ -248,7 +241,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         for (target, source) in &install_spec.lua {
             let _enter = span.enter();
             let absolute_source = build_dir.join(source);
-            utils::copy_lua_to_module_path(&absolute_source, target, &layout.src)?;
+            install::lua_module(&absolute_source, target, &layout.src)?;
         }
     }
     {
@@ -268,7 +261,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                     .instrument(tracing::trace_span!("copying target"))
                     .await?;
             }
-            utils::make_writable(&resolved_target).await?;
+            fs::make_writable(&resolved_target).await?;
         }
     }
     if entry_type.is_entrypoint() {
@@ -276,7 +269,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         let _enter = span.enter();
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
-            utils::install_binary(
+            install::binary(
                 &build_dir.join(source),
                 target,
                 tree,
@@ -286,7 +279,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
             )
             .instrument(tracing::trace_span!("installing binary"))
             .await
-            .map_err(|err| BuildError::InstallBinary {
+            .map_err(|err| Error::InstallBinary {
                 file_name: target.clone(),
                 source: err,
             })?;
@@ -312,7 +305,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
             fs::tokio::copy(&absolute_source, &target)
                 .instrument(tracing::trace_span!("copying configuration file"))
                 .await?;
-            utils::make_writable(&target).await?;
+            fs::make_writable(&target).await?;
         }
     }
     Ok(())
@@ -340,13 +333,13 @@ where
     T: InstallTree + Sync,
     State: deploy_builder::State + deploy_builder::IsComplete,
 {
-    pub(crate) async fn deploy(self) -> Result<LockedPackage, BuildError> {
+    pub(crate) async fn deploy(self) -> Result<LockedPackage, Error> {
         do_deploy(self._build()).await
     }
 }
 
 #[tracing::instrument(level = "trace", skip_all, fields(package = deploy.rockspec.package().to_string()))]
-async fn do_deploy<R, T>(deploy: Deploy<'_, R, T>) -> Result<LockedPackage, BuildError>
+async fn do_deploy<R, T>(deploy: Deploy<'_, R, T>) -> Result<LockedPackage, Error>
 where
     R: Rockspec + HasIntegrity,
     T: InstallTree + Sync,
@@ -434,7 +427,7 @@ where
                 .is_some_and(|name| name != "doc" && name != "docs")
         })
     {
-        recursive_copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
+        project::copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
     }
 
     recursive_copy_doc_dir(&layout.doc, &build_dir).await?;
@@ -462,7 +455,7 @@ pub(crate) fn resolve_source_dir(
     source_root: &Path,
     unpack_dir: Option<&Path>,
     copy_dirs: &[PathBuf],
-) -> Result<PathBuf, fs::FsError> {
+) -> Result<PathBuf, fs::Error> {
     if let Some(unpack_dir) = unpack_dir {
         return Ok(source_root.join(unpack_dir));
     }
@@ -507,12 +500,12 @@ pub(crate) fn resolve_source_dir(
 }
 
 #[tracing::instrument(level = "trace")]
-async fn recursive_copy_doc_dir(target_doc_dir: &Path, build_dir: &Path) -> Result<(), BuildError> {
+async fn recursive_copy_doc_dir(target_doc_dir: &Path, build_dir: &Path) -> Result<(), Error> {
     let mut doc_dir = build_dir.join("doc");
     if !doc_dir.exists() {
         doc_dir = build_dir.join("docs");
     }
-    recursive_copy_dir(&doc_dir, target_doc_dir).await?;
+    project::copy_dir(&doc_dir, target_doc_dir).await?;
     Ok(())
 }
 

@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::lua_version::LuaVersion;
 
 use crate::{
-    config::{Config, ConfigBuilder, ConfigError},
+    config::{self, Config, ConfigBuilder},
     lua_rockspec::per_platform_from_intermediate,
     package::PackageReq,
     project::{project_toml::LocalProjectTomlValidationError, Project},
@@ -154,7 +154,7 @@ impl ValidatedTestSpec {
         }
     }
 
-    pub(crate) fn test_config(&self, config: &Config) -> Result<Config, ConfigError> {
+    pub(crate) fn test_config(&self, config: &Config) -> Result<Config, config::Error> {
         match self {
             Self::BustedNlua { .. } => {
                 let config_builder: ConfigBuilder = config.clone().into();

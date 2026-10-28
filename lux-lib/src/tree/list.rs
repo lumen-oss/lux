@@ -1,6 +1,6 @@
 use crate::{lockfile::LockedPackage, tree::InstallTree};
 
-use super::{Tree, TreeError};
+use super::Tree;
 
 // TODO: Due to the whininess of the borrow checker, we resort to cloning package information
 // whenever returning it. In the future, it'd be greatly beneficial to instead return mutable
@@ -8,7 +8,7 @@ use super::{Tree, TreeError};
 // Cloning isn't destructive, but it's sure expensive.
 
 impl Tree {
-    pub fn as_rock_list(&self) -> Result<Vec<LockedPackage>, TreeError> {
+    pub fn as_rock_list(&self) -> Result<Vec<LockedPackage>, super::Error> {
         let rock_list = self.list()?;
 
         Ok(rock_list.values().flatten().cloned().collect())

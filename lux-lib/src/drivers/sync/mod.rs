@@ -10,18 +10,18 @@ pub(crate) mod reconcile;
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::install_packages::{InstallPackages, InstallPackagesError},
+    drivers::install_packages::{self, InstallPackages},
     lockfile::LockedPackageLockType,
     operations::{
         GenLuaRc, GenLuaRcError, GenLuauRc, GenLuauRcError, InstallProject, InstallProjectError,
         PackageInstallSpec,
     },
     package::PackageName,
-    package_db::{PackageDB, PackageDBError},
+    package_db::{self, PackageDB},
     project::project_toml::LocalProjectTomlValidationError,
     rockspec::Rockspec,
-    tree::{EntryType, InstallTree, TreeError},
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
+    tree::{self, EntryType, InstallTree},
+    workspace::{self, Workspace, WorkspaceTreeError},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,28 +59,28 @@ impl TargetSet {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum SyncError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallPackages(#[from] Box<InstallPackagesError>),
+    InstallPackages(#[from] Box<install_packages::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallProject(Box<InstallProjectError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     GenLuaRc(#[from] GenLuaRcError),
@@ -92,19 +92,19 @@ pub enum SyncError {
     Frozen(Box<frozen::SyncError>),
 }
 
-impl From<InstallPackagesError> for SyncError {
-    fn from(source: InstallPackagesError) -> Self {
+impl From<install_packages::Error> for Error {
+    fn from(source: install_packages::Error) -> Self {
         Self::InstallPackages(Box::new(source))
     }
 }
 
-impl From<InstallProjectError> for SyncError {
+impl From<InstallProjectError> for Error {
     fn from(source: InstallProjectError) -> Self {
         Self::InstallProject(Box::new(source))
     }
 }
 
-impl From<frozen::SyncError> for SyncError {
+impl From<frozen::SyncError> for Error {
     fn from(source: frozen::SyncError) -> Self {
         Self::Frozen(Box::new(source))
     }
@@ -142,7 +142,7 @@ impl<State> SyncBuilder<'_, State>
 where
     State: sync_builder::State + sync_builder::IsComplete,
 {
-    pub async fn sync(self) -> Result<SyncReport, SyncError> {
+    pub async fn sync(self) -> Result<SyncReport, Error> {
         let args = self._build();
         match args.mode {
             SyncMode::Open => sync_open(&args).await,
@@ -151,7 +151,7 @@ where
     }
 }
 
-async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
+async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
     let config = args.config;
     let workspace = args.workspace;
 
@@ -276,7 +276,7 @@ pub(crate) fn gather_dependencies(
     workspace: &Workspace,
     kind: DependencyKind,
     members: &NonEmpty<PackageName>,
-) -> Result<Vec<PackageInstallSpec>, SyncError> {
+) -> Result<Vec<PackageInstallSpec>, Error> {
     let mut packages = Vec::new();
     for project in workspace.members() {
         if !members.contains(project.toml().package()) {
@@ -333,7 +333,7 @@ pub(crate) fn gather_dependencies(
     Ok(packages)
 }
 
-async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, SyncError> {
+async fn sync_frozen(args: &Sync<'_>) -> Result<SyncReport, Error> {
     let report = frozen::Sync::new(args.workspace, args.config)
         .validate_integrity(args.validate_integrity.unwrap_or(true))
         .test(args.targets.test)

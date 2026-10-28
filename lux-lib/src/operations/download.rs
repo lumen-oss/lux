@@ -16,13 +16,13 @@ use crate::{
     fs,
     git::{GitRef, GitSource},
     lockfile::RemotePackageSourceUrl,
-    lua_rockspec::{LuaRockspecError, RemoteLuaRockspec, RockSourceSpec},
+    lua_rockspec::{self, RemoteLuaRockspec, RockSourceSpec},
     luarocks,
     package::{
         PackageName, PackageReq, PackageSpec, PackageSpecFromPackageReqError, PackageVersion,
         RemotePackage, RemotePackageTypeFilterSpec,
     },
-    package_db::{PackageDB, PackageDBError, SearchError},
+    package_db::{self, PackageDB, SearchError},
     remote_package_source::RemotePackageSource,
     reqwest::{RequestBuilderExt, RequestError},
     rockspec::Rockspec,
@@ -235,7 +235,7 @@ if the issue persists, the server may be temporarily unavailable."#
     ResponseConversion(#[from] FromUtf8Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     DownloadSrcRock(#[from] DownloadSrcRockError),
@@ -399,7 +399,7 @@ pub enum SearchAndDownloadError {
     DownloadRockspec(#[from] DownloadRockspecError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("UTF-8 conversion failed")]
     #[diagnostic(help(
         r#"the server returned a response that is not valid UTF-8.
@@ -409,10 +409,10 @@ if the issue persists, the server may be temporarily unavailable."#
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Rockspec(Box<LuaRockspecError>),
+    Rockspec(Box<lua_rockspec::Error>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error("failed to read packed rock {0}:\n{1}")]
     #[diagnostic(help(
         r#"the downloaded rock may be corrupted.
@@ -666,7 +666,7 @@ pub(crate) async fn unpack_rockspec(
     let mut content = String::new();
     rockspec_file
         .read_to_string(&mut content)
-        .map_err(|source| fs::FsError::ReadToString {
+        .map_err(|source| fs::Error::ReadToString {
             path: PathBuf::from(&rockspec_file_name),
             source,
         })?;

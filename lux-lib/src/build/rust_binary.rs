@@ -1,5 +1,5 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
-use crate::build::utils::{self, InstallBinaryError};
+use crate::build::{cargo, command, install};
 use crate::config::{build, Config};
 use crate::fs;
 use crate::lua_rockspec::RustBinaryBuildSpec;
@@ -15,7 +15,7 @@ use tracing::Instrument;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum RustBinaryError {
+pub enum Error {
     #[error("`cargo install` failed.\nstatus: {status}\nstdout: {stdout}\nstderr: {stderr}")]
     CargoInstall {
         status: ExitStatus,
@@ -39,15 +39,15 @@ pub enum RustBinaryError {
     InstallBinary {
         file_name: String,
         #[diagnostic_source]
-        source: InstallBinaryError,
+        source: install::Error,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 impl BuildBackend for RustBinaryBuildSpec {
-    type Err = RustBinaryError;
+    type Err = Error;
 
     #[tracing::instrument(name = "rust_binary::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -85,7 +85,7 @@ impl BuildBackend for RustBinaryBuildSpec {
 
         if let Some(cargo_vendor_dir) = &cargo_vendor_dir {
             install_args.push("--offline");
-            utils::prepare_cargo_vendor_config(config, build_dir, cargo_vendor_dir).await?;
+            cargo::prepare_vendor_config(config, build_dir, cargo_vendor_dir).await?;
         }
 
         match config
@@ -98,22 +98,22 @@ impl BuildBackend for RustBinaryBuildSpec {
             ))
             .await
         {
-            Ok(output) if output.status.success() => utils::trace_command_output(&output),
+            Ok(output) if output.status.success() => command::trace_output(&output),
             Ok(output) => {
-                return Err(RustBinaryError::CargoInstall {
+                return Err(Error::CargoInstall {
                     status: output.status,
                     stdout: String::from_utf8_lossy(&output.stdout).into(),
                     stderr: String::from_utf8_lossy(&output.stderr).into(),
                 });
             }
-            Err(source) => return Err(RustBinaryError::RustBuild { source }),
+            Err(source) => return Err(Error::RustBuild { source }),
         }
 
         let mut binaries = Vec::new();
-        for bin_script in utils::detect_binaries(build_dir) {
+        for bin_script in install::detect_binaries(build_dir) {
             if let Some(target) = bin_script.file_name() {
                 let file_name = target.to_string_lossy().to_string();
-                let installed_bin_script = utils::install_binary(
+                let installed_bin_script = install::binary(
                     &bin_script,
                     &file_name,
                     args.tree,
@@ -122,7 +122,7 @@ impl BuildBackend for RustBinaryBuildSpec {
                     config,
                 )
                 .await
-                .map_err(|err| RustBinaryError::InstallBinary {
+                .map_err(|err| Error::InstallBinary {
                     file_name: file_name.to_string(),
                     source: err,
                 })?;
@@ -140,15 +140,15 @@ async fn find_cargo_package_dir(
     config: &Config,
     source_root: &Path,
     package: &str,
-) -> Result<PathBuf, RustBinaryError> {
+) -> Result<PathBuf, Error> {
     let output = config
         .wrapped_command("cargo", ["metadata", "--no-deps", "--format-version", "1"])
         .current_dir(source_root)
         .output()
         .await
-        .map_err(|source| RustBinaryError::RustBuild { source })?;
+        .map_err(|source| Error::RustBuild { source })?;
     if !output.status.success() {
-        return Err(RustBinaryError::CargoMetadata {
+        return Err(Error::CargoMetadata {
             status: output.status,
             stdout: String::from_utf8_lossy(&output.stdout).into(),
             stderr: String::from_utf8_lossy(&output.stderr).into(),
@@ -166,7 +166,7 @@ async fn find_cargo_package_dir(
         .and_then(|pkg| pkg.get("manifest_path").and_then(|path| path.as_str()))
         .and_then(|path| Path::new(path).parent())
         .map(Path::to_path_buf)
-        .ok_or_else(|| RustBinaryError::CargoPackageNotFound {
+        .ok_or_else(|| Error::CargoPackageNotFound {
             package: package.to_string(),
         })
 }

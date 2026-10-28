@@ -8,7 +8,7 @@ use thiserror::Error;
 pub enum GitError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("error initializing temporary bare git repository to fetch metadata")]
     BareRepoInit(#[source] git2::Error),
     #[error("error initializing remote repository '{0}' to fetch metadata")]

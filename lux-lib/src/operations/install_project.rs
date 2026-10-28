@@ -3,58 +3,58 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{BuildBehaviour, BuildError},
+    build::{self, BuildBehaviour},
     config::Config,
-    drivers::install_packages::{InstallPackages, InstallPackagesError},
+    drivers::install_packages::{self, InstallPackages},
     hash::HasIntegrity,
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
     package::{PackageName, PackageReq},
-    package_db::{PackageDB, PackageDBError},
+    package_db::{self, PackageDB},
     pipeline::discover::FoundPackage,
-    project::{IntoLocalRockspecError, Project, ProjectError},
+    project::{self, IntoLocalRockspecError, Project},
     rockspec::Rockspec,
-    tree::{self, InstallTree, TreeError},
-    workspace::{Workspace, WorkspaceError},
+    tree::{self, InstallTree},
+    workspace::{self, Workspace},
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallProjectError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Project(#[from] ProjectError),
+    Project(#[from] project::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalRockspec(#[from] IntoLocalRockspecError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] Box<InstallPackagesError>),
+    Install(#[from] Box<install_packages::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Build(#[from] Box<BuildError>),
+    Build(#[from] Box<build::Error>),
     #[error("package '{0}' was not installed")]
     PackageNotInstalled(PackageName),
     #[error("failed to hash the project's sources")]
     Hash(#[source] std::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
 }
 
-impl From<InstallPackagesError> for InstallProjectError {
-    fn from(source: InstallPackagesError) -> Self {
+impl From<install_packages::Error> for InstallProjectError {
+    fn from(source: install_packages::Error) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<BuildError> for InstallProjectError {
-    fn from(source: BuildError) -> Self {
+impl From<build::Error> for InstallProjectError {
+    fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
 }

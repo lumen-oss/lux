@@ -66,7 +66,7 @@ impl FoundPackage {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum DiscoverError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Search(#[from] SearchError),
@@ -78,7 +78,7 @@ pub enum DiscoverError {
     FetchVendored(PackageReq, Box<operations::FetchVendoredError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Project(#[from] crate::project::ProjectError),
+    Project(#[from] crate::project::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalRockspec(#[from] crate::project::IntoLocalRockspecError),
@@ -105,10 +105,7 @@ impl<State> DiscoverBuilder<'_, State>
 where
     State: discover_builder::State + discover_builder::IsComplete,
 {
-    pub(crate) async fn discover(
-        self,
-        spec: &PackageInstallSpec,
-    ) -> Result<FoundPackage, DiscoverError> {
+    pub(crate) async fn discover(self, spec: &PackageInstallSpec) -> Result<FoundPackage, Error> {
         let args = self._build();
         if let Some(found) = discover_project(spec)? {
             return Ok(found);
@@ -120,7 +117,7 @@ where
     }
 }
 
-fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, DiscoverError> {
+fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, Error> {
     let Some(RockSourceSpec::File(path)) = &spec.source else {
         return Ok(None);
     };
@@ -139,7 +136,7 @@ async fn discover_source_spec(
     spec: &PackageInstallSpec,
     source: &RockSourceSpec,
     _config: &Config,
-) -> Result<FoundPackage, DiscoverError> {
+) -> Result<FoundPackage, Error> {
     match source {
         RockSourceSpec::Git(_) | RockSourceSpec::File(_) | RockSourceSpec::Url(_) => {
             discover_fetchable_source(spec, source.clone())
@@ -147,23 +144,23 @@ async fn discover_source_spec(
         #[cfg(feature = "wally")]
         RockSourceSpec::Wally(wally_req) => wally::discover(&spec.package, wally_req, _config)
             .await
-            .map_err(DiscoverError::Wally),
+            .map_err(Error::Wally),
         #[cfg(not(feature = "wally"))]
-        RockSourceSpec::Wally(_) => Err(DiscoverError::WallyDisabled),
+        RockSourceSpec::Wally(_) => Err(Error::WallyDisabled),
     }
 }
 
 fn discover_fetchable_source(
     spec: &PackageInstallSpec,
     source: RockSourceSpec,
-) -> Result<FoundPackage, DiscoverError> {
+) -> Result<FoundPackage, Error> {
     let download =
         RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source)
-            .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?;
+            .map_err(|err| Error::Download(spec.package.clone(), Box::new(err)))?;
     let rockspec = download.rockspec().clone();
     let remote = RemotePackage::new(
         spec.package.clone().try_into().map_err(|err| {
-            DiscoverError::Download(
+            Error::Download(
                 spec.package.clone(),
                 Box::new(operations::SearchAndDownloadError::from(err)),
             )
@@ -182,7 +179,7 @@ async fn discover_package_db(
     spec: &PackageInstallSpec,
     package_db: &PackageDB,
     config: &Config,
-) -> Result<FoundPackage, DiscoverError> {
+) -> Result<FoundPackage, Error> {
     if let Some(found) = package_db.resolve(spec, config).await? {
         Ok(found)
     } else {
@@ -194,18 +191,18 @@ async fn download_remote(
     spec: &PackageInstallSpec,
     package_db: &PackageDB,
     config: &Config,
-) -> Result<FoundPackage, DiscoverError> {
+) -> Result<FoundPackage, Error> {
     if package_db.has_remote_sources() {
         let mut remote = package_db.find(&spec.package, None).await?;
         #[cfg(feature = "wally")]
         if let RemotePackageSource::Wally(index_url) = &remote.source {
             return wally::discover_locked(&remote, index_url, config)
                 .await
-                .map_err(DiscoverError::Wally);
+                .map_err(Error::Wally);
         }
         #[cfg(not(feature = "wally"))]
         if let RemotePackageSource::Wally(_) = &remote.source {
-            return Err(DiscoverError::WallyDisabled);
+            return Err(Error::WallyDisabled);
         }
         let download = if let Some(vendor_dir) = config.vendor_dir() {
             FetchVendored::new()
@@ -214,13 +211,13 @@ async fn download_remote(
                 .package_db(package_db)
                 .fetch_vendored_rock()
                 .await
-                .map_err(|err| DiscoverError::FetchVendored(spec.package.clone(), Box::new(err)))?
+                .map_err(|err| Error::FetchVendored(spec.package.clone(), Box::new(err)))?
         } else {
             Download::new(&spec.package, config)
                 .package_db(package_db)
                 .download_remote_rock()
                 .await
-                .map_err(|err| DiscoverError::Download(spec.package.clone(), Box::new(err)))?
+                .map_err(|err| Error::Download(spec.package.clone(), Box::new(err)))?
         };
         let rockspec = download.rockspec().clone();
         let artifact = match &download {
@@ -243,7 +240,7 @@ async fn download_remote(
             artifact,
         })
     } else {
-        Err(DiscoverError::Search(SearchError::RockNotFound(
+        Err(Error::Search(SearchError::RockNotFound(
             spec.package.clone(),
         )))
     }

@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashSet};
-use std::error::Error;
 use std::fmt::Display;
 use std::io::{self, Write};
 use std::marker::PhantomData;
@@ -898,10 +897,10 @@ pub struct WorkspaceLockfile<P: LockfilePermissions> {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LockfileError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("error parsing lockfile from JSON")]
     ParseJson(#[source] serde_json::Error),
     #[error("error writing lockfile to JSON")]
@@ -1229,7 +1228,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
 impl Lockfile<ReadOnly> {
     /// Create a new `Lockfile`, writing an empty file if none exists.
     #[tracing::instrument(level = "trace")]
-    pub(crate) fn new(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, LockfileError> {
+    pub(crate) fn new(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, Error> {
         // Ensure that the lockfile exists
         match File::options().create_new(true).write(true).open(&filepath) {
             Ok(mut file) => {
@@ -1240,16 +1239,15 @@ impl Lockfile<ReadOnly> {
                     binaries: BTreeMap::new(),
                     lock: PackageLock::default(),
                 };
-                let json_str =
-                    serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
-                write!(file, "{json_str}").map_err(|source| fs::FsError::Write {
+                let json_str = serde_json::to_string(&empty_lockfile).map_err(Error::WriteJson)?;
+                write!(file, "{json_str}").map_err(|source| fs::Error::Write {
                     path: filepath.to_path_buf(),
                     source,
                 })?;
             }
             Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
             Err(source) => {
-                return Err(LockfileError::Fs(fs::FsError::FileOpen {
+                return Err(Error::Fs(fs::Error::FileOpen {
                     path: filepath.to_path_buf(),
                     source,
                 }));
@@ -1261,7 +1259,7 @@ impl Lockfile<ReadOnly> {
 
     /// Load a `Lockfile`, failing if none exists.
     #[tracing::instrument(level = "trace")]
-    pub fn load(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, LockfileError> {
+    pub fn load(filepath: PathBuf) -> Result<Lockfile<ReadOnly>, Error> {
         let content = fs::sync::read_to_string(&filepath)?;
         let tree_dir = filepath.parent().unwrap_or(filepath.as_path());
         let help = format!(
@@ -1297,9 +1295,9 @@ remove the tree at '{}' and reinstall all packages it contained.",
     pub fn map_then_flush<T, F, E>(self, cb: F) -> Result<T, FlushLockfileError>
     where
         F: FnOnce(&mut Lockfile<ReadWrite>) -> Result<T, E>,
-        E: Error,
+        E: std::error::Error,
         E: From<io::Error>,
-        E: Into<Box<dyn Error + Send + Sync>>,
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
         let mut writeable_lockfile = self.into_temporary();
 
@@ -1335,7 +1333,7 @@ remove the tree at '{}' and reinstall all packages it contained.",
 impl WorkspaceLockfile<ReadOnly> {
     /// Create a new `ProjectLockfile`, writing an empty file if none exists.
     #[tracing::instrument(level = "trace")]
-    pub fn new(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
+    pub fn new(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, Error> {
         // Ensure that the lockfile exists
         match File::options().create_new(true).write(true).open(&filepath) {
             Ok(mut file) => {
@@ -1347,16 +1345,15 @@ impl WorkspaceLockfile<ReadOnly> {
                     test_dependencies: PackageLock::default(),
                     build_dependencies: PackageLock::default(),
                 };
-                let json_str =
-                    serde_json::to_string(&empty_lockfile).map_err(LockfileError::WriteJson)?;
-                write!(file, "{json_str}").map_err(|source| fs::FsError::Write {
+                let json_str = serde_json::to_string(&empty_lockfile).map_err(Error::WriteJson)?;
+                write!(file, "{json_str}").map_err(|source| fs::Error::Write {
                     path: filepath.to_path_buf(),
                     source,
                 })?;
             }
             Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
             Err(source) => {
-                return Err(LockfileError::Fs(fs::FsError::FileOpen {
+                return Err(Error::Fs(fs::Error::FileOpen {
                     path: filepath.to_path_buf(),
                     source,
                 }));
@@ -1368,7 +1365,7 @@ impl WorkspaceLockfile<ReadOnly> {
 
     /// Load a `ProjectLockfile`, failing if none exists.
     #[tracing::instrument(level = "trace")]
-    pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, LockfileError> {
+    pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, Error> {
         let content = fs::sync::read_to_string(&filepath)?;
         let mut lockfile: WorkspaceLockfile<ReadOnly> = load_lockfile(
             &content,
@@ -1602,7 +1599,7 @@ impl Drop for ProjectLockfileGuard {
     }
 }
 
-fn load_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, LockfileError>
+fn load_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, Error>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -1613,23 +1610,21 @@ where
     deserialize_lockfile(value, lockfile, help)
 }
 
-fn parse_lockfile_json(
-    content: &str,
-) -> Result<serde_json::Map<String, serde_json::Value>, LockfileError> {
-    serde_json::from_str(content).map_err(LockfileError::ParseJson)
+fn parse_lockfile_json(content: &str) -> Result<serde_json::Map<String, serde_json::Value>, Error> {
+    serde_json::from_str(content).map_err(Error::ParseJson)
 }
 
 fn lockfile_version(
     value: &serde_json::Map<String, serde_json::Value>,
     lockfile: &Path,
-) -> Result<semver::Version, LockfileError> {
+) -> Result<semver::Version, Error> {
     let version = value
         .get("version")
         .and_then(|version| version.as_str())
-        .ok_or(LockfileError::MissingVersion {
+        .ok_or(Error::MissingVersion {
             lockfile: lockfile.to_path_buf(),
         })?;
-    semver::Version::parse(version).map_err(|source| LockfileError::InvalidVersion {
+    semver::Version::parse(version).map_err(|source| Error::InvalidVersion {
         version: version.to_string(),
         source,
     })
@@ -1639,30 +1634,30 @@ fn deserialize_lockfile<T>(
     value: serde_json::Map<String, serde_json::Value>,
     lockfile: &Path,
     help: &str,
-) -> Result<T, LockfileError>
+) -> Result<T, Error>
 where
     T: serde::de::DeserializeOwned,
 {
     let found = lockfile_version(&value, lockfile)?;
     if found.major != LOCKFILE_VERSION {
-        return Err(LockfileError::IncompatibleVersion {
+        return Err(Error::IncompatibleVersion {
             lockfile: lockfile.to_path_buf(),
             found: found.to_string(),
             expected: LOCKFILE_VERSION_STR.into(),
             help: help.into(),
         });
     }
-    serde_json::from_value(serde_json::Value::Object(value)).map_err(LockfileError::ParseJson)
+    serde_json::from_value(serde_json::Value::Object(value)).map_err(Error::ParseJson)
 }
 
 fn migrate_v1_lockfile(
     value: &mut serde_json::Map<String, serde_json::Value>,
     lockfile: &Path,
-) -> Result<(), LockfileError> {
+) -> Result<(), Error> {
     let tree_dir = lockfile.parent().unwrap_or(lockfile);
     let found = lockfile_version(value, lockfile)?;
     if value.contains_key("entrypoint_layout") {
-        return Err(LockfileError::IncompatibleVersion {
+        return Err(Error::IncompatibleVersion {
             lockfile: lockfile.to_path_buf(),
             found: found.to_string(),
             expected: LOCKFILE_VERSION_STR.into(),
@@ -1702,8 +1697,8 @@ fn migrate_entrypoints(
     section: &mut serde_json::Map<String, serde_json::Value>,
     lockfile: &Path,
     help: &str,
-) -> Result<(), LockfileError> {
-    let conflicting_entrypoints = || LockfileError::ConflictingEntrypoints {
+) -> Result<(), Error> {
+    let conflicting_entrypoints = || Error::ConflictingEntrypoints {
         lockfile: lockfile.to_path_buf(),
         help: help.to_string(),
     };
@@ -2052,11 +2047,11 @@ mod tests {
 
         assert!(matches!(
             deserialize("3.0.0"),
-            Err(LockfileError::IncompatibleVersion { .. })
+            Err(Error::IncompatibleVersion { .. })
         ));
         assert!(matches!(
             deserialize("not-a-version"),
-            Err(LockfileError::InvalidVersion { .. })
+            Err(Error::InvalidVersion { .. })
         ));
     }
 
@@ -2085,7 +2080,7 @@ mod tests {
         let lockfile = r#"{"version":"1.0.0","entrypoint_layout":{"root":"site/pack/lux"}}"#;
         assert!(matches!(
             load_lockfile::<Lockfile<ReadOnly>>(lockfile, Path::new("lux.lock"), ""),
-            Err(LockfileError::IncompatibleVersion { .. })
+            Err(Error::IncompatibleVersion { .. })
         ));
     }
 
@@ -2101,7 +2096,7 @@ mod tests {
         }"#;
         assert!(matches!(
             load_lockfile::<Lockfile<ReadOnly>>(lockfile, Path::new("lux.lock"), ""),
-            Err(LockfileError::ConflictingEntrypoints { .. })
+            Err(Error::ConflictingEntrypoints { .. })
         ));
     }
 

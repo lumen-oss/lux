@@ -12,7 +12,6 @@ use which::which;
 
 use crate::build::external_dependency::to_lib_name;
 use crate::build::external_dependency::ExternalDependencyInfo;
-use crate::build::utils::{c_lib_extension, format_path};
 use crate::config::external_deps::ExternalDependencySearchConfig;
 use crate::fs;
 use crate::lua_rockspec::ExternalDependencySpec;
@@ -23,6 +22,7 @@ use crate::operations::BuildLuaError;
 use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
 use crate::{config::Config, package::PackageVersion, variables::HasVariables};
+use crate::{path, target};
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
 
@@ -96,7 +96,7 @@ pub enum DetectLuaVersionError {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum LuaInstallationError {
+pub enum Error {
     #[error("could not find a Lua installation and failed to build Lua from source")]
     #[diagnostic(forward(0))]
     Build(#[from] BuildLuaError),
@@ -110,12 +110,12 @@ pub enum LuaInstallationError {
 
 impl LuaInstallation {
     #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn new_from_config(config: &Config) -> Result<Self, LuaInstallationError> {
+    pub async fn new_from_config(config: &Config) -> Result<Self, Error> {
         Self::new(LuaVersion::from(config)?, config).await
     }
 
     #[tracing::instrument(level = "trace", skip(config))]
-    pub async fn new(version: &LuaVersion, config: &Config) -> Result<Self, LuaInstallationError> {
+    pub async fn new(version: &LuaVersion, config: &Config) -> Result<Self, Error> {
         let _lock = NEW_MUTEX.lock().await;
         if let Some(lua_intallation) = Self::probe(version, config.external_deps()) {
             return Ok(lua_intallation);
@@ -211,10 +211,7 @@ impl LuaInstallation {
     }
 
     #[tracing::instrument(level = "trace", skip(config))]
-    pub async fn install(
-        version: &LuaVersion,
-        config: &Config,
-    ) -> Result<Self, LuaInstallationError> {
+    pub async fn install(version: &LuaVersion, config: &Config) -> Result<Self, Error> {
         let _lock = INSTALL_MUTEX.lock().await;
 
         let target = Self::root_dir(version, config);
@@ -227,8 +224,7 @@ impl LuaInstallation {
             .await?;
 
         if version.is_luau() {
-            return Self::luau_from_root_dir(&target)
-                .ok_or(LuaInstallationError::LuauBinaryNotFound);
+            return Self::luau_from_root_dir(&target).ok_or(Error::LuauBinaryNotFound);
         }
 
         let include_dir = target.join("include");
@@ -306,7 +302,7 @@ impl LuaInstallation {
         self.dependency_info
             .lib_name
             .as_ref()
-            .map(|name| format!("{}.{}", name, c_lib_extension()))
+            .map(|name| format!("{}.{}", name, target::c_lib_extension()))
     }
 
     #[cfg(target_env = "msvc")]
@@ -350,16 +346,16 @@ impl HasVariables for LuaInstallation {
                 .dependency_info
                 .include_dir
                 .as_ref()
-                .map(|dir| format_path(dir)),
+                .map(|dir| path::quoted(dir)),
             "LUA_LIBDIR" => self
                 .dependency_info
                 .lib_dir
                 .as_ref()
-                .map(|dir| format_path(dir)),
+                .map(|dir| path::quoted(dir)),
             "LUA_BINDIR" => self
                 .bin
                 .as_ref()
-                .and_then(|bin| bin.parent().map(format_path)),
+                .and_then(|bin| bin.parent().map(path::quoted)),
             "LUA" => self
                 .bin
                 .clone()
@@ -368,8 +364,8 @@ impl HasVariables for LuaInstallation {
                 }
                 .try_into()
                 .ok())
-                .map(|lua| format_path(&lua)),
-            "LUAU" if self.version.is_luau() => self.bin.as_ref().map(|bin| format_path(bin)),
+                .map(|lua| path::quoted(&lua)),
+            "LUAU" if self.version.is_luau() => self.bin.as_ref().map(|bin| path::quoted(bin)),
             "LUALIB" => self.lua_lib().or(Some("".into())),
             _ => None,
         })
@@ -566,7 +562,7 @@ fn is_lua_lib_name(name: &str, lua_version: &LuaVersion) -> bool {
     let name = name.trim_start_matches("lib");
     prefixes
         .iter()
-        .any(|prefix| name == format!("{}.{}", *prefix, c_lib_extension()))
+        .any(|prefix| name == format!("{}.{}", *prefix, target::c_lib_extension()))
         || prefixes.iter().any(|prefix| name.starts_with(*prefix))
             && (name.contains(&version_str) || name.contains(&version_suffix))
 }
@@ -578,7 +574,10 @@ fn get_lua_lib_name(lib_dir: &Path, lua_version: &LuaVersion) -> Option<String> 
             entries
                 .filter_map(Result::ok)
                 .map(|entry| entry.path().to_path_buf())
-                .filter(|file| file.extension().is_some_and(|ext| ext == c_lib_extension()))
+                .filter(|file| {
+                    file.extension()
+                        .is_some_and(|ext| ext == target::c_lib_extension())
+                })
                 .filter(|file| {
                     file.file_name()
                         .is_some_and(|name| is_lua_lib_name(&name.to_string_lossy(), lua_version))

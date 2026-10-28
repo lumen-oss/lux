@@ -1,7 +1,7 @@
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::sync::{Sync, SyncError, SyncMode, TargetSet},
+    drivers::sync::{self, Sync, SyncMode, TargetSet},
     lockfile::LockedPackage,
     package::PackageName,
     workspace::Workspace,
@@ -15,11 +15,11 @@ use tracing::{info_span, Instrument};
 pub enum BuildWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Sync(Box<SyncError>),
+    Sync(Box<sync::Error>),
 }
 
-impl From<SyncError> for BuildWorkspaceError {
-    fn from(source: SyncError) -> Self {
+impl From<sync::Error> for BuildWorkspaceError {
+    fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
 }
@@ -182,7 +182,7 @@ mod tests {
             .build()
             .unwrap();
         let workspace = Workspace::from_exact(project_root).unwrap().unwrap();
-        // TODO: Investigate if build::utils::compile is outputting the .so to a different directory
+        // TODO: Investigate if build::compile is outputting the .so to a different directory
         BuildWorkspace::new(&workspace, &config)
             .no_lock(false)
             .only_deps(false)

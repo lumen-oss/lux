@@ -1,19 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    config::{Config, ConfigError},
+    config::{self, Config},
     lockfile::{LockfileIntegrityError, PackageLock},
     lua_rockspec::RemoteLuaRockspec,
-    manifest::{Manifest, ManifestError},
+    manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
     operations::PackageInstallSpec,
     package::{
         PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage, RemotePackageType,
         RemotePackageTypeFilterSpec,
     },
-    pipeline::discover::{DiscoverError, FoundPackage},
+    pipeline::discover::{self, FoundPackage},
     remote_package_source::RemotePackageSource,
-    workspace::{Workspace, WorkspaceError},
+    workspace::{self, Workspace},
 };
 use itertools::Itertools;
 use tokio::sync::{Mutex, OnceCell};
@@ -28,20 +28,20 @@ pub struct PackageDB {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum PackageDBError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ManifestError(#[from] ManifestError),
+    Manifest(#[from] manifest::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ConfigError(#[from] ConfigError),
+    Config(#[from] config::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(Box<WorkspaceError>),
+    Workspace(Box<workspace::Error>),
 }
 
-impl From<WorkspaceError> for PackageDBError {
-    fn from(err: WorkspaceError) -> Self {
+impl From<workspace::Error> for Error {
+    fn from(err: workspace::Error) -> Self {
         Self::Workspace(Box::new(err))
     }
 }
@@ -53,7 +53,7 @@ pub enum SearchError {
     RockNotFound(PackageReq),
     #[error("error when pulling manifest")]
     #[diagnostic(forward(0))]
-    Manifest(#[from] ManifestError),
+    Manifest(#[from] manifest::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -103,7 +103,7 @@ impl ManifestProvider {
         }
     }
 
-    async fn get(&self) -> Result<&Manifest, ManifestError> {
+    async fn get(&self) -> Result<&Manifest, manifest::Error> {
         let manifest = self
             .manifest
             .get_or_try_init(|| Manifest::from_config(self.server_url.clone(), &self.config));
@@ -142,7 +142,7 @@ impl PackageProvider {
         &self,
         spec: &PackageInstallSpec,
         config: &Config,
-    ) -> Result<Option<FoundPackage>, DiscoverError> {
+    ) -> Result<Option<FoundPackage>, discover::Error> {
         match self {
             Self::Local(packages) => Ok(packages
                 .iter()
@@ -289,7 +289,7 @@ impl ClosureProvider {
         &self,
         spec: &PackageInstallSpec,
         _config: &Config,
-    ) -> Result<Option<FoundPackage>, DiscoverError> {
+    ) -> Result<Option<FoundPackage>, discover::Error> {
         let Some(closure) = self.load_closure_for(&spec.package).await else {
             return Ok(None);
         };
@@ -303,7 +303,7 @@ impl ClosureProvider {
             return Ok(None);
         }
         let rockspec = RemoteLuaRockspec::new(closure_spec.rockspec_raw()).map_err(|err| {
-            DiscoverError::Download(
+            discover::Error::Download(
                 spec.package.clone(),
                 Box::new(crate::operations::SearchAndDownloadError::Rockspec(
                     Box::new(err),
@@ -321,7 +321,7 @@ impl ClosureProvider {
 
 impl PackageDB {
     #[tracing::instrument(level = "trace", skip_all)]
-    pub async fn from_config(config: &Config) -> Result<Self, PackageDBError> {
+    pub async fn from_config(config: &Config) -> Result<Self, Error> {
         let mut providers = Vec::new();
         if let Some(cache) = ManifestCache::from_config(config) {
             providers.push(PackageProvider::Closure(ClosureProvider::new(
@@ -358,10 +358,7 @@ impl PackageDB {
 
     /// Builds a package database that prefers the workspace lockfile, falling
     /// back to the manifests for requirements the lockfile does not satisfy.
-    pub(crate) async fn open(
-        config: &Config,
-        workspace: &Workspace,
-    ) -> Result<Self, PackageDBError> {
+    pub(crate) async fn open(config: &Config, workspace: &Workspace) -> Result<Self, Error> {
         Ok(Self::from_config(config)
             .await?
             .with_locks(workspace.lockfile()?.local_pkg_locks()))
@@ -438,7 +435,7 @@ impl PackageDB {
         &self,
         spec: &PackageInstallSpec,
         config: &Config,
-    ) -> Result<Option<FoundPackage>, DiscoverError> {
+    ) -> Result<Option<FoundPackage>, discover::Error> {
         for provider in &self.providers {
             // Providers that can serve a package without downloading it (local packages and the
             // manifest cache) resolve early.

@@ -2,7 +2,7 @@ use bon::Builder;
 use tracing::Instrument;
 
 use crate::{
-    build::{BuildBehaviour, BuildError, Deploy, RemotePackageSourceSpec},
+    build::{self, BuildBehaviour, Deploy, RemotePackageSourceSpec},
     config::Config,
     hash::HasIntegrity,
     lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
@@ -45,7 +45,7 @@ impl<R: Rockspec + HasIntegrity, T: InstallTree + Sync, State> BuildBuilder<'_, 
 where
     State: build_builder::State + build_builder::IsComplete,
 {
-    pub async fn build(self) -> Result<LockedPackage, BuildError> {
+    pub async fn build(self) -> Result<LockedPackage, build::Error> {
         let build = self._build();
         let span = tracing::info_span!(
             "Building",
@@ -57,7 +57,7 @@ where
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LockedPackage, BuildError>
+async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LockedPackage, build::Error>
 where
     R: Rockspec + HasIntegrity,
     T: InstallTree + Sync,

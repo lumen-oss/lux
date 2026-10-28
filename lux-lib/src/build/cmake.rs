@@ -10,27 +10,27 @@ use tracing::{info_span, Instrument};
 
 use crate::{
     build::{
-        backend::{BuildBackend, BuildInfo, RunBuildArgs},
-        utils,
+        backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
+        command,
     },
     config::Config,
     fs,
     lua_rockspec::CMakeBuildSpec,
-    path::{Paths, PathsError},
-    tree::{InstallTree, TreeError},
+    path::{self, Paths},
+    tree::{self, InstallTree},
     variables::{self, GetVariableError, HasVariables, VariableSubstitutionError},
 };
 
 const CMAKE_BUILD_FILE: &str = "build.lux";
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum CMakeError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("{name} step failed.\n\n{status}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")]
     CommandFailure {
         name: String,
@@ -48,7 +48,7 @@ pub enum CMakeError {
     VariableSubstitution(#[from] VariableSubstitutionError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 #[derive(Debug)]
@@ -67,7 +67,7 @@ impl HasVariables for CMakeVariables {
 }
 
 impl BuildBackend for CMakeBuildSpec {
-    type Err = CMakeError;
+    type Err = Error;
 
     #[tracing::instrument(name = "cmake::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
@@ -100,7 +100,7 @@ impl BuildBackend for CMakeBuildSpec {
         self.variables
             .into_iter()
             .map(|(key, value)| {
-                let substituted_value = utils::substitute_variables(
+                let substituted_value = backend::substitute_variables(
                     &value,
                     &layout,
                     lua,
@@ -179,21 +179,21 @@ impl BuildBackend for CMakeBuildSpec {
 }
 
 #[tracing::instrument(level = "trace", skip(config))]
-async fn spawn_cmake_cmd(cmd: &mut Command, config: &Config) -> Result<(), CMakeError> {
+async fn spawn_cmake_cmd(cmd: &mut Command, config: &Config) -> Result<(), Error> {
     match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(child) => match child.wait_with_output().await {
-            Ok(output) if output.status.success() => utils::trace_command_output(&output),
+            Ok(output) if output.status.success() => command::trace_output(&output),
             Ok(output) => {
-                return Err(CMakeError::CommandFailure {
+                return Err(Error::CommandFailure {
                     name: config.cmake_cmd().clone(),
                     status: output.status,
                     stdout: String::from_utf8_lossy(&output.stdout).into(),
                     stderr: String::from_utf8_lossy(&output.stderr).into(),
                 });
             }
-            Err(source) => return Err(CMakeError::Io { source }),
+            Err(source) => return Err(Error::Io { source }),
         },
-        Err(_) => return Err(CMakeError::CommandNotFound(config.cmake_cmd().clone())),
+        Err(_) => return Err(Error::CommandNotFound(config.cmake_cmd().clone())),
     }
     Ok(())
 }

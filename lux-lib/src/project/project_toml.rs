@@ -6,10 +6,10 @@ use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
 use crate::lockfile::PinnedState;
+use crate::lua_rockspec;
 use crate::lua_rockspec::DeploySpec;
 use crate::lua_rockspec::LocalLuaRockspec;
 use crate::lua_rockspec::LocalRockSource;
-use crate::lua_rockspec::LuaRockspecError;
 use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::lua_rockspec::RockSourceSpec;
 use crate::lua_version::LuaVersion;
@@ -925,7 +925,7 @@ impl LocalProjectToml {
 
     /// Convert this project TOML to a Lua rockspec.
     /// Fails if there is no valid project root or if there are off-spec dependencies.
-    pub fn to_lua_rockspec(&self) -> Result<LocalLuaRockspec, LuaRockspecError> {
+    pub fn to_lua_rockspec(&self) -> Result<LocalLuaRockspec, lua_rockspec::Error> {
         if let Some(dep) = self
             .dependencies()
             .per_platform
@@ -934,7 +934,7 @@ impl LocalProjectToml {
             .collect_vec()
             .first()
         {
-            return Err(LuaRockspecError::OffSpecDependency(dep.name().clone()));
+            return Err(lua_rockspec::Error::OffSpecDependency(dep.name().clone()));
         }
         if let Some(dep) = self
             .build_dependencies()
@@ -944,7 +944,9 @@ impl LocalProjectToml {
             .collect_vec()
             .first()
         {
-            return Err(LuaRockspecError::OffSpecBuildDependency(dep.name().clone()));
+            return Err(lua_rockspec::Error::OffSpecBuildDependency(
+                dep.name().clone(),
+            ));
         }
         if let Some(dep) = self
             .test_dependencies()
@@ -954,7 +956,9 @@ impl LocalProjectToml {
             .collect_vec()
             .first()
         {
-            return Err(LuaRockspecError::OffSpecTestDependency(dep.name().clone()));
+            return Err(lua_rockspec::Error::OffSpecTestDependency(
+                dep.name().clone(),
+            ));
         }
         LocalLuaRockspec::new(
             &self.to_lua_remote_rockspec_string()?,
@@ -964,7 +968,7 @@ impl LocalProjectToml {
 
     /// Renders the rockspec for local builds, using the rockspec's own version
     /// and its source pointing at the project root.
-    pub fn to_local_rockspec(&self) -> Result<RemoteLuaRockspec, LuaRockspecError> {
+    pub fn to_local_rockspec(&self) -> Result<RemoteLuaRockspec, lua_rockspec::Error> {
         let content = self.to_lua_local_rockspec_string()?;
         Ok(LocalLuaRockspec::from_project_toml(self, content)
             .into_remote_with_source(self.source.clone()))
@@ -1223,11 +1227,11 @@ fn validate_generated_lua(lua_str: &str) -> Result<(), ProjectTomlError> {
 #[non_exhaustive]
 #[error(transparent)]
 pub enum ProjectTomlIntegrityError {
-    LuaRockspecError(#[from] LuaRockspecError),
+    LuaRockspec(#[from] lua_rockspec::Error),
     IoError(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 impl HasIntegrity for LocalProjectToml {
@@ -1247,7 +1251,7 @@ pub struct RemoteProjectToml {
 }
 
 impl RemoteProjectToml {
-    pub fn to_lua_rockspec(&self) -> Result<RemoteLuaRockspec, LuaRockspecError> {
+    pub fn to_lua_rockspec(&self) -> Result<RemoteLuaRockspec, lua_rockspec::Error> {
         RemoteLuaRockspec::new(&self.to_lua_remote_rockspec_string()?)
     }
 }

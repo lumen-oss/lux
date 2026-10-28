@@ -9,10 +9,10 @@ use crate::{
     },
     lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageReq, RockConstraintUnsatisfied},
-    package_db::{PackageDB, PackageDBError},
+    package_db::{self, PackageDB},
     remote_package_source::RemotePackageSource,
-    tree::{self, InstallTree, Tree, TreeError},
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
+    tree::{self, InstallTree, Tree},
+    workspace::{self, Workspace, WorkspaceTreeError},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -21,8 +21,8 @@ use thiserror::Error;
 
 use super::{PackageInstallSpec, RemoveError, Uninstall};
 
-use crate::drivers::install_packages::{InstallPackages, InstallPackagesError};
-use crate::drivers::sync::{Sync, SyncError, SyncMode, TargetSet};
+use crate::drivers::install_packages::{self, InstallPackages};
+use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UpdateError {
@@ -31,16 +31,16 @@ pub enum UpdateError {
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
     #[error("failed to update rock")]
     #[diagnostic(forward(0))]
-    Install(#[from] Box<InstallPackagesError>),
+    Install(#[from] Box<install_packages::Error>),
     #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error("error loading the workspace")]
     #[diagnostic(forward(0))]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionUnset(#[from] LuaVersionUnset),
@@ -48,23 +48,23 @@ pub enum UpdateError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error("error initialising the workspace install tree")]
     #[diagnostic(forward(0))]
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error("error syncing the workspace install tree")]
     #[diagnostic(forward(0))]
-    Sync(#[from] Box<SyncError>),
+    Sync(#[from] Box<sync::Error>),
 }
 
-impl From<InstallPackagesError> for UpdateError {
-    fn from(source: InstallPackagesError) -> Self {
+impl From<install_packages::Error> for UpdateError {
+    fn from(source: install_packages::Error) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<SyncError> for UpdateError {
-    fn from(source: SyncError) -> Self {
+impl From<sync::Error> for UpdateError {
+    fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
 }

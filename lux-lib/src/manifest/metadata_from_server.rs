@@ -24,7 +24,7 @@ pub enum ManifestFromServerError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("failed to pull manifest")]
     #[diagnostic(transparent)]
     Request(#[from] RequestError),
@@ -103,14 +103,14 @@ pub(super) async fn get_manifest(
             .truncate(true)
             .open(target)
             .await
-            .map_err(|source| fs::FsError::FileOpen {
+            .map_err(|source| fs::Error::FileOpen {
                 path: target.to_path_buf(),
                 source,
             })?;
 
         io::copy(&mut extracted_manifest, &mut target_file)
             .await
-            .map_err(|source| fs::FsError::Copy {
+            .map_err(|source| fs::Error::Copy {
                 from: extracted_manifest_path.to_path_buf(),
                 to: target.to_path_buf(),
                 source,
@@ -230,7 +230,7 @@ fn mk_manifest_url(
     Ok(url)
 }
 
-async fn mk_manifest_cache(url: &Url, config: &Config) -> Result<PathBuf, fs::FsError> {
+async fn mk_manifest_cache(url: &Url, config: &Config) -> Result<PathBuf, fs::Error> {
     let cache = config.cache_dir().join(
         // Convert the url to a directory name so we don't create too many subdirectories
         url.to_string()

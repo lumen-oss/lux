@@ -9,14 +9,14 @@ use tokio::process::Command;
 
 use crate::{
     config::Config,
-    lua_installation::{LuaBinary, LuaInstallationError},
+    lua_installation::{self, LuaBinary},
     lua_rockspec::LuaVersionError,
     operations::run_lua::{self, RunLua},
     package::PackageName,
-    path::{LuaEnvironment, Paths, PathsError},
+    path::{self, LuaEnvironment, Paths},
     project::project_toml::LocalProjectTomlValidationError,
     tree::InstallTree,
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
+    workspace::{self, Workspace, WorkspaceTreeError},
 };
 
 use super::RunLuaError;
@@ -78,14 +78,14 @@ pub enum RunError {
     RunLua(#[from] RunLuaError),
     #[error("failed to detect or install a luau runtime")]
     #[diagnostic(forward(0))]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[diagnostic(transparent)]
-    WorkspaceError(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),
     Io(#[from] std::io::Error),
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error("No `run` field found in `lux.toml`")]
     NoRunField,
 }

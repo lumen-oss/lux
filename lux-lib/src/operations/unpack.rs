@@ -19,7 +19,7 @@ pub enum UnpackError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("failed to unpack zip source")]
     Zip(#[from] zip::result::ZipError),
     #[error("source returned HTML - it may have been moved or deleted")]

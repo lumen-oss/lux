@@ -24,8 +24,8 @@ use crate::{
         utils::{GitError, SemVerTagOrSha},
     },
     lua_rockspec::{
-        LocalLuaRockspec, LuaRockspecError, LuaVersionError, PartialLuaRockspec,
-        PartialRockspecError, RemoteLuaRockspec,
+        self, LocalLuaRockspec, LuaVersionError, PartialLuaRockspec, PartialRockspecError,
+        RemoteLuaRockspec,
     },
     lua_version::LuaVersion,
     package::SpecRev,
@@ -91,10 +91,10 @@ where
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
-pub enum ProjectError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[diagnostic(transparent)]
     Project(#[from] LocalProjectTomlValidationError),
     #[diagnostic(transparent)]
@@ -109,7 +109,7 @@ pub enum ProjectError {
 #[error(transparent)]
 pub enum IntoLocalRockspecError {
     LocalProjectTomlValidationError(Box<LocalProjectTomlValidationError>),
-    RockspecError(Box<LuaRockspecError>),
+    Rockspec(Box<lua_rockspec::Error>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -117,7 +117,7 @@ pub enum IntoLocalRockspecError {
 #[error(transparent)]
 pub enum IntoRemoteRockspecError {
     RocksTomlValidationError(Box<RemoteProjectTomlValidationError>),
-    RockspecError(Box<LuaRockspecError>),
+    Rockspec(Box<lua_rockspec::Error>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -127,7 +127,7 @@ pub enum ProjectEditError {
     Io(#[from] tokio::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     Toml(#[from] toml_edit::TomlError),
     #[error("error parsing {PROJECT_TOML} after edit. This is probably a bug.")]
@@ -184,7 +184,7 @@ pub enum PinError {
     Io(#[from] tokio::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 /// A newtype for the project root directory.
@@ -228,7 +228,7 @@ pub struct Project {
 impl Project {
     /// Load a project at the specified path, if it exists
     #[tracing::instrument(level = "trace", skip_all)]
-    pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, ProjectError> {
+    pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, Error> {
         if !start.as_ref().exists() {
             return Ok(None);
         }
@@ -282,7 +282,7 @@ impl Project {
             .into_local()
             .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
             .to_lua_rockspec()
-            .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
+            .map_err(|err| IntoLocalRockspecError::Rockspec(Box::new(err)))
     }
 
     /// Returns this project's rockspec as a [`RemoteLuaRockspec`] whose source points at the
@@ -292,7 +292,7 @@ impl Project {
             .into_local()
             .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
             .to_local_rockspec()
-            .map_err(|err| IntoLocalRockspecError::RockspecError(Box::new(err)))
+            .map_err(|err| IntoLocalRockspecError::Rockspec(Box::new(err)))
     }
 
     pub fn remote_rockspec(
@@ -303,7 +303,7 @@ impl Project {
             .into_remote(specrev)
             .map_err(|err| IntoRemoteRockspecError::RocksTomlValidationError(Box::new(err)))?
             .to_lua_rockspec()
-            .map_err(|err| IntoRemoteRockspecError::RockspecError(Box::new(err)))
+            .map_err(|err| IntoRemoteRockspecError::Rockspec(Box::new(err)))
     }
 
     pub fn extra_rockspec(&self) -> Result<Option<PartialLuaRockspec>, PartialRockspecError> {
@@ -672,6 +672,24 @@ pub(crate) fn project_files(src: &Path) -> Vec<PathBuf> {
         .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
         .map(|entry| entry.into_path())
         .collect_vec()
+}
+
+/// Recursively copy the files of `src` into `dest`, honouring ignore files.
+#[tracing::instrument(level = "trace")]
+pub(crate) async fn copy_dir(src: &Path, dest: &Path) -> Result<(), fs::Error> {
+    if src.exists() {
+        for file in project_files(src) {
+            let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src)
+                .unwrap_or_else(|| unreachable!("diff_path with self"));
+            let target = dest.join(relative_src_path);
+            if let Some(parent) = target.parent() {
+                fs::tokio::create_dir_all(parent).await?;
+            }
+            fs::tokio::copy(&file, &target).await?;
+            fs::make_writable(&target).await?;
+        }
+    }
+    Ok(())
 }
 
 async fn upgraded_version_req(

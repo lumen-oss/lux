@@ -4,7 +4,7 @@ use crate::{
     fs,
     lockfile::{FlushLockfileError, LockedPackageId, PinnedState},
     package::PackageSpec,
-    tree::{InstallTree, Tree, TreeError},
+    tree::{self, InstallTree, Tree},
 };
 use fs_extra::dir::CopyOptions;
 use itertools::Itertools;
@@ -33,7 +33,7 @@ pub enum PinError {
     FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error("failed to move the old package")]
     #[diagnostic(help("make sure Lux has write access to the install directory"))]
     MoveItemsFailure(#[from] fs_extra::error::Error),
@@ -44,7 +44,7 @@ pub enum PinError {
     NotAnEntrypoint { rock: PackageSpec },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
 }
 
 pub fn set_pinned_state(

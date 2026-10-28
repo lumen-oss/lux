@@ -1,20 +1,20 @@
 use std::{io, ops::Deref, process::Command};
 
-use crate::drivers::sync::{Sync, SyncError, SyncMode, TargetSet};
+use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
 
 pub(crate) mod tiniest;
 use crate::fs;
 use crate::tree::InstallTree;
-use crate::workspace::{WorkspaceError, WorkspaceTreeError};
+use crate::workspace::{self, WorkspaceTreeError};
 use crate::{
     build::BuildBehaviour,
-    config::{Config, ConfigError},
+    config::{self, Config},
     lua_installation::LuaBinaryError,
     lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
     lua_version::LuaVersion,
     package::PackageName,
-    path::{Paths, PathsError},
-    project::{project_toml::LocalProjectTomlValidationError, Project, ProjectError},
+    path::{self, Paths},
+    project::{self, project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
     workspace::Workspace,
 };
@@ -82,10 +82,10 @@ pub enum TestEnv {
 pub enum RunTestsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Config(#[from] ConfigError),
+    Config(#[from] config::Error),
     #[error("build failed")]
     #[diagnostic(forward(0))]
-    Sync(#[from] Box<SyncError>),
+    Sync(#[from] Box<sync::Error>),
     #[error("tests failed!")]
     #[diagnostic(help("see the test runner's output for details"))]
     TestFailure,
@@ -98,16 +98,16 @@ pub enum RunTestsError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Project(#[from] ProjectError),
+    Project(#[from] project::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] WorkspaceTreeError),
@@ -131,8 +131,8 @@ pub enum RunTestsError {
     RunLua(#[from] super::run_lua::RunLuaError),
 }
 
-impl From<SyncError> for RunTestsError {
-    fn from(source: SyncError) -> Self {
+impl From<sync::Error> for RunTestsError {
+    fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
 }

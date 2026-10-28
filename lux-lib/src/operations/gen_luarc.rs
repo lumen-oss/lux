@@ -2,8 +2,8 @@ use crate::config::Config;
 use crate::fs;
 use crate::lockfile::LockedPackageLockType;
 use crate::tree::InstallTree;
+use crate::workspace;
 use crate::workspace::Workspace;
-use crate::workspace::WorkspaceError;
 use crate::workspace::WorkspaceTreeError;
 use crate::workspace::LUX_DIR_NAME;
 use bon::Builder;
@@ -20,10 +20,10 @@ use thiserror::Error;
 pub enum GenLuaRcError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] WorkspaceTreeError),

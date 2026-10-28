@@ -5,14 +5,14 @@ use std::{
 };
 
 use crate::{
-    config::{Config, ConfigBuilder, ConfigError},
+    config::{self, Config, ConfigBuilder},
     fs,
-    lockfile::{LockfileError, ReadOnly, WorkspaceLockfile},
+    lockfile::{self, ReadOnly, WorkspaceLockfile},
     lua_rockspec::LuaVersionError,
     lua_version::LuaVersion,
     package::PackageName,
-    project::{Project, ProjectError, TomlDeError, PROJECT_TOML},
-    tree::{InstallTree, Tree, TreeError},
+    project::{self, Project, TomlDeError, PROJECT_TOML},
+    tree::{self, InstallTree, Tree},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
 };
 use glob::glob;
@@ -51,7 +51,7 @@ impl Deref for WorkspaceRoot {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum WorkspaceError {
+pub enum Error {
     #[error("cannot read the current working directory")]
     #[diagnostic(help("make sure Lux has permissions to read the current working directory"))]
     GetCwd(io::Error),
@@ -72,7 +72,7 @@ pub enum WorkspaceError {
     Glob(String),
     #[error(transparent)]
     #[diagnostic(forward(0))]
-    Project(#[from] ProjectError),
+    Project(#[from] project::Error),
     #[error("no project or workspace found at '{0}'")]
     #[diagnostic(help("make sure the directory contains a '{WORKSPACE_TOML}'"))]
     NoWorkspaceOrProject(PathBuf),
@@ -86,10 +86,10 @@ pub enum WorkspaceError {
     EmptyWorkspace(PathBuf),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lockfile(#[from] LockfileError),
+    Lockfile(#[from] lockfile::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("package must be specified in a multi-project workspace")]
     #[diagnostic(help(
         r#"this workspace contains multiple projects.
@@ -109,7 +109,7 @@ specify the package with '--package=[PACKAGE_NAME]'
 pub enum WorkspaceTreeError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
@@ -128,20 +128,20 @@ pub struct Workspace {
 pub struct WorkspaceConfigError {
     path: PathBuf,
     #[diagnostic(source)]
-    source: Box<ConfigError>,
+    source: Box<config::Error>,
 }
 
 // TODO: move lockfile from project to workspace
 
 impl Workspace {
-    pub fn current() -> Result<Option<Self>, WorkspaceError> {
-        let cwd = std::env::current_dir().map_err(WorkspaceError::GetCwd)?;
+    pub fn current() -> Result<Option<Self>, Error> {
+        let cwd = std::env::current_dir().map_err(Error::GetCwd)?;
         Self::from(&cwd)
     }
 
-    pub fn current_or_err() -> Result<Self, WorkspaceError> {
-        let cwd = std::env::current_dir().map_err(WorkspaceError::GetCwd)?;
-        Self::current()?.ok_or(WorkspaceError::NoWorkspaceOrProject(cwd))
+    pub fn current_or_err() -> Result<Self, Error> {
+        let cwd = std::env::current_dir().map_err(Error::GetCwd)?;
+        Self::current()?.ok_or(Error::NoWorkspaceOrProject(cwd))
     }
 
     /// The path where the root `lux.toml` resides.
@@ -160,28 +160,25 @@ impl Workspace {
     }
 
     /// The package names of all workspace members.
-    pub fn member_names(&self) -> Result<NonEmpty<PackageName>, WorkspaceError> {
+    pub fn member_names(&self) -> Result<NonEmpty<PackageName>, Error> {
         NonEmpty::from_vec(
             self.members()
                 .iter()
                 .map(|project| project.toml().package.clone())
                 .collect(),
         )
-        .ok_or_else(|| WorkspaceError::EmptyWorkspace(self.root.0.clone()))
+        .ok_or_else(|| Error::EmptyWorkspace(self.root.0.clone()))
     }
 
     /// Get a workspace member, defaulting to the first one if none is specified.
     /// Fails if a package name is specified, but not found.
-    pub fn single_member_or_select(
-        &self,
-        name: &Option<PackageName>,
-    ) -> Result<&Project, WorkspaceError> {
+    pub fn single_member_or_select(&self, name: &Option<PackageName>) -> Result<&Project, Error> {
         match name {
             Some(name) => self
                 .members()
                 .iter()
                 .find(|project| &project.toml().package == name)
-                .ok_or_else(|| WorkspaceError::PackageNotFound(name.clone(), self.root.clone())),
+                .ok_or_else(|| Error::PackageNotFound(name.clone(), self.root.clone())),
             None => Ok(self.members().first()),
         }
     }
@@ -191,7 +188,7 @@ impl Workspace {
     pub fn single_member_or_select_mut(
         &mut self,
         package: &Option<PackageName>,
-    ) -> Result<&mut Project, WorkspaceError> {
+    ) -> Result<&mut Project, Error> {
         match package.as_ref() {
             Some(package) => self.select_member_mut(package),
             None => self.single_member_mut(),
@@ -199,42 +196,39 @@ impl Workspace {
     }
 
     /// Get the single member of this workspace, failing if it has multiple members.
-    pub fn single_member(&self) -> Result<&Project, WorkspaceError> {
+    pub fn single_member(&self) -> Result<&Project, Error> {
         if self.members().len() == 1 {
             Ok(self.members().first())
         } else {
-            Err(WorkspaceError::NoPackageSpecified)
+            Err(Error::NoPackageSpecified)
         }
     }
 
     /// Get the single mutable member of this workspace, failing if it has multiple members.
-    pub fn single_member_mut(&mut self) -> Result<&mut Project, WorkspaceError> {
+    pub fn single_member_mut(&mut self) -> Result<&mut Project, Error> {
         if self.members().len() == 1 {
             Ok(self.members_mut().first_mut())
         } else {
-            Err(WorkspaceError::NoPackageSpecified)
+            Err(Error::NoPackageSpecified)
         }
     }
 
     /// Select a member of this workspace, failing if it is not found.
-    pub fn select_member(&self, package: &PackageName) -> Result<&Project, WorkspaceError> {
+    pub fn select_member(&self, package: &PackageName) -> Result<&Project, Error> {
         let workspace_root = self.root.clone();
         self.members()
             .iter()
             .find(|project| &project.toml().package == package)
-            .ok_or_else(|| WorkspaceError::PackageNotFound(package.clone(), workspace_root))
+            .ok_or_else(|| Error::PackageNotFound(package.clone(), workspace_root))
     }
 
     /// Select a mutable member of this workspace, failing if it is not found.
-    pub fn select_member_mut(
-        &mut self,
-        package: &PackageName,
-    ) -> Result<&mut Project, WorkspaceError> {
+    pub fn select_member_mut(&mut self, package: &PackageName) -> Result<&mut Project, Error> {
         let workspace_root = self.root.clone();
         self.members_mut()
             .iter_mut()
             .find(|project| &project.toml().package == package)
-            .ok_or_else(|| WorkspaceError::PackageNotFound(package.clone(), workspace_root))
+            .ok_or_else(|| Error::PackageNotFound(package.clone(), workspace_root))
     }
 
     /// Get the `lux.lock` lockfile path.
@@ -243,12 +237,12 @@ impl Workspace {
     }
 
     /// Get the `lux.lock` lockfile in the project root.
-    pub fn lockfile(&self) -> Result<WorkspaceLockfile<ReadOnly>, WorkspaceError> {
+    pub fn lockfile(&self) -> Result<WorkspaceLockfile<ReadOnly>, Error> {
         Ok(WorkspaceLockfile::new(self.lockfile_path())?)
     }
 
     /// Get the `lux.lock` lockfile in the project root, if present.
-    pub fn try_lockfile(&self) -> Result<Option<WorkspaceLockfile<ReadOnly>>, WorkspaceError> {
+    pub fn try_lockfile(&self) -> Result<Option<WorkspaceLockfile<ReadOnly>>, Error> {
         let path = self.lockfile_path();
         if path.is_file() {
             Ok(Some(WorkspaceLockfile::load(path)?))
@@ -334,7 +328,7 @@ impl Workspace {
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
-    pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, WorkspaceError> {
+    pub fn from_exact(start: impl AsRef<Path>) -> Result<Option<Self>, Error> {
         if !start.as_ref().exists() {
             return Ok(None);
         }
@@ -347,7 +341,7 @@ impl Workspace {
                 Ok(Some(Self::from_toml(&toml_content, root)?))
             } else {
                 let project = Project::from_exact(root)?
-                    .ok_or_else(|| WorkspaceError::NoWorkspaceOrProject(root.to_path_buf()))?;
+                    .ok_or_else(|| Error::NoWorkspaceOrProject(root.to_path_buf()))?;
                 Ok(Some(Workspace {
                     root: WorkspaceRoot(root.to_path_buf()),
                     members: NonEmpty::new(project),
@@ -359,7 +353,7 @@ impl Workspace {
     }
 
     #[tracing::instrument(level = "trace", skip(start))]
-    pub fn from(start: impl AsRef<Path>) -> Result<Option<Self>, WorkspaceError> {
+    pub fn from(start: impl AsRef<Path>) -> Result<Option<Self>, Error> {
         if !start.as_ref().exists() {
             return Ok(None);
         }
@@ -389,7 +383,7 @@ impl Workspace {
                                 }
                                 _ => {
                                     let project = Project::from_exact(root)?.ok_or_else(|| {
-                                        WorkspaceError::NoWorkspaceOrProject(root.to_path_buf())
+                                        Error::NoWorkspaceOrProject(root.to_path_buf())
                                     })?;
                                     Ok(Some(Workspace {
                                         root: WorkspaceRoot(root.to_path_buf()),
@@ -412,9 +406,9 @@ impl Workspace {
         }
     }
 
-    fn from_toml(toml_content: &str, root: &Path) -> Result<Self, WorkspaceError> {
+    fn from_toml(toml_content: &str, root: &Path) -> Result<Self, Error> {
         let toml = WorkspaceToml::new(WORKSPACE_TOML, toml_content)
-            .map_err(|source| WorkspaceError::TOML { source })?;
+            .map_err(|source| Error::TOML { source })?;
         let mut members = Vec::new();
         for member in toml.workspace.members {
             match member {
@@ -423,9 +417,7 @@ impl Workspace {
                         .ok() // This is fine because we fail to deserialize invalid globs
                         .into_iter()
                         .flat_map(|paths| {
-                            paths.map(|path| {
-                                path.map_err(|err| WorkspaceError::Glob(err.to_string()))
-                            })
+                            paths.map(|path| path.map_err(|err| Error::Glob(err.to_string())))
                         })
                         .try_collect::<_, Vec<_>, _>()?;
                     for project_path in potential_paths {
@@ -438,7 +430,7 @@ impl Workspace {
                     let project_path = root.join(relative_project_path);
                     match Project::from_exact(&project_path)? {
                         Some(project) => members.push(project),
-                        None => return Err(WorkspaceError::WorkspaceNotFound(project_path)),
+                        None => return Err(Error::WorkspaceNotFound(project_path)),
                     }
                 }
             }
@@ -448,7 +440,7 @@ impl Workspace {
                 root: WorkspaceRoot(root.to_path_buf()),
                 members,
             }),
-            None => Err(WorkspaceError::EmptyWorkspace(root.to_path_buf())),
+            None => Err(Error::EmptyWorkspace(root.to_path_buf())),
         }
     }
 }

@@ -2,19 +2,19 @@ use std::io::{self, Cursor};
 
 use crate::{
     build::{
-        external_dependency::{ExternalDependencyError, ExternalDependencyInfo},
+        external_dependency::{Error, ExternalDependencyInfo},
         BuildBehaviour,
     },
     config::Config,
     hash::HasIntegrity,
     lockfile::{
-        LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageSpec, LockfileError,
-        OptState, PinnedState,
+        self, LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageSpec, OptState,
+        PinnedState,
     },
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
-    tree::{self, InstallTree, TreeError},
+    tree::{self, InstallTree},
 };
 use crate::{fs, lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
 use bytes::Bytes;
@@ -30,16 +30,16 @@ pub enum InstallBinaryRockError {
     Io(#[from] io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lockfile(#[from] LockfileError),
+    Lockfile(#[from] lockfile::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ExternalDependencyError(#[from] ExternalDependencyError),
+    ExternalDependency(#[from] Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),

@@ -6,7 +6,7 @@ use bon::Builder;
 
 use crate::{
     config::Config,
-    lua_installation::{LuaInstallation, LuaInstallationError},
+    lua_installation::{self, LuaInstallation},
     lua_version::LuaVersion,
     tree::InstallTree,
 };
@@ -23,9 +23,9 @@ use tokio::process::Command;
 
 use crate::{
     lua_installation::{LuaBinary, LuaBinaryError},
-    path::{LuaEnvironment, Paths, PathsError},
+    path::{self, LuaEnvironment, Paths},
+    tree,
     tree::Tree,
-    tree::TreeError,
 };
 
 #[derive(Error, Debug, Diagnostic)]
@@ -35,7 +35,7 @@ pub enum RunLuaError {
     LuaBinary(#[from] LuaBinaryError),
     #[error("failed to detect or install the lua runtime")]
     #[diagnostic(forward(0))]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[error("failed to run {lua_cmd}: {source}")]
     LuaCommandFailed {
         lua_cmd: String,
@@ -49,11 +49,11 @@ pub enum RunLuaError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
 }
 
 #[derive(Builder)]

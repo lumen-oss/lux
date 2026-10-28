@@ -4,14 +4,14 @@ use tokio::process::Command;
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::install_packages::{InstallPackages, InstallPackagesError},
+    drivers::install_packages::{self, InstallPackages},
     lua_rockspec::LuaVersionError,
     lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildWorkspace, BuildWorkspaceError},
     package::{PackageReq, PackageVersionReqError},
-    package_db::{PackageDB, PackageDBError},
-    path::{Paths, PathsError},
-    tree::{self, InstallTree, TreeError},
+    package_db::{self, PackageDB},
+    path::{self, Paths},
+    tree::{self, InstallTree},
     workspace::{Workspace, WorkspaceTreeError},
 };
 use bon::Builder;
@@ -84,10 +84,10 @@ pub enum ExecError {
     LuaVersionUnset(#[from] LuaVersionUnset),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Paths(#[from] PathsError),
+    Paths(#[from] path::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
@@ -119,16 +119,16 @@ impl From<InstallCommandError> for ExecError {
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum InstallCommandError {
-    InstallError(#[from] Box<InstallPackagesError>),
+    Install(#[from] Box<install_packages::Error>),
     PackageVersionReqError(#[from] PackageVersionReqError),
-    PackageDBError(#[from] PackageDBError),
-    Tree(#[from] TreeError),
+    PackageDB(#[from] package_db::Error),
+    Tree(#[from] tree::Error),
     LuaVersionUnset(#[from] LuaVersionUnset),
 }
 
-impl From<InstallPackagesError> for InstallCommandError {
-    fn from(source: InstallPackagesError) -> Self {
-        Self::InstallError(Box::new(source))
+impl From<install_packages::Error> for InstallCommandError {
+    fn from(source: install_packages::Error) -> Self {
+        Self::Install(Box::new(source))
     }
 }
 

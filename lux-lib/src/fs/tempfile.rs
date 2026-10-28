@@ -1,8 +1,6 @@
 use tempfile::TempDir;
 
-use crate::fs::FsError;
-
 /// Wrapped [`tempfile::tempdir`].
-pub(crate) fn tempdir() -> Result<TempDir, FsError> {
-    tempfile::tempdir().map_err(|source| FsError::CreateTempDir { source })
+pub(crate) fn tempdir() -> Result<TempDir, super::Error> {
+    tempfile::tempdir().map_err(|source| super::Error::CreateTempDir { source })
 }

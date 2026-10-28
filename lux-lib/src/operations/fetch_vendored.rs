@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::{
     fs,
     lockfile::RemotePackageSourceUrl,
-    lua_rockspec::{LuaRockspecError, RemoteLuaRockspec},
+    lua_rockspec::{self, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
     package::{PackageReq, PackageSpec},
     package_db::{PackageDB, SearchError},
@@ -29,18 +29,18 @@ pub enum FetchVendoredError {
     Search(#[from] SearchError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("could not find a vendored RockSpec for package '{0}' in vendor directory '{1}'.")]
     RockspecNotFound(PackageSpec, String),
     #[error("could not parse vendored RockSpec '{rockspec_path}'")]
     ParseRockspec {
         rockspec_path: String,
-        source: Box<LuaRockspecError>,
+        source: Box<lua_rockspec::Error>,
     },
     #[error("could not find a source or .rock archive for {0} in vendor directory {1}.")]
     PackageNotFound(PackageSpec, String),
     #[error("unable to read binary rock: {0}:\n{1}")]
-    ReadBinaryRock(String, fs::FsError),
+    ReadBinaryRock(String, fs::Error),
 }
 
 #[derive(Debug, PartialEq, Eq)]

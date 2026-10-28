@@ -7,9 +7,13 @@ use std::{
 use bon::Builder;
 
 use crate::{
-    build::external_dependency::ExternalDependencyInfo, config::Config,
-    lockfile::LockedPackageSpec, lua_installation::LuaInstallation, lua_rockspec::DeploySpec,
-    tree::InstallTree,
+    build::external_dependency::ExternalDependencyInfo,
+    config::Config,
+    lockfile::LockedPackageSpec,
+    lua_installation::LuaInstallation,
+    lua_rockspec::DeploySpec,
+    tree::{InstallTree, RockLayout},
+    variables::{self, Environment, VariableSubstitutionError},
 };
 
 #[derive(Builder)]
@@ -37,4 +41,23 @@ pub(crate) trait BuildBackend {
 #[derive(Default)]
 pub(crate) struct BuildInfo {
     pub binaries: Vec<PathBuf>,
+}
+
+pub(crate) fn substitute_variables(
+    input: &str,
+    output_paths: &RockLayout,
+    lua: &LuaInstallation,
+    external_dependencies: &HashMap<String, ExternalDependencyInfo>,
+    config: &Config,
+) -> Result<String, VariableSubstitutionError> {
+    variables::substitute(
+        &[
+            output_paths,
+            lua,
+            external_dependencies,
+            &Environment {},
+            config,
+        ],
+        input,
+    )
 }

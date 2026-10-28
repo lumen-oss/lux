@@ -4,14 +4,14 @@ use thiserror::Error;
 
 use crate::{
     config::Config,
-    drivers::sync::{gather_dependencies, DependencyKind, SyncError},
-    package_db::{PackageDB, PackageDBError},
+    drivers::sync::{self, gather_dependencies, DependencyKind},
+    package_db::{self, PackageDB},
     pipeline::{
         emit_lockfile::LockfileHandle,
         materialise::{Error as MaterialiseError, Materialise},
-        resolve::{ResolveError, ResolvePackageDependencies},
+        resolve::{self, ResolvePackageDependencies},
     },
-    workspace::{Workspace, WorkspaceError},
+    workspace::{self, Workspace},
 };
 
 /// Generates a workspace's lockfile without installing anything.
@@ -74,23 +74,23 @@ async fn generate_lockfile(args: GenerateLockfile<'_>) -> Result<(), GenerateLoc
 pub enum GenerateLockfileError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(#[from] PackageDBError),
+    PackageDB(#[from] package_db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Sync(Box<SyncError>),
+    Sync(Box<sync::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Resolve(#[from] ResolveError),
+    Resolve(#[from] resolve::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Materialise(#[from] MaterialiseError),
 }
 
-impl From<SyncError> for GenerateLockfileError {
-    fn from(source: SyncError) -> Self {
+impl From<sync::Error> for GenerateLockfileError {
+    fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
 }

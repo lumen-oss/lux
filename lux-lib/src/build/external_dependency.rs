@@ -13,19 +13,19 @@ use std::{
 };
 use thiserror::Error;
 
-use super::utils::{c_lib_extension, format_path};
+use crate::{path, target};
 
 use crate::fs;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ExternalDependencyError {
+pub enum Error {
     #[error("external dependency '{0}' not found")]
     #[diagnostic(help("{}", not_found_help(.0)))]
     NotFound(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error("{0} was probed successfully, but the header {1} could not be found")]
     #[diagnostic(help(
         r#"ensure the header is installed.
@@ -74,7 +74,7 @@ impl ExternalDependencyInfo {
         name: &str,
         dependency: &ExternalDependencySpec,
         config: &ExternalDependencySearchConfig,
-    ) -> Result<Self, ExternalDependencyError> {
+    ) -> Result<Self, Error> {
         let _stdout_gag = gag::Gag::stdout();
 
         let lib_info = pkg_config_probe(name)
@@ -91,7 +91,7 @@ impl ExternalDependencyInfo {
                     info.include_paths
                         .iter()
                         .find(|path| path.join(header).exists())
-                        .ok_or(ExternalDependencyError::SuccessfulProbeHeaderNotFound(
+                        .ok_or(Error::SuccessfulProbeHeaderNotFound(
                             name.to_string(),
                             header.to_slash_lossy().to_string(),
                         ))?
@@ -145,7 +145,7 @@ impl ExternalDependencyInfo {
         name: &str,
         dependency: &ExternalDependencySpec,
         config: &ExternalDependencySearchConfig,
-    ) -> Result<Self, ExternalDependencyError> {
+    ) -> Result<Self, Error> {
         let env_prefix = std::env::var(format!("{}_DIR", name.to_uppercase())).ok();
 
         let mut search_prefixes = Vec::new();
@@ -175,7 +175,7 @@ impl ExternalDependencyInfo {
                             None
                         }
                     })
-                    .ok_or(ExternalDependencyError::HeaderNotFound(
+                    .ok_or(Error::HeaderNotFound(
                         name.to_string(),
                         header.to_slash_lossy().to_string(),
                     ))?;
@@ -201,7 +201,7 @@ impl ExternalDependencyInfo {
                         }
                         None
                     })
-                    .ok_or(ExternalDependencyError::LibraryNotFound(
+                    .ok_or(Error::LibraryNotFound(
                         name.to_string(),
                         lib.to_slash_lossy().to_string(),
                     ))?;
@@ -210,7 +210,7 @@ impl ExternalDependencyInfo {
         }
 
         if let (None, None) = (&include_dir, &lib_dir) {
-            return Err(ExternalDependencyError::NotFound(name.into()));
+            return Err(Error::NotFound(name.into()));
         }
         let bin_dir = lib_dir.as_ref().and_then(|lib_dir| {
             lib_dir
@@ -309,7 +309,7 @@ impl HasVariables for HashMap<String, ExternalDependencyInfo> {
                     _ => None,
                 })
                 .as_deref()
-                .map(format_path)
+                .map(path::quoted)
         }))
     }
 }
@@ -401,7 +401,10 @@ fn get_lib_name(lib_dir: &Path, prefix: &str) -> Option<String> {
             entries
                 .filter_map(Result::ok)
                 .map(|entry| entry.path().to_path_buf())
-                .filter(|file| file.extension().is_some_and(|ext| ext == c_lib_extension()))
+                .filter(|file| {
+                    file.extension()
+                        .is_some_and(|ext| ext == target::c_lib_extension())
+                })
                 .filter(|file| {
                     file.file_name()
                         .is_some_and(|name| is_lib_name(&name.to_string_lossy(), prefix))
@@ -416,7 +419,7 @@ fn get_lib_name(lib_dir: &Path, prefix: &str) -> Option<String> {
 fn is_lib_name(file_name: &str, prefix: &str) -> bool {
     #[cfg(target_family = "unix")]
     let file_name = file_name.trim_start_matches("lib");
-    file_name == format!("{}.{}", prefix, c_lib_extension())
+    file_name == format!("{}.{}", prefix, target::c_lib_extension())
 }
 
 #[cfg(test)]
@@ -652,10 +655,7 @@ mod tests {
             &config,
         );
 
-        assert!(matches!(
-            result,
-            Err(ExternalDependencyError::HeaderNotFound { .. })
-        ));
+        assert!(matches!(result, Err(Error::HeaderNotFound { .. })));
     }
 
     #[cfg(not(target_env = "msvc"))]

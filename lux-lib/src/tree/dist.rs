@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io, path::PathBuf};
 
-use super::{EntryType, InstallTree, RockLayout, Tree, TreeError};
+use super::{EntryType, InstallTree, RockLayout, Tree};
 use crate::{
     config::Config,
     fs,
@@ -34,7 +34,7 @@ struct ConflictingPackageError {
 pub struct FlatDistTree(Tree);
 
 impl FlatDistTree {
-    pub fn new(root: PathBuf, version: LuaVersion, config: &Config) -> Result<Self, TreeError> {
+    pub fn new(root: PathBuf, version: LuaVersion, config: &Config) -> Result<Self, super::Error> {
         let version_dir = root.join(version.to_string());
         let test_tree_dir = version_dir.join("test_dependencies");
         let build_tree_dir = version_dir.join("build_dependencies");
@@ -103,9 +103,9 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), TreeError> {
+    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), super::Error> {
         self.guard_no_conflicting_package(package)
-            .map_err(TreeError::Io)?;
+            .map_err(super::Error::Io)?;
         let layout = self.layout_for(package);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
@@ -113,11 +113,15 @@ impl InstallTree for FlatDistTree {
         Ok(())
     }
 
-    fn cleanup(&self, _package: &LockedPackage, _entry_type: EntryType) -> Result<(), TreeError> {
+    fn cleanup(
+        &self,
+        _package: &LockedPackage,
+        _entry_type: EntryType,
+    ) -> Result<(), super::Error> {
         unreachable!("dist trees do not undergo cleanup for packages")
     }
 
-    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, TreeError> {
+    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, super::Error> {
         self.0.lockfile()
     }
 
@@ -125,22 +129,22 @@ impl InstallTree for FlatDistTree {
         self.0.lockfile_path()
     }
 
-    fn build_tree(&self, config: &Config) -> Result<Tree, TreeError> {
+    fn build_tree(&self, config: &Config) -> Result<Tree, super::Error> {
         self.0.build_tree(config)
     }
 
-    fn test_tree(&self, config: &Config) -> Result<Tree, TreeError> {
+    fn test_tree(&self, config: &Config) -> Result<Tree, super::Error> {
         self.0.test_tree(config)
     }
 
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, TreeError> {
+    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, super::Error> {
         self.0.list()
     }
 
     fn match_rocks(
         &self,
         req: &crate::package::PackageReq,
-    ) -> Result<super::RockMatches, TreeError> {
+    ) -> Result<super::RockMatches, super::Error> {
         self.0.match_rocks(req)
     }
 }

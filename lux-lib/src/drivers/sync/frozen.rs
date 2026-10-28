@@ -4,7 +4,7 @@ use crate::operations::{PackageInstallSpec, RemoveError, Uninstall};
 
 use super::reconcile::{reconcile_locks, SyncReport};
 
-use crate::drivers::install_packages::{InstallPackages, InstallPackagesError};
+use crate::drivers::install_packages::{self, InstallPackages};
 use crate::{
     build::BuildBehaviour,
     config::Config,
@@ -16,12 +16,12 @@ use crate::{
     luarocks::luarocks_installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError, GenLuauRcError},
     package::{PackageName, PackageReq},
-    package_db::{PackageDB, PackageDBError},
+    package_db::{self, PackageDB},
     pipeline::resolve::luarocks_build_backend_name,
-    project::{project_toml::LocalProjectTomlValidationError, ProjectError},
+    project::{self, project_toml::LocalProjectTomlValidationError},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
-    tree::{self, InstallTree, TreeError},
-    workspace::{Workspace, WorkspaceError, WorkspaceTreeError},
+    tree::{self, InstallTree},
+    workspace::{self, Workspace, WorkspaceTreeError},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -131,13 +131,13 @@ pub enum SyncError {
     FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] Box<InstallPackagesError>),
+    Install(#[from] Box<install_packages::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Remove(#[from] RemoveError),
@@ -152,10 +152,10 @@ pub enum SyncError {
     WorkspaceTree(#[from] WorkspaceTreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Workspace(#[from] WorkspaceError),
+    Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Project(#[from] ProjectError),
+    Project(#[from] project::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
@@ -167,17 +167,17 @@ pub enum SyncError {
     GenLuauRc(#[from] GenLuauRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(Box<PackageDBError>),
+    PackageDB(Box<package_db::Error>),
 }
 
-impl From<InstallPackagesError> for SyncError {
-    fn from(source: InstallPackagesError) -> Self {
+impl From<install_packages::Error> for SyncError {
+    fn from(source: install_packages::Error) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<PackageDBError> for SyncError {
-    fn from(source: PackageDBError) -> Self {
+impl From<package_db::Error> for SyncError {
+    fn from(source: package_db::Error) -> Self {
         Self::PackageDB(Box::new(source))
     }
 }

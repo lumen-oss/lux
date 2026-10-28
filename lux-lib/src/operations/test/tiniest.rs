@@ -10,15 +10,15 @@ use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::{
-    build::{BuildBehaviour, BuildError},
+    build::{self, BuildBehaviour},
     config::Config,
     fs,
-    lua_installation::{LuaInstallation, LuaInstallationError},
+    lua_installation::{self, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     package::PackageReq,
     pipeline::build_local::Build,
-    tree::{self, InstallTree, RockMatches, Tree, TreeError},
+    tree::{self, InstallTree, RockMatches, Tree},
     workspace::LUX_DIR_NAME,
 };
 
@@ -80,20 +80,20 @@ end
 pub enum TiniestError {
     #[error("failed to install tiniest")]
     #[diagnostic(transparent)]
-    Build(Box<BuildError>),
+    Build(Box<build::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] LuaInstallationError),
+    LuaInstallation(#[from] lua_installation::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Tree(#[from] TreeError),
+    Tree(#[from] tree::Error),
 }
 
-impl From<BuildError> for TiniestError {
-    fn from(source: BuildError) -> Self {
+impl From<build::Error> for TiniestError {
+    fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
 }
@@ -127,7 +127,7 @@ pub(crate) async fn ensure_installed(
     Ok(tree.layout_for(package.spec()).src)
 }
 
-fn find_installed_src(tree: &Tree, req: &PackageReq) -> Result<Option<PathBuf>, TreeError> {
+fn find_installed_src(tree: &Tree, req: &PackageReq) -> Result<Option<PathBuf>, tree::Error> {
     let packages = match tree.match_rocks(req)? {
         RockMatches::NotFound(_) => return Ok(None),
         RockMatches::Single(id) => vec![id],

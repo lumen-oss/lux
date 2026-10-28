@@ -17,9 +17,9 @@ use crate::fs;
 use crate::lua_version::LuaVersion;
 use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
-use crate::tree::{CustomRockLayout, Tree, TreeError};
+use crate::tree::{self, CustomRockLayout, Tree};
 use crate::variables::GetVariableError;
-use crate::{build::utils, variables::HasVariables};
+use crate::{target, variables::HasVariables};
 
 pub mod access_tokens;
 pub mod build;
@@ -162,21 +162,21 @@ impl Config {
     }
 
     /// Enabled luarocks repository servers that provide dev/scm rocks
-    pub fn enabled_dev_servers(&self) -> Result<Vec<Url>, ConfigError> {
+    pub fn enabled_dev_servers(&self) -> Result<Vec<Url>, Error> {
         let mut enabled_dev_servers = Vec::new();
         if self.enable_development_packages {
             let config_file = ConfigBuilder::config_file()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
             enabled_dev_servers.push(self.server().join(DEV_PATH).map_err(|source| {
-                ConfigError::UrlParseError {
+                Error::UrlParseError {
                     source,
                     help: Some(format!("check the `server` URL in {config_file}")),
                 }
             })?);
             for server in self.extra_servers() {
                 enabled_dev_servers.push(server.join(DEV_PATH).map_err(|source| {
-                    ConfigError::UrlParseError {
+                    Error::UrlParseError {
                         source,
                         help: Some(format!("check the `extra_servers` URLs in {config_file}")),
                     }
@@ -203,7 +203,7 @@ impl Config {
 
     /// The tree in which to install rocks.
     /// If installing packages for a project, use `Project::tree` instead.
-    pub fn user_tree(&self, version: LuaVersion) -> Result<Tree, TreeError> {
+    pub fn user_tree(&self, version: LuaVersion) -> Result<Tree, tree::Error> {
         Tree::new(self.user_tree.clone(), version, self)
     }
 
@@ -377,10 +377,10 @@ impl HasVariables for Config {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum ConfigError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Fs(#[from] fs::FsError),
+    Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     NoValidHomeDirectory(#[from] NoValidHomeDirectory),
@@ -510,7 +510,7 @@ pub struct ConfigBuilder {
 impl ConfigBuilder {
     /// Create a new `ConfigBuilder` by deserializing from a config file
     /// if present, or otherwise by instantiating the default config.
-    pub fn new() -> Result<Self, ConfigError> {
+    pub fn new() -> Result<Self, Error> {
         let config_file = Self::config_file()?;
         if config_file.is_file() {
             Self::from_file(&config_file)
@@ -519,11 +519,11 @@ impl ConfigBuilder {
         }
     }
 
-    pub(crate) fn from_file(config_file: &Path) -> Result<Self, ConfigError> {
+    pub(crate) fn from_file(config_file: &Path) -> Result<Self, Error> {
         let config_file_name = config_file.to_string_lossy().to_string();
         let content = fs::sync::read_to_string(config_file)?;
         crate::project::parse_toml(&config_file_name, &content).map_err(|source| {
-            ConfigError::Deserialize {
+            Error::Deserialize {
                 config_file: config_file_name,
                 source,
             }
@@ -893,7 +893,7 @@ impl ConfigBuilder {
     }
 
     #[tracing::instrument(level = "trace")]
-    pub fn build(self) -> Result<Config, ConfigError> {
+    pub fn build(self) -> Result<Config, Error> {
         let data_dir = self.data_dir.unwrap_or(Config::default_data_path());
         let cache_dir = self.cache_dir.unwrap_or(Config::default_cache_path());
         let user_tree = self.user_tree.unwrap_or(data_dir.join("tree"));
@@ -997,16 +997,16 @@ impl From<Config> for ConfigBuilder {
 }
 
 fn default_variables() -> impl Iterator<Item = (String, String)> {
-    let cflags = env::var("CFLAGS").unwrap_or(utils::default_cflags().into());
+    let cflags = env::var("CFLAGS").unwrap_or(target::default_cflags().into());
     let ldflags = env::var("LDFLAGS").unwrap_or("".into());
     vec![
         ("MAKE".into(), "make".into()),
         ("CMAKE".into(), "cmake".into()),
-        ("LIB_EXTENSION".into(), utils::c_dylib_extension().into()),
-        ("OBJ_EXTENSION".into(), utils::c_obj_extension().into()),
+        ("LIB_EXTENSION".into(), target::c_dylib_extension().into()),
+        ("OBJ_EXTENSION".into(), target::c_obj_extension().into()),
         ("CFLAGS".into(), cflags),
         ("LDFLAGS".into(), ldflags),
-        ("LIBFLAG".into(), utils::default_libflag().into()),
+        ("LIBFLAG".into(), target::default_libflag().into()),
     ]
     .into_iter()
 }
