@@ -674,6 +674,24 @@ pub(crate) fn project_files(src: &Path) -> Vec<PathBuf> {
         .collect_vec()
 }
 
+/// Recursively copy the files of `src` into `dest`, honouring ignore files.
+#[tracing::instrument(level = "trace")]
+pub(crate) async fn copy_dir(src: &Path, dest: &Path) -> Result<(), fs::Error> {
+    if src.exists() {
+        for file in project_files(src) {
+            let relative_src_path: PathBuf = pathdiff::diff_paths(src.join(&file), src)
+                .unwrap_or_else(|| unreachable!("diff_path with self"));
+            let target = dest.join(relative_src_path);
+            if let Some(parent) = target.parent() {
+                fs::tokio::create_dir_all(parent).await?;
+            }
+            fs::tokio::copy(&file, &target).await?;
+            fs::make_writable(&target).await?;
+        }
+    }
+    Ok(())
+}
+
 async fn upgraded_version_req(
     existing: Option<&str>,
     dep: &PackageName,

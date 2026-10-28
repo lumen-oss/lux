@@ -1,4 +1,5 @@
 use crate::fs;
+use crate::project;
 use std::string::FromUtf8Error;
 
 use crate::{
@@ -14,10 +15,7 @@ use crate::{
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{
-    builtin, cmake, command, make, rust_binary, rust_mlua, treesitter_parser,
-    utils::recursive_copy_dir,
-};
+use super::{builtin, cmake, command, make, rust_binary, rust_mlua, treesitter_parser};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -143,7 +141,7 @@ where
                 dir.file_name()
                     .is_some_and(|name| name != "doc" && name != "docs")
             }) {
-                recursive_copy_dir(&build_dir.join(directory), &layout.etc).await?;
+                project::copy_dir(&build_dir.join(directory), &layout.etc).await?;
             }
         }
         None => {
@@ -167,7 +165,7 @@ where
                     }
                 })
             {
-                recursive_copy_dir(
+                project::copy_dir(
                     &build_dir.join(&subdirectory),
                     &layout.etc.join(&subdirectory),
                 )

@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{build::utils::recursive_copy_dir, fs, tree::RockLayout};
+use crate::{fs, project, tree::RockLayout};
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -53,7 +53,7 @@ async fn install_manifest_entries<T>(
         let target = dest.join(relative_src_path);
         let src_path = src.join(relative_src_path);
         if src_path.is_dir() {
-            recursive_copy_dir(&src_path, &target).await?;
+            project::copy_dir(&src_path, &target).await?;
         } else if src_path.is_file() {
             if let Some(target_parent_dir) = target.parent() {
                 fs::tokio::create_dir_all(target_parent_dir).await?;
@@ -77,7 +77,7 @@ async fn install_bin_manifest_entries(
     install_manifest_entries(entries, src, dest).await?;
     #[cfg(unix)]
     for relative_src_path in entries.keys() {
-        crate::build::utils::set_executable_permissions(&dest.join(relative_src_path)).await?;
+        fs::set_executable_permissions(&dest.join(relative_src_path)).await?;
     }
     Ok(())
 }

@@ -1,10 +1,10 @@
 use crate::{
-    build::utils::format_path,
     config::Config,
     fs,
     lockfile::{self, LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, ReadOnly},
     lua_version::LuaVersion,
     package::{PackageName, PackageReq},
+    path,
     variables::{GetVariableError, HasVariables},
 };
 use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
@@ -158,12 +158,12 @@ pub enum Error {
 impl HasVariables for RockLayout {
     fn get_variable(&self, var: &str) -> Result<Option<String>, GetVariableError> {
         Ok(match var {
-            "PREFIX" => Some(format_path(&self.root)),
-            "LIBDIR" => Some(format_path(&self.lib)),
-            "LUADIR" => Some(format_path(&self.src)),
-            "BINDIR" => Some(format_path(&self.bin)),
-            "CONFDIR" => Some(format_path(&self.conf)),
-            "DOCDIR" => Some(format_path(&self.doc)),
+            "PREFIX" => Some(path::quoted(&self.root)),
+            "LIBDIR" => Some(path::quoted(&self.lib)),
+            "LUADIR" => Some(path::quoted(&self.src)),
+            "BINDIR" => Some(path::quoted(&self.bin)),
+            "CONFDIR" => Some(path::quoted(&self.conf)),
+            "DOCDIR" => Some(path::quoted(&self.doc)),
             _ => None,
         })
     }

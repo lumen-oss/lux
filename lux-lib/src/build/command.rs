@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     io,
     path::Path,
-    process::{ExitStatus, Stdio},
+    process::{ExitStatus, Output, Stdio},
 };
 use thiserror::Error;
 
@@ -11,7 +11,7 @@ use tracing::{info_span, Instrument};
 use which::which;
 
 use crate::{
-    build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
+    build::backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
     config::Config,
     lua_installation::LuaInstallation,
     lua_rockspec::CommandBuildSpec,
@@ -21,7 +21,6 @@ use crate::{
 };
 
 use super::external_dependency::ExternalDependencyInfo;
-use super::utils;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum Error {
@@ -62,6 +61,18 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     VariableSubstitution(#[from] VariableSubstitutionError),
+}
+pub(crate) fn trace_output(output: &Output) {
+    if !output.stderr.is_empty() {
+        for line in String::from_utf8_lossy(&output.stderr).lines() {
+            tracing::debug!("{}", line);
+        }
+    }
+    if !output.stdout.is_empty() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            tracing::debug!("{}", line);
+        }
+    }
 }
 
 impl BuildBackend for CommandBuildSpec {
@@ -128,7 +139,7 @@ async fn run_command(
     let lua_cpath = build_paths.package_cpath_prepended().joined();
     let bin_path = build_paths.path_prepended().joined();
     let substituted_cmd =
-        utils::substitute_variables(command, output_paths, lua, external_dependencies, config)?;
+        backend::substitute_variables(command, output_paths, lua, external_dependencies, config)?;
 
     if substituted_cmd.is_empty() {
         return Err(Error::EmptyCommand);
@@ -163,7 +174,7 @@ async fn run_command(
             ))
             .await
         {
-            Ok(output) if output.status.success() => utils::trace_command_output(&output),
+            Ok(output) if output.status.success() => trace_output(&output),
             Ok(output) => {
                 return Err(Error::CommandFailure {
                     command: substituted_cmd,

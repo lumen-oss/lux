@@ -1,4 +1,3 @@
-use crate::build::utils::recursive_copy_dir;
 use crate::config::Config;
 use crate::git::url::RemoteGitUrlParseError;
 use crate::git::{GitRef, GitSource};
@@ -6,6 +5,7 @@ use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
 use crate::package::{wally, PackageSpec};
+use crate::project;
 use crate::reqwest::{RequestBuilderExt, RequestError};
 use crate::rockspec::Rockspec;
 use crate::{fs, operations};
@@ -386,7 +386,7 @@ async fn fetch_src_impl<R: Rockspec>(
 
             let hash = if path.is_dir() {
                 let hash = path.hash().await.map_err(FetchSrcError::Hash)?;
-                recursive_copy_dir(path, dest_dir).await?;
+                project::copy_dir(path, dest_dir).await?;
                 hash
             } else {
                 let mut file = fs::sync::open(path)?;

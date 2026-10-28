@@ -5,8 +5,6 @@ use thiserror::Error;
 
 use crate::{fs, lua_rockspec::LuaModule};
 
-use super::utils::make_writable;
-
 /// Errors from transpiling Luau source to Lua.
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -34,7 +32,7 @@ pub(crate) async fn transpile_luau_to_lua_module(
         fs::tokio::create_dir_all(parent).await?;
     }
     fs::tokio::write(&target, lua_content).await?;
-    make_writable(&target).await?;
+    fs::make_writable(&target).await?;
     Ok(())
 }
 

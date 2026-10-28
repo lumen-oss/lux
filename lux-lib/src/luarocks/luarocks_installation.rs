@@ -294,7 +294,7 @@ variables = {{
             .output()
             .await?;
         if output.status.success() {
-            build::utils::trace_command_output(&output);
+            build::command::trace_output(&output);
             Ok(())
         } else {
             Err(ExecLuaRocksError::CommandFailure {

@@ -1,5 +1,5 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
-use crate::build::utils::{self, InstallBinaryError};
+use crate::build::{cargo, command, install};
 use crate::config::{build, Config};
 use crate::fs;
 use crate::lua_rockspec::RustBinaryBuildSpec;
@@ -39,7 +39,7 @@ pub enum Error {
     InstallBinary {
         file_name: String,
         #[diagnostic_source]
-        source: InstallBinaryError,
+        source: install::Error,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -85,7 +85,7 @@ impl BuildBackend for RustBinaryBuildSpec {
 
         if let Some(cargo_vendor_dir) = &cargo_vendor_dir {
             install_args.push("--offline");
-            utils::prepare_cargo_vendor_config(config, build_dir, cargo_vendor_dir).await?;
+            cargo::prepare_vendor_config(config, build_dir, cargo_vendor_dir).await?;
         }
 
         match config
@@ -98,7 +98,7 @@ impl BuildBackend for RustBinaryBuildSpec {
             ))
             .await
         {
-            Ok(output) if output.status.success() => utils::trace_command_output(&output),
+            Ok(output) if output.status.success() => command::trace_output(&output),
             Ok(output) => {
                 return Err(Error::CargoInstall {
                     status: output.status,
@@ -110,10 +110,10 @@ impl BuildBackend for RustBinaryBuildSpec {
         }
 
         let mut binaries = Vec::new();
-        for bin_script in utils::detect_binaries(build_dir) {
+        for bin_script in install::detect_binaries(build_dir) {
             if let Some(target) = bin_script.file_name() {
                 let file_name = target.to_string_lossy().to_string();
-                let installed_bin_script = utils::install_binary(
+                let installed_bin_script = install::binary(
                     &bin_script,
                     &file_name,
                     args.tree,

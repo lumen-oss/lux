@@ -1,10 +1,10 @@
-use super::utils::c_dylib_extension;
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
-use crate::build::utils;
+use crate::build::{cargo, command};
 use crate::config::build;
 use crate::fs;
 use crate::lua_rockspec::RustMluaBuildSpec;
 use crate::lua_version::{LuaVersion, LuaVersionUnset};
+use crate::target::c_dylib_extension;
 use crate::tree::InstallTree;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -84,7 +84,7 @@ impl BuildBackend for RustMluaBuildSpec {
             .map(|vendor_dir| vendor_dir.join("cargo"))
             .filter(|dir| dir.is_dir())
         {
-            utils::prepare_cargo_vendor_config(config, build_dir, &cargo_vendor_dir).await?;
+            cargo::prepare_vendor_config(config, build_dir, &cargo_vendor_dir).await?;
             build_args.push("--offline");
         }
 
@@ -99,7 +99,7 @@ impl BuildBackend for RustMluaBuildSpec {
                 ))
                 .await
             {
-                Ok(output) if output.status.success() => utils::trace_command_output(&output),
+                Ok(output) if output.status.success() => command::trace_output(&output),
                 Ok(output) => {
                     return Err(Error::CargoBuild {
                         status: output.status,

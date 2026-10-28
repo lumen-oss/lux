@@ -10,8 +10,8 @@ use tracing::{info_span, Instrument};
 
 use crate::{
     build::{
-        backend::{BuildBackend, BuildInfo, RunBuildArgs},
-        utils,
+        backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
+        command,
     },
     config::Config,
     fs,
@@ -100,7 +100,7 @@ impl BuildBackend for CMakeBuildSpec {
         self.variables
             .into_iter()
             .map(|(key, value)| {
-                let substituted_value = utils::substitute_variables(
+                let substituted_value = backend::substitute_variables(
                     &value,
                     &layout,
                     lua,
@@ -182,7 +182,7 @@ impl BuildBackend for CMakeBuildSpec {
 async fn spawn_cmake_cmd(cmd: &mut Command, config: &Config) -> Result<(), Error> {
     match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(child) => match child.wait_with_output().await {
-            Ok(output) if output.status.success() => utils::trace_command_output(&output),
+            Ok(output) if output.status.success() => command::trace_output(&output),
             Ok(output) => {
                 return Err(Error::CommandFailure {
                     name: config.cmake_cmd().clone(),

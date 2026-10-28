@@ -5,6 +5,7 @@ use crate::lua_installation;
 use crate::lua_rockspec::LuaVersionError;
 use crate::lua_version::LuaVersion;
 use crate::operations::UnpackError;
+use crate::project;
 use crate::rockspec::Rockspec;
 use crate::tree::{self, EntryType, InstallTree};
 use bon::Builder;
@@ -31,11 +32,12 @@ use miette::Diagnostic;
 use patch::Patch;
 use ssri::Integrity;
 use thiserror::Error;
-use utils::{recursive_copy_dir, CompileCFilesError, InstallBinaryError};
 
 pub mod builtin;
 pub mod cmake;
 pub mod command;
+pub mod compile;
+pub mod install;
 pub mod luarocks;
 #[cfg(feature = "luau-transpile")]
 pub mod luau;
@@ -47,7 +49,7 @@ pub mod source;
 pub mod treesitter_parser;
 
 pub(crate) mod backend;
-pub(crate) mod utils;
+pub(crate) mod cargo;
 pub(crate) use builtin::autodetect_modules;
 
 pub mod external_dependency;
@@ -121,7 +123,7 @@ pub enum Error {
     Patch(#[from] patch::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CompileCFiles(#[from] CompileCFilesError),
+    CompileCFiles(#[from] compile::c_files::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
@@ -150,7 +152,7 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
     InstallBinary {
         file_name: String,
         #[diagnostic_source]
-        source: InstallBinaryError,
+        source: install::Error,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -239,7 +241,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         for (target, source) in &install_spec.lua {
             let _enter = span.enter();
             let absolute_source = build_dir.join(source);
-            utils::copy_lua_to_module_path(&absolute_source, target, &layout.src)?;
+            install::lua_module(&absolute_source, target, &layout.src)?;
         }
     }
     {
@@ -259,7 +261,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                     .instrument(tracing::trace_span!("copying target"))
                     .await?;
             }
-            utils::make_writable(&resolved_target).await?;
+            fs::make_writable(&resolved_target).await?;
         }
     }
     if entry_type.is_entrypoint() {
@@ -267,7 +269,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
         let _enter = span.enter();
         let deploy_spec = rockspec.deploy().current_platform();
         for (target, source) in &install_spec.bin {
-            utils::install_binary(
+            install::binary(
                 &build_dir.join(source),
                 target,
                 tree,
@@ -303,7 +305,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
             fs::tokio::copy(&absolute_source, &target)
                 .instrument(tracing::trace_span!("copying configuration file"))
                 .await?;
-            utils::make_writable(&target).await?;
+            fs::make_writable(&target).await?;
         }
     }
     Ok(())
@@ -425,7 +427,7 @@ where
                 .is_some_and(|name| name != "doc" && name != "docs")
         })
     {
-        recursive_copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
+        project::copy_dir(&build_dir.join(directory), &layout.etc.join(directory)).await?;
     }
 
     recursive_copy_doc_dir(&layout.doc, &build_dir).await?;
@@ -503,7 +505,7 @@ async fn recursive_copy_doc_dir(target_doc_dir: &Path, build_dir: &Path) -> Resu
     if !doc_dir.exists() {
         doc_dir = build_dir.join("docs");
     }
-    recursive_copy_dir(&doc_dir, target_doc_dir).await?;
+    project::copy_dir(&doc_dir, target_doc_dir).await?;
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    build::utils::{self, CCExt},
+    build::{command, compile::CCExt},
     config::Config,
     fs,
     hash::HasIntegrity,
@@ -207,7 +207,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     make_cmd.env("XCFLAGS", xcflags.join(" "));
 
     match make_cmd.output().await {
-        Ok(output) if output.status.success() => utils::trace_command_output(&output),
+        Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "build".into(),
@@ -234,7 +234,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         .output()
         .await
     {
-        Ok(output) if output.status.success() => utils::trace_command_output(&output),
+        Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "install".into(),
@@ -316,7 +316,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         .await
         .map_err(|err| io::Error::other(err.to_string()))?;
     match msvcbuild.output().await {
-        Ok(output) if output.status.success() => utils::trace_command_output(&output),
+        Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "build".into(),
@@ -440,7 +440,7 @@ async fn run_cmake(cwd: &Path, args: &[String], config: &Config) -> Result<(), B
     cmd.stderr(Stdio::piped());
     match cmd.output().await {
         Ok(output) if output.status.success() => {
-            utils::trace_command_output(&output);
+            command::trace_output(&output);
             Ok(())
         }
         Ok(output) => Err(BuildLuaError::CommandFailure {
@@ -574,7 +574,7 @@ async fn do_build_lua_unix(
         .output()
         .await
     {
-        Ok(output) if output.status.success() => utils::trace_command_output(&output),
+        Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
             return Err(BuildLuaError::CommandFailure {
                 name: "install".into(),
@@ -759,7 +759,7 @@ fn guard_success(
 ) -> Result<(), BuildLuaError> {
     match output {
         Ok(output) if output.status.success() => {
-            utils::trace_command_output(&output);
+            command::trace_output(&output);
             Ok(())
         }
         Ok(output) => Err(BuildLuaError::CommandFailure {

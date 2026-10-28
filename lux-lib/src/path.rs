@@ -1,14 +1,20 @@
 use crate::{
-    build::utils::c_dylib_extension,
     config::Config,
     lua_version::LuaVersion,
+    target::c_dylib_extension,
     tree::{self, InstallTree},
 };
 use itertools::Itertools;
 use miette::Diagnostic;
-use path_slash::PathBufExt;
+use path_slash::{PathBufExt, PathExt};
 use serde::Serialize;
-use std::{env, fmt::Display, path::PathBuf, str::FromStr};
+use shlex::try_quote;
+use std::{
+    env,
+    fmt::Display,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use thiserror::Error;
 
 const LUA_PATH_SEPARATOR: &str = ";";
@@ -40,6 +46,17 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
+}
+
+pub(crate) fn quoted(path: &Path) -> String {
+    let path_str = path.to_slash_lossy();
+    if cfg!(windows) {
+        path_str.to_string()
+    } else {
+        try_quote(&path_str)
+            .map(|str| str.to_string())
+            .unwrap_or(format!("'{path_str}'"))
+    }
 }
 
 impl Paths {

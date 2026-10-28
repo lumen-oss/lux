@@ -10,7 +10,6 @@ use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::{
-    build::utils::c_dylib_extension,
     config::Config,
     fs,
     lua_installation::{self, LuaInstallation},
@@ -18,6 +17,7 @@ use crate::{
     operations::{InstallProject, InstallProjectError},
     project::{project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
+    target::c_dylib_extension,
     tree::{self, InstallTree},
 };
 

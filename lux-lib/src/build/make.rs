@@ -12,8 +12,8 @@ use tracing::{info_span, Instrument};
 
 use crate::{
     build::{
-        backend::{BuildBackend, BuildInfo, RunBuildArgs},
-        utils,
+        backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
+        command,
     },
     lua_rockspec::MakeBuildSpec,
     path::{self, Paths},
@@ -82,7 +82,7 @@ impl BuildBackend for MakeBuildSpec {
                 .chain(&self.build_variables)
                 .filter(|(_, value)| !value.is_empty())
                 .map(|(key, value)| {
-                    let substituted_value = utils::substitute_variables(
+                    let substituted_value = backend::substitute_variables(
                         value,
                         &layout,
                         lua,
@@ -112,7 +112,7 @@ impl BuildBackend for MakeBuildSpec {
                     .instrument(info_span!("Make build pass"))
                     .await
                 {
-                    Ok(output) if output.status.success() => utils::trace_command_output(&output),
+                    Ok(output) if output.status.success() => command::trace_output(&output),
                     Ok(output) => {
                         return Err(Error::CommandFailure {
                             name: match self.build_target {
@@ -141,7 +141,7 @@ impl BuildBackend for MakeBuildSpec {
                 .chain(&self.install_variables)
                 .filter(|(_, value)| !value.is_empty())
                 .map(|(key, value)| {
-                    let substituted_value = utils::substitute_variables(
+                    let substituted_value = backend::substitute_variables(
                         value,
                         &layout,
                         lua,
@@ -166,7 +166,7 @@ impl BuildBackend for MakeBuildSpec {
                 .instrument(info_span!("Make install pass"))
                 .await
             {
-                Ok(output) if output.status.success() => utils::trace_command_output(&output),
+                Ok(output) if output.status.success() => command::trace_output(&output),
                 Ok(output) => {
                     return Err(Error::CommandFailure {
                         name: format!("{} {}", config.make_cmd(), self.install_target),

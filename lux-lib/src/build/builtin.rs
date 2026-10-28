@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 use crate::{
     build::{
         backend::{BuildBackend, BuildInfo, RunBuildArgs},
-        utils,
+        compile::{c_files, c_modules},
     },
     fs,
     lua_rockspec::{BuiltinBuildSpec, LuaModule, ModuleSpec, ParseLuaModuleError},
@@ -21,22 +21,22 @@ use crate::{
 #[cfg(not(feature = "luau-transpile"))]
 use crate::lua_version::LuaVersion;
 
-use super::utils::{CompileCFilesError, CompileCModulesError, InstallBinaryError};
+use super::{compile, install};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CompileCFiles(#[from] CompileCFilesError),
+    CompileCFiles(#[from] compile::c_files::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CompileCModules(#[from] CompileCModulesError),
+    CompileCModules(#[from] compile::c_modules::Error),
     #[error("failed to install binary '{file_name}'")]
     InstallBinary {
         file_name: String,
         #[diagnostic_source]
-        source: InstallBinaryError,
+        source: install::Error,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -104,7 +104,7 @@ impl BuildBackend for BuiltinBuildSpec {
                 ModuleSpec::SourcePath(source) => {
                     if source.extension().map(|ext| ext == "c").unwrap_or(false) {
                         let absolute_source_paths = vec![build_dir.join(source)];
-                        utils::compile_c_files(
+                        c_files::compile(
                             &absolute_source_paths,
                             destination_path,
                             &layout.lib,
@@ -133,17 +133,13 @@ impl BuildBackend for BuiltinBuildSpec {
                         });
                     } else {
                         let absolute_source_path = build_dir.join(source);
-                        utils::copy_lua_to_module_path(
-                            &absolute_source_path,
-                            destination_path,
-                            &layout.src,
-                        )?;
+                        install::lua_module(&absolute_source_path, destination_path, &layout.src)?;
                     }
                 }
                 ModuleSpec::SourcePaths(files) => {
                     let absolute_source_paths =
                         files.iter().map(|file| build_dir.join(file)).collect();
-                    utils::compile_c_files(
+                    c_files::compile(
                         &absolute_source_paths,
                         destination_path,
                         &layout.lib,
@@ -154,7 +150,7 @@ impl BuildBackend for BuiltinBuildSpec {
                     .await?
                 }
                 ModuleSpec::ModulePaths(data) => {
-                    utils::compile_c_modules(
+                    c_modules::compile(
                         data,
                         build_dir,
                         destination_path,
@@ -169,11 +165,11 @@ impl BuildBackend for BuiltinBuildSpec {
         }
 
         let mut binaries = Vec::new();
-        for bin_script in utils::detect_binaries(build_dir) {
+        for bin_script in install::detect_binaries(build_dir) {
             if let Some(target) = bin_script.file_name() {
                 let file_name = target.to_string_lossy().to_string();
                 let installed_bin_script =
-                    utils::install_binary(&bin_script, &file_name, tree, lua, args.deploy, config)
+                    install::binary(&bin_script, &file_name, tree, lua, args.deploy, config)
                         .await
                         .map_err(|err| Error::InstallBinary {
                             file_name: file_name.clone(),

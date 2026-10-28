@@ -182,7 +182,7 @@ mod tests {
             .build()
             .unwrap();
         let workspace = Workspace::from_exact(project_root).unwrap().unwrap();
-        // TODO: Investigate if build::utils::compile is outputting the .so to a different directory
+        // TODO: Investigate if build::compile is outputting the .so to a different directory
         BuildWorkspace::new(&workspace, &config)
             .no_lock(false)
             .only_deps(false)

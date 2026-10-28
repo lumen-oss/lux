@@ -13,7 +13,7 @@ use std::{
 };
 use thiserror::Error;
 
-use super::utils::{c_lib_extension, format_path};
+use crate::{path, target};
 
 use crate::fs;
 
@@ -309,7 +309,7 @@ impl HasVariables for HashMap<String, ExternalDependencyInfo> {
                     _ => None,
                 })
                 .as_deref()
-                .map(format_path)
+                .map(path::quoted)
         }))
     }
 }
@@ -401,7 +401,10 @@ fn get_lib_name(lib_dir: &Path, prefix: &str) -> Option<String> {
             entries
                 .filter_map(Result::ok)
                 .map(|entry| entry.path().to_path_buf())
-                .filter(|file| file.extension().is_some_and(|ext| ext == c_lib_extension()))
+                .filter(|file| {
+                    file.extension()
+                        .is_some_and(|ext| ext == target::c_lib_extension())
+                })
                 .filter(|file| {
                     file.file_name()
                         .is_some_and(|name| is_lib_name(&name.to_string_lossy(), prefix))
@@ -416,7 +419,7 @@ fn get_lib_name(lib_dir: &Path, prefix: &str) -> Option<String> {
 fn is_lib_name(file_name: &str, prefix: &str) -> bool {
     #[cfg(target_family = "unix")]
     let file_name = file_name.trim_start_matches("lib");
-    file_name == format!("{}.{}", prefix, c_lib_extension())
+    file_name == format!("{}.{}", prefix, target::c_lib_extension())
 }
 
 #[cfg(test)]

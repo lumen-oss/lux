@@ -1,3 +1,8 @@
+use std::path::Path;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -176,4 +181,51 @@ pub enum Error {
     },
     #[error("{0}")]
     Other(String),
+}
+
+/// Ensures the file at `path` is writable by its owner, so that it can be
+/// overwritten on a later install, even when the source is read-only
+/// (e.g. a vendored rock in a read-only Nix store).
+#[cfg(unix)]
+pub(crate) async fn make_writable(path: &Path) -> Result<()> {
+    let mut perms = self::tokio::metadata(path).await?.permissions();
+    perms.set_mode(perms.mode() | 0o200);
+    self::tokio::set_permissions(path, perms).await?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) async fn make_writable(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+/// See [`make_writable`].
+#[cfg(unix)]
+pub(crate) fn make_writable_sync(path: &Path) -> Result<()> {
+    let mut perms = std::fs::metadata(path)
+        .map_err(|source| Error::Metadata {
+            path: path.to_path_buf(),
+            source,
+        })?
+        .permissions();
+    perms.set_mode(perms.mode() | 0o200);
+    std::fs::set_permissions(path, perms).map_err(|source| Error::SetPermissions {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn make_writable_sync(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tracing::instrument(level = "trace")]
+pub(crate) async fn set_executable_permissions(script: &Path) -> Result<()> {
+    let mut perms = self::tokio::metadata(script).await?.permissions();
+    perms.set_mode(perms.mode() | 0o111);
+    self::tokio::set_permissions(script, perms).await?;
+    Ok(())
 }

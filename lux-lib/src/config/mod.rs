@@ -19,7 +19,7 @@ use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
 use crate::tree::{self, CustomRockLayout, Tree};
 use crate::variables::GetVariableError;
-use crate::{build::utils, variables::HasVariables};
+use crate::{target, variables::HasVariables};
 
 pub mod access_tokens;
 pub mod build;
@@ -997,16 +997,16 @@ impl From<Config> for ConfigBuilder {
 }
 
 fn default_variables() -> impl Iterator<Item = (String, String)> {
-    let cflags = env::var("CFLAGS").unwrap_or(utils::default_cflags().into());
+    let cflags = env::var("CFLAGS").unwrap_or(target::default_cflags().into());
     let ldflags = env::var("LDFLAGS").unwrap_or("".into());
     vec![
         ("MAKE".into(), "make".into()),
         ("CMAKE".into(), "cmake".into()),
-        ("LIB_EXTENSION".into(), utils::c_dylib_extension().into()),
-        ("OBJ_EXTENSION".into(), utils::c_obj_extension().into()),
+        ("LIB_EXTENSION".into(), target::c_dylib_extension().into()),
+        ("OBJ_EXTENSION".into(), target::c_obj_extension().into()),
         ("CFLAGS".into(), cflags),
         ("LDFLAGS".into(), ldflags),
-        ("LIBFLAG".into(), utils::default_libflag().into()),
+        ("LIBFLAG".into(), target::default_libflag().into()),
     ]
     .into_iter()
 }

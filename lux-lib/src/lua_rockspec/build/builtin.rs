@@ -1,9 +1,9 @@
 use crate::{
-    build::utils::c_dylib_extension,
     lua_rockspec::{
         deserialize_vec_from_lua_array_or_string, normalize_lua_value, DisplayAsLuaValue,
         PartialOverride, PerPlatform, PlatformOverridable,
     },
+    target::c_dylib_extension,
 };
 use itertools::Itertools;
 use miette::Diagnostic;
