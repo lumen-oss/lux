@@ -76,7 +76,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     let package = args.package;
     let tree = args.tree;
     let layout = tree.layout_for(&package.spec);
-    let suffix = if is_binary_rock(&layout.lib) {
+    let suffix = if contains_dylib(&layout.lib) || contains_dylib(&layout.etc.join("parser")) {
         format!("{}.rock", luarocks::current_platform_luarocks_identifier())
     } else {
         "all.rock".into()
@@ -157,17 +157,21 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     Ok(output_path)
 }
 
-fn is_binary_rock(lib_dir: &Path) -> bool {
-    if !lib_dir.is_dir() {
+fn contains_dylib(dir: &Path) -> bool {
+    if !dir.is_dir() {
         return false;
     }
-    WalkDir::new(lib_dir).into_iter().any(|entry| {
+    // Tree-sitter parsers are built with `DLL_EXTENSION`, which is `dylib` on macOS
+    // whereas lux names its C libraries `so`.
+    let dylib_extensions = [c_dylib_extension(), std::env::consts::DLL_EXTENSION];
+    WalkDir::new(dir).into_iter().any(|entry| {
         entry.is_ok_and(|entry| {
             let file = entry.into_path();
             file.is_file()
                 && file
                     .extension()
-                    .is_some_and(|ext| ext.to_string_lossy() == c_dylib_extension())
+                    .map(|ext| ext.to_string_lossy().into_owned())
+                    .is_some_and(|ext| dylib_extensions.contains(&ext.as_str()))
         })
     })
 }
@@ -269,6 +273,33 @@ fn add_dir_or_file_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contains_dylib_detects_treesitter_parser() {
+        let temp = fs::tempfile::tempdir().unwrap();
+        let parser_dir = temp.path().join("parser");
+        fs::sync::create_dir_all(parser_dir.join("nested")).unwrap();
+        fs::sync::write(
+            parser_dir.join(format!("tmux.{}", std::env::consts::DLL_EXTENSION)),
+            b"not a real dylib",
+        )
+        .unwrap();
+
+        assert!(contains_dylib(&parser_dir));
+        assert!(!contains_dylib(&parser_dir.join("nested")));
+        assert!(!contains_dylib(&parser_dir.join("absent")));
+    }
+
+    #[test]
+    fn contains_dylib_ignores_query_files() {
+        let temp = fs::tempfile::tempdir().unwrap();
+        let parser_dir = temp.path().join("parser");
+        fs::sync::create_dir_all(&parser_dir).unwrap();
+        fs::sync::write(parser_dir.join("highlights.scm"), b"; comment").unwrap();
+        fs::sync::write(parser_dir.join("README.md"), b"# tree-sitter").unwrap();
+
+        assert!(!contains_dylib(&parser_dir));
+    }
 
     // non-regression for https://github.com/lumen-oss/lux/issues/2031
     #[test]
