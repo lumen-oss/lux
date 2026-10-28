@@ -169,7 +169,7 @@ mod tests {
         lockfile::{LockConstraint, LockedPackageId, OptState, PinnedState},
         lua_version::LuaVersion,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
-        package::Name,
+        package,
     };
 
     use super::*;
@@ -317,7 +317,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         };
         let rockspec = unpack_rockspec(&rock).await.unwrap();
         let dependency = LockedPackageId::new(
-            &PackageName::from("transitive-dependency"),
+            &package::Name::from("transitive-dependency"),
             &"1.0-1".parse().unwrap(),
             PinnedState::default(),
             OptState::default(),
