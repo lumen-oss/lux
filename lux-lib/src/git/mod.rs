@@ -1,6 +1,10 @@
 use std::fmt::Display;
 
+use miette::Diagnostic;
+use thiserror::Error;
+
 use crate::{
+    fs,
     git::url::RemoteGitUrl,
     lua_rockspec::{DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue},
 };
@@ -15,6 +19,22 @@ impl DisplayAsLuaValue for RemoteGitUrl {
     }
 }
 
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::Error),
+    #[error("error initializing temporary bare git repository to fetch metadata")]
+    BareRepoInit(#[source] git2::Error),
+    #[error("error initializing remote repository '{0}' to fetch metadata")]
+    RemoteInit(String, #[source] git2::Error),
+    #[error("error fetching from remote repository '{0}'")]
+    RemoteFetch(String, #[source] git2::Error),
+    #[error("error listing remote refs for '{0}'")]
+    RemoteList(String, #[source] git2::Error),
+    #[error("could not determine latest tag or commit sha for '{0}'")]
+    NoTagOrCommitSha(String),
+}
 /// Specifies a git reference (tag or branch)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum GitRef {

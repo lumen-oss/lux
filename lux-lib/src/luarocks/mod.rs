@@ -7,7 +7,7 @@ use crate::{fs, project, tree::RockLayout};
 use miette::Diagnostic;
 use thiserror::Error;
 
-use self::rock_manifest::{RockManifest, RockManifestError};
+use self::rock_manifest::{Error, RockManifest};
 
 pub mod install_binary_rock;
 pub mod luarocks_installation;
@@ -33,7 +33,7 @@ pub enum InstallRockManifestError {
     RockManifestNotFound,
     #[error(transparent)]
     #[diagnostic(transparent)]
-    RockManifest(#[from] RockManifestError),
+    RockManifest(#[from] Error),
 }
 
 pub(crate) struct RockManifestSources {

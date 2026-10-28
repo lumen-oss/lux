@@ -4,7 +4,7 @@ use crate::{
     lockfile::LockedPackageLockType,
     lua_version::LuaVersion,
     tree::InstallTree,
-    workspace::{self, Workspace, WorkspaceTreeError, LUX_DIR_NAME},
+    workspace::{self, TreeError, Workspace, LUX_DIR_NAME},
 };
 use bon::Builder;
 use miette::Diagnostic;
@@ -26,7 +26,7 @@ pub enum GenLuauRcError {
     Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error("failed to serialize .luaurc content:\n{0}")]
     Serialize(String),
     #[error("failed to deserialize .luaurc content:\n{0}")]

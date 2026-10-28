@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     config::{self, Config},
-    lockfile::{LockfileIntegrityError, PackageLock},
+    lockfile::{IntegrityError, PackageLock},
     lua_rockspec::RemoteLuaRockspec,
     manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
@@ -61,7 +61,7 @@ pub enum SearchError {
 pub enum RemotePackageDbIntegrityError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lockfile(#[from] LockfileIntegrityError),
+    Lockfile(#[from] IntegrityError),
 }
 
 /// A source of package metadata consulted by a [`PackageDB`].

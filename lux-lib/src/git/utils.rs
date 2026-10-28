@@ -1,25 +1,6 @@
 use crate::{config::Config, fs, git::url::RemoteGitUrl};
 use git2::{AutotagOption, Cred, FetchOptions, RemoteCallbacks, Repository};
 use itertools::Itertools;
-use miette::Diagnostic;
-use thiserror::Error;
-
-#[derive(Debug, Error, Diagnostic)]
-pub enum GitError {
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Fs(#[from] fs::Error),
-    #[error("error initializing temporary bare git repository to fetch metadata")]
-    BareRepoInit(#[source] git2::Error),
-    #[error("error initializing remote repository '{0}' to fetch metadata")]
-    RemoteInit(String, #[source] git2::Error),
-    #[error("error fetching from remote repository '{0}'")]
-    RemoteFetch(String, #[source] git2::Error),
-    #[error("error listing remote refs for '{0}'")]
-    RemoteList(String, #[source] git2::Error),
-    #[error("could not determine latest tag or commit sha for '{0}'")]
-    NoTagOrCommitSha(String),
-}
 
 pub(crate) enum SemVerTagOrSha {
     SemVerTag(String),
@@ -30,26 +11,26 @@ pub(crate) enum SemVerTagOrSha {
 pub(crate) fn latest_semver_tag_or_commit_sha(
     url: &RemoteGitUrl,
     config: &Config,
-) -> Result<SemVerTagOrSha, GitError> {
+) -> Result<SemVerTagOrSha, super::Error> {
     match latest_semver_tag(url, config)? {
         Some(tag) => Ok(SemVerTagOrSha::SemVerTag(tag)),
         None => {
             let sha = latest_commit_sha(url, config)?
-                .ok_or(GitError::NoTagOrCommitSha(url.to_string()))?;
+                .ok_or(super::Error::NoTagOrCommitSha(url.to_string()))?;
             Ok(SemVerTagOrSha::CommitSha(sha))
         }
     }
 }
 
 #[tracing::instrument(level = "trace")]
-fn latest_semver_tag(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, GitError> {
+fn latest_semver_tag(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, super::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
 
     let url_str = url.to_string();
-    let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
+    let repo = Repository::init_bare(&temp_dir).map_err(super::Error::BareRepoInit)?;
     let mut remote = repo
         .remote_anonymous(&url_str)
-        .map_err(|err| GitError::RemoteInit(url_str.clone(), err))?;
+        .map_err(|err| super::Error::RemoteInit(url_str.clone(), err))?;
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(mk_credentials_callback(url, config));
     let mut fetch_opts = FetchOptions::new();
@@ -57,10 +38,10 @@ fn latest_semver_tag(url: &RemoteGitUrl, config: &Config) -> Result<Option<Strin
     fetch_opts.remote_callbacks(callbacks);
     remote
         .fetch(&[] as &[&str], Some(&mut fetch_opts), None)
-        .map_err(|err| GitError::RemoteFetch(url_str.clone(), err))?;
+        .map_err(|err| super::Error::RemoteFetch(url_str.clone(), err))?;
     let refs = remote
         .list()
-        .map_err(|err| GitError::RemoteList(url_str.clone(), err))?;
+        .map_err(|err| super::Error::RemoteList(url_str.clone(), err))?;
     Ok(refs
         .iter()
         .filter_map(|head| {
@@ -98,23 +79,23 @@ fn mk_credentials_callback(
     }
 }
 
-fn latest_commit_sha(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, GitError> {
+fn latest_commit_sha(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, super::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
     let url_str = url.to_string();
-    let repo = Repository::init_bare(&temp_dir).map_err(GitError::BareRepoInit)?;
+    let repo = Repository::init_bare(&temp_dir).map_err(super::Error::BareRepoInit)?;
     let mut remote = repo
         .remote_anonymous(&url_str)
-        .map_err(|err| GitError::RemoteInit(url_str.clone(), err))?;
+        .map_err(|err| super::Error::RemoteInit(url_str.clone(), err))?;
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(mk_credentials_callback(url, config));
     let mut fetch_opts = FetchOptions::new();
     fetch_opts.remote_callbacks(callbacks);
     remote
         .fetch(&[] as &[&str], Some(&mut fetch_opts), None)
-        .map_err(|err| GitError::RemoteFetch(url_str.clone(), err))?;
+        .map_err(|err| super::Error::RemoteFetch(url_str.clone(), err))?;
     let refs = remote
         .list()
-        .map_err(|err| GitError::RemoteList(url_str.clone(), err))?;
+        .map_err(|err| super::Error::RemoteList(url_str.clone(), err))?;
     Ok(refs.iter().find_map(|head| match head.name() {
         "refs/heads/HEAD" => Some(head.oid().to_string()),
         "refs/heads/main" => Some(head.oid().to_string()),

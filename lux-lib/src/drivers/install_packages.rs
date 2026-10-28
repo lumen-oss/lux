@@ -18,7 +18,7 @@ use crate::{
     package::PackageNameList,
     package_db::{self, PackageDB},
     tree::{self, InstallTree},
-    workspace::WorkspaceTreeError,
+    workspace::TreeError,
 };
 
 use crate::pipeline::{
@@ -292,7 +292,7 @@ pub enum Error {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error("error instantiating LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocks(#[from] LuaRocksError),

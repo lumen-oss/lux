@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     fs,
     lockfile::{
-        FlushLockfileError, LockedPackage, LockedPackageLockType, Lockfile, LockfileIntegrityError,
+        FlushLockfileError, IntegrityError, LockedPackage, LockedPackageLockType, Lockfile,
         PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
@@ -21,7 +21,7 @@ use crate::{
     project::{self, project_toml::LocalProjectTomlValidationError},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
     tree::{self, InstallTree},
-    workspace::{self, Workspace, WorkspaceTreeError},
+    workspace::{self, TreeError, Workspace},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -145,11 +145,11 @@ pub enum SyncError {
     Integrity {
         package: PackageName,
         #[diagnostic_source]
-        source: LockfileIntegrityError,
+        source: IntegrityError,
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),

@@ -16,7 +16,7 @@ use crate::{
     path::{self, LuaEnvironment, Paths},
     project::project_toml::LocalProjectTomlValidationError,
     tree::InstallTree,
-    workspace::{self, Workspace, WorkspaceTreeError},
+    workspace::{self, TreeError, Workspace},
 };
 
 use super::RunLuaError;
@@ -82,7 +82,7 @@ pub enum RunError {
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     Io(#[from] std::io::Error),
     #[diagnostic(transparent)]
     Paths(#[from] path::Error),

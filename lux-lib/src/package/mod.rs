@@ -11,7 +11,7 @@ pub(crate) mod wally;
 
 pub use outdated::*;
 pub use version::{
-    PackageVersion, PackageVersionParseError, PackageVersionReq, PackageVersionReqError, SpecRev,
+    PackageVersion, PackageVersionReq, SpecRev, VersionParseError, VersionReqError,
     VersionReqToVersionError,
 };
 
@@ -27,7 +27,7 @@ use crate::{
 };
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum PackageSpecFromPackageReqError {
+pub enum SpecFromPackageReqError {
     #[error("invalid version for rock {rock}: {err}")]
     Version {
         rock: PackageName,
@@ -47,7 +47,7 @@ impl PackageSpec {
     pub fn new(name: PackageName, version: PackageVersion) -> Self {
         Self { name, version }
     }
-    pub fn parse(name: String, version: String) -> Result<Self, PackageVersionParseError> {
+    pub fn parse(name: String, version: String) -> Result<Self, VersionParseError> {
         Ok(Self::new(
             PackageName::new(name),
             PackageVersion::parse(&version)?,
@@ -69,16 +69,18 @@ impl PackageSpec {
 }
 
 impl TryFrom<PackageReq> for PackageSpec {
-    type Error = PackageSpecFromPackageReqError;
+    type Error = SpecFromPackageReqError;
 
     fn try_from(value: PackageReq) -> Result<Self, Self::Error> {
         let name = value.name;
-        let version = value.version_req.try_into().map_err(|err| {
-            PackageSpecFromPackageReqError::Version {
-                rock: name.clone(),
-                err,
-            }
-        })?;
+        let version =
+            value
+                .version_req
+                .try_into()
+                .map_err(|err| SpecFromPackageReqError::Version {
+                    rock: name.clone(),
+                    err,
+                })?;
         Ok(Self { name, version })
     }
 }
@@ -182,7 +184,7 @@ pub enum ParseRemotePackageError {
     #[error("unable to parse package {package_str}:\n{error}")]
     InvalidPackageVersion {
         #[source]
-        error: PackageVersionParseError,
+        error: VersionParseError,
         package_str: String,
     },
 }
@@ -215,7 +217,7 @@ pub struct PackageReq {
 }
 
 impl PackageReq {
-    pub fn new(name: String, version: Option<String>) -> Result<Self, PackageVersionReqError> {
+    pub fn new(name: String, version: Option<String>) -> Result<Self, VersionReqError> {
         let version_req = match version {
             Some(version_req_str) => PackageVersionReq::parse(version_req_str.as_str())?,
             None => PackageVersionReq::any(),
@@ -234,7 +236,7 @@ impl PackageReq {
         Self::new(name, version).unwrap_unchecked()
     }
 
-    pub fn parse(pkg_constraints: &str) -> Result<Self, PackageReqParseError> {
+    pub fn parse(pkg_constraints: &str) -> Result<Self, ReqParseError> {
         Self::from_str(pkg_constraints)
     }
     pub fn name(&self) -> &PackageName {
@@ -307,35 +309,35 @@ impl DisplayAsLuaKV for BuildDependencies<'_> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum PackageReqParseError {
+pub enum ReqParseError {
     #[error("could not parse dependency name from '{0}'")]
     InvalidDependencyName(String),
     #[error("could not parse version requirement in '{str}': {error}")]
     InvalidPackageVersionReq {
         #[source]
-        error: PackageVersionReqError,
+        error: VersionReqError,
         str: String,
     },
 }
 
 impl FromStr for PackageReq {
-    type Err = PackageReqParseError;
+    type Err = ReqParseError;
 
-    fn from_str(str: &str) -> Result<Self, PackageReqParseError> {
+    fn from_str(str: &str) -> Result<Self, ReqParseError> {
         let rock_name_str = str
             .chars()
             .peeking_take_while(|t| t.is_alphanumeric() || matches!(t, '-' | '_' | '.'))
             .collect::<String>();
 
         if rock_name_str.is_empty() {
-            return Err(PackageReqParseError::InvalidDependencyName(str.to_string()));
+            return Err(ReqParseError::InvalidDependencyName(str.to_string()));
         }
 
         let constraints = str.trim_start_matches(&rock_name_str).trim();
         let version_req = match constraints {
             "" => PackageVersionReq::any(),
             constraints => PackageVersionReq::parse(constraints.trim_start()).map_err(|error| {
-                PackageReqParseError::InvalidPackageVersionReq {
+                ReqParseError::InvalidPackageVersionReq {
                     error,
                     str: str.to_string(),
                 }

@@ -40,7 +40,7 @@ use crate::{
     hash::HasIntegrity,
     lua_version::{LuaVersion, LuaVersionUnset},
     package::{PackageName, PackageSpec, PackageVersion, PackageVersionReq},
-    project::{project_toml::ProjectTomlError, ProjectRoot},
+    project::{project_toml, ProjectRoot},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
     ROCKSPEC_FUEL_LIMIT,
 };
@@ -94,7 +94,7 @@ try reducing the number of dependencies or simplifying build instructions.
     OffSpecTestDependency(PackageName),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ProjectToml(#[from] ProjectTomlError),
+    ProjectToml(#[from] project_toml::Error),
 }
 
 impl Error {

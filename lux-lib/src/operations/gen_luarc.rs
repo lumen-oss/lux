@@ -3,8 +3,8 @@ use crate::fs;
 use crate::lockfile::LockedPackageLockType;
 use crate::tree::InstallTree;
 use crate::workspace;
+use crate::workspace::TreeError;
 use crate::workspace::Workspace;
-use crate::workspace::WorkspaceTreeError;
 use crate::workspace::LUX_DIR_NAME;
 use bon::Builder;
 use itertools::Itertools;
@@ -26,7 +26,7 @@ pub enum GenLuaRcError {
     Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error("failed to serialize luarc content:\n{0}")]
     Serialize(String),
     #[error("failed to deserialize luarc content:\n{0}")]

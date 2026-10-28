@@ -15,10 +15,12 @@ use crate::build::external_dependency::ExternalDependencyInfo;
 use crate::config::external_deps::ExternalDependencySearchConfig;
 use crate::fs;
 use crate::lua_rockspec::ExternalDependencySpec;
+use crate::lua_version;
 use crate::lua_version::LuaVersion;
 use crate::lua_version::LuaVersionUnset;
 use crate::operations;
 use crate::operations::BuildLuaError;
+use crate::package;
 use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
 use crate::{config::Config, package::PackageVersion, variables::HasVariables};
@@ -88,10 +90,10 @@ pub enum DetectLuaVersionError {
     ParseLuaVersion(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageVersionParse(#[from] crate::package::PackageVersionParseError),
+    PackageVersionParse(#[from] package::VersionParseError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersion(#[from] crate::lua_version::LuaVersionError),
+    LuaVersion(#[from] lua_version::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]

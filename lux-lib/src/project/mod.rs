@@ -17,12 +17,7 @@ use crate::{fs, lockfile::OptState};
 
 use crate::{
     config::Config,
-    git::{
-        self,
-        shorthand::RemoteGitUrlShorthand,
-        url::RemoteGitUrl,
-        utils::{GitError, SemVerTagOrSha},
-    },
+    git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, utils::SemVerTagOrSha},
     lua_rockspec::{
         self, LocalLuaRockspec, LuaVersionError, PartialLuaRockspec, PartialRockspecError,
         RemoteLuaRockspec,
@@ -122,7 +117,7 @@ pub enum IntoRemoteRockspecError {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ProjectEditError {
+pub enum EditError {
     #[error(transparent)]
     Io(#[from] tokio::io::Error),
     #[error(transparent)]
@@ -135,7 +130,7 @@ pub enum ProjectEditError {
     TomlDe(#[from] TomlDeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Git(#[from] GitError),
+    Git(#[from] git::Error),
     #[error("unable to query latest version for '{0}'")]
     #[diagnostic(help("check your server config and ensure the package has been published"))]
     LatestVersionNotFound(PackageName),
@@ -320,7 +315,7 @@ impl Project {
         self.toml().lua_version_matches(config)
     }
 
-    async fn write_toml(&mut self, project_toml: DocumentMut) -> Result<(), ProjectEditError> {
+    async fn write_toml(&mut self, project_toml: DocumentMut) -> Result<(), EditError> {
         let toml_content = project_toml.to_string();
         fs::tokio::write(self.toml_path(), &toml_content).await?;
         self.toml = PartialProjectToml::new(
@@ -335,7 +330,7 @@ impl Project {
         &mut self,
         dependencies: DependencyType<&PackageReq>,
         package_db: &PackageDB,
-    ) -> Result<(), ProjectEditError> {
+    ) -> Result<(), EditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
@@ -353,10 +348,10 @@ impl Project {
             | DependencyType::Test(ref deps) => {
                 for dep in deps {
                     let dep_version_str = if dep.version_req().is_any() {
-                        let latest_version =
-                            package_db.latest_version(dep.name()).await.ok_or_else(|| {
-                                ProjectEditError::LatestVersionNotFound(dep.name().clone())
-                            })?;
+                        let latest_version = package_db
+                            .latest_version(dep.name())
+                            .await
+                            .ok_or_else(|| EditError::LatestVersionNotFound(dep.name().clone()))?;
                         latest_version
                             .to_pessimistic_version_req()
                             .unwrap_or_else(|| latest_version.to_string())
@@ -387,7 +382,7 @@ impl Project {
         &mut self,
         dependencies: LuaDependencyType<&RemoteGitUrlShorthand>,
         config: &Config,
-    ) -> Result<(), ProjectEditError> {
+    ) -> Result<(), EditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
@@ -432,7 +427,7 @@ impl Project {
     pub async fn remove(
         &mut self,
         dependencies: DependencyType<&PackageName>,
-    ) -> Result<(), ProjectEditError> {
+    ) -> Result<(), EditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
@@ -474,7 +469,7 @@ impl Project {
         dependencies: LuaDependencyType<&PackageName>,
         package_db: &PackageDB,
         config: &Config,
-    ) -> Result<(), ProjectEditError> {
+    ) -> Result<(), EditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
@@ -504,7 +499,7 @@ impl Project {
         &mut self,
         package_db: &PackageDB,
         config: &Config,
-    ) -> Result<(), ProjectEditError> {
+    ) -> Result<(), EditError> {
         if let Some(dependencies) = &self.toml().dependencies {
             let packages = dependencies
                 .iter()
@@ -664,12 +659,12 @@ async fn upgraded_version_req(
     existing: Option<&str>,
     dep: &PackageName,
     package_db: &PackageDB,
-) -> Result<Option<String>, ProjectEditError> {
+) -> Result<Option<String>, EditError> {
     if let Some(existing) = existing.and_then(|existing| PackageVersionReq::parse(existing).ok()) {
         let latest = package_db
             .latest_version(dep)
             .await
-            .ok_or(ProjectEditError::LatestVersionNotFound(dep.clone()))?;
+            .ok_or(EditError::LatestVersionNotFound(dep.clone()))?;
         Ok(latest.upgrade_version_req(&existing))
     } else {
         Ok(None)
@@ -681,7 +676,7 @@ async fn upgrade_dependency(
     dep: &PackageName,
     package_db: &PackageDB,
     config: &Config,
-) -> Result<(), ProjectEditError> {
+) -> Result<(), EditError> {
     let mut dep_item = table[dep.to_string()].clone();
     match &dep_item {
         Item::Value(val) => {
@@ -711,23 +706,21 @@ async fn upgrade_dependency(
     Ok(())
 }
 
-fn git_url_from_item(git_item: &Item) -> Result<RemoteGitUrlShorthand, ProjectEditError> {
+fn git_url_from_item(git_item: &Item) -> Result<RemoteGitUrlShorthand, EditError> {
     let git_value = git_item
         .clone()
         .into_value()
-        .map_err(|err| ProjectEditError::ExpectedValue(Box::new(err)))?;
+        .map_err(|err| EditError::ExpectedValue(Box::new(err)))?;
     let git_url_str = git_value
         .as_str()
-        .ok_or(ProjectEditError::ExpectedString(Box::new(
-            git_value.clone(),
-        )))?;
+        .ok_or(EditError::ExpectedString(Box::new(git_value.clone())))?;
     Ok(git_url_str.parse()?)
 }
 
 fn resolve_git_latest(
     url: RemoteGitUrlShorthand,
     config: &Config,
-) -> Result<SemVerTagOrSha, ProjectEditError> {
+) -> Result<SemVerTagOrSha, EditError> {
     Ok(git::utils::latest_semver_tag_or_commit_sha(
         &url.into(),
         config,
@@ -921,7 +914,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(err, ProjectEditError::LatestVersionNotFound(_)));
+        assert!(matches!(err, EditError::LatestVersionNotFound(_)));
         assert_eq!(
             fs::sync::read_to_string(project.toml_path()).unwrap(),
             toml_before

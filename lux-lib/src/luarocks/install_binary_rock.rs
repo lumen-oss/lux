@@ -2,7 +2,7 @@ use std::io::{self, Cursor};
 
 use crate::{
     build::{
-        external_dependency::{Error, ExternalDependencyInfo},
+        external_dependency::{self, ExternalDependencyInfo},
         BuildBehaviour,
     },
     config::Config,
@@ -22,7 +22,7 @@ use super::{install_rock_manifest, InstallRockManifestError, RockManifestSources
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum InstallBinaryRockError {
+pub enum Error {
     #[error("IO operation failed")]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -36,7 +36,7 @@ pub enum InstallBinaryRockError {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ExternalDependency(#[from] Error),
+    ExternalDependency(#[from] external_dependency::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersionError(#[from] LuaVersionError),
@@ -91,7 +91,7 @@ where
     }
 
     #[tracing::instrument(name = "Installing binary rock", skip_all)]
-    pub(crate) async fn install(self) -> Result<LockedPackage, InstallBinaryRockError> {
+    pub(crate) async fn install(self) -> Result<LockedPackage, Error> {
         let rockspec = self.rockspec;
         for (name, dep) in rockspec.external_dependencies().current_platform() {
             let _ = ExternalDependencyInfo::probe(name, dep, self.config.external_deps())?;

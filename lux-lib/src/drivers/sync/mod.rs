@@ -21,7 +21,7 @@ use crate::{
     project::project_toml::LocalProjectTomlValidationError,
     rockspec::Rockspec,
     tree::{self, EntryType, InstallTree},
-    workspace::{self, Workspace, WorkspaceTreeError},
+    workspace::{self, TreeError, Workspace},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,7 +71,7 @@ pub enum Error {
     Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WorkspaceTree(#[from] WorkspaceTreeError),
+    WorkspaceTree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
