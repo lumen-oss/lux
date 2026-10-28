@@ -254,7 +254,9 @@ where
             .map(|pkg| (pkg.spec().id(), pkg.clone())),
     );
 
-    lockfile.map_then_flush(|lockfile| {
+    // NOTE: re-read the lockfile here. `lockfile` was loaded before the builds ran,
+    // and flushing that snapshot would drop the binaries each build recorded.
+    tree.lockfile()?.map_then_flush(|lockfile| {
         for package in &conflicting_entrypoints {
             lockfile.remove_by_id(&package.id());
         }
