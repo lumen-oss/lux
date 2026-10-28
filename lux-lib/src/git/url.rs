@@ -50,7 +50,10 @@ impl FromStr for RemoteGitUrl {
     type Err = RemoteGitUrlParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let url: Url = s.parse()?;
+        let url: Url = match normalize_git_url(s) {
+            Some(url) => url.parse()?,
+            None => s.parse()?,
+        };
         let scheme = url.scheme();
         if !matches!(scheme, "ssh" | "git" | "http" | "https" | "ftp" | "ftps") {
             return Err(RemoteGitUrlParseError::UnsupportedRemoteScheme {
@@ -67,6 +70,16 @@ impl FromStr for RemoteGitUrl {
             url_str: String::from(s),
         })
     }
+}
+
+/// Converts a Git URL (`git@github.com:nvim-neorg/neorg`) into an `ssh://` URL.
+fn normalize_git_url(s: &str) -> Option<String> {
+    let (host, path) = s.split_once(':')?;
+    // Filter out false positives
+    if path.starts_with('/') || !(host.contains('.') || host.contains('@')) {
+        return None;
+    }
+    Some(format!("ssh://{host}/{path}"))
 }
 
 impl Display for RemoteGitUrl {
@@ -92,5 +105,34 @@ impl Serialize for RemoteGitUrl {
         S: serde::Serializer,
     {
         self.to_string().serialize(serializer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scp_like_url_ssh() {
+        let url: RemoteGitUrl = "git@github.com:lumen-oss/lux.git".parse().unwrap();
+        assert_eq!(url.host(), "github.com");
+        assert_eq!(url.owner(), Some("lumen-oss"));
+        assert_eq!(url.repo(), "lux");
+        assert_eq!(url.to_string(), "git@github.com:lumen-oss/lux.git");
+        let url: RemoteGitUrl = "github.com:lumen-oss/lux".parse().unwrap();
+        assert_eq!(url.host(), "github.com");
+        assert_eq!(url.repo(), "lux");
+    }
+
+    #[test]
+    fn test_regular_urls_still_parse() {
+        for raw in [
+            "https://github.com/lumen-oss/lux.git",
+            "ssh://git@github.com/lumen-oss/lux.git",
+        ] {
+            let url: RemoteGitUrl = raw.parse().unwrap();
+            assert_eq!(url.host(), "github.com");
+            assert_eq!(url.repo(), "lux");
+        }
     }
 }
