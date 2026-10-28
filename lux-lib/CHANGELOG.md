@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.68.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.4...lux-lib-v0.68.0) `lux-lib` - 2026-10-27
+
+### Added
+- *(upload)* dry-run option
+
+### Dependencies
+- *(deps)* [**breaking**] bulk update ([#2125](https://github.com/lumen-oss/lux/pull/2125))
+
+### Fixed
+- *(rockspec)* properly resolve modules for git source rocks
+- *(build/luarocks)* install all manifest entries
+- *(project)* don't apply gitignore of parent directories ([#2141](https://github.com/lumen-oss/lux/pull/2141))
+- *(build)* `pkg-config::get_variable()` should accept lowercase name
+- *(rockspec)* allow missing `external_deps.prefixes`
+
 ## [0.67.4](https://github.com/lumen-oss/lux/compare/lux-lib-v0.67.3...lux-lib-v0.67.4) `lux-lib` - 2026-10-27
 
 ### Fixed
