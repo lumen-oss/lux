@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.69.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.68.0...lux-lib-v0.69.0) `lux-lib` - 2026-10-28
+
+### Added
+- *(lib)* `set_pinned_state` and `set_opt_state`
+- *(lux-lua)* allow adding/installing git sources and opt/pinned packages
+
+### Other
+- *(lux-lua)* add luacats annotation data
+
 ## [0.50.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.49.4...lux-lsp-v0.50.0) `lux-lsp` - 2026-10-27
 
 ### Other
