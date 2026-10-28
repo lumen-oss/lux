@@ -77,7 +77,9 @@ impl BuildBackend for TreesitterParserBuildSpec {
             }
         }
         if self.parser {
-            build_parser(&build_dir, &layout.etc.join("parser"), &self.lang).await?;
+            let parser_dir = layout.lib.join("parser");
+            build_parser(&build_dir, &parser_dir, &self.lang).await?;
+            copy_parser_to_root(&parser_dir, &layout.etc.join("parser"), &self.lang).await?;
         }
 
         let queries_dir = layout.etc.join("queries").join(&self.lang);
@@ -161,7 +163,7 @@ async fn build_parser(
 ) -> Result<(), TreesitterBuildError> {
     fs::tokio::create_dir_all(parser_dir).await?;
     let loader = tree_sitter_loader::Loader::with_parser_lib_path(build_dir.to_path_buf());
-    let output_path = parser_dir.join(format!("{}.{}", lang, std::env::consts::DLL_EXTENSION));
+    let output_path = parser_dir.join(parser_file_name(lang));
     // HACK(vhyrro): `tree-sitter-loader` will only use a temp directory instead of a
     // lockfile if a `CROSS_RUNNER` env variable is set (why??). We should probably make a
     // PR fixing this with a flag. This should make-do for now: theoretically, this could
@@ -171,4 +173,24 @@ async fn build_parser(
     loader
         .compile_parser_at_path(build_dir, output_path, &[])
         .map_err(|err| TreesitterBuildError::TreesitterCompileError(err.to_string()))
+}
+
+fn parser_file_name(lang: &str) -> String {
+    format!("{}.{}", lang, std::env::consts::DLL_EXTENSION)
+}
+
+#[tracing::instrument(level = "trace")]
+async fn copy_parser_to_root(
+    parser_dir: &Path,
+    root_parser_dir: &Path,
+    lang: &str,
+) -> Result<(), TreesitterBuildError> {
+    let file_name = parser_file_name(lang);
+    fs::tokio::create_dir_all(root_parser_dir).await?;
+    fs::tokio::copy(
+        &parser_dir.join(&file_name),
+        &root_parser_dir.join(&file_name),
+    )
+    .await?;
+    Ok(())
 }

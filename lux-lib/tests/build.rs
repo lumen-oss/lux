@@ -194,10 +194,14 @@ async fn treesitter_parser_build() {
         .await
         .unwrap();
 
-    let etc = tree.layout_for(package.spec()).etc;
+    let layout = tree.layout_for(package.spec());
 
-    let folds_query = etc.join("queries").join("rust").join("folds.scm");
+    let folds_query = layout.etc.join("queries").join("rust").join("folds.scm");
     assert!(folds_query.is_file());
+
+    let parser_file_name = format!("rust.{}", std::env::consts::DLL_EXTENSION);
+    assert!(layout.lib.join("parser").join(&parser_file_name).is_file());
+    assert!(layout.etc.join("parser").join(&parser_file_name).is_file());
 }
 
 #[flaky_test(tokio, times = 5)]
