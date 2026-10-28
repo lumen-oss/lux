@@ -13,7 +13,7 @@ use std::{
 use thiserror::Error;
 use toml_edit::{DocumentMut, Item};
 
-use crate::fs;
+use crate::{fs, lockfile::OptState};
 
 use crate::{
     config::Config,

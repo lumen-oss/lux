@@ -21,9 +21,9 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use path_slash::PathBufExt;
 
 use crate::lua_impls::{
-    self, AddDependencyLua, ConfigLua, DependencyTypeLua, DownloadedRockspecLua,
-    LockedPackageIdLua, LockedPackageLua, LuaDependencyTypeLua, PackageInstallSpecLua,
-    PackageNameLua, PinnedStateLua, ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
+    self, AddDependenciesLua, ConfigLua, DependencyTypeLua, DownloadedRockspecLua,
+    LockedPackageIdLua, LockedPackageLua, PackageInstallSpecLua, PackageNameLua, PinnedStateLua,
+    ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone)]
@@ -161,7 +161,7 @@ impl TypedUserData for OperationsModule {
             |_,
              (mut workspace, deps, config): (
                 WorkspaceLua,
-                LuaDependencyTypeLua<AddDependencyLua>,
+                AddDependenciesLua,
                 ConfigLua,
             )| async move {
                 let _runtime = lua_runtime().enter();

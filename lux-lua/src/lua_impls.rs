@@ -1523,6 +1523,20 @@ fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<LuaDependencyS
     Ok(LuaDependencySpec::new(package_req, pin, opt, source))
 }
 
+pub struct AddDependenciesLua(pub LuaDependencyType<AddDependencyLua>);
+
+impl Typed for AddDependenciesLua {
+    fn ty() -> Type {
+        Type::named("LuxDependencyType")
+    }
+}
+
+impl FromLua for AddDependenciesLua {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
+        LuaDependencyTypeLua::<AddDependencyLua>::from_lua(value, lua).map(|deps| Self(deps.0))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum AddDependencyLua {
     PackageReq(PackageReq),
@@ -3265,12 +3279,9 @@ impl TypedUserData for ProjectLua {
         methods.param("config", "Lux config");
         methods.add_async_method_mut(
             "add",
-            |_, mut this, (deps, config): (LuaDependencyTypeLua<AddDependencyLua>, ConfigLua)| async move {
+            |_, mut this, (deps, config): (AddDependenciesLua, ConfigLua)| async move {
                 let _guard = lux_lib::lua::lua_runtime().enter();
-                let package_db =
-                    PackageDB::from_config(&config.0)
-                        .await
-                        .into_lua_err()?;
+                let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
                 project_add_dependencies(&mut this.0, deps.0, &package_db, &config.0).await
             },
         );
@@ -3448,6 +3459,93 @@ mod definitions_registry {
         "Project" => ProjectLua,
         "Workspace" => WorkspaceLua,
         "DownloadedRockspec" => DownloadedRockspecLua,
+    }
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "AddDependency",
+            build: || Type::class(
+                TypedClassBuilder::default()
+                    .field(
+                        "package",
+                        Type::union([Type::string(), Type::nil()]),
+                        "Package requirement, e.g. `foo >= 1.0`.",
+                    )
+                    .field(
+                        "name",
+                        Type::union([Type::string(), Type::nil()]),
+                        "Package name, e.g. `foo`.",
+                    )
+                    .field(
+                        "version",
+                        Type::union([Type::string(), Type::nil()]),
+                        "Version requirement used with `name`.",
+                    )
+                    .field(
+                        "opt",
+                        Type::union([Type::boolean(), Type::nil()]),
+                        "Load the package only on demand.",
+                    )
+                    .field(
+                        "pin",
+                        Type::union([Type::boolean(), Type::nil()]),
+                        "Prevent the package from being updated.",
+                    )
+                    .field(
+                        "git",
+                        Type::union([Type::string(), Type::nil()]),
+                        "Git URL or shorthand, e.g. `github:owner/repo`.",
+                    )
+                    .field(
+                        "rev",
+                        Type::union([Type::string(), Type::nil()]),
+                        "Git tag or revision.",
+                    )
+                    .field(
+                        "path",
+                        Type::union([Type::string(), Type::nil()]),
+                        "Path to a local package.",
+                    )
+                    .build(),
+            )
+        }
+    }
+
+    inventory::submit! {
+        LuxDefinition {
+            name: "LuxDependencyType",
+            build: || Type::class(
+                TypedClassBuilder::default()
+                    .field(
+                        "regular",
+                        Type::union([
+                            Type::array(Type::named("AddDependency")),
+                            Type::string(),
+                            Type::nil(),
+                        ]),
+                        "Regular runtime dependencies.",
+                    )
+                    .field(
+                        "build",
+                        Type::union([
+                            Type::array(Type::named("AddDependency")),
+                            Type::string(),
+                            Type::nil(),
+                        ]),
+                        "Build dependencies.",
+                    )
+                    .field(
+                        "test",
+                        Type::union([
+                            Type::array(Type::named("AddDependency")),
+                            Type::string(),
+                            Type::nil(),
+                        ]),
+                        "Test dependencies.",
+                    )
+                    .build(),
+            )
+        }
     }
 }
 
