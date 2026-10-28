@@ -1,7 +1,7 @@
 use itertools::{Either, Itertools};
+use lux_lib::package;
 use lux_lib::{
     config::Config,
-    package::PackageName,
     package_db::PackageDB,
     rockspec::lua_dependency::{self},
     workspace::Workspace,
@@ -40,7 +40,7 @@ pub struct Add {
 
     /// Project to modify.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 pub async fn add(data: Add, config: Config) -> Result<()> {

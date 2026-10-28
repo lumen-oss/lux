@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 use itertools::Itertools;
@@ -6,7 +7,6 @@ use lux_lib::{
     drivers::sync::{Sync, SyncMode, TargetSet},
     git::shorthand::RemoteGitUrlShorthand,
     lua_version::LuaVersion,
-    package::PackageReq,
     tree::Tree,
     workspace::Workspace,
 };
@@ -53,7 +53,7 @@ pub fn top_level_ignored_files(project: &Workspace) -> Vec<PathBuf> {
 // and then a package requirement.
 #[derive(Debug, Clone)]
 pub enum PackageReqOrGitShorthand {
-    PackageReq(PackageReq),
+    PackageReq(package::Req),
     GitShorthand(RemoteGitUrlShorthand),
 }
 
@@ -63,7 +63,7 @@ impl FromStr for PackageReqOrGitShorthand {
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match RemoteGitUrlShorthand::parse_with_prefix(s) {
             Ok(shorthand) => Ok(Self::GitShorthand(shorthand)),
-            Err(_) => Ok(Self::PackageReq(PackageReq::parse(s)?)),
+            Err(_) => Ok(Self::PackageReq(package::Req::parse(s)?)),
         }
     }
 }
@@ -93,7 +93,7 @@ pub async fn sync_dependencies_if_locked(workspace: &Workspace, config: &Config)
     Ok(())
 }
 
-pub fn exists_matching_workspace_member(package_req: &PackageReq) -> Result<bool> {
+pub fn exists_matching_workspace_member(package_req: &package::Req) -> Result<bool> {
     let workspace = Workspace::current()?;
     Ok(workspace.is_some_and(|ws| {
         ws.select_member(package_req.name()).is_ok_and(|project| {

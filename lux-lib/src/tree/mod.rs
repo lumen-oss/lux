@@ -1,9 +1,9 @@
+use crate::package;
 use crate::{
     config::Config,
     fs,
     lockfile::{self, LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, ReadOnly},
     lua_version::LuaVersion,
-    package::{PackageName, PackageReq},
     path,
     variables::{GetVariableError, HasVariables},
 };
@@ -52,9 +52,9 @@ pub trait InstallTree {
     /// The tree in which to install test dependencies.
     fn test_tree(&self, config: &Config) -> Result<Tree, Error>;
     /// List the packages that are installed in this tree.
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, Error>;
-    /// Find installed rocks that match the given [`PackageReq`].
-    fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, Error>;
+    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, Error>;
+    /// Find installed rocks that match the given [`package::Req`].
+    fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error>;
     /// Create the standard directories (src, lib, etc.) for a package.
     fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error>;
     /// Apply the custom layout once a package has been fully installed.
@@ -208,7 +208,7 @@ impl Tree {
         })
     }
 
-    pub fn match_rocks_and<F>(&self, req: &PackageReq, filter: F) -> Result<RockMatches, Error>
+    pub fn match_rocks_and<F>(&self, req: &package::Req, filter: F) -> Result<RockMatches, Error>
     where
         F: Fn(&LockedPackage) -> bool,
     {
@@ -353,11 +353,11 @@ impl InstallTree for Tree {
         )
     }
 
-    fn list(&self) -> Result<HashMap<PackageName, Vec<LockedPackage>>, Error> {
+    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, Error> {
         Ok(self.lockfile()?.list())
     }
 
-    fn match_rocks(&self, req: &PackageReq) -> Result<RockMatches, Error> {
+    fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error> {
         let found_packages = self.lockfile()?.find_rocks(req);
         Ok(match NonEmpty::try_from(found_packages) {
             Ok(found_packages) => {
@@ -386,7 +386,7 @@ impl EntryType {
 
 #[derive(Clone, Debug)]
 pub enum RockMatches {
-    NotFound(PackageReq),
+    NotFound(package::Req),
     Single(LockedPackageId),
     Many(NonEmpty<LockedPackageId>),
 }
@@ -404,13 +404,14 @@ mod tests {
     use itertools::Itertools;
     use std::path::PathBuf;
 
+    use crate::package;
+
     use insta::assert_yaml_snapshot;
 
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         lua_version::LuaVersion,
-        package::{PackageName, PackageSpec, PackageVersion},
         remote_package_source::RemotePackageSource,
         tree::{InstallTree, RockLayout},
         variables,
@@ -442,7 +443,7 @@ mod tests {
         };
 
         let package = LockedPackage::from(
-            &PackageSpec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
+            &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
             LockConstraint::Unconstrained,
             RemotePackageSource::Test,
             None,
@@ -483,7 +484,7 @@ mod tests {
         let tree = config.user_tree(LuaVersion::Lua51).unwrap();
         let result = tree.list().unwrap();
         // note: sorted_redaction doesn't work because we have a nested Vec
-        let sorted_result: Vec<(PackageName, Vec<PackageVersion>)> = result
+        let sorted_result: Vec<(package::Name, Vec<package::Version>)> = result
             .into_iter()
             .sorted()
             .map(|(name, package)| {
@@ -527,7 +528,7 @@ mod tests {
         };
 
         let package = LockedPackage::from(
-            &PackageSpec::parse("neorg".into(), "8.0.0-1-1".into()).unwrap(),
+            &package::Spec::parse("neorg".into(), "8.0.0-1-1".into()).unwrap(),
             LockConstraint::Unconstrained,
             RemotePackageSource::Test,
             None,

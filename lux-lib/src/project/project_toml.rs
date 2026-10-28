@@ -14,8 +14,7 @@ use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::lua_rockspec::RockSourceSpec;
 use crate::lua_version::LuaVersion;
 use crate::operations::RunCommand;
-use crate::package::PackageNameList;
-use crate::package::SpecRev;
+use crate::package;
 use crate::project::TomlDeError;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::ROCKSPEC_FUEL_LIMIT;
@@ -33,16 +32,14 @@ use crate::{
         PlatformSupport, PlatformValidationError, RemoteRockSource, RockDescription,
         RockSourceError, RockspecFormat, TestSpec, TestSpecDecodeError, TestSpecInternal,
     },
-    package::{
-        BuildDependencies, Dependencies, PackageName, PackageReq, PackageVersion, PackageVersionReq,
-    },
+    package::{BuildDependencies, Dependencies},
     rockspec::{LuaVersionCompatibility, Rockspec},
 };
 use itertools::Itertools;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
 
-use crate::package::wally::PackageReq as WallyPackageReq;
+use crate::wally;
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use ssri::Integrity;
@@ -60,14 +57,14 @@ pub const PROJECT_TOML: &str = "lux.toml";
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)] // This is ok because it's just a Deserialize helper
 enum DependencyEntry {
-    Simple(PackageVersionReq),
+    Simple(package::VersionReq),
     Detailed(DependencyTableEntry),
 }
 
 #[derive(Debug, Deserialize)]
 struct DependencyTableEntry {
     #[serde(default)]
-    version: Option<PackageVersionReq>,
+    version: Option<package::VersionReq>,
     #[serde(default)]
     opt: Option<bool>,
     #[serde(default)]
@@ -79,7 +76,7 @@ struct DependencyTableEntry {
     #[serde(default)]
     rev: Option<String>,
     #[serde(default)]
-    wally: Option<WallyPackageReq>,
+    wally: Option<wally::package::Req>,
 }
 
 fn parse_map_to_dependency_vec_opt<'de, D>(
@@ -88,7 +85,7 @@ fn parse_map_to_dependency_vec_opt<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    let packages: Option<HashMap<PackageName, DependencyEntry>> =
+    let packages: Option<HashMap<package::Name, DependencyEntry>> =
         Option::deserialize(deserializer)?;
 
     match packages {
@@ -98,7 +95,7 @@ where
                 .into_iter()
                 .map(|(name, spec)| match spec {
                     DependencyEntry::Simple(version_req) => {
-                        Ok(PackageReq { name, version_req }.into())
+                        Ok(package::Req { name, version_req }.into())
                     }
                     DependencyEntry::Detailed(entry) => {
                         let DependencyTableEntry {
@@ -119,7 +116,7 @@ where
                                 )));
                             }
                             (
-                                PackageVersionReq::SemVer(wally.version_req().clone()),
+                                package::VersionReq::SemVer(wally.version_req().clone()),
                                 Some(RockSourceSpec::Wally(wally)),
                             )
                         } else {
@@ -160,7 +157,7 @@ where
                         };
 
                         Ok(LuaDependencySpec {
-                            package_req: PackageReq { name, version_req },
+                            package_req: package::Req { name, version_req },
                             opt: OptState::from(opt.unwrap_or(false)),
                             pin: PinnedState::from(pin.unwrap_or(false)),
                             source,
@@ -220,13 +217,13 @@ pub enum LocalProjectTomlValidationError {
     RockSource(#[from] RockSourceError),
     #[error("duplicate dependencies: {0}")]
     #[diagnostic(help("remove the duplicate entries from the [dependencies] table."))]
-    DuplicateDependencies(PackageNameList),
+    DuplicateDependencies(package::List),
     #[error("duplicate test dependencies: {0}")]
     #[diagnostic(help("remove the duplicate entries from the [test_dependencies] table."))]
-    DuplicateTestDependencies(PackageNameList),
+    DuplicateTestDependencies(package::List),
     #[error("duplicate build dependencies: {0}")]
     #[diagnostic(help("remove the duplicate entries from the [build_dependencies] table."))]
-    DuplicateBuildDependencies(PackageNameList),
+    DuplicateBuildDependencies(package::List),
     #[error(
         r#"dependencies field cannot contain 'lua'.
         Please provide the version in the top-level 'lua' field
@@ -275,7 +272,7 @@ pub struct PartialProjectToml {
         feature = "schema",
         schemars(extend("x-lux-toml-example" = r#"package = "my-lua-project""#))
     )]
-    pub(crate) package: PackageName,
+    pub(crate) package: package::Name,
     /// The package version. If unset, Lux derives it from the current SemVer
     /// git tag (optional `v` prefix), falling back to "dev".
     ///
@@ -319,7 +316,7 @@ args = ["src/main.lua"]
         feature = "schema",
         schemars(extend("x-lux-toml-example" = r#"lua = ">=5.1""#))
     )]
-    pub(crate) lua: Option<PackageVersionReq>,
+    pub(crate) lua: Option<package::VersionReq>,
     /// Metadata published to LuaRocks.
     #[serde(default)]
     #[cfg_attr(
@@ -529,7 +526,7 @@ impl PartialProjectToml {
     }
 
     /// This project's Lua version requirement, if any
-    pub fn lua(&self) -> Option<&PackageVersionReq> {
+    pub fn lua(&self) -> Option<&package::VersionReq> {
         self.lua.as_ref()
     }
 
@@ -561,19 +558,19 @@ impl PartialProjectToml {
         let duplicate_dependencies = get_duplicates(&self.dependencies);
         if !duplicate_dependencies.is_empty() {
             return Err(LocalProjectTomlValidationError::DuplicateDependencies(
-                PackageNameList::new(duplicate_dependencies),
+                package::List::new(duplicate_dependencies),
             ));
         }
         let duplicate_test_dependencies = get_duplicates(&self.test_dependencies);
         if !duplicate_test_dependencies.is_empty() {
             return Err(LocalProjectTomlValidationError::DuplicateTestDependencies(
-                PackageNameList::new(duplicate_test_dependencies),
+                package::List::new(duplicate_test_dependencies),
             ));
         }
         let duplicate_build_dependencies = get_duplicates(&self.build_dependencies);
         if !duplicate_build_dependencies.is_empty() {
             return Err(LocalProjectTomlValidationError::DuplicateBuildDependencies(
-                PackageNameList::new(duplicate_build_dependencies),
+                package::List::new(duplicate_build_dependencies),
             ));
         }
 
@@ -584,7 +581,7 @@ impl PartialProjectToml {
             version: project_toml
                 .version_template
                 .try_generate(&self.lux_toml_dir, None)
-                .unwrap_or(PackageVersion::default_dev_version()),
+                .unwrap_or(package::Version::default_dev_version()),
             lua: project_toml
                 .lua
                 .ok_or(LocalProjectTomlValidationError::NoLuaVersion)?,
@@ -678,7 +675,7 @@ impl PartialProjectToml {
     /// A source must be provided for the rockspec to be valid.
     pub fn into_remote(
         &self,
-        specrev: Option<SpecRev>,
+        specrev: Option<package::version::SpecRev>,
     ) -> Result<RemoteProjectToml, RemoteProjectTomlValidationError> {
         self.into_remote_with_version(None, specrev)
     }
@@ -687,8 +684,8 @@ impl PartialProjectToml {
     /// target version.
     pub fn into_remote_with_version(
         &self,
-        version: Option<PackageVersion>,
-        specrev: Option<SpecRev>,
+        version: Option<package::Version>,
+        specrev: Option<package::version::SpecRev>,
     ) -> Result<RemoteProjectToml, RemoteProjectTomlValidationError> {
         let version = match version {
             Some(version) => version,
@@ -714,12 +711,12 @@ impl PartialProjectToml {
 
     // In the not-yet-validated struct, we create getters only
     // for the non-optional fields.
-    pub fn package(&self) -> &PackageName {
+    pub fn package(&self) -> &package::Name {
         &self.package
     }
 
     /// Returns the current package version, which may be generated from a template
-    pub fn version(&self) -> Result<PackageVersion, GenerateVersionError> {
+    pub fn version(&self) -> Result<package::Version, GenerateVersionError> {
         self.version_template.try_generate(&self.lux_toml_dir, None)
     }
 
@@ -798,7 +795,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
                 self.package().to_owned(),
                 self.version_template
                     .try_generate(&self.lux_toml_dir, None)
-                    .unwrap_or(PackageVersion::default_dev_version()),
+                    .unwrap_or(package::Version::default_dev_version()),
             ))
         }
     }
@@ -818,7 +815,7 @@ impl LuaVersionCompatibility for PartialProjectToml {
                 self.package.clone(),
                 self.version_template
                     .try_generate(&self.lux_toml_dir, None)
-                    .unwrap_or(PackageVersion::default_dev_version()),
+                    .unwrap_or(package::Version::default_dev_version()),
             ))
         }
     }
@@ -896,9 +893,9 @@ pub struct RunSpec {
 /// To build a rockspec, use `RemoteProjectToml`.
 #[derive(Debug)]
 pub struct LocalProjectToml {
-    package: PackageName,
-    version: PackageVersion,
-    lua: PackageVersionReq,
+    package: package::Name,
+    version: package::Version,
+    lua: package::VersionReq,
     rockspec_format: Option<RockspecFormat>,
     run: Option<PerPlatform<RunSpec>>,
     description: RockDescription,
@@ -985,7 +982,7 @@ impl LocalProjectToml {
 
     fn render_rockspec(
         &self,
-        version: &PackageVersion,
+        version: &package::Version,
         source: Option<DisplayLuaKV>,
     ) -> Result<String, Error> {
         let starter = format!(
@@ -1015,7 +1012,7 @@ version = "{}""#,
             if !self.lua.is_luau() {
                 dependencies.insert(
                     0,
-                    PackageReq {
+                    package::Req {
                         name: "lua".into(),
                         version_req: self.lua.clone(),
                     }
@@ -1083,11 +1080,11 @@ version = "{}""#,
 impl Rockspec for LocalProjectToml {
     type Error = Error;
 
-    fn package(&self) -> &PackageName {
+    fn package(&self) -> &package::Name {
         &self.package
     }
 
-    fn version(&self) -> &PackageVersion {
+    fn version(&self) -> &package::Version {
         &self.version
     }
 
@@ -1099,7 +1096,7 @@ impl Rockspec for LocalProjectToml {
         &self.supported_platforms
     }
 
-    fn lua(&self) -> &PackageVersionReq {
+    fn lua(&self) -> &package::VersionReq {
         &self.lua
     }
 
@@ -1259,11 +1256,11 @@ impl RemoteProjectToml {
 impl Rockspec for RemoteProjectToml {
     type Error = Error;
 
-    fn package(&self) -> &PackageName {
+    fn package(&self) -> &package::Name {
         self.local.package()
     }
 
-    fn version(&self) -> &PackageVersion {
+    fn version(&self) -> &package::Version {
         self.local.version()
     }
 
@@ -1275,7 +1272,7 @@ impl Rockspec for RemoteProjectToml {
         self.local.supported_platforms()
     }
 
-    fn lua(&self) -> &PackageVersionReq {
+    fn lua(&self) -> &package::VersionReq {
         self.local.lua()
     }
 
@@ -1361,7 +1358,7 @@ version = "{}""#,
             if !self.local.lua.is_luau() {
                 dependencies.insert(
                     0,
-                    PackageReq {
+                    package::Req {
                         name: "lua".into(),
                         version_req: self.local.lua.clone(),
                     }

@@ -1,3 +1,4 @@
+use crate::package;
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use path_slash::PathBufExt;
@@ -15,6 +16,7 @@ use toml_edit::{DocumentMut, Item};
 
 use crate::{fs, lockfile::OptState};
 
+use crate::lockfile::PinnedState;
 use crate::{
     config::Config,
     git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, utils::SemVerTagOrSha},
@@ -23,16 +25,11 @@ use crate::{
         RemoteLuaRockspec,
     },
     lua_version::LuaVersion,
-    package::SpecRev,
     package_db::PackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencyType},
         LuaVersionCompatibility,
     },
-};
-use crate::{
-    lockfile::PinnedState,
-    package::{PackageName, PackageReq, PackageVersionReq},
 };
 
 pub(crate) mod gen;
@@ -133,7 +130,7 @@ pub enum EditError {
     Git(#[from] git::Error),
     #[error("unable to query latest version for '{0}'")]
     #[diagnostic(help("check your server config and ensure the package has been published"))]
-    LatestVersionNotFound(PackageName),
+    LatestVersionNotFound(package::Name),
     #[error("expected field to be a value, but got '{0}'")]
     #[diagnostic(
         help("ensure your {PROJECT_TOML} matches the specification"),
@@ -156,11 +153,11 @@ pub enum EditError {
 pub enum PinError {
     #[error("package '{0}' not found in dependencies")]
     #[diagnostic(help("to add it, run 'lx add {0}'"))]
-    PackageNotFound(PackageName),
+    PackageNotFound(package::Name),
     #[error("dependency '{dep}' is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {
         pin_state: PinnedState,
-        dep: PackageName,
+        dep: package::Name,
     },
     #[error("unable to parse {toml_path} for editing")]
     #[diagnostic(
@@ -292,7 +289,7 @@ impl Project {
 
     pub fn remote_rockspec(
         &self,
-        specrev: Option<SpecRev>,
+        specrev: Option<package::version::SpecRev>,
     ) -> Result<RemoteLuaRockspec, IntoRemoteRockspecError> {
         self.toml()
             .into_remote(specrev)
@@ -328,7 +325,7 @@ impl Project {
 
     pub async fn add(
         &mut self,
-        dependencies: DependencyType<&PackageReq>,
+        dependencies: DependencyType<&package::Req>,
         package_db: &PackageDB,
     ) -> Result<(), EditError> {
         let mut project_toml =
@@ -426,7 +423,7 @@ impl Project {
 
     pub async fn remove(
         &mut self,
-        dependencies: DependencyType<&PackageName>,
+        dependencies: DependencyType<&package::Name>,
     ) -> Result<(), EditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
@@ -466,7 +463,7 @@ impl Project {
 
     pub async fn upgrade(
         &mut self,
-        dependencies: LuaDependencyType<&PackageName>,
+        dependencies: LuaDependencyType<&package::Name>,
         package_db: &PackageDB,
         config: &Config,
     ) -> Result<(), EditError> {
@@ -544,7 +541,7 @@ impl Project {
 
     async fn set_dependency_flag(
         &mut self,
-        dependencies: LuaDependencyType<&PackageName>,
+        dependencies: LuaDependencyType<&package::Name>,
         key: &str,
         enabled: bool,
     ) -> Result<(), PinError> {
@@ -602,7 +599,7 @@ impl Project {
 
     pub async fn set_pinned_state(
         &mut self,
-        dependencies: LuaDependencyType<&PackageName>,
+        dependencies: LuaDependencyType<&package::Name>,
         pin: PinnedState,
     ) -> Result<(), PinError> {
         self.set_dependency_flag(dependencies, "pin", pin.as_bool())
@@ -611,7 +608,7 @@ impl Project {
 
     pub async fn set_opt_state(
         &mut self,
-        dependencies: LuaDependencyType<&PackageName>,
+        dependencies: LuaDependencyType<&package::Name>,
         opt: OptState,
     ) -> Result<(), PinError> {
         self.set_dependency_flag(dependencies, "opt", opt.as_bool())
@@ -657,10 +654,11 @@ pub(crate) async fn copy_dir(src: &Path, dest: &Path) -> Result<(), fs::Error> {
 
 async fn upgraded_version_req(
     existing: Option<&str>,
-    dep: &PackageName,
+    dep: &package::Name,
     package_db: &PackageDB,
 ) -> Result<Option<String>, EditError> {
-    if let Some(existing) = existing.and_then(|existing| PackageVersionReq::parse(existing).ok()) {
+    if let Some(existing) = existing.and_then(|existing| package::VersionReq::parse(existing).ok())
+    {
         let latest = package_db
             .latest_version(dep)
             .await
@@ -673,7 +671,7 @@ async fn upgraded_version_req(
 
 async fn upgrade_dependency(
     table: &mut Item,
-    dep: &PackageName,
+    dep: &package::Name,
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<(), EditError> {
@@ -727,7 +725,7 @@ fn resolve_git_latest(
     )?)
 }
 
-fn apply_git_latest(table: &mut Item, dep: &PackageName, latest: SemVerTagOrSha) {
+fn apply_git_latest(table: &mut Item, dep: &package::Name, latest: SemVerTagOrSha) {
     match latest {
         SemVerTagOrSha::SemVerTag(latest_tag) => {
             table[dep.to_string()]["version"] = Item::Value(latest_tag.clone().into());
@@ -782,7 +780,6 @@ mod tests {
         fs,
         lua_rockspec::ExternalDependencySpec,
         manifest::{Manifest, ManifestMetadata},
-        package::PackageReq,
         package_db::PackageDB,
         rockspec::Rockspec,
     };
@@ -795,10 +792,12 @@ mod tests {
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let project_root: PathBuf = project_root.path().into();
         let mut project = Project::from_exact(&project_root).unwrap().unwrap();
-        let add_dependencies = [PackageReq::new("busted".into(), Some(">= 1.0.0".into())).unwrap()];
-        let expected_dependencies = vec![PackageReq::new("busted".into(), Some(">= 1.0.0".into()))
-            .unwrap()
-            .into()];
+        let add_dependencies =
+            [package::Req::new("busted".into(), Some(">= 1.0.0".into())).unwrap()];
+        let expected_dependencies =
+            vec![package::Req::new("busted".into(), Some(">= 1.0.0".into()))
+                .unwrap()
+                .into()];
 
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
@@ -905,7 +904,8 @@ mod tests {
             &config,
         );
 
-        let unknown_dependencies = [PackageReq::from_str("not-a-package-in-any-manifest").unwrap()];
+        let unknown_dependencies =
+            [package::Req::from_str("not-a-package-in-any-manifest").unwrap()];
         let err = project
             .add(
                 DependencyType::Regular(unknown_dependencies.iter().collect_vec()),
@@ -962,7 +962,7 @@ type = "builtin"
         ] {
             std::fs::write(&toml_path, format!("{base}\n[dependencies]\n{input}\n")).unwrap();
             let mut project = Project::from_exact(&project_root).unwrap().unwrap();
-            let packages = [PackageName::from("30log")];
+            let packages = [package::Name::from("30log")];
             project
                 .upgrade(
                     LuaDependencyType::Regular(packages.iter().collect()),

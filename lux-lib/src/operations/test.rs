@@ -1,3 +1,4 @@
+use crate::package;
 use std::{io, ops::Deref, process::Command};
 
 use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
@@ -12,7 +13,6 @@ use crate::{
     lua_installation::LuaBinaryError,
     lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
     lua_version::LuaVersion,
-    package::PackageName,
     path::{self, Paths},
     project::{self, project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
@@ -41,7 +41,7 @@ pub struct Test<'a> {
     args: Vec<String>,
 
     /// Package to run tests for
-    package: Option<PackageName>,
+    package: Option<package::Name>,
 
     no_lock: Option<bool>,
 

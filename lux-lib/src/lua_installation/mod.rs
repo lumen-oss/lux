@@ -23,7 +23,7 @@ use crate::operations::BuildLuaError;
 use crate::package;
 use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
-use crate::{config::Config, package::PackageVersion, variables::HasVariables};
+use crate::{config::Config, variables::HasVariables};
 use crate::{path, target};
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
@@ -74,7 +74,7 @@ in your config, or use `-v LUA=/path/to/lua_binary`.
     )]
     LuaVersionMismatch {
         lua_cmd: String,
-        installed_version: PackageVersion,
+        installed_version: package::Version,
         lua_version: LuaVersion,
     },
     #[error("{0} not found on the PATH")]
@@ -90,7 +90,7 @@ pub enum DetectLuaVersionError {
     ParseLuaVersion(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageVersionParse(#[from] package::VersionParseError),
+    PackageVersionParse(#[from] package::version::ParseError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersion(#[from] lua_version::Error),
@@ -593,7 +593,7 @@ fn get_lua_lib_name(lib_dir: &Path, lua_version: &LuaVersion) -> Option<String> 
 
 fn detect_installed_lua_version_from_path(
     lua_cmd: &Path,
-) -> Result<PackageVersion, DetectLuaVersionError> {
+) -> Result<package::Version, DetectLuaVersionError> {
     let output = match std::process::Command::new(lua_cmd).arg("-v").output() {
         Ok(output) => Ok(output),
         Err(err) => Err(DetectLuaVersionError::RunLuaCommand(
@@ -613,7 +613,7 @@ fn detect_installed_lua_version_from_path(
 
 fn parse_lua_version_from_output(
     lua_output: &str,
-) -> Result<PackageVersion, DetectLuaVersionError> {
+) -> Result<package::Version, DetectLuaVersionError> {
     let lua_version_str = lua_output
         .trim_start_matches("Lua")
         .trim_start_matches("JIT")
@@ -623,7 +623,7 @@ fn parse_lua_version_from_output(
         .ok_or(DetectLuaVersionError::ParseLuaVersion(
             lua_output.to_string(),
         ))?;
-    Ok(PackageVersion::parse(&lua_version_str)?)
+    Ok(package::Version::parse(&lua_version_str)?)
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::path::{Path, PathBuf};
 
 use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace_member};
@@ -11,7 +12,6 @@ use lux_lib::{
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
-    package::PackageName,
     package_db::PackageDB,
     pipeline::build_local::Build,
     rockspec::Rockspec as _,
@@ -44,7 +44,7 @@ pub struct Pack {
 }
 
 async fn pack_workspace(
-    member: Option<&PackageName>,
+    member: Option<&package::Name>,
     dest_dir: &Path,
     config: &Config,
 ) -> Result<Vec<PathBuf>> {

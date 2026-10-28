@@ -1,5 +1,6 @@
 //! Support for running [tiniest](https://github.com/dphfox/tiniest) test suites.
 
+use crate::package;
 use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
@@ -16,7 +17,6 @@ use crate::{
     lua_installation::{self, LuaInstallation},
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
-    package::PackageReq,
     pipeline::build_local::Build,
     tree::{self, InstallTree, RockMatches, Tree},
     workspace::LUX_DIR_NAME,
@@ -105,7 +105,7 @@ pub(crate) async fn ensure_installed(
     config: &Config,
 ) -> Result<PathBuf, TiniestError> {
     let tiniest =
-        unsafe { PackageReq::new_unchecked("tiniest".into(), Some(TINIEST_VERSION.into())) };
+        unsafe { package::Req::new_unchecked("tiniest".into(), Some(TINIEST_VERSION.into())) };
     if let Some(src_dir) = find_installed_src(tree, &tiniest)? {
         return Ok(src_dir);
     }
@@ -127,7 +127,7 @@ pub(crate) async fn ensure_installed(
     Ok(tree.layout_for(package.spec()).src)
 }
 
-fn find_installed_src(tree: &Tree, req: &PackageReq) -> Result<Option<PathBuf>, tree::Error> {
+fn find_installed_src(tree: &Tree, req: &package::Req) -> Result<Option<PathBuf>, tree::Error> {
     let packages = match tree.match_rocks(req)? {
         RockMatches::NotFound(_) => return Ok(None),
         RockMatches::Single(id) => vec![id],

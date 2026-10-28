@@ -5,6 +5,7 @@
 //! all dependencies.
 //! Cache misses simply fall back to the regular discovery/building logic.
 
+use crate::package;
 use serde::{Deserialize, Deserializer};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -14,9 +15,7 @@ use crate::{
     config::Config,
     lua_version::LuaVersion,
     luarocks,
-    package::{
-        PackageName, PackageReq, PackageVersion, RemotePackageType, RemotePackageTypeFilterSpec,
-    },
+    package::{RemotePackageType, RemotePackageTypeFilterSpec},
 };
 
 // cache.luanox.org may change its format over time, so we track it.
@@ -46,7 +45,7 @@ pub struct Closure {
 impl Closure {
     pub(crate) fn spec(
         &self,
-        req: &PackageReq,
+        req: &package::Req,
         filter: Option<&RemotePackageTypeFilterSpec>,
     ) -> Option<(&ClosureSpec, RemotePackageType)> {
         let default_filter = RemotePackageTypeFilterSpec::default();
@@ -72,19 +71,19 @@ impl Closure {
 /// One entry of a precomputed closure.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClosureSpec {
-    package: PackageName,
-    version: PackageVersion,
+    package: package::Name,
+    version: package::Version,
     #[serde(deserialize_with = "deserialize_available_types")]
     available_types: Vec<RemotePackageType>,
     rockspec_raw: String,
 }
 
 impl ClosureSpec {
-    pub(crate) fn package(&self) -> &PackageName {
+    pub(crate) fn package(&self) -> &package::Name {
         &self.package
     }
 
-    pub(crate) fn version(&self) -> &PackageVersion {
+    pub(crate) fn version(&self) -> &package::Version {
         &self.version
     }
 
@@ -113,7 +112,7 @@ impl ClosureSpec {
 #[derive(Debug, Clone, Deserialize)]
 struct VersionsIndex {
     format: u32,
-    versions: Vec<PackageVersion>,
+    versions: Vec<package::Version>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,8 +140,8 @@ impl ManifestCache {
 
     pub(crate) async fn versions(
         &self,
-        name: &PackageName,
-    ) -> Result<Vec<PackageVersion>, ManifestCacheError> {
+        name: &package::Name,
+    ) -> Result<Vec<package::Version>, ManifestCacheError> {
         let url = self.url(&format!("versions/{name}.json"))?;
         let index: VersionsIndex = self.get_json(&url).await?;
         self.check_format(index.format)?;
@@ -151,7 +150,7 @@ impl ManifestCache {
 
     pub(crate) async fn latest_closure(
         &self,
-        name: &PackageName,
+        name: &package::Name,
     ) -> Result<Closure, ManifestCacheError> {
         let url = self.url(&format!("latest/{name}.json"))?;
         let closure: Closure = self.get_json(&url).await?;
@@ -161,8 +160,8 @@ impl ManifestCache {
 
     pub(crate) async fn closure(
         &self,
-        name: &PackageName,
-        version: &PackageVersion,
+        name: &package::Name,
+        version: &package::Version,
     ) -> Result<Closure, ManifestCacheError> {
         let hash = hex::encode(Sha256::digest(format!("{name}@{version}").as_bytes()));
         let url = self.url(&format!("{hash}.json"))?;
@@ -255,17 +254,17 @@ mod tests {
                 ]
             }"#,
         );
-        let req = PackageReq::from_str("say").unwrap();
+        let req = package::Req::from_str("say").unwrap();
         let (spec, _) = closure.spec(&req, None).unwrap();
         assert_eq!(
             spec.version(),
-            &PackageVersion::from_str("2.0.0-1").unwrap()
+            &package::Version::from_str("2.0.0-1").unwrap()
         );
     }
 
     #[test]
     fn prefers_binary_over_rockspec_over_src() {
-        let req = PackageReq::from_str("say").unwrap();
+        let req = package::Req::from_str("say").unwrap();
 
         let rockspec_or_src = closure_from_json(
             r#"{"format":1,"specs":[{"package":"say","version":"1.0.0-1","available_types":["rockspec","src"],"rockspec_raw":""}]}"#,
@@ -289,7 +288,7 @@ mod tests {
         let closure = closure_from_json(
             r#"{"format":1,"specs":[{"package":"say","version":"1.0.0-1","available_types":["all","rockspec"],"rockspec_raw":""}]}"#,
         );
-        let req = PackageReq::from_str("say").unwrap();
+        let req = package::Req::from_str("say").unwrap();
         let filter: RemotePackageTypeFilterSpec =
             serde_json::from_str(r#"{"rockspec":true,"src":false,"binary":false}"#).unwrap();
         assert_eq!(
@@ -303,11 +302,11 @@ mod tests {
         let closure = closure_from_json(
             r#"{"format":1,"specs":[{"package":"say","version":"1.0.0-1","available_types":["rockspec"],"rockspec_raw":""},{"package":"say","version":"2.0.0-1","available_types":["rockspec"],"rockspec_raw":""}]}"#,
         );
-        let req = PackageReq::from_str("say < 2.0.0").unwrap();
+        let req = package::Req::from_str("say < 2.0.0").unwrap();
         let (spec, _) = closure.spec(&req, None).unwrap();
         assert_eq!(
             spec.version(),
-            &PackageVersion::from_str("1.0.0-1").unwrap()
+            &package::Version::from_str("1.0.0-1").unwrap()
         );
     }
 }

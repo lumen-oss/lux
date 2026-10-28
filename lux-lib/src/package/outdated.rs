@@ -4,32 +4,32 @@ use crate::package_db::PackageDB;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{version::PackageVersion, PackageName, PackageReq, PackageSpec, PackageVersionReq};
+use super::{version::Version, Name, Req, Spec, VersionReq};
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("rock {0} not found")]
-pub struct RockNotFound(PackageName);
+pub struct RockNotFound(Name);
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("rock {} has no version that satisfies constraint {}", .name, .constraint.to_string())]
 pub struct RockConstraintUnsatisfied {
-    name: PackageName,
-    constraint: PackageVersionReq,
+    name: Name,
+    constraint: VersionReq,
 }
 
-impl PackageSpec {
+impl Spec {
     /// Tries to find a newer version of a given rock.
     /// Returns the latest version if found.
     pub async fn has_update(
         &self,
         package_db: &PackageDB,
-    ) -> Result<Option<PackageVersion>, RockNotFound> {
+    ) -> Result<Option<Version>, RockNotFound> {
         let latest_version = package_db
-            .latest_version(&self.name)
+            .latest_version(self.name())
             .await
-            .ok_or_else(|| RockNotFound(self.name.clone()))?;
+            .ok_or_else(|| RockNotFound(self.name().clone()))?;
 
-        if self.version < latest_version {
+        if self.version() < &latest_version {
             Ok(Some(latest_version))
         } else {
             Ok(None)
@@ -40,28 +40,28 @@ impl PackageSpec {
     /// Returns the latest version if found.
     pub async fn has_update_with(
         &self,
-        constraint: &PackageReq,
+        constraint: &Req,
         package_db: &PackageDB,
-    ) -> Result<Option<PackageVersion>, RockConstraintUnsatisfied> {
+    ) -> Result<Option<Version>, RockConstraintUnsatisfied> {
         let latest_version = package_db
             .latest_match(constraint, None)
             .await
             .ok_or_else(|| RockConstraintUnsatisfied {
-                name: self.name.clone(),
+                name: self.name().clone(),
                 constraint: constraint.version_req.clone(),
             })?;
 
-        if self.version < latest_version.version {
-            Ok(Some(latest_version.version))
+        if self.version() < latest_version.version() {
+            Ok(Some(latest_version.version().clone()))
         } else {
             Ok(None)
         }
     }
 }
 
-impl Display for PackageSpec {
+impl Display for Spec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{} {}", self.name, self.version).as_str())
+        f.write_str(format!("{} {}", self.name(), self.version()).as_str())
     }
 }
 
@@ -74,7 +74,7 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         manifest::{Manifest, ManifestMetadata},
-        package::PackageSpec,
+        package::Spec,
         package_db::PackageDB,
     };
 
@@ -94,8 +94,7 @@ mod tests {
             &config,
         );
 
-        let test_package =
-            PackageSpec::parse("lua-cjson".to_string(), "2.0.0".to_string()).unwrap();
+        let test_package = Spec::parse("lua-cjson".to_string(), "2.0.0".to_string()).unwrap();
 
         assert_eq!(
             test_package.has_update(&package_db).await.unwrap(),

@@ -512,6 +512,7 @@ async fn recursive_copy_doc_dir(target_doc_dir: &Path, build_dir: &Path) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::package;
     use predicates::prelude::*;
     use std::{
         io::{Cursor, Write},
@@ -533,7 +534,6 @@ mod tests {
         lua_installation::{detect_installed_lua_version, LuaInstallation},
         lua_rockspec::RemoteLuaRockspec,
         lua_version::LuaVersion,
-        package::PackageSpec,
         project::Project,
         remote_package_source::RemotePackageSource,
     };
@@ -565,7 +565,7 @@ mod tests {
         let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
         let package = LockedPackage::from(
-            &PackageSpec::new(rockspec.package().clone(), rockspec.version().clone()),
+            &package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
             LockConstraint::Unconstrained,
             RemotePackageSource::Test,
             None,

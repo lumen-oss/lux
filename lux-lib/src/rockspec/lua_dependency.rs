@@ -1,3 +1,4 @@
+use crate::package;
 use std::{collections::HashMap, convert::Infallible, fmt::Display, str::FromStr};
 
 use crate::{
@@ -5,7 +6,6 @@ use crate::{
     lua_rockspec::{
         ExternalDependencySpec, PartialOverride, PerPlatform, PlatformOverridable, RockSourceSpec,
     },
-    package::{PackageName, PackageReq, PackageSpec, PackageVersionReq, ReqParseError},
 };
 use miette::Diagnostic;
 use serde::{Deserialize, Deserializer};
@@ -16,13 +16,13 @@ use thiserror::Error;
 pub enum SpecParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageReq(#[from] ReqParseError),
+    Req(#[from] package::ReqParseError),
 }
 
 /// Specification for a Lua dependency in a Lux project
 #[derive(Debug, Clone, PartialEq)]
 pub struct LuaDependencySpec {
-    pub(crate) package_req: PackageReq,
+    pub(crate) package_req: package::Req,
     pub(crate) pin: PinnedState,
     pub(crate) opt: OptState,
     pub(crate) source: Option<RockSourceSpec>,
@@ -30,7 +30,7 @@ pub struct LuaDependencySpec {
 
 impl LuaDependencySpec {
     pub fn new(
-        package_req: PackageReq,
+        package_req: package::Req,
         pin: PinnedState,
         opt: OptState,
         source: Option<RockSourceSpec>,
@@ -43,7 +43,7 @@ impl LuaDependencySpec {
         }
     }
 
-    pub fn package_req(&self) -> &PackageReq {
+    pub fn package_req(&self) -> &package::Req {
         &self.package_req
     }
     pub fn pin(&self) -> &PinnedState {
@@ -55,24 +55,24 @@ impl LuaDependencySpec {
     pub fn source(&self) -> &Option<RockSourceSpec> {
         &self.source
     }
-    pub fn into_package_req(self) -> PackageReq {
+    pub fn into_package_req(self) -> package::Req {
         self.package_req
     }
-    pub fn name(&self) -> &PackageName {
+    pub fn name(&self) -> &package::Name {
         self.package_req.name()
     }
-    pub fn version_req(&self) -> &PackageVersionReq {
+    pub fn version_req(&self) -> &package::VersionReq {
         self.package_req.version_req()
     }
-    pub fn matches(&self, package: &PackageSpec) -> bool {
+    pub fn matches(&self, package: &package::Spec) -> bool {
         self.package_req.matches(package)
     }
 }
 
-impl From<PackageName> for LuaDependencySpec {
-    fn from(name: PackageName) -> Self {
+impl From<package::Name> for LuaDependencySpec {
+    fn from(name: package::Name) -> Self {
         Self {
-            package_req: PackageReq::from(name),
+            package_req: package::Req::from(name),
             pin: PinnedState::default(),
             opt: OptState::default(),
             source: None,
@@ -80,8 +80,8 @@ impl From<PackageName> for LuaDependencySpec {
     }
 }
 
-impl From<PackageReq> for LuaDependencySpec {
-    fn from(package_req: PackageReq) -> Self {
+impl From<package::Req> for LuaDependencySpec {
+    fn from(package_req: package::Req) -> Self {
         Self {
             package_req,
             pin: PinnedState::default(),
@@ -95,7 +95,7 @@ impl FromStr for LuaDependencySpec {
     type Err = SpecParseError;
 
     fn from_str(str: &str) -> Result<Self, SpecParseError> {
-        let package_req = PackageReq::from_str(str)?;
+        let package_req = package::Req::from_str(str)?;
         Ok(Self {
             package_req,
             pin: PinnedState::default(),
@@ -153,7 +153,7 @@ impl<'de> Deserialize<'de> for LuaDependencySpec {
     where
         D: Deserializer<'de>,
     {
-        let package_req = PackageReq::deserialize(deserializer)?;
+        let package_req = package::Req::deserialize(deserializer)?;
         Ok(Self {
             package_req,
             pin: PinnedState::default(),

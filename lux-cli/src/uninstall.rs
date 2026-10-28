@@ -1,6 +1,7 @@
 use clap::Args;
 use inquire::Confirm;
 use itertools::Itertools;
+use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
@@ -8,7 +9,6 @@ use lux_lib::{
     lockfile::LockedPackageId,
     lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
-    package::PackageReq,
     package_db::PackageDB,
     tree::{self, InstallTree, RockMatches},
 };
@@ -18,7 +18,7 @@ use miette::{miette, IntoDiagnostic, Result};
 #[derive(Args)]
 pub struct Uninstall {
     /// The package or packages to uninstall from the system.
-    packages: Vec<PackageReq>,
+    packages: Vec<package::Req>,
 }
 
 /// Uninstall one or multiple rocks from the user tree

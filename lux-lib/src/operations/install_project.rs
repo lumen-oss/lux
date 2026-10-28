@@ -1,3 +1,4 @@
+use crate::package;
 use bon::Builder;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -9,7 +10,6 @@ use crate::{
     hash::HasIntegrity,
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
-    package::{PackageName, PackageReq},
     package_db::{self, PackageDB},
     pipeline::discover::FoundPackage,
     project::{self, IntoLocalRockspecError, Project},
@@ -39,7 +39,7 @@ pub enum InstallProjectError {
     #[diagnostic(transparent)]
     Build(#[from] Box<build::Error>),
     #[error("package '{0}' was not installed")]
-    PackageNotInstalled(PackageName),
+    PackageNotInstalled(package::Name),
     #[error("failed to hash the project's sources")]
     Hash(#[source] std::io::Error),
     #[error(transparent)]
@@ -125,10 +125,12 @@ impl<
         }
         .with_local(vec![root]);
 
-        let install_spec =
-            PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)
-                .build_behaviour(behaviour)
-                .build();
+        let install_spec = PackageInstallSpec::new(
+            package::Req::from(name.clone()),
+            tree::EntryType::Entrypoint,
+        )
+        .build_behaviour(behaviour)
+        .build();
 
         InstallPackages::new(config, tree)
             .package_db(package_db)

@@ -1,3 +1,4 @@
+use crate::package;
 use miette::Diagnostic;
 use path_slash::PathExt;
 use thiserror::Error;
@@ -7,11 +8,7 @@ pub use crate::manifest::metadata::*;
 use crate::manifest::metadata_from_server::*;
 use crate::manifest::metadata_from_vendor_dir::manifest_from_vendor_dir;
 use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
-use crate::{
-    config::Config,
-    package::{PackageReq, RemotePackage},
-    remote_package_source::RemotePackageSource,
-};
+use crate::{config::Config, package::RemotePackage, remote_package_source::RemotePackageSource};
 
 pub mod metadata;
 mod metadata_from_server;
@@ -103,7 +100,7 @@ impl Manifest {
     /// Find a package that matches the requirement, returning the latest match
     pub fn find(
         &self,
-        package_req: &PackageReq,
+        package_req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<RemotePackage> {
         let filter = filter.as_ref().unwrap_or(&self.default_filter);

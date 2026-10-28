@@ -1,13 +1,11 @@
+use crate::package;
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
-use crate::{
-    config::Config,
-    package::{PackageVersion, PackageVersionReq},
-};
+use crate::config::Config;
 use itertools::Itertools;
 use miette::Diagnostic;
 use serde::{Deserialize, Serialize};
@@ -39,11 +37,11 @@ pub enum LuaVersion {
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("unsupported Lua version: '{0}'")]
-    UnsupportedLuaVersion(PackageVersion),
+    UnsupportedLuaVersion(package::Version),
 }
 
 impl LuaVersion {
-    pub fn as_version(&self) -> PackageVersion {
+    pub fn as_version(&self) -> package::Version {
         unsafe {
             match self {
                 LuaVersion::Lua51 => "5.1.0".parse().unwrap_unchecked(),
@@ -66,7 +64,7 @@ impl LuaVersion {
             LuaVersion::Lua55 => "5.5".into(),
         }
     }
-    pub fn as_version_req(&self) -> PackageVersionReq {
+    pub fn as_version_req(&self) -> package::VersionReq {
         unsafe {
             format!("~> {}", self.version_compatibility_str())
                 .parse()
@@ -75,9 +73,9 @@ impl LuaVersion {
     }
 
     /// Get the LuaVersion from a version that has been parsed from the `lua -v` output
-    pub fn from_version(version: PackageVersion) -> Result<LuaVersion, Error> {
+    pub fn from_version(version: package::Version) -> Result<LuaVersion, Error> {
         // NOTE: Special case. luajit -v outputs 2.x.y as a version
-        let luajit_version_req: PackageVersionReq = unsafe { "~> 2".parse().unwrap_unchecked() };
+        let luajit_version_req: package::VersionReq = unsafe { "~> 2".parse().unwrap_unchecked() };
         if luajit_version_req.matches(&version) {
             Ok(LuaVersion::LuaJIT)
         } else if LuaVersion::Lua51.as_version_req().matches(&version) {

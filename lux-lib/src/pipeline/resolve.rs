@@ -1,3 +1,4 @@
+use crate::package;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -16,7 +17,6 @@ use crate::{
     },
     lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::PackageInstallSpec,
-    package::{PackageName, PackageReq},
     package_db::PackageDB,
     remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
@@ -31,7 +31,7 @@ use super::{
 
 /// The build dependencies of a rockspec that still need to be installed, with the
 /// LuaRocks build backend (if any) first.
-pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<PackageName> {
+pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<package::Name> {
     let mut names = rockspec
         .build_dependencies()
         .current_platform()
@@ -54,10 +54,10 @@ pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<Pa
 }
 
 /// The name of the luarocks build backend rock required to build this rockspec (if any).
-pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<PackageName> {
+pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<package::Name> {
     match &rockspec.build().current_platform().build_backend {
         Some(BuildBackendSpec::LuaRock(backend)) => {
-            Some(PackageName::new(format!("luarocks-build-{backend}")))
+            Some(package::Name::new(format!("luarocks-build-{backend}")))
         }
         _ => None,
     }
@@ -146,7 +146,7 @@ where
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct RequestKey {
     section: LockedPackageLockType,
-    package: PackageReq,
+    package: package::Req,
     pin: PinnedState,
     opt: OptState,
 }
@@ -536,7 +536,7 @@ fn build_dependency_specs(
                 })
                 .or_else(|| {
                     Some(
-                        PackageInstallSpec::new(PackageReq::from(name), EntryType::Entrypoint)
+                        PackageInstallSpec::new(package::Req::from(name), EntryType::Entrypoint)
                             .build_behaviour(BuildBehaviour::Ignore)
                             .pin(parent.pin)
                             .opt(parent.opt)
@@ -554,7 +554,7 @@ mod tests {
     use super::*;
     use crate::config::ConfigBuilder;
     use crate::lockfile::{LockConstraint, LockedPackageHashes};
-    use crate::package::{PackageSpec, RemotePackage};
+    use crate::package::RemotePackage;
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
         let dependencies = if dependencies.is_empty() {
@@ -583,7 +583,7 @@ mod tests {
                     };
                     FoundPackage {
                         remote: RemotePackage::new(
-                            PackageSpec::new(
+                            package::Spec::new(
                                 rockspec.package().clone(),
                                 rockspec.version().clone(),
                             ),
@@ -599,7 +599,7 @@ mod tests {
     }
 
     fn install_spec(name: &str) -> PackageInstallSpec {
-        let package = match name.parse::<PackageReq>() {
+        let package = match name.parse::<package::Req>() {
             Ok(package) => package,
             Err(err) => unreachable!("invalid package req: {err}"),
         };
@@ -609,7 +609,7 @@ mod tests {
     }
 
     fn installed_package(name: &str) -> LockedPackage {
-        let spec = PackageSpec::parse(name.to_string(), "1.0.0-1".to_string()).unwrap();
+        let spec = package::Spec::parse(name.to_string(), "1.0.0-1".to_string()).unwrap();
         LockedPackage::from(
             &spec,
             LockConstraint::Unconstrained,

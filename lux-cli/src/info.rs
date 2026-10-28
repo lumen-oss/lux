@@ -1,8 +1,6 @@
 use clap::Args;
-use lux_lib::{
-    config::Config, operations::Download, package::PackageReq, rockspec::Rockspec,
-    tree::InstallTree,
-};
+use lux_lib::package;
+use lux_lib::{config::Config, operations::Download, rockspec::Rockspec, tree::InstallTree};
 
 use miette::Result;
 
@@ -10,7 +8,7 @@ use crate::workspace::current_workspace_or_user_tree;
 
 #[derive(Args)]
 pub struct Info {
-    package: PackageReq,
+    package: package::Req,
 }
 
 pub async fn info(data: Info, config: Config) -> Result<()> {

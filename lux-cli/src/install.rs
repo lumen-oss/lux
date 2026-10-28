@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::path::PathBuf;
 
 use lux_lib::{
@@ -6,7 +7,6 @@ use lux_lib::{
     lockfile::PinnedState,
     lua_version::LuaVersion,
     operations,
-    package::{PackageName, PackageReq},
     package_db::PackageDB,
     workspace::{self, Workspace},
 };
@@ -18,7 +18,7 @@ use crate::utils::install::apply_build_behaviour;
 #[derive(clap::Args)]
 pub struct Install {
     /// Package or list of packages to install.
-    package_req: Vec<PackageReq>,
+    package_req: Vec<package::Req>,
 
     /// Pin the packages so that they don't get updated.
     #[arg(long)]
@@ -35,7 +35,7 @@ pub struct Install {
     /// Package to install when installing from a multi-project workspace.
     /// Ignored if the `--path` option is unset.
     #[arg(short, long, visible_short_alias = 'p')]
-    package: Option<PackageName>,
+    package: Option<package::Name>,
 }
 
 /// Install a rock into the user tree.
@@ -49,7 +49,7 @@ pub async fn install(data: Install, config: Config) -> Result<()> {
 
 async fn install_from_path(
     path: PathBuf,
-    package: Option<PackageName>,
+    package: Option<package::Name>,
     config: Config,
 ) -> Result<()> {
     let workspace =

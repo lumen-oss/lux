@@ -539,6 +539,8 @@ local unpack = unpack or table.unpack
 mod tests {
     #[cfg(any(target_os = "linux", feature = "impure_tests"))]
     use super::*;
+    #[cfg(target_os = "linux")]
+    use crate::package;
 
     #[cfg(target_os = "linux")]
     use assert_fs::prelude::{PathChild, PathCreateDir};
@@ -553,12 +555,11 @@ mod tests {
     use crate::{
         fs,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
-        package::PackageSpec,
         remote_package_source::RemotePackageSource,
     };
 
     #[cfg(target_os = "linux")]
-    fn mk_dummy_package(spec: PackageSpec) -> LockedPackage {
+    fn mk_dummy_package(spec: package::Spec) -> LockedPackage {
         let hashes = LockedPackageHashes {
             rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 .parse()
@@ -587,7 +588,7 @@ mod tests {
             .unwrap();
         let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
 
-        let pkg_a = mk_dummy_package(PackageSpec::new("foo".into(), "1.0.0-1".parse().unwrap()));
+        let pkg_a = mk_dummy_package(package::Spec::new("foo".into(), "1.0.0-1".parse().unwrap()));
         tree.prepare(&pkg_a.spec).unwrap();
         let layout_a = tree.layout_for(&pkg_a.spec);
         staging
@@ -598,7 +599,7 @@ mod tests {
             .await
             .unwrap();
 
-        let pkg_b = mk_dummy_package(PackageSpec::new("bar".into(), "2.0.0-1".parse().unwrap()));
+        let pkg_b = mk_dummy_package(package::Spec::new("bar".into(), "2.0.0-1".parse().unwrap()));
         tree.prepare(&pkg_b.spec).unwrap();
         let layout_b = tree.layout_for(&pkg_b.spec);
         staging

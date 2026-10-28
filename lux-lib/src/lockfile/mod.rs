@@ -1,3 +1,4 @@
+use crate::package;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::io::{self, Write};
@@ -21,10 +22,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::fs;
-use crate::package::{
-    PackageName, PackageReq, PackageSpec, PackageVersion, PackageVersionReq,
-    RemotePackageTypeFilterSpec, VersionReqError,
-};
+use crate::package::RemotePackageTypeFilterSpec;
 use crate::remote_package_source::RemotePackageSource;
 use crate::rockspec::lua_dependency::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
@@ -161,8 +159,8 @@ impl<'de> Deserialize<'de> for OptState {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LockedPackageSpec {
-    name: PackageName,
-    version: PackageVersion,
+    name: package::Name,
+    version: package::Version,
     pinned: PinnedState,
     opt: OptState,
     dependencies: Vec<LockedPackageId>,
@@ -182,8 +180,8 @@ pub struct LockedPackageId(String);
 
 impl LockedPackageId {
     pub fn new(
-        name: &PackageName,
-        version: &PackageVersion,
+        name: &package::Name,
+        version: &package::Version,
         pinned: PinnedState,
         opt: OptState,
         constraint: LockConstraint,
@@ -230,8 +228,8 @@ impl Display for LockedPackageId {
 impl LockedPackageSpec {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        name: &PackageName,
-        version: &PackageVersion,
+        name: &package::Name,
+        version: &package::Version,
         constraint: LockConstraint,
         dependencies: Vec<LockedPackageId>,
         build_dependencies: Vec<LockedPackageId>,
@@ -270,11 +268,11 @@ impl LockedPackageSpec {
         unsafe { LockConstraint::try_from(&self.constraint).unwrap_unchecked() }
     }
 
-    pub fn name(&self) -> &PackageName {
+    pub fn name(&self) -> &package::Name {
         &self.name
     }
 
-    pub fn version(&self) -> &PackageVersion {
+    pub fn version(&self) -> &package::Version {
         &self.version
     }
 
@@ -294,24 +292,24 @@ impl LockedPackageSpec {
         self.build_dependencies.iter().collect()
     }
 
-    pub fn to_package(&self) -> PackageSpec {
-        PackageSpec::new(self.name.clone(), self.version.clone())
+    pub fn to_package(&self) -> package::Spec {
+        package::Spec::new(self.name.clone(), self.version.clone())
     }
 
-    pub fn into_package_req(self) -> PackageReq {
+    pub fn into_package_req(self) -> package::Req {
         match self.constraint() {
             LockConstraint::Unconstrained => self.name.into(),
-            LockConstraint::Constrained(version_req) => PackageReq {
+            LockConstraint::Constrained(version_req) => package::Req {
                 name: self.name,
                 version_req,
             },
         }
     }
 
-    pub(crate) fn as_package_req(&self) -> PackageReq {
+    pub(crate) fn as_package_req(&self) -> package::Req {
         match self.constraint() {
             LockConstraint::Unconstrained => self.name.clone().into(),
-            LockConstraint::Constrained(version_req) => PackageReq {
+            LockConstraint::Constrained(version_req) => package::Req {
                 name: self.name.clone(),
                 version_req: version_req.clone(),
             },
@@ -371,7 +369,7 @@ impl LockedPackage {
 
     #[cfg(test)]
     pub(crate) fn from(
-        package: &PackageSpec,
+        package: &package::Spec,
         constraint: LockConstraint,
         source: RemotePackageSource,
         source_url: Option<RemotePackageSourceUrl>,
@@ -411,11 +409,11 @@ impl LockedPackage {
         &self.spec
     }
 
-    pub fn into_package_spec(self) -> PackageSpec {
+    pub fn into_package_spec(self) -> package::Spec {
         self.spec.to_package()
     }
 
-    pub fn as_package_spec(&self) -> PackageSpec {
+    pub fn as_package_spec(&self) -> package::Spec {
         self.spec.to_package()
     }
 
@@ -423,11 +421,11 @@ impl LockedPackage {
         self.spec.id()
     }
 
-    pub fn name(&self) -> &PackageName {
+    pub fn name(&self) -> &package::Name {
         self.spec.name()
     }
 
-    pub fn version(&self) -> &PackageVersion {
+    pub fn version(&self) -> &package::Version {
         self.spec.version()
     }
 
@@ -463,19 +461,19 @@ impl LockedPackage {
         &self.hashes
     }
 
-    pub fn to_package(&self) -> PackageSpec {
+    pub fn to_package(&self) -> package::Spec {
         self.spec.to_package()
     }
 
-    pub fn into_package_req(self) -> PackageReq {
+    pub fn into_package_req(self) -> package::Req {
         self.spec.into_package_req()
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct LockedPackageIntermediate {
-    name: PackageName,
-    version: PackageVersion,
+    name: package::Name,
+    version: package::Version,
     #[serde(default, skip_serializing_if = "PinnedState::is_default")]
     pinned: PinnedState,
     #[serde(default, skip_serializing_if = "OptState::is_default")]
@@ -574,7 +572,7 @@ impl PartialOrd for LockedPackageHashes {
 pub enum LockConstraint {
     #[default]
     Unconstrained,
-    Constrained(PackageVersionReq),
+    Constrained(package::VersionReq),
 }
 
 impl<'de> Deserialize<'de> for LockConstraint {
@@ -600,7 +598,7 @@ impl LockConstraint {
         }
     }
 
-    fn matches_version_req(&self, req: &PackageVersionReq) -> bool {
+    fn matches_version_req(&self, req: &package::VersionReq) -> bool {
         match self {
             LockConstraint::Unconstrained => req.is_any(),
             LockConstraint::Constrained(package_version_req) => package_version_req == req,
@@ -608,8 +606,8 @@ impl LockConstraint {
     }
 }
 
-impl From<PackageVersionReq> for LockConstraint {
-    fn from(value: PackageVersionReq) -> Self {
+impl From<package::VersionReq> for LockConstraint {
+    fn from(value: package::VersionReq) -> Self {
         if value.is_any() {
             Self::Unconstrained
         } else {
@@ -623,7 +621,7 @@ impl From<PackageVersionReq> for LockConstraint {
 pub enum LockConstraintParseError {
     #[error("Invalid constraint in LuaPackage")]
     #[diagnostic(forward(0))]
-    LockConstraintParseError(#[from] VersionReqError),
+    LockConstraintParseError(#[from] package::version::ReqError),
 }
 
 impl TryFrom<&Option<String>> for LockConstraint {
@@ -656,7 +654,7 @@ pub(crate) struct PackageLock {
     rocks: BTreeMap<LockedPackageId, LockedPackage>,
 
     /// The entrypoints of the tree. Enforces one entrypoint per package name.
-    entrypoints: BTreeMap<PackageName, LockedPackageId>,
+    entrypoints: BTreeMap<package::Name, LockedPackageId>,
 }
 
 impl PackageLock {
@@ -708,7 +706,7 @@ impl PackageLock {
     }
 
     /// Returns the entrypoint with the given package name, if any.
-    pub(crate) fn entrypoint(&self, name: &PackageName) -> Option<&LockedPackage> {
+    pub(crate) fn entrypoint(&self, name: &package::Name) -> Option<&LockedPackage> {
         self.entrypoints.get(name).and_then(|id| self.get(id))
     }
 
@@ -719,7 +717,7 @@ impl PackageLock {
             .any(|dep_id| dep_id == package)
     }
 
-    fn list(&self) -> HashMap<PackageName, Vec<LockedPackage>> {
+    fn list(&self) -> HashMap<package::Name, Vec<LockedPackage>> {
         self.rocks()
             .values()
             .cloned()
@@ -738,7 +736,7 @@ impl PackageLock {
 
     pub(crate) fn has_rock(
         &self,
-        req: &PackageReq,
+        req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<LockedPackage> {
         self.list()
@@ -972,7 +970,7 @@ check the source URL, then rerun the command with `lx --no-lock` to update the h
     #[error(
         "package {0} version {1} with pinned state {2} and constraint {3} not found in the lockfile."
     )]
-    PackageNotFound(PackageName, Box<PackageVersion>, PinnedState, String),
+    PackageNotFound(package::Name, Box<package::Version>, PinnedState, String),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -1018,11 +1016,11 @@ impl<P: LockfilePermissions> Lockfile<P> {
     }
 
     /// Returns the entrypoint with the given package name, if any.
-    pub fn entrypoint(&self, name: &PackageName) -> Option<&LockedPackage> {
+    pub fn entrypoint(&self, name: &package::Name) -> Option<&LockedPackage> {
         self.lock.entrypoint(name)
     }
 
-    pub fn entrypoints(&self) -> Vec<(&PackageName, &LockedPackage)> {
+    pub fn entrypoints(&self) -> Vec<(&package::Name, &LockedPackage)> {
         self.lock
             .entrypoints
             .iter()
@@ -1066,20 +1064,20 @@ impl<P: LockfilePermissions> Lockfile<P> {
         self.lock.get(id).unwrap_unchecked()
     }
 
-    pub(crate) fn list(&self) -> HashMap<PackageName, Vec<LockedPackage>> {
+    pub(crate) fn list(&self) -> HashMap<package::Name, Vec<LockedPackage>> {
         self.lock.list()
     }
 
     pub(crate) fn has_rock(
         &self,
-        req: &PackageReq,
+        req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<LockedPackage> {
         self.lock.has_rock(req, filter)
     }
 
     /// Find all rocks that match the requirement
-    pub(crate) fn find_rocks(&self, req: &PackageReq) -> Vec<LockedPackageId> {
+    pub(crate) fn find_rocks(&self, req: &package::Req) -> Vec<LockedPackageId> {
         match self.list().get(req.name()) {
             Some(packages) => packages
                 .iter()
@@ -1770,7 +1768,7 @@ mod tests {
     use assert_fs::fixture::PathCopy;
     use insta::{assert_json_snapshot, sorted_redaction};
 
-    use crate::{config::ConfigBuilder, lua_version::LuaVersion, package::PackageSpec};
+    use crate::{config::ConfigBuilder, lua_version::LuaVersion};
 
     #[test]
     fn parse_lockfile() {
@@ -1818,7 +1816,7 @@ mod tests {
         let tree = config.user_tree(LuaVersion::Lua51).unwrap();
         let mut lockfile = tree.lockfile().unwrap().write_guard();
 
-        let test_package = PackageSpec::parse("test1".to_string(), "0.1.0".to_string()).unwrap();
+        let test_package = package::Spec::parse("test1".to_string(), "0.1.0".to_string()).unwrap();
         let test_local_package = LockedPackage::from(
             &test_package,
             crate::lockfile::LockConstraint::Unconstrained,
@@ -1829,7 +1827,7 @@ mod tests {
         lockfile.add_entrypoint(&test_local_package);
 
         let test_dep_package =
-            PackageSpec::parse("test2".to_string(), "0.1.0".to_string()).unwrap();
+            package::Spec::parse("test2".to_string(), "0.1.0".to_string()).unwrap();
         let mut test_local_dep_package = LockedPackage::from(
             &test_dep_package,
             crate::lockfile::LockConstraint::Constrained(">= 1.0.0".parse().unwrap()),
@@ -1873,9 +1871,9 @@ mod tests {
     fn test_sync_spec() {
         let lockfile = get_test_lockfile();
         let packages = vec![
-            PackageReq::parse("neorg@8.8.1-1").unwrap().into(),
-            PackageReq::parse("lua-cjson@2.1.0").unwrap().into(),
-            PackageReq::parse("nonexistent").unwrap().into(),
+            package::Req::parse("neorg@8.8.1-1").unwrap().into(),
+            package::Req::parse("lua-cjson@2.1.0").unwrap().into(),
+            package::Req::parse("nonexistent").unwrap().into(),
         ];
 
         let sync_spec = lockfile
@@ -1918,8 +1916,8 @@ mod tests {
     fn test_sync_spec_remove() {
         let lockfile = get_test_lockfile();
         let packages = vec![
-            PackageReq::parse("lua-cjson@2.1.0").unwrap().into(),
-            PackageReq::parse("nonexistent").unwrap().into(),
+            package::Req::parse("lua-cjson@2.1.0").unwrap().into(),
+            package::Req::parse("nonexistent").unwrap().into(),
         ];
 
         let sync_spec = lockfile
@@ -1981,12 +1979,12 @@ mod tests {
     #[test]
     fn test_sync_spec_different_constraints() {
         let lockfile = get_test_lockfile();
-        let packages = vec![PackageReq::parse("nvim-nio>=2.0.0").unwrap().into()];
+        let packages = vec![package::Req::parse("nvim-nio>=2.0.0").unwrap().into()];
         let sync_spec = lockfile
             .lock
             .package_sync_spec(&packages, &SyncStrategy::LockfileOnly);
 
-        let expected: PackageVersionReq = ">=2.0.0".parse().unwrap();
+        let expected: package::VersionReq = ">=2.0.0".parse().unwrap();
         assert!(sync_spec
             .to_add
             .iter()
@@ -2016,11 +2014,11 @@ mod tests {
         let lockfile = tree.lockfile().unwrap();
 
         let packages: Vec<LuaDependencySpec> = vec![
-            PackageReq::parse("neorg@8.8.1-1").unwrap().into(),
+            package::Req::parse("neorg@8.8.1-1").unwrap().into(),
             // This package isn't installed in the tree
-            PackageReq::parse("lua-cjson@2.1.0").unwrap().into(),
+            package::Req::parse("lua-cjson@2.1.0").unwrap().into(),
             // And neither is this
-            PackageReq::parse("nonexistent").unwrap().into(),
+            package::Req::parse("nonexistent").unwrap().into(),
         ];
 
         // Since lua-cjson is not present in the tree, it should get put into `to_add`

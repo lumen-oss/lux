@@ -1,9 +1,9 @@
 use clap::ValueEnum;
+use lux_lib::package;
 use lux_lib::{
     config::ConfigBuilder,
     lua_installation::nvim_lua_version,
     lua_version::LuaVersion,
-    package::PackageReq,
     tree::{NvimLayout, RojoLayout},
 };
 use miette::{miette, Result};
@@ -11,7 +11,7 @@ use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Clone)]
 pub enum PackageOrRockspec {
-    Package(PackageReq),
+    Package(package::Req),
     RockSpec(PathBuf),
 }
 
@@ -54,7 +54,7 @@ impl FromStr for PackageOrRockspec {
         if path.is_file() {
             Ok(Self::RockSpec(path))
         } else {
-            let pkg = PackageReq::from_str(s).map_err(|err| {
+            let pkg = package::Req::from_str(s).map_err(|err| {
                 miette!(
                     help = format!("if '{s}' is a path to a file, ensure it exists"),
                     "No file '{s}' found and cannot parse package query: {err}",

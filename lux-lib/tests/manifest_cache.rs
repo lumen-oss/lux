@@ -1,5 +1,6 @@
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
+use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::ConfigBuilder,
@@ -7,7 +8,6 @@ use lux_lib::{
     lua_installation::detect_installed_lua_version,
     lua_version::LuaVersion,
     operations::PackageInstallSpec,
-    package::PackageReq,
     package_db::PackageDB,
     tree::{EntryType, InstallTree},
 };
@@ -31,9 +31,10 @@ async fn install_rock_lockfile(rock: &str, manifest_cache: bool) -> String {
         .user_tree(LuaVersion::from(&config).unwrap().clone())
         .unwrap();
 
-    let spec = PackageInstallSpec::new(PackageReq::from_str(rock).unwrap(), EntryType::Entrypoint)
-        .build_behaviour(BuildBehaviour::Force)
-        .build();
+    let spec =
+        PackageInstallSpec::new(package::Req::from_str(rock).unwrap(), EntryType::Entrypoint)
+            .build_behaviour(BuildBehaviour::Force)
+            .build();
 
     InstallPackages::new(&config, &tree)
         .package(spec)

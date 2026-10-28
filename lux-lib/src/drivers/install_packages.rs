@@ -1,3 +1,4 @@
+use crate::package;
 use std::{collections::HashMap, io};
 
 use bon::Builder;
@@ -15,7 +16,6 @@ use crate::{
     },
     lua_installation,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
-    package::PackageNameList,
     package_db::{self, PackageDB},
     tree::{self, InstallTree},
     workspace::TreeError,
@@ -120,7 +120,7 @@ where
         .collect_vec();
 
     if !duplicate_entrypoints.is_empty() {
-        return Err(Error::DuplicateEntrypoints(PackageNameList::new(
+        return Err(Error::DuplicateEntrypoints(package::List::new(
             duplicate_entrypoints,
         )));
     }
@@ -303,7 +303,7 @@ pub enum Error {
     #[diagnostic(forward(0))]
     PackageDB(#[from] package_db::Error),
     #[error("cannot install duplicate entrypoints:\n{0}")]
-    DuplicateEntrypoints(PackageNameList),
+    DuplicateEntrypoints(package::List),
     #[error("cannot install conflicting entrypoints:\n{0}")]
     #[diagnostic(help(
         "only a single entrypoint per package is allowed.\nif you would like to replace the existing entrypoints, retry with `--force` to overwrite the existing entrypoint"

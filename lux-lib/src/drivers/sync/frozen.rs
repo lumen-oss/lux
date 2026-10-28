@@ -1,3 +1,4 @@
+use crate::package;
 use std::io;
 
 use crate::operations::{PackageInstallSpec, RemoveError, Uninstall};
@@ -15,7 +16,6 @@ use crate::{
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError, GenLuauRcError},
-    package::{PackageName, PackageReq},
     package_db::{self, PackageDB},
     pipeline::resolve::luarocks_build_backend_name,
     project::{self, project_toml::LocalProjectTomlValidationError},
@@ -38,7 +38,7 @@ pub struct Sync<'a> {
     config: &'a Config,
 
     #[builder(field)]
-    extra_packages: Vec<PackageReq>,
+    extra_packages: Vec<package::Req>,
 
     /// Whether to validate the integrity of installed packages.
     validate_integrity: Option<bool>,
@@ -56,7 +56,7 @@ impl<State> SyncBuilder<'_, State>
 where
     State: sync_builder::State,
 {
-    pub fn add_package(mut self, package: PackageReq) -> Self {
+    pub fn add_package(mut self, package: package::Req) -> Self {
         self.extra_packages.push(package);
         self
     }
@@ -143,7 +143,7 @@ pub enum SyncError {
     Remove(#[from] RemoveError),
     #[error("integrity error for package '{package}'")]
     Integrity {
-        package: PackageName,
+        package: package::Name,
         #[diagnostic_source]
         source: IntegrityError,
     },
@@ -317,7 +317,7 @@ impl<'a, 'b> SyncPackages<'a, 'b> {
                         extra_packages.push(backend.into());
                         if cfg!(target_family = "unix") {
                             let luarocks = unsafe {
-                                PackageReq::new_unchecked(
+                                package::Req::new_unchecked(
                                     "luarocks".into(),
                                     Some(LUAROCKS_VERSION.into()),
                                 )
@@ -442,10 +442,8 @@ where
 #[cfg(all(test, feature = "impure_tests"))]
 mod tests {
     use super::Sync;
-    use crate::{
-        config::ConfigBuilder, lockfile::LockedPackageLockType, package::PackageReq,
-        workspace::Workspace,
-    };
+    use crate::package;
+    use crate::{config::ConfigBuilder, lockfile::LockedPackageLockType, workspace::Workspace};
     use assert_fs::{prelude::PathCopy, TempDir};
     use flaky_test::flaky_test;
     use std::path::PathBuf;
@@ -487,7 +485,7 @@ mod tests {
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         {
             let report = Sync::new(&workspace, &config)
-                .add_package(PackageReq::new("toml-edit".into(), None).unwrap())
+                .add_package(package::Req::new("toml-edit".into(), None).unwrap())
                 .sync()
                 .await
                 .unwrap();
@@ -520,7 +518,7 @@ mod tests {
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         {
             let report = Sync::new(&workspace, &config)
-                .add_package(PackageReq::new("toml-edit".into(), None).unwrap())
+                .add_package(package::Req::new("toml-edit".into(), None).unwrap())
                 .sync()
                 .await
                 .unwrap();
@@ -551,7 +549,7 @@ mod tests {
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         // First sync to create the tree and lockfile
         Sync::new(&workspace, &config)
-            .add_package(PackageReq::new("toml-edit".into(), None).unwrap())
+            .add_package(package::Req::new("toml-edit".into(), None).unwrap())
             .sync()
             .await
             .unwrap();

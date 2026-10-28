@@ -1,10 +1,10 @@
+use lux_lib::package;
 use std::path::{Path, PathBuf};
 
 use clap::Args;
 use lux_lib::{
     config::Config,
     lua_rockspec::RemoteLuaRockspec,
-    package::PackageName,
     package_db::PackageDB,
     upload::{Mode, PreparedRockspec, ProjectUpload, RockspecUpload},
     workspace::Workspace,
@@ -26,7 +26,7 @@ pub struct Upload {
 
     /// Package to upload.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 
     /// Path to a `.rockspec` file to upload.{n}
     /// If not set, uploads the current project or workspace.

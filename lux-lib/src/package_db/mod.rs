@@ -1,3 +1,4 @@
+use crate::package;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
@@ -7,10 +8,7 @@ use crate::{
     manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
     operations::PackageInstallSpec,
-    package::{
-        PackageName, PackageReq, PackageSpec, PackageVersion, RemotePackage, RemotePackageType,
-        RemotePackageTypeFilterSpec,
-    },
+    package::{RemotePackage, RemotePackageType, RemotePackageTypeFilterSpec},
     pipeline::discover::{self, FoundPackage},
     remote_package_source::RemotePackageSource,
     workspace::{self, Workspace},
@@ -50,7 +48,7 @@ impl From<workspace::Error> for Error {
 #[non_exhaustive]
 pub enum SearchError {
     #[error("no rock that matches '{0}' found in the lockfile or in the manifests")]
-    RockNotFound(PackageReq),
+    RockNotFound(package::Req),
     #[error("error when pulling manifest")]
     #[diagnostic(forward(0))]
     Manifest(#[from] manifest::Error),
@@ -114,7 +112,7 @@ impl ManifestProvider {
 impl PackageProvider {
     async fn find(
         &self,
-        package_req: &PackageReq,
+        package_req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Result<Option<RemotePackage>, SearchError> {
         match self {
@@ -155,8 +153,8 @@ impl PackageProvider {
 
     async fn search(
         &self,
-        package_req: &PackageReq,
-    ) -> Result<Vec<(PackageName, Vec<PackageVersion>)>, SearchError> {
+        package_req: &package::Req,
+    ) -> Result<Vec<(package::Name, Vec<package::Version>)>, SearchError> {
         match self {
             Self::Local(packages) => Ok(packages
                 .iter()
@@ -219,7 +217,7 @@ impl PackageProvider {
 pub(crate) struct ClosureProvider {
     cache: ManifestCache,
     rock_server: Url,
-    loaded: Arc<Mutex<HashMap<PackageName, Arc<Closure>>>>,
+    loaded: Arc<Mutex<HashMap<package::Name, Arc<Closure>>>>,
 }
 
 impl ClosureProvider {
@@ -231,7 +229,7 @@ impl ClosureProvider {
         }
     }
 
-    async fn load_closure_for(&self, req: &PackageReq) -> Option<Arc<Closure>> {
+    async fn load_closure_for(&self, req: &package::Req) -> Option<Arc<Closure>> {
         if let Some(closure) = self.loaded.lock().await.get(req.name()) {
             return Some(closure.clone());
         }
@@ -269,7 +267,7 @@ impl ClosureProvider {
             }
         };
         RemotePackage::new(
-            PackageSpec::new(spec.package().clone(), spec.version().clone()),
+            package::Spec::new(spec.package().clone(), spec.version().clone()),
             source,
             None,
         )
@@ -277,7 +275,7 @@ impl ClosureProvider {
 
     async fn find(
         &self,
-        req: &PackageReq,
+        req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Option<RemotePackage> {
         let closure = self.load_closure_for(req).await?;
@@ -418,7 +416,7 @@ impl PackageDB {
     )]
     pub(crate) async fn find(
         &self,
-        package_req: &PackageReq,
+        package_req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
     ) -> Result<RemotePackage, SearchError> {
         for provider in &self.providers {
@@ -455,8 +453,8 @@ impl PackageDB {
     /// Search for all packages that match the requirement.
     pub async fn search(
         &self,
-        package_req: &PackageReq,
-    ) -> Result<Vec<(PackageName, Vec<PackageVersion>)>, SearchError> {
+        package_req: &package::Req,
+    ) -> Result<Vec<(package::Name, Vec<package::Version>)>, SearchError> {
         let mut results = Vec::new();
         for provider in &self.providers {
             results.extend(provider.search(package_req).await?);
@@ -465,7 +463,10 @@ impl PackageDB {
     }
 
     /// Find the latest version for a package by name.
-    pub(crate) async fn latest_version(&self, rock_name: &PackageName) -> Option<PackageVersion> {
+    pub(crate) async fn latest_version(
+        &self,
+        rock_name: &package::Name,
+    ) -> Option<package::Version> {
         self.latest_match(&rock_name.clone().into(), None)
             .await
             .map(|result| result.version().clone())
@@ -474,9 +475,9 @@ impl PackageDB {
     /// Find the latest package that matches the requirement.
     pub async fn latest_match(
         &self,
-        package_req: &PackageReq,
+        package_req: &package::Req,
         filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<PackageSpec> {
+    ) -> Option<package::Spec> {
         match self.find(package_req, filter).await {
             Ok(result) => Some(result.spec),
             Err(_) => None,

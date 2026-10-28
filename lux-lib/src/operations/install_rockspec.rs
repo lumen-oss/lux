@@ -1,3 +1,4 @@
+use crate::package;
 use bon::Builder;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -11,7 +12,6 @@ use crate::{
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     operations::PackageInstallSpec,
-    package::{PackageName, PackageReq},
     package_db::{self, PackageDB},
     pipeline::discover::FoundPackage,
     rockspec::{LuaVersionCompatibility, Rockspec},
@@ -39,7 +39,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     Build(#[from] Box<build::Error>),
     #[error("package '{0}' was not installed")]
-    PackageNotInstalled(PackageName),
+    PackageNotInstalled(package::Name),
 }
 
 impl From<install_packages::Error> for InstallRockspecError {
@@ -94,12 +94,14 @@ impl<
         let root = FoundPackage::from_rockspec(rockspec);
         let package_db = PackageDB::from_config(config).await?.with_local(vec![root]);
 
-        let install_spec =
-            PackageInstallSpec::new(PackageReq::from(name.clone()), tree::EntryType::Entrypoint)
-                .build_behaviour(BuildBehaviour::Force)
-                .pin(pin)
-                .opt(OptState::Required)
-                .build();
+        let install_spec = PackageInstallSpec::new(
+            package::Req::from(name.clone()),
+            tree::EntryType::Entrypoint,
+        )
+        .build_behaviour(BuildBehaviour::Force)
+        .pin(pin)
+        .opt(OptState::Required)
+        .build();
 
         InstallPackages::new(config, tree)
             .package_db(package_db)

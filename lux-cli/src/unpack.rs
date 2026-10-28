@@ -1,7 +1,8 @@
+use lux_lib::package;
 use std::{fs::File, io::Cursor, path::PathBuf};
 
 use clap::Args;
-use lux_lib::{config::Config, operations, package::PackageReq};
+use lux_lib::{config::Config, operations};
 
 use miette::{IntoDiagnostic, Result};
 
@@ -15,7 +16,7 @@ pub struct Unpack {
 
 #[derive(Args)]
 pub struct UnpackRemote {
-    pub package_req: PackageReq,
+    pub package_req: package::Req,
     /// The directory to unpack to
     pub destination: Option<PathBuf>,
 }

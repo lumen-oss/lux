@@ -1,6 +1,7 @@
 //! Functions for interacting with global state (currently installed packages user-wide,
 //! getting all packages from the manifest, etc.)
 
+use lux_lib::package;
 use std::{collections::HashMap, path::PathBuf};
 
 use itertools::Itertools;
@@ -11,7 +12,6 @@ use lux_lib::{
     lockfile::LockedPackageId,
     lua::lua_runtime,
     operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
-    package::{PackageName, PackageReq},
     package_db::PackageDB,
     rockspec::lua_dependency::DependencyType,
     tree::{RockMatches, Tree},
@@ -133,7 +133,7 @@ impl TypedUserData for OperationsModule {
                         packages
                             .into_iter()
                             .map(|s| s.parse())
-                            .collect::<Result<Vec<PackageReq>, _>>()
+                            .collect::<Result<Vec<package::Req>, _>>()
                     })
                     .transpose()
                     .into_lua_err()?;
@@ -396,7 +396,7 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
         .collect())
 }
 
-fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LockedPackageId> {
+fn deps_to_ids(deps: &DependencyType<package::Name>, tree: &Tree) -> Vec<LockedPackageId> {
     let names = match deps {
         DependencyType::Regular(d) | DependencyType::Build(d) | DependencyType::Test(d) => d,
         DependencyType::External(_) => &Vec::default(),
@@ -405,7 +405,7 @@ fn deps_to_ids(deps: &DependencyType<PackageName>, tree: &Tree) -> Vec<LockedPac
     names
         .iter()
         .filter_map(|name| {
-            let req = PackageReq::parse(name.to_string().as_str()).ok()?;
+            let req = package::Req::parse(name.to_string().as_str()).ok()?;
             tree.match_rocks(&req).ok()
         })
         .flat_map(|matches| match matches {

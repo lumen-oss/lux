@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::{
     collections::BTreeMap,
     io,
@@ -14,7 +15,6 @@ use lux_lib::{
     lua_rockspec::RemoteLuaRockspec,
     lua_version::LuaVersion,
     operations::{InstallProject, PackageInstallSpec},
-    package::{PackageName, PackageReq},
     package_db::PackageDB,
     pipeline::build_local::Build,
     tree::{self, FlatDistTree, InstallTree},
@@ -138,7 +138,7 @@ pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
 }
 
 async fn install_project(
-    package: Option<&PackageName>,
+    package: Option<&package::Name>,
     staging_dir: &TempDir,
     config: &Config,
 ) -> Result<(LockedPackage, FlatDistTree)> {
@@ -159,7 +159,7 @@ async fn install_project(
 }
 
 async fn install_package(
-    package: &PackageReq,
+    package: &package::Req,
     staging_dir: &TempDir,
     config: &Config,
 ) -> Result<(LockedPackage, FlatDistTree)> {

@@ -1,3 +1,4 @@
+use crate::package;
 use std::{ops::Deref, path::PathBuf};
 
 use bon::Builder;
@@ -12,7 +13,6 @@ use crate::{
     lua_installation::{self, LuaBinary},
     lua_rockspec::LuaVersionError,
     operations::run_lua::{self, RunLua},
-    package::PackageName,
     path::{self, LuaEnvironment, Paths},
     project::project_toml::LocalProjectTomlValidationError,
     tree::InstallTree,
@@ -94,7 +94,7 @@ pub enum RunError {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Run<'a> {
     workspace: &'a Workspace,
-    package: Option<PackageName>,
+    package: Option<package::Name>,
     dir: Option<PathBuf>,
     args: &'a [String],
     config: &'a Config,

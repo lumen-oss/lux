@@ -1,3 +1,4 @@
+use crate::package;
 use std::io;
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
         WorkspaceLockfile,
     },
     lua_version::{LuaVersion, LuaVersionUnset},
-    package::{PackageReq, RockConstraintUnsatisfied},
+    package::RockConstraintUnsatisfied,
     package_db::{self, PackageDB},
     remote_package_source::RemotePackageSource,
     tree::{self, InstallTree, Tree},
@@ -80,15 +81,15 @@ pub struct Update<'a> {
 
     /// Packages to update.
     #[builder(field)]
-    packages: Option<Vec<PackageReq>>,
+    packages: Option<Vec<package::Req>>,
 
     /// Test dependencies to update.
     #[builder(field)]
-    test_dependencies: Option<Vec<PackageReq>>,
+    test_dependencies: Option<Vec<package::Req>>,
 
     /// Build dependencies to update.
     #[builder(field)]
-    build_dependencies: Option<Vec<PackageReq>>,
+    build_dependencies: Option<Vec<package::Req>>,
 
     /// Workspace to use for resolving the dependency tree.
     /// Uses the current workspace if None.
@@ -101,15 +102,15 @@ pub struct Update<'a> {
 }
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
-    pub fn packages(mut self, packages: Option<Vec<PackageReq>>) -> Self {
+    pub fn packages(mut self, packages: Option<Vec<package::Req>>) -> Self {
         self.packages = packages;
         self
     }
-    pub fn build_dependencies(mut self, packages: Option<Vec<PackageReq>>) -> Self {
+    pub fn build_dependencies(mut self, packages: Option<Vec<package::Req>>) -> Self {
         self.build_dependencies = packages;
         self
     }
-    pub fn test_dependencies(mut self, packages: Option<Vec<PackageReq>>) -> Self {
+    pub fn test_dependencies(mut self, packages: Option<Vec<package::Req>>) -> Self {
         self.test_dependencies = packages;
         self
     }
@@ -216,7 +217,7 @@ async fn update_dependency_tree(
     lock_type: LockedPackageLockType,
     package_db: PackageDB,
     config: &Config,
-    packages: &Option<Vec<PackageReq>>,
+    packages: &Option<Vec<package::Req>>,
 ) -> Result<Vec<LockedPackage>, UpdateError> {
     let lockfile = tree.lockfile()?;
     let dependencies = updatable_packages(&lockfile)
@@ -232,8 +233,8 @@ async fn update_dependency_tree(
 }
 
 fn is_included(
-    (pkg, _): &(LockedPackage, PackageReq),
-    package_reqs: &Option<Vec<PackageReq>>,
+    (pkg, _): &(LockedPackage, package::Req),
+    package_reqs: &Option<Vec<package::Req>>,
 ) -> bool {
     package_reqs.is_none()
         || package_reqs.as_ref().is_some_and(|packages| {
@@ -259,7 +260,7 @@ async fn update_install_tree(
 }
 
 async fn update(
-    packages: Vec<(LockedPackage, PackageReq)>,
+    packages: Vec<(LockedPackage, package::Req)>,
     package_db: PackageDB,
     tree: &Tree,
     lockfile: &Lockfile<ReadOnly>,
@@ -300,7 +301,7 @@ async fn update(
     }
 }
 
-fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, PackageReq)> {
+fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, package::Req)> {
     lockfile
         .rocks()
         .values()
@@ -323,7 +324,7 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, Pack
 }
 
 fn mk_install_spec(
-    (package, req): &(LockedPackage, PackageReq),
+    (package, req): &(LockedPackage, package::Req),
     lockfile: &Lockfile<ReadOnly>,
 ) -> PackageInstallSpec {
     let entry_type = if lockfile.is_entrypoint(&package.id()) {

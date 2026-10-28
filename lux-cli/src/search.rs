@@ -1,3 +1,4 @@
+use lux_lib::package;
 use std::collections::HashMap;
 
 use clap::Args;
@@ -5,17 +6,13 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
-use lux_lib::{
-    config::Config,
-    package::{PackageName, PackageReq, PackageVersion},
-    package_db::PackageDB,
-};
+use lux_lib::{config::Config, package_db::PackageDB};
 
 use crate::args::OutputFormat;
 
 #[derive(Args)]
 pub struct Search {
-    lua_package_req: PackageReq,
+    lua_package_req: package::Req,
     // TODO(vhyrro): Add options.
     #[arg(long, default_value = "text", value_enum, ignore_case = true)]
     output_format: OutputFormat,
@@ -32,7 +29,7 @@ pub async fn search(data: Search, config: Config) -> Result<()> {
 
     match data.output_format {
         OutputFormat::Json => {
-            let rock_to_version_map: HashMap<PackageName, Vec<PackageVersion>> =
+            let rock_to_version_map: HashMap<package::Name, Vec<package::Version>> =
                 HashMap::from_iter(result);
             println!(
                 "{}",

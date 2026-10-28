@@ -1,3 +1,4 @@
+use crate::package;
 use itertools::Itertools;
 
 use miette::Diagnostic;
@@ -12,7 +13,6 @@ use crate::lua_version::LuaVersion;
 use crate::{
     config::{self, Config, ConfigBuilder},
     lua_rockspec::per_platform_from_intermediate,
-    package::PackageReq,
     project::{project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
 };
@@ -58,11 +58,11 @@ pub enum TestSpec {
 pub(crate) enum ValidatedTestSpec {
     Busted {
         spec: BustedTestSpec,
-        dependencies: Vec<PackageReq>,
+        dependencies: Vec<package::Req>,
     },
     BustedNlua {
         spec: BustedTestSpec,
-        dependencies: Vec<PackageReq>,
+        dependencies: Vec<package::Req>,
     },
     Tiniest,
     Command(CommandTestSpec),
@@ -70,7 +70,7 @@ pub(crate) enum ValidatedTestSpec {
 }
 
 impl TestSpec {
-    pub(crate) fn test_dependencies(&self, project: &Project) -> Vec<PackageReq> {
+    pub(crate) fn test_dependencies(&self, project: &Project) -> Vec<package::Req> {
         self.to_validated(project)
             .ok()
             .iter()
@@ -90,13 +90,13 @@ impl TestSpec {
             .find(|dep| dep.name().to_string() == "busted");
         let busted = busted_dependency
             .map(|dep| dep.package_req.clone())
-            .unwrap_or_else(|| unsafe { PackageReq::new_unchecked("busted".into(), None) });
+            .unwrap_or_else(|| unsafe { package::Req::new_unchecked("busted".into(), None) });
         let nlua_dependency = test_dependencies
             .iter()
             .find(|dep| dep.name().to_string() == "nlua");
         let nlua = nlua_dependency
             .map(|dep| dep.package_req.clone())
-            .unwrap_or_else(|| unsafe { PackageReq::new_unchecked("nlua".into(), None) });
+            .unwrap_or_else(|| unsafe { package::Req::new_unchecked("nlua".into(), None) });
         let is_busted = project_root.join(".busted").is_file() || busted_dependency.is_some();
         match self {
             Self::AutoDetect if is_busted => {
@@ -181,7 +181,7 @@ impl ValidatedTestSpec {
         }
     }
 
-    fn test_dependencies(&self) -> Vec<PackageReq> {
+    fn test_dependencies(&self) -> Vec<package::Req> {
         match self {
             Self::Busted {
                 spec: _,

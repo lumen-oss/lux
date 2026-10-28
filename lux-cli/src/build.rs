@@ -1,10 +1,10 @@
 use clap::Args;
+use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
     drivers::sync::{Sync, SyncMode, TargetSet},
     lockfile::LockedPackage,
-    package::PackageName,
     workspace::Workspace,
 };
 use miette::Result;
@@ -21,7 +21,7 @@ pub struct Build {
 
     /// Package to build.
     #[arg(short, long, visible_short_alias = 'p')]
-    pub(crate) package: Option<PackageName>,
+    pub(crate) package: Option<package::Name>,
 }
 
 /// Returns `Some` if the `only_deps` arg is set to `false`.
