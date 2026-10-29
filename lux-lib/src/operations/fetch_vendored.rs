@@ -1,10 +1,10 @@
 use crate::package;
+use crate::rockspec;
 use std::path::{Path, PathBuf};
 
 use crate::{
     fs,
     lockfile::RemotePackageSourceUrl,
-    lua_rockspec::{self, RemoteLuaRockspec},
     operations::{DownloadedRockspec, RemoteRockDownload},
     package_db::{PackageDB, SearchError},
     remote_package_source::RemotePackageSource,
@@ -35,7 +35,7 @@ pub enum FetchVendoredError {
     #[error("could not parse vendored RockSpec '{rockspec_path}'")]
     ParseRockspec {
         rockspec_path: String,
-        source: Box<lua_rockspec::Error>,
+        source: Box<rockspec::lua::Error>,
     },
     #[error("could not find a source or .rock archive for {0} in vendor directory {1}.")]
     PackageNotFound(package::Spec, String),
@@ -111,7 +111,7 @@ async fn do_fetch_vendored_rock(
 async fn load_vendored_rockspec(
     vendor_dir: &Path,
     package: &package::Spec,
-) -> Result<RemoteLuaRockspec, FetchVendoredError> {
+) -> Result<rockspec::lua::Remote, FetchVendoredError> {
     let rockspec_path =
         vendor_dir.join(format!("{}-{}.rockspec", package.name(), package.version()));
     if !rockspec_path.is_file() {
@@ -121,7 +121,7 @@ async fn load_vendored_rockspec(
         ));
     }
     let rockspec_content = fs::tokio::read_to_string(&rockspec_path).await?;
-    let rockspec = RemoteLuaRockspec::new(&rockspec_content).map_err(|err| {
+    let rockspec = rockspec::lua::Remote::new(&rockspec_content).map_err(|err| {
         FetchVendoredError::ParseRockspec {
             rockspec_path: rockspec_path.to_slash_lossy().to_string(),
             source: Box::new(err),

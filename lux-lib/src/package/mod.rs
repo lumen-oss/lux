@@ -14,11 +14,11 @@ use version::{HasModRev, ParseError, ReqError, ReqToVersionError};
 
 pub(crate) use version::SpecRevIterator;
 
+use crate::rockspec;
 use crate::{
     lockfile::RemotePackageSourceUrl,
-    lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue},
     remote_package_source::RemotePackageSource,
-    rockspec::lua_dependency::LuaDependencySpec,
+    rockspec::LuaDependencySpec,
     variables::{GetVariableError, HasVariables},
 };
 #[derive(Clone, Debug)]
@@ -130,28 +130,28 @@ impl From<Name> for Req {
 pub(crate) struct Dependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
 pub(crate) struct BuildDependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
 
-impl DisplayAsLuaKV for Dependencies<'_> {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
+impl rockspec::DisplayAsLuaKV for Dependencies<'_> {
+    fn display_lua(&self) -> rockspec::DisplayLuaKV {
+        rockspec::DisplayLuaKV {
             key: "dependencies".to_string(),
-            value: DisplayLuaValue::List(
+            value: rockspec::DisplayLuaValue::List(
                 self.0
                     .iter()
-                    .map(|req| DisplayLuaValue::String(req.to_string()))
+                    .map(|req| rockspec::DisplayLuaValue::String(req.to_string()))
                     .collect(),
             ),
         }
     }
 }
 
-impl DisplayAsLuaKV for BuildDependencies<'_> {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
+impl rockspec::DisplayAsLuaKV for BuildDependencies<'_> {
+    fn display_lua(&self) -> rockspec::DisplayLuaKV {
+        rockspec::DisplayLuaKV {
             key: "build_dependencies".to_string(),
-            value: DisplayLuaValue::List(
+            value: rockspec::DisplayLuaValue::List(
                 self.0
                     .iter()
-                    .map(|req| DisplayLuaValue::String(req.to_string()))
+                    .map(|req| rockspec::DisplayLuaValue::String(req.to_string()))
                     .collect(),
             ),
         }

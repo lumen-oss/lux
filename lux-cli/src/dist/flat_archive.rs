@@ -1,4 +1,5 @@
 use lux_lib::package;
+use lux_lib::rockspec;
 use std::{
     collections::BTreeMap,
     io,
@@ -12,7 +13,6 @@ use lux_lib::{
     drivers::install_packages::InstallPackages,
     lockfile::LockedPackage,
     lua,
-    lua_rockspec::RemoteLuaRockspec,
     operations::{InstallProject, PackageInstallSpec},
     package_db::PackageDB,
     pipeline::build_local::Build,
@@ -196,7 +196,7 @@ async fn install_rockspec(
         .unwrap_or("".into())
         .as_str()
     {
-        "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
+        "rockspec" => Ok(rockspec::lua::Remote::new(&content)?),
         _ => Err(miette!(
             help = "for example '/path/to/package-1.0.0-1.rockpec' or package@1.0.0",
             "expected a path to a .rockspec or a package requirement."

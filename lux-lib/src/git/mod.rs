@@ -3,19 +3,15 @@ use std::fmt::Display;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::{
-    fs,
-    git::url::RemoteGitUrl,
-    lua_rockspec::{DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue},
-};
+use crate::{fs, git::url::RemoteGitUrl, rockspec};
 
 pub mod shorthand;
 pub mod url;
 pub mod utils;
 
-impl DisplayAsLuaValue for RemoteGitUrl {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::String(self.to_string())
+impl rockspec::DisplayAsLuaValue for RemoteGitUrl {
+    fn display_lua_value(&self) -> rockspec::DisplayLuaValue {
+        rockspec::DisplayLuaValue::String(self.to_string())
     }
 }
 
@@ -49,29 +45,29 @@ pub struct GitSource {
     pub git_ref: Option<GitRef>,
 }
 
-impl DisplayAsLuaKV for GitSource {
-    fn display_lua(&self) -> DisplayLuaKV {
-        let mut fields = vec![DisplayLuaKV {
+impl rockspec::DisplayAsLuaKV for GitSource {
+    fn display_lua(&self) -> rockspec::DisplayLuaKV {
+        let mut fields = vec![rockspec::DisplayLuaKV {
             key: "url".to_string(),
-            value: DisplayLuaValue::String(self.url.to_string()),
+            value: rockspec::DisplayLuaValue::String(self.url.to_string()),
         }];
 
         if let Some(git_ref) = &self.git_ref {
             match git_ref {
-                GitRef::Tag(tag) => fields.push(DisplayLuaKV {
+                GitRef::Tag(tag) => fields.push(rockspec::DisplayLuaKV {
                     key: "tag".to_string(),
-                    value: DisplayLuaValue::String(tag.clone()),
+                    value: rockspec::DisplayLuaValue::String(tag.clone()),
                 }),
-                GitRef::Branch(branch) => fields.push(DisplayLuaKV {
+                GitRef::Branch(branch) => fields.push(rockspec::DisplayLuaKV {
                     key: "branch".to_string(),
-                    value: DisplayLuaValue::String(branch.clone()),
+                    value: rockspec::DisplayLuaValue::String(branch.clone()),
                 }),
             }
         }
 
-        DisplayLuaKV {
+        rockspec::DisplayLuaKV {
             key: "source".to_string(),
-            value: DisplayLuaValue::Table(fields),
+            value: rockspec::DisplayLuaValue::Table(fields),
         }
     }
 }

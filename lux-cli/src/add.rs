@@ -3,7 +3,7 @@ use lux_lib::package;
 use lux_lib::{
     config::Config,
     package_db::PackageDB,
-    rockspec::lua_dependency::{self},
+    rockspec::{DependencyType, LuaDependencyType},
     workspace::Workspace,
 };
 
@@ -56,14 +56,11 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
 
     if !data.package_req.is_empty() {
         project
-            .add(
-                lua_dependency::DependencyType::Regular(dependencies.iter().collect()),
-                &db,
-            )
+            .add(DependencyType::Regular(dependencies.iter().collect()), &db)
             .await?;
         project
             .add_git(
-                lua_dependency::LuaDependencyType::Regular(git_dependencies.iter().collect()),
+                LuaDependencyType::Regular(git_dependencies.iter().collect()),
                 &config,
             )
             .await?;
@@ -77,14 +74,11 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
                 PackageReqOrGitShorthand::GitShorthand(url) => Either::Right(url.clone()),
             });
         project
-            .add(
-                lua_dependency::DependencyType::Build(dependencies.iter().collect()),
-                &db,
-            )
+            .add(DependencyType::Build(dependencies.iter().collect()), &db)
             .await?;
         project
             .add_git(
-                lua_dependency::LuaDependencyType::Build(git_dependencies.iter().collect()),
+                LuaDependencyType::Build(git_dependencies.iter().collect()),
                 &config,
             )
             .await?;
@@ -98,14 +92,11 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
                 PackageReqOrGitShorthand::GitShorthand(url) => Either::Right(url.clone()),
             });
         project
-            .add(
-                lua_dependency::DependencyType::Test(dependencies.iter().collect()),
-                &db,
-            )
+            .add(DependencyType::Test(dependencies.iter().collect()), &db)
             .await?;
         project
             .add_git(
-                lua_dependency::LuaDependencyType::Test(git_dependencies.iter().collect()),
+                LuaDependencyType::Test(git_dependencies.iter().collect()),
                 &config,
             )
             .await?;

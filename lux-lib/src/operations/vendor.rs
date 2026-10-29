@@ -1,4 +1,5 @@
 use crate::package;
+use crate::rockspec;
 use std::{
     collections::HashMap,
     io::{self, Cursor},
@@ -22,7 +23,6 @@ use crate::{
     config::Config,
     fs,
     lockfile::LockedPackageLockType,
-    lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::{self, PackageInstallSpec, UnpackError},
     package_db::{self, PackageDB},
     pipeline::{
@@ -30,7 +30,6 @@ use crate::{
         resolve::{self, luarocks_build_backend_name, ResolvePackageDependencies},
         Artifacts,
     },
-    project::project_toml::LocalProjectTomlValidationError,
     rockspec::Rockspec,
     tree::EntryType,
     workspace::{self, Workspace},
@@ -42,7 +41,7 @@ pub enum VendorTarget {
     Workspace(Workspace),
 
     /// Vendor dependencies of a Lua RockSpec
-    Rockspec(RemoteLuaRockspec),
+    Rockspec(rockspec::lua::Remote),
 }
 
 /// Vendor a project's dependencies into the specified directory at `<vendor_dir>`.
@@ -73,7 +72,7 @@ pub enum VendorError {
     Workspace(#[from] workspace::Error),
     #[error("project validation failed")]
     #[diagnostic(forward(0))]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
+    LocalProjectTomlValidation(#[from] rockspec::toml::Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     PackageDB(#[from] package_db::Error),
@@ -183,7 +182,10 @@ fn cargo_dependencies(
         .filter_map(|package| {
             let rockspec = &package.rockspec;
             match rockspec.build().current_platform().build_backend {
-                Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_)) => Some((
+                Some(
+                    rockspec::build::BuildBackendSpec::RustMlua(_)
+                    | rockspec::build::BuildBackendSpec::RustBinary(_),
+                ) => Some((
                     package.package.spec.to_package(),
                     rockspec.source().current_platform().unpack_dir.clone(),
                     rockspec.build().current_platform().copy_directories.clone(),
@@ -273,7 +275,7 @@ fn push_dependencies<R: Rockspec>(
     lock_type: &LockedPackageLockType,
     rockspec: &R,
     install_specs: &mut Vec<PackageInstallSpec>,
-) -> Result<(), LocalProjectTomlValidationError> {
+) -> Result<(), rockspec::toml::Error> {
     let mut dependencies: Vec<package::Req> = match lock_type {
         LockedPackageLockType::Regular => rockspec
             .dependencies()
@@ -436,13 +438,19 @@ fn is_cargo_build_backend(target: &VendorTarget) -> bool {
             project.toml().into_local().is_ok_and(|toml| {
                 matches!(
                     toml.build().current_platform().build_backend.to_owned(),
-                    Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_))
+                    Some(
+                        rockspec::build::BuildBackendSpec::RustMlua(_)
+                            | rockspec::build::BuildBackendSpec::RustBinary(_)
+                    )
                 )
             })
         }),
         VendorTarget::Rockspec(rockspec) => matches!(
             rockspec.build().current_platform().build_backend.to_owned(),
-            Some(BuildBackendSpec::RustMlua(_) | BuildBackendSpec::RustBinary(_))
+            Some(
+                rockspec::build::BuildBackendSpec::RustMlua(_)
+                    | rockspec::build::BuildBackendSpec::RustBinary(_)
+            )
         ),
     }
 }
@@ -520,7 +528,7 @@ mod tests {
     }
 
     fn make_downloaded_package(
-        rockspec: RemoteLuaRockspec,
+        rockspec: rockspec::lua::Remote,
         source: RemotePackageSource,
         artifact: PackageSource,
         temp_dir: Option<TempDir>,
@@ -563,9 +571,9 @@ mod tests {
 
         let src_dir = TempDir::new().unwrap();
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
-        let rockspec = RemoteLuaRockspec::from_source_spec(
+        let rockspec = rockspec::lua::Remote::from_source_spec(
             "rockspec-only-url@1.0.0".parse().unwrap(),
-            crate::lua_rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
+            rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
             Vec::new(),
             HashMap::new(),
         );
@@ -606,9 +614,9 @@ mod tests {
 
         let src_dir = TempDir::new().unwrap();
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
-        let rockspec = RemoteLuaRockspec::from_source_spec(
+        let rockspec = rockspec::lua::Remote::from_source_spec(
             "rockspec-only-url@1.0.0".parse().unwrap(),
-            crate::lua_rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
+            rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
             Vec::new(),
             HashMap::new(),
         );

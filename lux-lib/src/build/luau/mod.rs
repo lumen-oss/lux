@@ -3,7 +3,7 @@ use std::path::Path;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::{fs, lua_rockspec::LuaModule};
+use crate::{fs, rockspec};
 
 /// Errors from transpiling Luau source to Lua.
 #[derive(Error, Debug, Diagnostic)]
@@ -22,7 +22,7 @@ pub enum Error {
 /// and prepending any Luau standard library shims it requires.
 pub(crate) async fn transpile_luau_to_lua_module(
     source: &Path,
-    target_module: &LuaModule,
+    target_module: &rockspec::build::Module,
     target_dir: &Path,
 ) -> Result<(), Error> {
     let luau_content = fs::tokio::read_to_string(source).await?;
@@ -50,7 +50,7 @@ mod tests {
         )
         .unwrap();
         let target = temp.path().join("out");
-        let module: LuaModule = "greeting".parse().unwrap();
+        let module: rockspec::build::Module = "greeting".parse().unwrap();
         transpile_luau_to_lua_module(&source, &module, &target)
             .await
             .unwrap();

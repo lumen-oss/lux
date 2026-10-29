@@ -1,4 +1,5 @@
 use crate::package;
+use crate::rockspec;
 use std::{ops::Deref, path::PathBuf};
 
 use bon::Builder;
@@ -11,10 +12,8 @@ use tokio::process::Command;
 use crate::{
     config::Config,
     lua,
-    lua_rockspec::LuaVersionError,
     operations::run_lua::{self, RunLua},
     path::{self, LuaEnvironment, Paths},
-    project::project_toml::LocalProjectTomlValidationError,
     tree::InstallTree,
     workspace::{self, TreeError, Workspace},
 };
@@ -69,11 +68,11 @@ impl Deref for RunCommand {
 #[non_exhaustive]
 pub enum RunError {
     #[diagnostic(transparent)]
-    Toml(#[from] LocalProjectTomlValidationError),
+    Toml(#[from] rockspec::toml::Error),
     #[diagnostic(transparent)]
     RunCommand(#[from] RunCommandError),
     #[diagnostic(transparent)]
-    LuaVersion(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
     #[diagnostic(transparent)]
     RunLua(#[from] RunLuaError),
     #[error("failed to detect or install a luau runtime")]

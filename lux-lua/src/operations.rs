@@ -13,7 +13,7 @@ use lux_lib::{
     lua,
     operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
     package_db::PackageDB,
-    rockspec::lua_dependency::DependencyType,
+    rockspec::DependencyType,
     tree::{RockMatches, Tree},
 };
 use mlua::prelude::*;

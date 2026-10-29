@@ -2,10 +2,10 @@ use clap::Args;
 use inquire::{Confirm, Select};
 use itertools::Itertools;
 use lux_lib::package;
+use lux_lib::rockspec;
 use lux_lib::{
     config::Config,
     lockfile::{LockedPackage, OptState, PinnedState},
-    lua_rockspec::RemoteLuaRockspec,
     rockspec::Rockspec,
     tree::{InstallTree, RockMatches, Tree},
 };
@@ -155,7 +155,7 @@ async fn open_homepage(pkg: LockedPackage, tree: &Tree) -> Result<()> {
 fn get_homepage(pkg: &LockedPackage, tree: &Tree) -> Result<Option<Url>> {
     let rockspec_content =
         std::fs::read_to_string(tree.layout_for(pkg.spec()).rockspec_path()).into_diagnostic()?;
-    let rockspec = RemoteLuaRockspec::new(&rockspec_content)?;
+    let rockspec = rockspec::lua::Remote::new(&rockspec_content)?;
     Ok(rockspec.description().homepage.clone())
 }
 

@@ -9,7 +9,7 @@ use serde::{de::Error as _, ser::Serializer, Deserialize, Deserializer, Serializ
 use thiserror::Error;
 use url::Url;
 
-use crate::lua_rockspec::{DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue};
+use crate::rockspec;
 
 /// The wally client version advertised when downloading package contents.
 /// The registry rejects requests without a sufficiently recent `Wally-Version` header.
@@ -264,11 +264,11 @@ pub(crate) struct PlaceInfo {
     pub(crate) server_packages: Option<String>,
 }
 
-impl DisplayAsLuaKV for Req {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
+impl rockspec::DisplayAsLuaKV for Req {
+    fn display_lua(&self) -> rockspec::DisplayLuaKV {
+        rockspec::DisplayLuaKV {
             key: "wally".to_string(),
-            value: DisplayLuaValue::String(self.to_string()),
+            value: rockspec::DisplayLuaValue::String(self.to_string()),
         }
     }
 }

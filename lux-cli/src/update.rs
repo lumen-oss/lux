@@ -3,7 +3,7 @@ use itertools::Itertools;
 use lux_lib::package;
 
 use lux_lib::package_db::PackageDB;
-use lux_lib::rockspec::lua_dependency::LuaDependencyType;
+use lux_lib::rockspec::LuaDependencyType;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config::Config, operations};
 use miette::{miette, Context, Result};

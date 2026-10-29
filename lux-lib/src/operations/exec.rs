@@ -1,4 +1,5 @@
 use crate::package;
+use crate::rockspec;
 use std::io;
 use tokio::process::Command;
 
@@ -7,7 +8,6 @@ use crate::{
     config::Config,
     drivers::install_packages::{self, InstallPackages},
     lua,
-    lua_rockspec::LuaVersionError,
     operations::{BuildWorkspace, BuildWorkspaceError},
     package_db::{self, PackageDB},
     path::{self, Paths},
@@ -90,7 +90,7 @@ pub enum ExecError {
     Paths(#[from] path::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionError(#[from] LuaVersionError),
+    LuaVersionError(#[from] rockspec::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     BuildWorkspace(#[from] Box<BuildWorkspaceError>),

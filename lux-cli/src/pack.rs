@@ -1,4 +1,5 @@
 use lux_lib::package;
+use lux_lib::rockspec;
 use std::path::{Path, PathBuf};
 
 use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace_member};
@@ -9,7 +10,6 @@ use lux_lib::{
     config::Config,
     drivers::install_packages::InstallPackages,
     lua,
-    lua_rockspec::RemoteLuaRockspec,
     operations::{self, PackageInstallSpec},
     package_db::PackageDB,
     pipeline::build_local::Build,
@@ -174,7 +174,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .unwrap_or("".into())
                 .as_str()
             {
-                "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
+                "rockspec" => Ok(rockspec::lua::Remote::new(&content)?),
                 _ => Err(miette!(
                     "expected a path to a .rockspec or a package requirement."
                 )),

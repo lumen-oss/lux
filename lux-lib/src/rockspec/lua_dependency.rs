@@ -3,9 +3,7 @@ use std::{collections::HashMap, convert::Infallible, fmt::Display, str::FromStr}
 
 use crate::{
     lockfile::{OptState, PinnedState},
-    lua_rockspec::{
-        ExternalDependencySpec, PartialOverride, PerPlatform, PlatformOverridable, RockSourceSpec,
-    },
+    rockspec,
 };
 use miette::Diagnostic;
 use serde::{Deserialize, Deserializer};
@@ -25,7 +23,7 @@ pub struct LuaDependencySpec {
     pub(crate) package_req: package::Req,
     pub(crate) pin: PinnedState,
     pub(crate) opt: OptState,
-    pub(crate) source: Option<RockSourceSpec>,
+    pub(crate) source: Option<rockspec::RockSourceSpec>,
 }
 
 impl LuaDependencySpec {
@@ -33,7 +31,7 @@ impl LuaDependencySpec {
         package_req: package::Req,
         pin: PinnedState,
         opt: OptState,
-        source: Option<RockSourceSpec>,
+        source: Option<rockspec::RockSourceSpec>,
     ) -> Self {
         Self {
             package_req,
@@ -52,7 +50,7 @@ impl LuaDependencySpec {
     pub fn opt(&self) -> &OptState {
         &self.opt
     }
-    pub fn source(&self) -> &Option<RockSourceSpec> {
+    pub fn source(&self) -> &Option<rockspec::RockSourceSpec> {
         &self.source
     }
     pub fn into_package_req(self) -> package::Req {
@@ -118,7 +116,7 @@ impl Display for LuaDependencySpec {
 /// Override `base_deps` with `override_deps`
 /// - Adds missing dependencies
 /// - Replaces dependencies with the same name
-impl PartialOverride for Vec<LuaDependencySpec> {
+impl rockspec::PartialOverride for Vec<LuaDependencySpec> {
     type Err = Infallible;
 
     fn apply_overrides(&self, override_vec: &Self) -> Result<Self, Self::Err> {
@@ -136,15 +134,15 @@ impl PartialOverride for Vec<LuaDependencySpec> {
     }
 }
 
-impl PlatformOverridable for Vec<LuaDependencySpec> {
+impl rockspec::PlatformOverridable for Vec<LuaDependencySpec> {
     type Err = Infallible;
 
-    fn on_nil<T>() -> Result<super::PerPlatform<T>, <Self as PlatformOverridable>::Err>
+    fn on_nil<T>() -> Result<super::PerPlatform<T>, <Self as rockspec::PlatformOverridable>::Err>
     where
-        T: PlatformOverridable,
+        T: rockspec::PlatformOverridable,
         T: Default,
     {
-        Ok(PerPlatform::default())
+        Ok(rockspec::PerPlatform::default())
     }
 }
 
@@ -169,7 +167,7 @@ pub enum DependencyType<T> {
     Regular(Vec<T>),
     Build(Vec<T>),
     Test(Vec<T>),
-    External(HashMap<String, ExternalDependencySpec>),
+    External(HashMap<String, rockspec::ExternalDependencySpec>),
 }
 
 impl<T> DependencyType<T> {
@@ -193,6 +191,7 @@ pub enum LuaDependencyType<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::rockspec::PartialOverride;
 
     use ottavino::{Closure, Executor, Fuel, Lua, Value};
     use ottavino_util::serde::from_value;
@@ -236,7 +235,7 @@ mod tests {
             eval_lua(r#"return { build = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
         let test_deps: DependencyType<LuaDependencySpec> =
             eval_lua(r#"return { test = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-        let external_deps: DependencyType<ExternalDependencySpec> = eval_lua(
+        let external_deps: DependencyType<rockspec::ExternalDependencySpec> = eval_lua(
             r#"return { external = { foo = { header = "foo.h", library = "libfoo.so" }, bar = { header = "bar.h" } } }"#,
         )
         .unwrap();
@@ -290,7 +289,7 @@ mod tests {
         }
 
         let _err: ottavino::ExternError =
-            eval_lua::<DependencyType<ExternalDependencySpec>>("return {}").unwrap_err();
+            eval_lua::<DependencyType<rockspec::ExternalDependencySpec>>("return {}").unwrap_err();
     }
 
     #[test]

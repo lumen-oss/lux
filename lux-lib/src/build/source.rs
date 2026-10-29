@@ -1,14 +1,13 @@
+use std::path::PathBuf;
+
 use crate::fs;
 use crate::project;
+use crate::rockspec;
 use std::string::FromUtf8Error;
 
 use crate::{
     build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
-    lua_rockspec::{self, BuildBackendSpec, BuildSpec, LocalLuaRockspec},
-    project::{
-        project_toml::{LocalProjectTomlValidationError, PartialProjectToml},
-        ProjectRoot, TomlDeError, PROJECT_TOML,
-    },
+    project::{TomlDeError, TOML_FILE_NAME},
     rockspec::Rockspec,
     tree::InstallTree,
 };
@@ -30,10 +29,10 @@ pub enum Error {
     Toml(#[from] TomlDeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
+    LocalProjectTomlValidation(#[from] rockspec::toml::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaRockspec(#[from] lua_rockspec::Error),
+    LuaRockspec(#[from] rockspec::lua::Error),
     #[error("builtin build failed")]
     #[diagnostic(forward(0))]
     Builtin(#[from] builtin::Error),
@@ -73,66 +72,66 @@ where
     let layout = tree.layout_for(package);
     let build_dir = args.build_dir;
 
-    let mut build_spec = BuildSpec::default();
+    let mut build_spec = rockspec::build::BuildSpec::default();
     let mut copy_directories = None;
     for path in fs::sync::read_dir(build_dir)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
     {
-        if path.file_name().is_some_and(|name| name == PROJECT_TOML) {
+        if path.file_name().is_some_and(|name| name == TOML_FILE_NAME) {
             let toml_content = String::from_utf8(fs::tokio::read(path).await?)?;
             let project_toml =
-                PartialProjectToml::new(PROJECT_TOML, &toml_content, ProjectRoot::new())?
+                rockspec::toml::Partial::new(TOML_FILE_NAME, &toml_content, PathBuf::new())?
                     .into_local()?;
             build_spec = project_toml.build().current_platform().clone();
             copy_directories = Some(build_spec.copy_directories);
             break;
         } else if path.extension().is_some_and(|ext| ext == "rockspec") {
             let rockspec_content = String::from_utf8(fs::tokio::read(path).await?)?;
-            let rockspec = LocalLuaRockspec::new(&rockspec_content, ProjectRoot::new())?;
+            let rockspec = rockspec::lua::Local::new(&rockspec_content, PathBuf::new())?;
             build_spec = rockspec.build().current_platform().clone();
             copy_directories = Some(build_spec.copy_directories);
             break;
         }
     }
     let build_info = match build_spec.build_backend {
-        Some(BuildBackendSpec::Builtin(build_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::Builtin(build_spec)) => {
             build_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::Make(make_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::Make(make_spec)) => {
             make_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::CMake(cmake_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::CMake(cmake_spec)) => {
             cmake_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::Command(command_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::Command(command_spec)) => {
             command_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
             rust_mlua_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::RustBinary(rust_binary_spec)) => {
             rust_binary_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
+        Some(rockspec::build::BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
             treesitter_parser_spec
                 .run(args)
                 .await?
         }
-        Some(BuildBackendSpec::LuaRock(build_backend)) => return Err(Error::UnsupportedLuarocksBuildBackend(build_backend)),
-        Some(BuildBackendSpec::Source) | // This should not be possible. Let's ignore it.
+        Some(rockspec::build::BuildBackendSpec::LuaRock(build_backend)) => return Err(Error::UnsupportedLuarocksBuildBackend(build_backend)),
+        Some(rockspec::build::BuildBackendSpec::Source) | // This should not be possible. Let's ignore it.
         None => BuildInfo::default(),
     };
     match copy_directories {

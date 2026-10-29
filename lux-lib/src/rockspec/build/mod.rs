@@ -6,7 +6,7 @@ mod rust_mlua;
 mod tree_sitter;
 
 use crate::package;
-pub use builtin::{BuiltinBuildSpec, LuaModule, ModulePaths, ModuleSpec, ParseLuaModuleError};
+pub use builtin::{BuiltinBuildSpec, Module, ModulePaths, ModuleSpec, ParseLuaModuleError};
 pub use cmake::*;
 pub use make::*;
 use path_slash::PathBufExt;
@@ -28,9 +28,7 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::{
-    lua_rockspec::per_platform_from_intermediate, rockspec::lua_dependency::LuaDependencySpec,
-};
+use crate::{rockspec::per_platform_from_intermediate, rockspec::LuaDependencySpec};
 
 use super::{
     DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue, LuaTableKey, LuaValueSeed,
@@ -99,14 +97,14 @@ impl BuildSpec {
                             LuaTableKey::IntKey(_) => {
                                 Err(BuildSpecInternalError::ModulesHaveListElements)
                             }
-                            LuaTableKey::StringKey(str) => Ok(LuaModule::from_str(str.as_str())?),
+                            LuaTableKey::StringKey(str) => Ok(Module::from_str(str.as_str())?),
                         }?;
                         match ModuleSpec::from_internal(module_spec_internal) {
                             Ok(module_spec) => Ok((key_str, module_spec)),
                             Err(err) => Err(err.into()),
                         }
                     })
-                    .collect::<Result<HashMap<LuaModule, ModuleSpec>, BuildSpecInternalError>>()?,
+                    .collect::<Result<HashMap<Module, ModuleSpec>, BuildSpecInternalError>>()?,
             })),
             BuildType::Make => {
                 let default = MakeBuildSpec::default();
@@ -368,7 +366,7 @@ pub struct InstallSpec {
         feature = "schema",
         schemars(with = "std::collections::BTreeMap<String, String>")
     )]
-    pub lua: HashMap<LuaModule, PathBuf>,
+    pub lua: HashMap<Module, PathBuf>,
     /// Dynamic libraries implemented compiled Lua modules.
     #[serde(default, deserialize_with = "deserialize_file_name_path_map")]
     #[cfg_attr(
@@ -392,7 +390,7 @@ pub struct InstallSpec {
 
 fn deserialize_module_path_map<'de, D>(
     deserializer: D,
-) -> Result<HashMap<LuaModule, PathBuf>, D::Error>
+) -> Result<HashMap<Module, PathBuf>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -1055,10 +1053,7 @@ mod tests {
     #[test]
     pub fn install_spec_roundtrip() {
         let spec = InstallSpec {
-            lua: HashMap::from([(
-                "mymod".parse::<LuaModule>().unwrap(),
-                "src/mymod.lua".into(),
-            )]),
+            lua: HashMap::from([("mymod".parse::<Module>().unwrap(), "src/mymod.lua".into())]),
             lib: HashMap::from([("mylib".into(), "lib/mylib.so".into())]),
             conf: HashMap::from([("myconf".into(), "conf/myconf.cfg".into())]),
             bin: HashMap::from([("mybinary".into(), "bin/mybinary".into())]),
@@ -1090,10 +1085,7 @@ mod tests {
                 ModuleSpecInternal::SourcePath("src/mymod.lua".into()),
             )])),
             install: Some(InstallSpec {
-                lua: HashMap::from([(
-                    "extra".parse::<LuaModule>().unwrap(),
-                    "src/extra.lua".into(),
-                )]),
+                lua: HashMap::from([("extra".parse::<Module>().unwrap(), "src/extra.lua".into())]),
                 bin: HashMap::from([("mytool".into(), "bin/mytool".into())]),
                 ..Default::default()
             }),

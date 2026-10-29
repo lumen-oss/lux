@@ -1,5 +1,6 @@
 use crate::package;
-use std::{io, ops::Deref, process::Command};
+use crate::rockspec;
+use std::{io, process::Command};
 
 use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
 
@@ -11,9 +12,8 @@ use crate::{
     build::BuildBehaviour,
     config::{self, Config},
     lua,
-    lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
     path::{self, Paths},
-    project::{self, project_toml::LocalProjectTomlValidationError, Project},
+    project::{self, Project},
     rockspec::Rockspec,
     workspace::Workspace,
 };
@@ -112,13 +112,13 @@ pub enum RunTestsError {
     Tree(#[from] TreeError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ProjectTomlValidation(#[from] LocalProjectTomlValidationError),
+    ProjectTomlValidation(#[from] rockspec::toml::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    TestSpec(#[from] TestSpecError),
+    TestSpec(#[from] rockspec::TestSpecError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersion(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaBinary(#[from] lua::installation::Error),
@@ -171,11 +171,11 @@ async fn run_project_tests(
     let rocks = project.toml().into_local()?;
     let test_spec = match rocks.test().current_platform().to_validated(project) {
         Ok(test_spec) => test_spec,
-        Err(TestSpecError::NoTestSpecDetected)
+        Err(rockspec::TestSpecError::NoTestSpecDetected)
             if project.lua_version(config)? == lua::Version::Luau =>
         {
             // tiniest is the default test framework for Luau projects
-            ValidatedTestSpec::Tiniest
+            rockspec::ValidatedTestSpec::Tiniest
         }
         Err(err) => return Err(err.into()),
     };
@@ -197,7 +197,7 @@ async fn run_project_tests(
     paths.prepend(&test_tree_paths);
 
     let collector_path = match &test_spec {
-        ValidatedTestSpec::Tiniest => {
+        rockspec::ValidatedTestSpec::Tiniest => {
             let spec_files = tiniest::discover_spec_files(project.root());
             if spec_files.is_empty() {
                 tracing::warn!("no *.spec.luau or *.spec.lua files found in test/ or tests/");
@@ -213,10 +213,10 @@ async fn run_project_tests(
     }
 
     let test_executable = match &test_spec {
-        ValidatedTestSpec::Busted { .. } => BUSTED_EXE.to_string(),
-        ValidatedTestSpec::BustedNlua { .. } => BUSTED_EXE.to_string(),
-        ValidatedTestSpec::Command(spec) => spec.command.to_string(),
-        ValidatedTestSpec::Tiniest | ValidatedTestSpec::LuaScript(_) => {
+        rockspec::ValidatedTestSpec::Busted { .. } => BUSTED_EXE.to_string(),
+        rockspec::ValidatedTestSpec::BustedNlua { .. } => BUSTED_EXE.to_string(),
+        rockspec::ValidatedTestSpec::Command(spec) => spec.command.to_string(),
+        rockspec::ValidatedTestSpec::Tiniest | rockspec::ValidatedTestSpec::LuaScript(_) => {
             let runtime =
                 super::run_lua::resolve_lua_runtime(&lua_version.clone(), &test_config).await?;
             runtime.to_string_lossy().to_string()
@@ -224,7 +224,7 @@ async fn run_project_tests(
     };
     let mut command = Command::new(&test_executable);
     let mut command = command
-        .current_dir(project.root().deref())
+        .current_dir(project.root())
         .args(runner_args)
         .args(test_args)
         .env("PATH", paths.path_prepended().joined())
@@ -232,7 +232,7 @@ async fn run_project_tests(
         .env("LUA_CPATH", paths.package_cpath().joined());
     if matches!(
         &test_spec,
-        ValidatedTestSpec::Busted { .. } | ValidatedTestSpec::BustedNlua { .. }
+        rockspec::ValidatedTestSpec::Busted { .. } | rockspec::ValidatedTestSpec::BustedNlua { .. }
     ) && !test_spec
         .args()
         .iter()

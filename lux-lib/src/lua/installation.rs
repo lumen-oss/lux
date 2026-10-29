@@ -14,10 +14,10 @@ use crate::build::external_dependency::to_lib_name;
 use crate::build::external_dependency::ExternalDependencyInfo;
 use crate::config::external_deps::ExternalDependencySearchConfig;
 use crate::fs;
-use crate::lua_rockspec::ExternalDependencySpec;
 use crate::operations;
 use crate::operations::BuildLuaError;
 use crate::package;
+use crate::rockspec;
 use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
 use crate::{config::Config, variables::HasVariables};
@@ -158,7 +158,7 @@ impl Installation {
             .map(|pkg_name| {
                 ExternalDependencyInfo::probe(
                     pkg_name,
-                    &ExternalDependencySpec::default(),
+                    &rockspec::ExternalDependencySpec::default(),
                     search_config,
                 )
             })

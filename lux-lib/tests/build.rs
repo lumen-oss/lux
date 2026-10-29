@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
+use lux_lib::rockspec;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{
-    build::BuildBehaviour::Force, config::ConfigBuilder, lua, lua_rockspec::RemoteLuaRockspec,
-    pipeline::build_local::Build, tree,
+    build::BuildBehaviour::Force, config::ConfigBuilder, lua, pipeline::build_local::Build, tree,
 };
 use tokio::runtime::Builder;
 
@@ -28,7 +28,7 @@ async fn builtin_build() {
         .unwrap(),
     )
     .unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -68,7 +68,7 @@ async fn make_build() {
         .unwrap(),
     )
     .unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -122,7 +122,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
     let dir = TempDir::new().unwrap();
 
     let content = String::from_utf8(std::fs::read(rockspec_path).unwrap()).unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -161,7 +161,7 @@ async fn treesitter_parser_build() {
     let rockspec = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/tree-sitter-rust-0.0.43.rockspec");
     let content = String::from_utf8(std::fs::read(rockspec).unwrap()).unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -207,7 +207,7 @@ async fn treesitter_parser_build_source_queries() {
     let rockspec = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/tree-sitter-tmux-scm-1.rockspec");
     let content = String::from_utf8(std::fs::read(rockspec).unwrap()).unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -301,7 +301,7 @@ async fn test_build_local_project_no_source() {
     assert!(plugin_file.is_file());
 
     let packed_rockspec = std::fs::read_to_string(layout.rockspec_path()).unwrap();
-    RemoteLuaRockspec::new(&packed_rockspec).unwrap();
+    rockspec::lua::Remote::new(&packed_rockspec).unwrap();
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn local_project_rockspec_keeps_lua_text() {
         .to_lua_remote_rockspec_string()
         .unwrap();
 
-    RemoteLuaRockspec::new(&content).unwrap();
+    rockspec::lua::Remote::new(&content).unwrap();
 }
 
 #[flaky_test(tokio, times = 5)]
@@ -374,7 +374,7 @@ fn test_build_multiple_treesitter_parsers() {
         .unwrap(),
     )
     .unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -508,7 +508,7 @@ async fn builtin_build_install_include() {
         .unwrap(),
     )
     .unwrap();
-    let rockspec = RemoteLuaRockspec::new(&content).unwrap();
+    let rockspec = rockspec::lua::Remote::new(&content).unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 

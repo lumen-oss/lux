@@ -9,8 +9,7 @@ use thiserror::Error;
 use crate::{
     build::external_dependency::ExternalDependencyInfo,
     config::Config,
-    fs, lua,
-    lua_rockspec::{LuaModule, ModulePaths},
+    fs, lua, rockspec,
     variables::{self, Environment, VariableSubstitutionError},
 };
 
@@ -54,9 +53,9 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
     fields(profile = config.build_profile().to_string()),
 )]
 pub(crate) async fn compile(
-    data: &ModulePaths,
+    data: &rockspec::build::ModulePaths,
     source_dir: &Path,
-    target_module: &LuaModule,
+    target_module: &rockspec::build::Module,
     target_dir: &Path,
     lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,

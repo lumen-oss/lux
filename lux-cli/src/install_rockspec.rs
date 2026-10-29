@@ -1,3 +1,4 @@
+use lux_lib::rockspec;
 use miette::miette;
 use std::path::PathBuf;
 
@@ -5,7 +6,6 @@ use clap::Args;
 use lux_lib::{
     config::Config,
     lockfile::PinnedState,
-    lua_rockspec::RemoteLuaRockspec,
     operations::{self},
     rockspec::LuaVersionCompatibility,
 };
@@ -37,7 +37,7 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
 
     let content = std::fs::read_to_string(path).into_diagnostic()?;
 
-    let rockspec = RemoteLuaRockspec::new(&content)?;
+    let rockspec = rockspec::lua::Remote::new(&content)?;
 
     let lua_version = rockspec.lua_version_matches(&config)?;
     let tree = config.user_tree(lua_version)?;

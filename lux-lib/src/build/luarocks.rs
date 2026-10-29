@@ -1,7 +1,7 @@
 use crate::build::backend::BuildInfo;
 use crate::build::backend::RunBuildArgs;
 use crate::fs;
-use crate::lua_rockspec::LuaVersionError;
+use crate::rockspec;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
 use crate::tree;
@@ -42,7 +42,7 @@ pub enum Error {
     Rockspec(Box<dyn Diagnostic + Send + Sync>),
     #[error("error installing luarocks compatibility layer")]
     #[diagnostic(forward(0))]
-    LuaVersion(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
 }
 
 #[tracing::instrument(name = "Delegating to luarocks",
@@ -113,13 +113,14 @@ async fn install<R: Rockspec, T: InstallTree>(
 mod tests {
     use std::path::Path;
 
+    use crate::rockspec;
+
     use assert_fs::TempDir;
 
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackageSpec, OptState, PinnedState},
         lua,
-        lua_rockspec::RemoteLuaRockspec,
         rockspec::Rockspec,
         tree::InstallTree,
     };
@@ -136,7 +137,7 @@ mod tests {
 
     #[tokio::test]
     async fn installs_all_build_artifacts() {
-        let rockspec = RemoteLuaRockspec::new(
+        let rockspec = rockspec::lua::Remote::new(
             r#"
 rockspec_format = "3.0"
 package = "test-luarocks-backend"

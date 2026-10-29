@@ -2,7 +2,7 @@ use schemars::{schema_for, JsonSchema};
 use serde_json::{Map, Value};
 
 use crate::config::ConfigBuilder;
-use crate::project::project_toml::PartialProjectToml;
+use crate::rockspec;
 
 /// The JSON Schema for the Lux `config.toml` file.
 pub fn config_schema() -> schemars::Schema {
@@ -19,7 +19,7 @@ pub fn config_schema() -> schemars::Schema {
 
 /// The JSON Schema for the Lux `lux.toml` project manifest.
 pub fn lux_toml_schema() -> schemars::Schema {
-    let mut schema = schema_for!(PartialProjectToml);
+    let mut schema = schema_for!(rockspec::toml::Partial);
     schema.insert("title".to_string(), "lux.toml".into());
     schema.insert(
         "description".to_string(),

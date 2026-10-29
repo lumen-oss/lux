@@ -3,7 +3,7 @@ use crate::{
         url::{RemoteGitUrl, RemoteGitUrlParseError},
         GitSource,
     },
-    lua_rockspec::per_platform_from_intermediate,
+    rockspec::per_platform_from_intermediate,
     wally,
 };
 

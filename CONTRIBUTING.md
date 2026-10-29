@@ -218,8 +218,8 @@ The generated schemas are [published on the documentation site](https://lux.lume
 The schema's `description` fields are populated from the doc comments on the
 TOML-facing structs, e.g. `ConfigBuilder` in
 [`lux-lib/src/config/mod.rs`](./lux-lib/src/config/mod.rs) and
-`PartialProjectToml` in
-[`lux-lib/src/project/project_toml.rs`](./lux-lib/src/project/project_toml.rs),
+`Partial` in
+[`lux-lib/src/rockspec/toml/mod.rs`](./lux-lib/src/rockspec/toml/mod.rs),
 as well as the build/test/source structs they nest.
 
 > [!IMPORTANT]

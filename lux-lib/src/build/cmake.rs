@@ -15,8 +15,8 @@ use crate::{
     },
     config::Config,
     fs,
-    lua_rockspec::CMakeBuildSpec,
     path::{self, Paths},
+    rockspec,
     tree::{self, InstallTree},
     variables::{self, GetVariableError, HasVariables, VariableSubstitutionError},
 };
@@ -66,7 +66,7 @@ impl HasVariables for CMakeVariables {
     }
 }
 
-impl BuildBackend for CMakeBuildSpec {
+impl BuildBackend for rockspec::build::CMakeBuildSpec {
     type Err = Error;
 
     #[tracing::instrument(name = "cmake::run", skip_all, level = "debug")]

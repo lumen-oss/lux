@@ -1,7 +1,7 @@
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::package;
-use lux_lib::{config::Config, rockspec::lua_dependency, workspace::Workspace};
+use lux_lib::{config::Config, rockspec::DependencyType, workspace::Workspace};
 
 use miette::{IntoDiagnostic, Result};
 
@@ -33,7 +33,7 @@ pub async fn remove(data: Remove, config: Config) -> Result<()> {
 
     if !data.depencencies.is_empty() {
         project
-            .remove(lua_dependency::DependencyType::Regular(
+            .remove(DependencyType::Regular(
                 data.depencencies.iter().collect_vec(),
             ))
             .await?;
@@ -42,18 +42,14 @@ pub async fn remove(data: Remove, config: Config) -> Result<()> {
     let build_packages = data.build.unwrap_or_default();
     if !build_packages.is_empty() {
         project
-            .remove(lua_dependency::DependencyType::Build(
-                build_packages.iter().collect_vec(),
-            ))
+            .remove(DependencyType::Build(build_packages.iter().collect_vec()))
             .await?;
     }
 
     let test_packages = data.test.unwrap_or_default();
     if !test_packages.is_empty() {
         project
-            .remove(lua_dependency::DependencyType::Test(
-                test_packages.iter().collect_vec(),
-            ))
+            .remove(DependencyType::Test(test_packages.iter().collect_vec()))
             .await?;
     }
 

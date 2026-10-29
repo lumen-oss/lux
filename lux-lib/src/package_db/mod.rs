@@ -1,10 +1,10 @@
 use crate::package;
+use crate::rockspec;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     config::{self, Config},
     lockfile::{IntegrityError, PackageLock},
-    lua_rockspec::RemoteLuaRockspec,
     manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
     operations::PackageInstallSpec,
@@ -300,11 +300,11 @@ impl ClosureProvider {
         if package_type != RemotePackageType::Rockspec {
             return Ok(None);
         }
-        let rockspec = RemoteLuaRockspec::new(closure_spec.rockspec_raw()).map_err(|err| {
+        let rockspec = rockspec::lua::Remote::new(closure_spec.rockspec_raw()).map_err(|err| {
             discover::Error::Download(
                 spec.package.clone(),
                 Box::new(crate::operations::SearchAndDownloadError::Rockspec(
-                    Box::new(err),
+                    err.into(),
                 )),
             )
         })?;

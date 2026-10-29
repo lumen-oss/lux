@@ -1,6 +1,6 @@
 use crate::{
     config::external_deps::ExternalDependencySearchConfig,
-    lua_rockspec::ExternalDependencySpec,
+    rockspec,
     variables::{GetVariableError, HasVariables},
 };
 use itertools::Itertools;
@@ -72,7 +72,7 @@ impl ExternalDependencyInfo {
     #[tracing::instrument(level = "trace", skip(config))]
     pub fn probe(
         name: &str,
-        dependency: &ExternalDependencySpec,
+        dependency: &rockspec::ExternalDependencySpec,
         config: &ExternalDependencySearchConfig,
     ) -> Result<Self, Error> {
         let _stdout_gag = gag::Gag::stdout();
@@ -143,7 +143,7 @@ impl ExternalDependencyInfo {
     #[tracing::instrument(level = "trace", skip(config))]
     fn fallback_probe(
         name: &str,
-        dependency: &ExternalDependencySpec,
+        dependency: &rockspec::ExternalDependencySpec,
         config: &ExternalDependencySearchConfig,
     ) -> Result<Self, Error> {
         let env_prefix = std::env::var(format!("{}_DIR", name.to_uppercase())).ok();
@@ -433,7 +433,7 @@ mod tests {
         let config = ExternalDependencySearchConfig::default();
         ExternalDependencyInfo::probe(
             "zlib",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 header: Some("zlib.h".into()),
                 library: None,
             },
@@ -448,7 +448,7 @@ mod tests {
         let config = ExternalDependencySearchConfig::default();
         ExternalDependencyInfo::probe(
             "zlib",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("libz".into()),
                 header: None,
             },
@@ -463,7 +463,7 @@ mod tests {
         let config = ExternalDependencySearchConfig::default();
         ExternalDependencyInfo::probe(
             "zlib",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("z".into()),
                 header: None,
             },
@@ -478,7 +478,7 @@ mod tests {
         let config = ExternalDependencySearchConfig::default();
         ExternalDependencyInfo::probe(
             "zlib",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("zlib".into()),
                 header: None,
             },
@@ -504,7 +504,7 @@ mod tests {
 
         ExternalDependencyInfo::fallback_probe(
             "foo",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 header: Some("foo.h".into()),
                 library: None,
             },
@@ -529,7 +529,7 @@ mod tests {
 
         ExternalDependencyInfo::fallback_probe(
             "foo",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 header: Some("foo.h".into()),
                 library: None,
             },
@@ -563,7 +563,7 @@ mod tests {
 
         ExternalDependencyInfo::fallback_probe(
             "foo",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("foo".into()),
                 header: None,
             },
@@ -601,7 +601,7 @@ mod tests {
 
         ExternalDependencyInfo::fallback_probe(
             "foo",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("foo".into()),
                 header: None,
             },
@@ -633,7 +633,7 @@ mod tests {
 
         ExternalDependencyInfo::fallback_probe(
             "foo",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("foo".into()),
                 header: None,
             },
@@ -648,7 +648,7 @@ mod tests {
 
         let result = ExternalDependencyInfo::fallback_probe(
             "foo",
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 header: Some("foo.h".into()),
                 library: None,
             },
