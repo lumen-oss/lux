@@ -10,7 +10,7 @@ use tokio::process::Command;
 
 use crate::{
     config::Config,
-    lua_installation::{self, LuaBinary},
+    lua,
     lua_rockspec::LuaVersionError,
     operations::run_lua::{self, RunLua},
     path::{self, LuaEnvironment, Paths},
@@ -78,7 +78,7 @@ pub enum RunError {
     RunLua(#[from] RunLuaError),
     #[error("failed to detect or install a luau runtime")]
     #[diagnostic(forward(0))]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),
     #[diagnostic(transparent)]
@@ -167,7 +167,7 @@ async fn run_with_local_lua(
 
     let tree = workspace.tree(config)?;
 
-    let lua_cmd = LuaBinary::from(run_lua::resolve_lua_runtime(&version, config).await?);
+    let lua_cmd = lua::Binary::from(run_lua::resolve_lua_runtime(&version, config).await?);
 
     RunLua::new()
         .root(&root_dir.unwrap_or(workspace.root().to_path_buf()))

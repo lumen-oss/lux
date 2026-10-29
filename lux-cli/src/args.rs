@@ -2,8 +2,7 @@ use clap::ValueEnum;
 use lux_lib::package;
 use lux_lib::{
     config::ConfigBuilder,
-    lua_installation::nvim_lua_version,
-    lua_version::LuaVersion,
+    lua,
     tree::{NvimLayout, RojoLayout},
 };
 use miette::{miette, Result};
@@ -31,10 +30,10 @@ pub enum Preset {
 }
 
 impl Preset {
-    pub fn lua_version(self) -> Option<LuaVersion> {
+    pub fn lua_version(self) -> Option<lua::Version> {
         match self {
-            Self::Nvim => nvim_lua_version(),
-            Self::Rojo => Some(LuaVersion::Luau),
+            Self::Nvim => lua::installation::version_for_neovim(),
+            Self::Rojo => Some(lua::Version::Luau),
         }
     }
 
@@ -70,13 +69,13 @@ mod tests {
     use super::*;
     use crate::Cli;
     use clap::Parser;
-    use lux_lib::lua_version::LuaVersion;
+    use lux_lib::lua;
 
     #[test]
     fn parses_rojo_preset() {
         let cli = Cli::try_parse_from(["lx", "--preset", "rojo", "list"]).unwrap();
         assert_eq!(cli.preset, Some(Preset::Rojo));
-        assert_eq!(Preset::Rojo.lua_version(), Some(LuaVersion::Luau));
+        assert_eq!(Preset::Rojo.lua_version(), Some(lua::Version::Luau));
     }
 
     #[test]

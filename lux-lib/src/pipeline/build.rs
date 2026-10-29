@@ -8,7 +8,7 @@ use crate::{
     build::Deploy,
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
-    lua_installation::{self, LuaInstallation},
+    lua,
     lua_rockspec::BuildBackendSpec,
     luarocks::{
         install_binary_rock::{self, BinaryRockInstall},
@@ -32,7 +32,7 @@ pub enum Error {
     InstallBinaryRock(String, #[source] Box<install_binary_rock::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[error("error instantiating LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
     LuaRocks(#[from] LuaRocksError),
@@ -78,7 +78,7 @@ where
 {
     pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, Error> {
         let args = self._build();
-        let lua = LuaInstallation::new_from_config(args.config).await?;
+        let lua = lua::Installation::new_from_config(args.config).await?;
 
         let needs_luarocks = args.packages.iter().any(|package| {
             matches!(

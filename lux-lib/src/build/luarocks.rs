@@ -118,8 +118,8 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackageSpec, OptState, PinnedState},
+        lua,
         lua_rockspec::RemoteLuaRockspec,
-        lua_version::LuaVersion,
         rockspec::Rockspec,
         tree::InstallTree,
     };
@@ -149,11 +149,11 @@ build = { type = "test-custom" }
         let tree_dir = TempDir::new().unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .user_tree(Some(tree_dir.path().to_path_buf()))
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),

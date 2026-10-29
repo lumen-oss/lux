@@ -8,9 +8,8 @@ use lux_lib::{
     build::BuildBehaviour,
     config::Config,
     drivers::install_packages::InstallPackages,
-    lua_installation::LuaInstallation,
+    lua,
     lua_rockspec::RemoteLuaRockspec,
-    lua_version::LuaVersion,
     operations::{self, PackageInstallSpec},
     package_db::PackageDB,
     pipeline::build_local::Build,
@@ -107,7 +106,7 @@ async fn pack_workspace(
 }
 
 pub async fn pack(args: Pack, config: Config) -> Result<()> {
-    let lua_version = LuaVersion::from(&config)?.clone();
+    let lua_version = lua::Version::from(&config)?.clone();
     let dest_dir = std::env::current_dir().into_diagnostic()?;
     let rock_paths: Vec<PathBuf> = match args.package_or_rockspec {
         Some(PackageOrRockspec::Package(package_req))
@@ -182,7 +181,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             }?;
             let temp_dir = tempdir().into_diagnostic()?;
             let config = config.with_tree(temp_dir.path().to_path_buf());
-            let lua = LuaInstallation::new(&lua_version, &config).await?;
+            let lua = lua::Installation::new(&lua_version, &config).await?;
             let tree = config.user_tree(lua_version)?;
             let package = Build::new()
                 .rockspec(&rockspec)

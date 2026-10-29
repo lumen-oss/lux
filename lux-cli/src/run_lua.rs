@@ -5,14 +5,7 @@ use tokio::process::Command;
 
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{
-    config::Config,
-    lua_installation::{LuaBinary, LuaInstallation},
-    lua_version::LuaVersion,
-    operations,
-    path::LuaEnvironment,
-    workspace::Workspace,
-};
+use lux_lib::{config::Config, lua, operations, path::LuaEnvironment, workspace::Workspace};
 
 use miette::{IntoDiagnostic, Result, WrapErr};
 
@@ -86,7 +79,7 @@ pub async fn run_lua(run_lua: RunLua, config: Config) -> Result<()> {
             )
         }
         None => {
-            let version = LuaVersion::from(&config)?.clone();
+            let version = lua::Version::from(&config)?.clone();
             (
                 version.clone(),
                 std::env::current_dir().into_diagnostic()?,
@@ -103,15 +96,15 @@ To exit type 'exit()' or <C-d>.
 "#,
     );
 
-    let lua_cmd = match run_lua.lua.map(LuaBinary::Custom) {
+    let lua_cmd = match run_lua.lua.map(lua::Binary::Custom) {
         Some(lua_cmd) => lua_cmd,
         None => {
-            let lua_cmd = LuaInstallation::new(&lua_version, &config)
+            let lua_cmd = lua::Installation::new(&lua_version, &config)
                 .await?
                 .bin()
                 .as_ref()
-                .map(|lua_bin| LuaBinary::Custom(lua_bin.to_slash_lossy().to_string()))
-                .unwrap_or_else(|| LuaBinary::new(lua_version, &config));
+                .map(|lua_bin| lua::Binary::Custom(lua_bin.to_slash_lossy().to_string()))
+                .unwrap_or_else(|| lua::Binary::new(lua_version, &config));
             lua_cmd
         }
     };
@@ -145,7 +138,7 @@ To exit type 'exit()' or <C-d>.
     Ok(())
 }
 
-async fn print_lua_help(lua_cmd: &LuaBinary) -> Result<()> {
+async fn print_lua_help(lua_cmd: &lua::Binary) -> Result<()> {
     let lua_cmd_path: PathBuf = lua_cmd.clone().try_into()?;
     let output = Command::new(lua_cmd_path.to_string_lossy().to_string())
         // HACK: This fails with exit 1, because lua doesn't actually have a help flag (╯°□°)╯︵ ┻━┻

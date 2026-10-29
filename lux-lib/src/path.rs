@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    lua_version::LuaVersion,
+    lua,
     target::c_dylib_extension,
     tree::{self, InstallTree},
 };
@@ -38,7 +38,7 @@ pub struct Paths {
     /// Paths for executables
     bin: BinPath,
 
-    version: LuaVersion,
+    version: lua::Version,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -166,7 +166,7 @@ impl Paths {
     }
 
     /// The Lua version these paths belong to.
-    pub fn version(&self) -> &LuaVersion {
+    pub fn version(&self) -> &lua::Version {
         &self.version
     }
 
@@ -229,7 +229,7 @@ impl Paths {
 
 #[cfg(test)]
 impl Paths {
-    pub(crate) fn test(version: LuaVersion, src: PackagePath, lib: PackagePath) -> Self {
+    pub(crate) fn test(version: lua::Version, src: PackagePath, lib: PackagePath) -> Self {
         Self {
             src,
             lib,
@@ -360,7 +360,7 @@ mod tests {
         }
     }
 
-    fn test_paths(version: LuaVersion, src: &[&str], lib: &[&str]) -> Paths {
+    fn test_paths(version: lua::Version, src: &[&str], lib: &[&str]) -> Paths {
         Paths {
             src: PackagePath(src.iter().map(|path| PathBuf::from(*path)).collect()),
             lib: PackagePath(lib.iter().map(|path| PathBuf::from(*path)).collect()),
@@ -393,7 +393,7 @@ mod tests {
     fn pure_lua_path_ignores_inherited_paths() {
         let _base = EnvGuard::set("LUA_PATH", "/system/?.lua");
         let _versioned = EnvGuard::set("LUA_PATH_5_4", "/system54/?.lua");
-        let paths = test_paths(LuaVersion::Lua54, &["/project/?.lua"], &[]);
+        let paths = test_paths(lua::Version::Lua54, &["/project/?.lua"], &[]);
 
         assert_eq!(paths.lua_path(LuaEnvironment::Pure), "/project/?.lua");
     }
@@ -403,7 +403,7 @@ mod tests {
     fn impure_lua_path_prefers_versioned_env_and_appends_defaults() {
         let _base = EnvGuard::set("LUA_PATH", "/system/?.lua");
         let _versioned = EnvGuard::set("LUA_PATH_5_4", "/system54/?.lua");
-        let paths = test_paths(LuaVersion::Lua54, &["/project/?.lua"], &[]);
+        let paths = test_paths(lua::Version::Lua54, &["/project/?.lua"], &[]);
 
         assert_eq!(
             paths.lua_path(LuaEnvironment::Impure),
@@ -416,7 +416,7 @@ mod tests {
     fn impure_lua_path_falls_back_to_unversioned_env() {
         let _base = EnvGuard::set("LUA_PATH", "/system/?.lua");
         let _versioned = EnvGuard::set("LUA_PATH_5_3", "/system53/?.lua");
-        let paths = test_paths(LuaVersion::Lua54, &["/project/?.lua"], &[]);
+        let paths = test_paths(lua::Version::Lua54, &["/project/?.lua"], &[]);
 
         assert_eq!(
             paths.lua_path(LuaEnvironment::Impure),
@@ -428,7 +428,7 @@ mod tests {
     #[serial]
     fn impure_lua_cpath_merges_inherited_paths() {
         let _versioned = EnvGuard::set("LUA_CPATH_5_4", "/system54/?.so");
-        let paths = test_paths(LuaVersion::Lua54, &[], &["/project/?.so"]);
+        let paths = test_paths(lua::Version::Lua54, &[], &["/project/?.so"]);
 
         assert_eq!(
             paths.lua_cpath(LuaEnvironment::Impure),

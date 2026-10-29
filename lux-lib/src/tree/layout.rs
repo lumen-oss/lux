@@ -210,7 +210,7 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
-        lua_version::LuaVersion,
+        lua,
         remote_package_source::RemotePackageSource,
         tree::{EntryType, InstallTree, NvimLayout, RojoLayout},
     };
@@ -238,7 +238,7 @@ mod tests {
             .entrypoint_layout(NvimLayout)
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
         (temp, tree_path, tree)
     }
 
@@ -326,7 +326,7 @@ mod tests {
             .entrypoint_layout(RojoLayout)
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Luau).unwrap();
+        let tree = config.user_tree(lua::Version::Luau).unwrap();
         (temp, tree)
     }
 
@@ -393,7 +393,7 @@ mod tests {
             .entrypoint_layout(RojoLayout)
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
         let package = sample_package();
 
         tree.prepare(&package.spec).unwrap();

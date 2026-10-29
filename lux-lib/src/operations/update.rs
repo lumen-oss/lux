@@ -8,7 +8,7 @@ use crate::{
         LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
         WorkspaceLockfile,
     },
-    lua_version::{LuaVersion, LuaVersionUnset},
+    lua,
     package::RockConstraintUnsatisfied,
     package_db::{self, PackageDB},
     remote_package_source::RemotePackageSource,
@@ -44,7 +44,7 @@ pub enum UpdateError {
     Workspace(#[from] workspace::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -250,7 +250,7 @@ async fn update_install_tree(
 ) -> Result<Vec<LockedPackage>, UpdateError> {
     let tree = args
         .config
-        .user_tree(LuaVersion::from(args.config)?.clone())?;
+        .user_tree(lua::Version::from(args.config)?.clone())?;
     let lockfile = tree.lockfile()?;
     let packages = updatable_packages(&lockfile)
         .into_iter()
@@ -346,8 +346,8 @@ mod tests {
     use assert_fs::prelude::PathCopy;
 
     use crate::{
-        config::ConfigBuilder, lockfile::LockedPackageLockType, lua_version::LuaVersion,
-        package_db::PackageDB, workspace::Workspace,
+        config::ConfigBuilder, lockfile::LockedPackageLockType, lua, package_db::PackageDB,
+        workspace::Workspace,
     };
 
     use super::Update;
@@ -368,7 +368,7 @@ mod tests {
 
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
         let package_db = PackageDB::from_config(&config).await.unwrap();

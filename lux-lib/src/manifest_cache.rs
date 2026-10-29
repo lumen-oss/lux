@@ -13,8 +13,7 @@ use url::Url;
 
 use crate::{
     config::Config,
-    lua_version::LuaVersion,
-    luarocks,
+    lua, luarocks,
     package::{RemotePackageType, RemotePackageTypeFilterSpec},
 };
 
@@ -126,7 +125,7 @@ pub struct ManifestCache {
 impl ManifestCache {
     pub(crate) fn from_config(config: &Config) -> Option<Self> {
         let base_url = config.manifest_cache_url()?.clone();
-        let lua_version = LuaVersion::from(config).ok()?.version_compatibility_str();
+        let lua_version = lua::Version::from(config).ok()?.version_compatibility_str();
         #[cfg(not(test))]
         let client = crate::reqwest::https_client(config);
         #[cfg(test)]

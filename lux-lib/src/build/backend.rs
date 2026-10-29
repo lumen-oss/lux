@@ -10,7 +10,7 @@ use crate::{
     build::external_dependency::ExternalDependencyInfo,
     config::Config,
     lockfile::LockedPackageSpec,
-    lua_installation::LuaInstallation,
+    lua,
     lua_rockspec::DeploySpec,
     tree::{InstallTree, RockLayout},
     variables::{self, Environment, VariableSubstitutionError},
@@ -21,7 +21,7 @@ use crate::{
 pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
     pub(crate) package: &'a LockedPackageSpec,
     pub(crate) no_install: bool,
-    pub(crate) lua: &'a LuaInstallation,
+    pub(crate) lua: &'a lua::Installation,
     pub(crate) external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,
     pub(crate) deploy: &'a DeploySpec,
     pub(crate) config: &'a Config,
@@ -46,7 +46,7 @@ pub(crate) struct BuildInfo {
 pub(crate) fn substitute_variables(
     input: &str,
     output_paths: &RockLayout,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<String, VariableSubstitutionError> {

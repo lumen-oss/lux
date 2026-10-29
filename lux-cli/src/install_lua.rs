@@ -1,17 +1,17 @@
 use std::path::Path;
 
-use lux_lib::{config::Config, lua_installation::LuaInstallation, lua_version::LuaVersion};
+use lux_lib::{config::Config, lua};
 
 use miette::{miette, Result};
 
 pub async fn install_lua(config: Config) -> Result<()> {
-    let version = LuaVersion::from(&config)?;
+    let version = lua::Version::from(&config)?;
 
     // TODO: Detect when path already exists by checking `Lua::path()` and prompt the user
     // whether they'd like to forcefully reinstall.
-    let lua = LuaInstallation::install(version, &config).await?;
+    let lua = lua::Installation::install(version, &config).await?;
     let lua_root = match version {
-        LuaVersion::Luau => lua
+        lua::Version::Luau => lua
             .bin()
             .as_ref()
             .and_then(|bin| bin.parent())

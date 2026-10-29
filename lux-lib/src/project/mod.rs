@@ -20,11 +20,11 @@ use crate::lockfile::PinnedState;
 use crate::{
     config::Config,
     git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, utils::SemVerTagOrSha},
+    lua,
     lua_rockspec::{
         self, LocalLuaRockspec, LuaVersionError, PartialLuaRockspec, PartialRockspecError,
         RemoteLuaRockspec,
     },
-    lua_version::LuaVersion,
     package_db::PackageDB,
     rockspec::{
         lua_dependency::{DependencyType, LuaDependencyType},
@@ -308,7 +308,7 @@ impl Project {
         }
     }
 
-    pub fn lua_version(&self, config: &Config) -> Result<LuaVersion, LuaVersionError> {
+    pub fn lua_version(&self, config: &Config) -> Result<lua::Version, LuaVersionError> {
         self.toml().lua_version_matches(config)
     }
 

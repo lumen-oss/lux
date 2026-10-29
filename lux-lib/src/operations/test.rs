@@ -10,9 +10,8 @@ use crate::workspace::{self, TreeError};
 use crate::{
     build::BuildBehaviour,
     config::{self, Config},
-    lua_installation::LuaBinaryError,
+    lua,
     lua_rockspec::{LuaVersionError, TestSpecError, ValidatedTestSpec},
-    lua_version::LuaVersion,
     path::{self, Paths},
     project::{self, project_toml::LocalProjectTomlValidationError, Project},
     rockspec::Rockspec,
@@ -122,7 +121,7 @@ pub enum RunTestsError {
     LuaVersion(#[from] LuaVersionError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaBinary(#[from] LuaBinaryError),
+    LuaBinary(#[from] lua::installation::Error),
     #[error("failed to set up tiniest")]
     #[diagnostic(forward(0))]
     Tiniest(#[from] tiniest::TiniestError),
@@ -173,7 +172,7 @@ async fn run_project_tests(
     let test_spec = match rocks.test().current_platform().to_validated(project) {
         Ok(test_spec) => test_spec,
         Err(TestSpecError::NoTestSpecDetected)
-            if project.lua_version(config)? == LuaVersion::Luau =>
+            if project.lua_version(config)? == lua::Version::Luau =>
         {
             // tiniest is the default test framework for Luau projects
             ValidatedTestSpec::Tiniest
@@ -292,10 +291,7 @@ async fn run_project_tests(
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use crate::{
-        config::ConfigBuilder, fs, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion,
-    };
+    use crate::{config::ConfigBuilder, fs, lua};
 
     use super::*;
     use assert_fs::{prelude::PathCopy, TempDir};
@@ -322,7 +318,7 @@ mod tests {
         let tree_root = workspace.root().to_path_buf().join(".lux");
         let _ = fs::tokio::remove_dir_all(&tree_root).await;
 
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
         let config = ConfigBuilder::new()
             .unwrap()

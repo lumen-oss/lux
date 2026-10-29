@@ -11,9 +11,8 @@ use lux_lib::{
     config::{Config, ConfigBuilder},
     drivers::install_packages::InstallPackages,
     lockfile::LockedPackage,
-    lua_installation::LuaInstallation,
+    lua,
     lua_rockspec::RemoteLuaRockspec,
-    lua_version::LuaVersion,
     operations::{InstallProject, PackageInstallSpec},
     package_db::PackageDB,
     pipeline::build_local::Build,
@@ -105,7 +104,7 @@ pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
     }?;
     let install_root = tree.root();
 
-    if tree.version() == &LuaVersion::Luau {
+    if tree.version() == &lua::Version::Luau {
         write_luaurc(&tree).await?;
     }
 
@@ -163,7 +162,7 @@ async fn install_package(
     staging_dir: &TempDir,
     config: &Config,
 ) -> Result<(LockedPackage, FlatDistTree)> {
-    let lua_version = LuaVersion::from(config)?.clone();
+    let lua_version = lua::Version::from(config)?.clone();
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
     let packages = InstallPackages::new(config, &tree)
         .package(
@@ -190,7 +189,7 @@ async fn install_rockspec(
     let content = tokio::fs::read_to_string(&rockspec_path)
         .await
         .into_diagnostic()?;
-    let lua_version = LuaVersion::from(config)?.clone();
+    let lua_version = lua::Version::from(config)?.clone();
     let rockspec = match rockspec_path
         .extension()
         .map(|ext| ext.to_string_lossy().to_string())
@@ -203,7 +202,7 @@ async fn install_rockspec(
             "expected a path to a .rockspec or a package requirement."
         )),
     }?;
-    let lua = LuaInstallation::new(&lua_version, config).await?;
+    let lua = lua::Installation::new(&lua_version, config).await?;
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
     let package = Build::new()
         .rockspec(&rockspec)

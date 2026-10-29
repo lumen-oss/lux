@@ -2,8 +2,8 @@ use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::build::{cargo, command};
 use crate::config::build;
 use crate::fs;
+use crate::lua;
 use crate::lua_rockspec::RustMluaBuildSpec;
-use crate::lua_version::{LuaVersion, LuaVersionUnset};
 use crate::target::c_dylib_extension;
 use crate::tree::InstallTree;
 use itertools::Itertools;
@@ -29,7 +29,7 @@ pub enum Error {
     RustBuild { source: io::Error },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -50,16 +50,16 @@ impl BuildBackend for RustMluaBuildSpec {
         let tree = args.tree;
         let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
-        let lua_version = LuaVersion::from(config)?;
+        let lua_version = lua::Version::from(config)?;
         let lua_feature = match lua_version {
-            LuaVersion::Lua51 => "lua51",
-            LuaVersion::Lua52 => "lua52",
-            LuaVersion::Lua53 => "lua53",
-            LuaVersion::Lua54 => "lua54",
-            LuaVersion::Lua55 => "lua55",
-            LuaVersion::LuaJIT => "luajit",
-            LuaVersion::LuaJIT52 => "luajit",
-            LuaVersion::Luau => return Err(Error::LuauUnsupported),
+            lua::Version::Lua51 => "lua51",
+            lua::Version::Lua52 => "lua52",
+            lua::Version::Lua53 => "lua53",
+            lua::Version::Lua54 => "lua54",
+            lua::Version::Lua55 => "lua55",
+            lua::Version::LuaJIT => "luajit",
+            lua::Version::LuaJIT52 => "luajit",
+            lua::Version::Luau => return Err(Error::LuauUnsupported),
         };
         let features = self
             .features

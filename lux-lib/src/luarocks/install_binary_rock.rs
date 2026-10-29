@@ -167,7 +167,7 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackageId, OptState, PinnedState},
-        lua_version::LuaVersion,
+        lua,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
         package,
     };
@@ -335,11 +335,11 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         let install_root = TempDir::new().unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .user_tree(Some(install_root.to_path_buf()))
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
         let installed = BinaryRockInstall::new(
             &rockspec,

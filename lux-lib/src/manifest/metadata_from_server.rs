@@ -14,7 +14,7 @@ use url::Url;
 use zip::ZipArchive;
 
 use crate::config::Config;
-use crate::lua_version::{LuaVersion, LuaVersionUnset};
+use crate::lua;
 use crate::reqwest::{RequestBuilderExt, RequestError};
 
 #[derive(Error, Debug, Diagnostic)]
@@ -48,7 +48,7 @@ if you are using a custom server, make sure it returns correctly formatted manif
     ZipExtract(Url, #[source] zip::result::ZipError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersion(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
 }
 
 impl From<reqwest::Error> for ManifestFromServerError {
@@ -130,7 +130,7 @@ pub(crate) async fn manifest_from_cache_or_server(
     server_url: &Url,
     config: &Config,
 ) -> Result<String, ManifestFromServerError> {
-    let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
+    let manifest_version = lua::Version::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     manifest_from_cache_or_server_impl(&manifest_version, url, config).await
 }
@@ -194,7 +194,7 @@ pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
     config: &Config,
 ) -> Result<String, ManifestFromServerError> {
-    let manifest_version = LuaVersion::from(config)?.version_compatibility_str();
+    let manifest_version = lua::Version::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     manifest_from_server_only_impl(url, &manifest_version, config).await
 }
@@ -292,7 +292,7 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
-            .lua_version(Some(LuaVersion::LuaJIT))
+            .lua_version(Some(lua::Version::LuaJIT))
             .no_progress(Some(true))
             .build()
             .unwrap();
@@ -312,7 +312,7 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .no_progress(Some(true))
             .build()
             .unwrap();
@@ -336,14 +336,14 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .cache_dir(Some(cache_dir.to_path_buf()))
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .no_progress(Some(true))
             .build()
             .unwrap();
         let server_url = Url::parse(&url_str).unwrap();
         let manifest_url = mk_manifest_url(
             &server_url,
-            &LuaVersion::Lua51.version_compatibility_str(),
+            &lua::Version::Lua51.version_compatibility_str(),
             &config,
         )
         .unwrap();

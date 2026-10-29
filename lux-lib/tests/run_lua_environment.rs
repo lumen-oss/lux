@@ -3,8 +3,7 @@
 use assert_fs::prelude::*;
 use lux_lib::{
     config::ConfigBuilder,
-    lua_installation::LuaBinary,
-    lua_version::LuaVersion,
+    lua,
     operations::{RunLua, RunLuaError},
     path::LuaEnvironment,
 };
@@ -31,7 +30,7 @@ async fn pure_environment_hides_inherited_lua_paths() {
         .write_str("return true")
         .unwrap();
 
-    let version = LuaVersion::Lua51;
+    let version = lua::Version::Lua51;
     let external_path = external.child("?.lua");
     std::env::set_var("LUA_PATH_5_1", external_path.to_string_lossy().to_string());
 
@@ -42,7 +41,7 @@ async fn pure_environment_hides_inherited_lua_paths() {
         .build()
         .unwrap();
     let tree = config.user_tree(version.clone()).unwrap();
-    let lua_cmd = LuaBinary::Custom(lua_cmd.to_string_lossy().to_string());
+    let lua_cmd = lua::Binary::Custom(lua_cmd.to_string_lossy().to_string());
     let args = vec!["main.lua".to_string()];
 
     let pure = RunLua::new()

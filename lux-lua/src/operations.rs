@@ -10,7 +10,7 @@ use lux_lib::{
     drivers::install_packages::InstallPackages,
     drivers::sync::{Sync, SyncMode, TargetSet},
     lockfile::LockedPackageId,
-    lua::lua_runtime,
+    lua,
     operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
     package_db::PackageDB,
     rockspec::lua_dependency::DependencyType,
@@ -46,7 +46,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "search",
             |_, (query, config): (String, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 search(query, config).await
             },
         );
@@ -57,7 +57,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "outdated",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let tree = workspace.0.tree(&config.0).into_lua_err()?;
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
                 let rocks = tree.as_rock_list().into_lua_err()?;
@@ -84,7 +84,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "install",
             |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
                 InstallPackages::new(&config.0, &tree.0)
@@ -104,7 +104,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "uninstall",
             |_, (packages, tree, config): (Vec<LockedPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
                 Uninstall::new()
                     .config(&config.0)
@@ -127,7 +127,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "update",
             |_, (workspace, packages, config): (WorkspaceLua, Option<Vec<String>>, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let package_reqs = packages
                     .map(|packages| {
                         packages
@@ -164,7 +164,7 @@ impl TypedUserData for OperationsModule {
                 AddDependenciesLua,
                 ConfigLua,
             )| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
 
                 {
@@ -210,7 +210,7 @@ impl TypedUserData for OperationsModule {
                 DependencyTypeLua<PackageNameLua>,
                 ConfigLua,
             )| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let deps = lua_impls::map_dependency_type_names(deps.0);
                 let tree = workspace.0.tree(&config.0).into_lua_err()?;
                 let ids_to_remove: Vec<LockedPackageId> = deps_to_ids(&deps, &tree);
@@ -243,7 +243,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "sync",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 Sync::new(&workspace.0, &config.0)
                     .mode(SyncMode::Frozen)
                     .targets(TargetSet::all(&workspace.0, true))
@@ -260,7 +260,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "sync_dependencies",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 Sync::new(&workspace.0, &config.0)
                     .mode(SyncMode::Frozen)
                     .targets(TargetSet::all(&workspace.0, false))
@@ -282,7 +282,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "build",
             |_, (workspace, package, config): (WorkspaceLua, Option<PackageNameLua>, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 BuildWorkspace::new(&workspace.0, &config.0)
                     .maybe_package(package.map(|p| p.0))
                     .no_lock(false)
@@ -303,7 +303,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "dist_bin",
             |_, (project, tree, output, config): (ProjectLua, TreeLua, String, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 DistProjectBin::new()
                     .project(&project.0)
                     .tree(&tree.0)
@@ -325,7 +325,7 @@ impl TypedUserData for OperationsModule {
         methods.add_async_function(
             "download_rockspec",
             |_, (package_req, config): (String, ConfigLua)| async move {
-                let _runtime = lua_runtime().enter();
+                let _runtime = lua::runtime().enter();
                 let req = package_req.parse().into_lua_err()?;
                 Download::new(&req, &config.0)
                     .download_rockspec()

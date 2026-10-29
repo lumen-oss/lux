@@ -8,7 +8,7 @@ use serde_enum_str::Serialize_enum_str;
 use std::{convert::Infallible, path::PathBuf};
 use thiserror::Error;
 
-use crate::lua_version::LuaVersion;
+use crate::lua;
 
 use crate::{
     config::{self, Config, ConfigBuilder},
@@ -163,10 +163,10 @@ impl ValidatedTestSpec {
                 // requiring luafilesystem's `lfs` module
                 // if it is built with Lua 5.1 headers.
                 #[cfg(not(any(target_os = "macos", target_env = "msvc")))]
-                let lua_version = LuaVersion::Lua51;
+                let lua_version = lua::Version::Lua51;
 
                 #[cfg(any(target_os = "macos", target_env = "msvc"))]
-                let lua_version = LuaVersion::LuaJIT;
+                let lua_version = lua::Version::LuaJIT;
 
                 Ok(config_builder
                     .lua_version(Some(lua_version))

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Args;
 use emmylua_formatter as luafmt;
-use lux_lib::{config::Config, lua_version::LuaVersion, project::Project, workspace::Workspace};
+use lux_lib::{config::Config, lua, project::Project, workspace::Workspace};
 use miette::{bail, miette, Context, IntoDiagnostic, Result};
 use path_slash::PathExt;
 use walkdir::WalkDir;
@@ -80,11 +80,11 @@ struct FmtConfig {
     luafmt: luafmt::LuaFormatConfig,
     luafmt_syntax_level: Option<luafmt::LuaSyntaxLevel>,
     editorconfig: PathBuf,
-    lua_version: Option<LuaVersion>,
+    lua_version: Option<lua::Version>,
 }
 
 impl FmtConfig {
-    fn resolve(root: &Path, lua_version: Option<LuaVersion>) -> Self {
+    fn resolve(root: &Path, lua_version: Option<lua::Version>) -> Self {
         let stylua: stylua_lib::Config = std::fs::read_to_string(root.join("stylua.toml"))
             .or_else(|_| std::fs::read_to_string(root.join(".stylua.toml")))
             .map(|config: String| toml::from_str(&config).unwrap_or_default())
@@ -219,15 +219,17 @@ fn format_loose(
     format_files(files, &configs, backend)
 }
 
-fn lua_version_to_luafmt_syntax_level(lua_version: &LuaVersion) -> Option<luafmt::LuaSyntaxLevel> {
+fn lua_version_to_luafmt_syntax_level(
+    lua_version: &lua::Version,
+) -> Option<luafmt::LuaSyntaxLevel> {
     match lua_version {
-        LuaVersion::Lua51 => Some(luafmt::LuaSyntaxLevel::Lua51),
-        LuaVersion::Lua52 => Some(luafmt::LuaSyntaxLevel::Lua52),
-        LuaVersion::Lua53 => Some(luafmt::LuaSyntaxLevel::Lua53),
-        LuaVersion::Lua54 => Some(luafmt::LuaSyntaxLevel::Lua54),
-        LuaVersion::Lua55 => Some(luafmt::LuaSyntaxLevel::Lua55),
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => Some(luafmt::LuaSyntaxLevel::LuaJIT),
-        LuaVersion::Luau => None,
+        lua::Version::Lua51 => Some(luafmt::LuaSyntaxLevel::Lua51),
+        lua::Version::Lua52 => Some(luafmt::LuaSyntaxLevel::Lua52),
+        lua::Version::Lua53 => Some(luafmt::LuaSyntaxLevel::Lua53),
+        lua::Version::Lua54 => Some(luafmt::LuaSyntaxLevel::Lua54),
+        lua::Version::Lua55 => Some(luafmt::LuaSyntaxLevel::Lua55),
+        lua::Version::LuaJIT | lua::Version::LuaJIT52 => Some(luafmt::LuaSyntaxLevel::LuaJIT),
+        lua::Version::Luau => None,
     }
 }
 

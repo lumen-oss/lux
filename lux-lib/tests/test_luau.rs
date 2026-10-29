@@ -2,10 +2,7 @@
 
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
-use lux_lib::{
-    config::ConfigBuilder, lua_installation::LuaInstallation, lua_version::LuaVersion,
-    operations::Test, workspace::Workspace,
-};
+use lux_lib::{config::ConfigBuilder, lua, operations::Test, workspace::Workspace};
 use std::path::PathBuf;
 
 #[flaky_test(tokio, times = 5)]
@@ -19,12 +16,12 @@ async fn test_luau_tiniest() {
     let config = ConfigBuilder::new()
         .unwrap()
         .user_tree(Some(tree_root))
-        .lua_version(Some(LuaVersion::Luau))
+        .lua_version(Some(lua::Version::Luau))
         .build()
         .unwrap();
 
     if which::which("luau").is_err() && which::which("lune").is_err() {
-        LuaInstallation::install(&LuaVersion::Luau, &config)
+        lua::Installation::install(&lua::Version::Luau, &config)
             .await
             .unwrap();
     }

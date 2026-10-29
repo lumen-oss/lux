@@ -6,7 +6,7 @@ use lux_lib::{
     config::Config,
     drivers::sync::{Sync, SyncMode, TargetSet},
     git::shorthand::RemoteGitUrlShorthand,
-    lua_version::LuaVersion,
+    lua,
     tree::Tree,
     workspace::Workspace,
 };
@@ -75,7 +75,7 @@ pub fn current_workspace_or_user_tree(config: &Config) -> Result<Tree> {
     Ok(match &workspace {
         Some(workspace) => workspace.tree(config)?,
         None => {
-            let lua_version = LuaVersion::from(config)?.clone();
+            let lua_version = lua::Version::from(config)?.clone();
             config.user_tree(lua_version)?
         }
     })

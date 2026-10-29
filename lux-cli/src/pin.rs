@@ -3,7 +3,7 @@ use itertools::Itertools;
 use lux_lib::config::Config;
 use lux_lib::drivers::sync::{Sync, SyncMode, TargetSet};
 use lux_lib::lockfile::PinnedState;
-use lux_lib::lua_version::LuaVersion;
+use lux_lib::lua;
 use lux_lib::operations;
 use lux_lib::package;
 use lux_lib::rockspec::lua_dependency;
@@ -90,7 +90,7 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                 .wrap_err("syncing dependencies with the workspace lockfile failed.")?;
         }
         None => {
-            let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+            let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
 
             for package in &data.package_req {
                 match tree.match_rocks_and(package, |package| pin != package.pinned())? {

@@ -5,13 +5,11 @@ use assert_fs::TempDir;
 #[cfg(target_env = "msvc")]
 use flaky_test::flaky_test;
 #[cfg(target_env = "msvc")]
-use lux_lib::lua_installation::detect_installed_lua_version;
-#[cfg(target_env = "msvc")]
 use lux_lib::operations::DistProjectBin;
 #[cfg(target_env = "msvc")]
 use lux_lib::project::Project;
 #[cfg(target_env = "msvc")]
-use lux_lib::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
+use lux_lib::{config::ConfigBuilder, lua, tree::FlatDistTree};
 #[cfg(target_env = "msvc")]
 use std::path::PathBuf;
 
@@ -29,7 +27,7 @@ async fn test_dist_bin_from_lua_source_compiles_and_runs() {
     project_dir.copy_from(&sample, &["**"]).unwrap();
 
     let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
     let config = ConfigBuilder::new()
         .unwrap()
         .lua_version(lua_version)

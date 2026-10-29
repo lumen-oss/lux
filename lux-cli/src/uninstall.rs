@@ -7,7 +7,7 @@ use lux_lib::{
     config::Config,
     drivers::install_packages::InstallPackages,
     lockfile::LockedPackageId,
-    lua_version::LuaVersion,
+    lua,
     operations::{self, PackageInstallSpec},
     package_db::PackageDB,
     tree::{self, InstallTree, RockMatches},
@@ -23,7 +23,7 @@ pub struct Uninstall {
 
 /// Uninstall one or multiple rocks from the user tree
 pub async fn uninstall(uninstall_args: Uninstall, config: Config) -> Result<()> {
-    let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+    let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
 
     let package_matches = uninstall_args
         .packages
@@ -165,7 +165,7 @@ Reinstall?
 
     let mut has_dangling_rocks = true;
     while has_dangling_rocks {
-        let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+        let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
         let lockfile = tree.lockfile()?;
         let dangling_rocks = lockfile
             .rocks()

@@ -14,7 +14,7 @@ use crate::{
         FlushLockfileError, LockedPackage, LockedPackageId, LockedPackageLockType, Lockfile,
         ReadWrite,
     },
-    lua_installation,
+    lua,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     package_db::{self, PackageDB},
     tree::{self, InstallTree},
@@ -280,10 +280,10 @@ where
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] crate::lua_version::LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),

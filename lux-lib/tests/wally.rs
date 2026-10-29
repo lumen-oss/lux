@@ -6,7 +6,7 @@ use assert_fs::{prelude::PathCopy, TempDir};
 use flaky_test::flaky_test;
 use lux_lib::{
     config::ConfigBuilder,
-    lua_version::LuaVersion,
+    lua,
     operations::{BuildWorkspace, Run},
     path::LuaEnvironment,
     workspace::Workspace,
@@ -22,7 +22,7 @@ async fn test_install_wally_dependency() {
     let config = ConfigBuilder::new()
         .unwrap()
         .cache_dir(Some(project.path().join(".cache")))
-        .lua_version(Some(LuaVersion::Luau))
+        .lua_version(Some(lua::Version::Luau))
         .build()
         .unwrap();
 

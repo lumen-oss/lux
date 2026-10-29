@@ -4,10 +4,7 @@ use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
-use lux_lib::{
-    config::ConfigBuilder, lua_installation::detect_installed_lua_version, lua_version::LuaVersion,
-    operations::Test, workspace::Workspace,
-};
+use lux_lib::{config::ConfigBuilder, lua, operations::Test, workspace::Workspace};
 use tokio::fs::remove_dir_all;
 
 #[flaky_test(tokio, times = 5)]
@@ -21,7 +18,7 @@ async fn run_busted_test() {
     let tree_root = workspace.root().to_path_buf().join(".lux");
     let _ = remove_dir_all(&tree_root).await;
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -44,7 +41,7 @@ async fn run_busted_test_no_lock() {
     let tree_root = workspace.root().to_path_buf().join(".lux");
     let _ = remove_dir_all(&tree_root).await;
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()

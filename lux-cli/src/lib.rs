@@ -25,7 +25,7 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::{config::ConfigBuilder, lua_version::LuaVersion, workspace::Workspace};
+use lux_lib::{config::ConfigBuilder, lua, workspace::Workspace};
 use miette::IntoDiagnostic;
 use outdated::Outdated;
 use pack::Pack;
@@ -121,7 +121,7 @@ pub struct Cli {
     ///   - From the current project, if it has an exact Lua version requirement.{n}
     ///   - From the Lua installation that is available on the PATH.
     #[arg(long, global = true, value_name = "ver")]
-    pub lua_version: Option<LuaVersion>,
+    pub lua_version: Option<lua::Version>,
 
     /// Which tree to operate on.{n}
     /// In a workspace, this can be used to specify a detached workspace tree.
@@ -401,7 +401,7 @@ impl Commands {
     /// - if there is more than one project an no `--package` has been specified
     /// - if the command is not a project command
     /// - if the workspace cannot be loaded
-    pub fn lua_version(&self) -> Option<LuaVersion> {
+    pub fn lua_version(&self) -> Option<lua::Version> {
         match self {
             Self::Add(Add { package, .. })
             | Self::Build(Build { package, .. })
@@ -577,12 +577,12 @@ where
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
-fn project_lua_version(pkg: &Option<package::Name>) -> Option<LuaVersion> {
+fn project_lua_version(pkg: &Option<package::Name>) -> Option<lua::Version> {
     let current_workspace = Workspace::current().ok().flatten()?;
     let project = current_workspace.single_member_or_select(pkg).ok()?;
     let lua = project.toml().lua()?;
-    let mut matches = LuaVersion::iter().filter(|v| {
-        !matches!(v, LuaVersion::LuaJIT | LuaVersion::LuaJIT52) && lua.matches(&v.as_version())
+    let mut matches = lua::Version::iter().filter(|v| {
+        !matches!(v, lua::Version::LuaJIT | lua::Version::LuaJIT52) && lua.matches(&v.as_version())
     });
     let version = matches.next()?;
     if matches.next().is_none() {

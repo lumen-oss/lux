@@ -63,10 +63,7 @@ mod tests {
         TempDir,
     };
 
-    use lux_lib::{
-        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion,
-    };
+    use lux_lib::{config::ConfigBuilder, lua};
 
     #[tokio::test]
     async fn test_install_rockspec_from_vendored() {
@@ -131,7 +128,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let rockspec = temp_dir.child("test_rock-scm-1.rockspec");
         rockspec.write_str(rockspec_content).unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .vendor_dir(Some(vendor_dir.to_path_buf()))
@@ -184,7 +181,7 @@ mod tests {
             "#,
             )
             .unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .vendor_dir(Some(vendor_dir.to_path_buf()))

@@ -13,10 +13,8 @@ use walkdir::WalkDir;
 use crate::{
     build::{self, BuildBehaviour},
     config::Config,
-    fs,
-    lua_installation::{self, LuaInstallation},
+    fs, lua,
     lua_rockspec::RemoteLuaRockspec,
-    lua_version::LuaVersion,
     pipeline::build_local::Build,
     tree::{self, InstallTree, RockMatches, Tree},
     workspace::LUX_DIR_NAME,
@@ -83,7 +81,7 @@ pub enum TiniestError {
     Build(Box<build::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -109,7 +107,7 @@ pub(crate) async fn ensure_installed(
     if let Some(src_dir) = find_installed_src(tree, &tiniest)? {
         return Ok(src_dir);
     }
-    let lua = LuaInstallation::new(&LuaVersion::Luau, config).await?;
+    let lua = lua::Installation::new(&lua::Version::Luau, config).await?;
     let rockspec = RemoteLuaRockspec::new(&tiniest_rockspec()).unwrap_or_else(|err| {
         unreachable!("failed to parse the embedded tiniest rockspec: {err:?}")
     });

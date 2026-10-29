@@ -7,9 +7,8 @@ use lux_lib::{
     config::ConfigBuilder,
     drivers::install_packages::InstallPackages,
     git::{GitRef, GitSource},
-    lua_installation::detect_installed_lua_version,
+    lua,
     lua_rockspec::RockSourceSpec,
-    lua_version::LuaVersion,
     operations::{Exec, PackageInstallSpec},
     package_db::PackageDB,
     tree::EntryType,
@@ -67,7 +66,7 @@ async fn install_and_use(package: package::Req, module_name: &str) {
         .build_behaviour(BuildBehaviour::Force)
         .build();
     let dir = TempDir::new().unwrap();
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -77,7 +76,7 @@ async fn install_and_use(package: package::Req, module_name: &str) {
         .unwrap();
 
     let tree = config
-        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
     let installed = InstallPackages::new(&config, &tree)
         .package(install_spec)
@@ -122,7 +121,7 @@ async fn no_build_artifacts_in_cwd() {
 #[cfg(test)]
 async fn test_install(install_spec: PackageInstallSpec) {
     let dir = TempDir::new().unwrap();
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -132,7 +131,7 @@ async fn test_install(install_spec: PackageInstallSpec) {
         .unwrap();
 
     let tree = config
-        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
     let installed = InstallPackages::new(&config, &tree)
         .package(install_spec)

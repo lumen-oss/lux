@@ -4,11 +4,10 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
-use lux_lib::lua_version::LuaVersion;
 use lux_lib::operations::BuildWorkspace;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
-use lux_lib::{config::ConfigBuilder, lua_installation::detect_installed_lua_version};
+use lux_lib::{config::ConfigBuilder, lua};
 
 #[flaky_test(tokio, times = 5)]
 async fn test_build_multi_workspace_local_dependencies() {
@@ -17,7 +16,7 @@ async fn test_build_multi_workspace_local_dependencies() {
     let workspace_root = TempDir::new().unwrap();
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()

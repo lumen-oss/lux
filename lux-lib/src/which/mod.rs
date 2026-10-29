@@ -3,8 +3,8 @@ use std::{io, path::PathBuf};
 
 use crate::{
     config::Config,
+    lua,
     lua_rockspec::LuaModule,
-    lua_version::{LuaVersion, LuaVersionUnset},
     tree::{self, InstallTree},
 };
 use bon::Builder;
@@ -57,14 +57,14 @@ pub enum Error {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error("lua module {0} not found.")]
     ModuleNotFound(LuaModule),
 }
 
 fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
     let config = which.config;
-    let lua_version = LuaVersion::from(config)?;
+    let lua_version = lua::Version::from(config)?;
     let tree = config.user_tree(lua_version.clone())?;
     let lockfile = tree.lockfile()?;
     let local_packages = if which.packages.is_empty() {
@@ -130,7 +130,7 @@ mod tests {
         let config = ConfigBuilder::new()
             .unwrap()
             .user_tree(Some(tree_path.clone()))
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
 

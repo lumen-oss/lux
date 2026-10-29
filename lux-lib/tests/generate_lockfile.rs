@@ -9,8 +9,7 @@ use flaky_test::flaky_test;
 use lux_lib::{
     config::{Config, ConfigBuilder},
     drivers::sync::{Sync, SyncMode, TargetSet},
-    lua_installation::detect_installed_lua_version,
-    lua_version::LuaVersion,
+    lua,
     operations::GenerateLockfile,
     workspace::Workspace,
 };
@@ -40,7 +39,7 @@ type = "builtin"
 fn test_config() -> Config {
     ConfigBuilder::new()
         .unwrap()
-        .lua_version(detect_installed_lua_version().or(Some(LuaVersion::Lua51)))
+        .lua_version(lua::detect::installed_version().or(Some(lua::Version::Lua51)))
         .build()
         .unwrap()
 }

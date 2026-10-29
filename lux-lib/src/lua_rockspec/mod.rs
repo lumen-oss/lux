@@ -39,7 +39,7 @@ impl DisplayAsLuaValue for Url {
 
 use crate::{
     hash::HasIntegrity,
-    lua_version::{LuaVersion, LuaVersionUnset},
+    lua,
     project::{project_toml, ProjectRoot},
     rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
     ROCKSPEC_FUEL_LIMIT,
@@ -671,10 +671,10 @@ HINT: If Lux has auto-detected an incompatible Lua installation,
       Valid versions are: '5.1', '5.2', '5.3', '5.4', '5.5', 'jit', 'jit52' and 'luau'.
 "#
     )]
-    LuaVersionUnsupported(LuaVersion, package::Name, package::Version),
+    LuaVersionUnsupported(lua::Version, package::Name, package::Version),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
 }
 
 impl HasIntegrity for RemoteLuaRockspec {

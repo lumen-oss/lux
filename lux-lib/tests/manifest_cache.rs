@@ -5,8 +5,7 @@ use lux_lib::{
     build::BuildBehaviour,
     config::ConfigBuilder,
     drivers::install_packages::InstallPackages,
-    lua_installation::detect_installed_lua_version,
-    lua_version::LuaVersion,
+    lua,
     operations::PackageInstallSpec,
     package_db::PackageDB,
     tree::{EntryType, InstallTree},
@@ -16,7 +15,7 @@ use std::str::FromStr;
 #[cfg(test)]
 async fn install_rock_lockfile(rock: &str, manifest_cache: bool) -> String {
     let dir = TempDir::new().unwrap();
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let mut config_builder = ConfigBuilder::new()
         .unwrap()
@@ -28,7 +27,7 @@ async fn install_rock_lockfile(rock: &str, manifest_cache: bool) -> String {
     let config = config_builder.build().unwrap();
 
     let tree = config
-        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
 
     let spec =

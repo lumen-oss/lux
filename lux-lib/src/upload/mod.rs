@@ -743,7 +743,7 @@ mod test {
     use super::*;
 
     use crate::config::ConfigBuilder;
-    use crate::lua_version::LuaVersion;
+    use crate::lua;
     use assert_fs::prelude::*;
     use httptest::matchers::{contains, request};
     use httptest::responders::{json_encoded, status_code, Responder};
@@ -847,7 +847,7 @@ type = "builtin"
             .data_dir(Some(config_dir.path().to_path_buf()))
             .cache_dir(Some(config_dir.path().to_path_buf()))
             .no_manifest_cache(Some(true))
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
         let package_db = PackageDB::from_config(&config).await.unwrap();

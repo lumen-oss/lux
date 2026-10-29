@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lux_lib::{config::Config, lua_installation::LuaInstallation, lua_version::LuaVersion};
+use lux_lib::{config::Config, lua};
 use miette::{miette, IntoDiagnostic, Result};
 use tokio::process::Command;
 
@@ -43,7 +43,7 @@ pub(crate) async fn run(
 }
 
 async fn installed_luau_analyze(config: &Config) -> Result<PathBuf> {
-    let lua = LuaInstallation::new(&LuaVersion::Luau, config)
+    let lua = lua::Installation::new(&lua::Version::Luau, config)
         .await
         .map_err(|err| miette!("{err}"))?;
     let analyze_bin = lua

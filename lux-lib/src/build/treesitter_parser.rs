@@ -1,7 +1,7 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
+use crate::lua;
 use crate::lua_rockspec::TreesitterParserBuildSpec;
-use crate::lua_version::LuaVersionUnset;
 use crate::tree::InstallTree;
 use miette::Diagnostic;
 use std::num::ParseIntError;
@@ -17,7 +17,7 @@ const DEFAULT_GENERATE_ABI_VERSION: usize = tree_sitter::LANGUAGE_VERSION;
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error("invalid TREE_SITTER_LANGUAGE_VERSION")]
     #[diagnostic(help(
         "check the value of the TREE_SITTER_LANGUAGE_VERSION environment variable."

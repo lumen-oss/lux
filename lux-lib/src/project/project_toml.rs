@@ -6,13 +6,13 @@ use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
 use crate::lockfile::PinnedState;
+use crate::lua;
 use crate::lua_rockspec;
 use crate::lua_rockspec::DeploySpec;
 use crate::lua_rockspec::LocalLuaRockspec;
 use crate::lua_rockspec::LocalRockSource;
 use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::lua_rockspec::RockSourceSpec;
-use crate::lua_version::LuaVersion;
 use crate::operations::RunCommand;
 use crate::package;
 use crate::project::TomlDeError;
@@ -786,7 +786,7 @@ impl PartialProjectToml {
 // but we also add a special implementation for `ProjectToml` (as providing a lua version
 // is required even by the non-validated struct).
 impl LuaVersionCompatibility for PartialProjectToml {
-    fn validate_lua_version(&self, version: &LuaVersion) -> Result<(), LuaVersionError> {
+    fn validate_lua_version(&self, version: &lua::Version) -> Result<(), LuaVersionError> {
         if self.supports_lua_version(version) {
             Ok(())
         } else {
@@ -805,8 +805,8 @@ impl LuaVersionCompatibility for PartialProjectToml {
         Ok(())
     }
 
-    fn lua_version_matches(&self, config: &Config) -> Result<LuaVersion, LuaVersionError> {
-        let version = LuaVersion::from(config)?.clone();
+    fn lua_version_matches(&self, config: &Config) -> Result<lua::Version, LuaVersionError> {
+        let version = lua::Version::from(config)?.clone();
         if self.supports_lua_version(&version) {
             Ok(version)
         } else {
@@ -820,25 +820,25 @@ impl LuaVersionCompatibility for PartialProjectToml {
         }
     }
 
-    fn supports_lua_version(&self, lua_version: &LuaVersion) -> bool {
+    fn supports_lua_version(&self, lua_version: &lua::Version) -> bool {
         self.lua.as_ref().is_none_or(|lua| {
             if lua.is_luau() {
-                return matches!(lua_version, LuaVersion::Luau);
+                return matches!(lua_version, lua::Version::Luau);
             }
             lua.matches(&lua_version.as_version())
         })
     }
 
-    fn lua_version(&self) -> Option<LuaVersion> {
+    fn lua_version(&self) -> Option<lua::Version> {
         if self.lua.as_ref().is_some_and(|lua| lua.is_luau()) {
-            return Some(LuaVersion::Luau);
+            return Some(lua::Version::Luau);
         }
         for (possibility, version) in [
-            ("5.5.0", LuaVersion::Lua55),
-            ("5.4.0", LuaVersion::Lua54),
-            ("5.3.0", LuaVersion::Lua53),
-            ("5.2.0", LuaVersion::Lua52),
-            ("5.1.0", LuaVersion::Lua51),
+            ("5.5.0", lua::Version::Lua55),
+            ("5.4.0", lua::Version::Lua54),
+            ("5.3.0", lua::Version::Lua53),
+            ("5.2.0", lua::Version::Lua52),
+            ("5.1.0", lua::Version::Lua51),
         ] {
             let possibility = unsafe { possibility.parse().unwrap_unchecked() };
             if self

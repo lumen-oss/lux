@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::Args;
 use emmylua_check::OutputDestination;
 use itertools::Itertools;
-use lux_lib::{config::Config, lua_version::LuaVersion, workspace::Workspace};
+use lux_lib::{config::Config, lua, workspace::Workspace};
 
 use miette::{miette, Result};
 
@@ -109,7 +109,10 @@ pub async fn check(args: Check, config: Config) -> Result<()> {
         return Ok(());
     }
 
-    if config.lua_version().is_some_and(|v| v == &LuaVersion::Luau) {
+    if config
+        .lua_version()
+        .is_some_and(|v| v == &lua::Version::Luau)
+    {
         if args.ignore.is_some()
             || args.output_format == OutputFormat::Json
             || args.warnings_as_errors

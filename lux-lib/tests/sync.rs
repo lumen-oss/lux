@@ -82,7 +82,7 @@ async fn sync_multi_projects_same_dependencies() {
 #[cfg(not(target_os = "windows"))]
 #[flaky_test(tokio, times = 5)]
 async fn sync_clean_install_tree() {
-    use lux_lib::{lua_installation::detect_installed_lua_version, lua_version::LuaVersion};
+    use lux_lib::lua;
 
     let sample_project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/dependencies/");
@@ -110,7 +110,7 @@ fallo = "2.2.0"
     .unwrap();
     let workspace_tree = TempDir::new().unwrap();
     let workspace = Workspace::from_exact(project_dir.path()).unwrap().unwrap();
-    let lua_version = detect_installed_lua_version().unwrap_or(LuaVersion::Lua51);
+    let lua_version = lua::detect::installed_version().unwrap_or(lua::Version::Lua51);
     let config = ConfigBuilder::new()
         .unwrap()
         .lua_version(Some(lua_version.clone()))

@@ -1,8 +1,7 @@
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
 use lux_lib::{
-    config::ConfigBuilder, lua_version::LuaVersion, operations::BuildWorkspace, tree::RojoLayout,
-    workspace::Workspace,
+    config::ConfigBuilder, lua, operations::BuildWorkspace, tree::RojoLayout, workspace::Workspace,
 };
 use std::path::PathBuf;
 
@@ -20,7 +19,7 @@ async fn test_rojo_package_layout() {
 
     let config = ConfigBuilder::new()
         .unwrap()
-        .lua_version(Some(LuaVersion::Luau))
+        .lua_version(Some(lua::Version::Luau))
         .entrypoint_layout(RojoLayout)
         .build()
         .unwrap();
