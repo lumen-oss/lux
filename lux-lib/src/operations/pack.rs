@@ -162,7 +162,7 @@ fn contains_dylib(dir: &Path) -> bool {
         return false;
     }
     // Tree-sitter parsers are built with `DLL_EXTENSION`, which is `dylib` on macOS
-    // whereas lux names its C libraries `so`.
+    // whereas Lua names its C libraries `so`.
     let dylib_extensions = [c_dylib_extension(), std::env::consts::DLL_EXTENSION];
     WalkDir::new(dir).into_iter().any(|entry| {
         entry.is_ok_and(|entry| {
