@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{config::Config, lua_version::LuaVersion, operations::Exec, workspace::Workspace};
+use lux_lib::{config::Config, lua, operations::Exec, workspace::Workspace};
 use path_slash::PathBufExt;
 
 use crate::utils;
@@ -49,7 +49,10 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
         }
     };
 
-    if config.lua_version().is_some_and(|v| v == &LuaVersion::Luau) {
+    if config
+        .lua_version()
+        .is_some_and(|v| v == &lua::Version::Luau)
+    {
         utils::luau_analyze::run(
             &config,
             vec![target_path],

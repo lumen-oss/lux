@@ -514,7 +514,7 @@ mod tests {
     fn test_config() -> Config {
         ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(crate::lua_version::LuaVersion::Lua51))
+            .lua_version(Some(crate::lua::Version::Lua51))
             .build()
             .unwrap()
     }

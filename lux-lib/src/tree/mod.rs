@@ -3,8 +3,7 @@ use crate::{
     config::Config,
     fs,
     lockfile::{self, LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, ReadOnly},
-    lua_version::LuaVersion,
-    path,
+    lua, path,
     variables::{GetVariableError, HasVariables},
 };
 use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
@@ -34,7 +33,7 @@ const LOCKFILE_NAME: &str = "lux.lock";
 /// - /bin - binary files produced by various rocks
 pub trait InstallTree {
     /// The Lua version for which to install packages.
-    fn version(&self) -> &LuaVersion;
+    fn version(&self) -> &lua::Version;
     /// The root directory of the tree
     fn root(&self) -> PathBuf;
     /// Where wrapped package binaries are installed
@@ -132,7 +131,7 @@ impl RockLayout {
 #[derive(Clone, Debug)]
 pub struct Tree {
     /// The Lua version of the tree.
-    version: LuaVersion,
+    version: lua::Version,
     /// The parent of this tree's root directory.
     root_parent: PathBuf,
     /// The root of this tree's test dependency tree.
@@ -172,7 +171,11 @@ impl HasVariables for RockLayout {
 impl Tree {
     /// NOTE: This is exposed for use by the config module.
     /// Use `Config::tree()`
-    pub(crate) fn new(root: PathBuf, version: LuaVersion, config: &Config) -> Result<Self, Error> {
+    pub(crate) fn new(
+        root: PathBuf,
+        version: lua::Version,
+        config: &Config,
+    ) -> Result<Self, Error> {
         let version_dir = root.join(version.to_string());
         let test_tree_dir = version_dir.join("test_dependencies");
         let build_tree_dir = version_dir.join("build_dependencies");
@@ -183,7 +186,7 @@ impl Tree {
         root: PathBuf,
         test_tree_dir: PathBuf,
         build_tree_dir: PathBuf,
-        version: LuaVersion,
+        version: lua::Version,
         config: &Config,
     ) -> Result<Self, Error> {
         let path_with_version = root.join(version.to_string());
@@ -240,7 +243,7 @@ impl Tree {
 }
 
 impl InstallTree for Tree {
-    fn version(&self) -> &LuaVersion {
+    fn version(&self) -> &lua::Version {
         &self.version
     }
 
@@ -411,7 +414,7 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
-        lua_version::LuaVersion,
+        lua,
         remote_package_source::RemotePackageSource,
         tree::{InstallTree, RockLayout},
         variables,
@@ -431,7 +434,7 @@ mod tests {
             .user_tree(Some(tree_path.clone()))
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
         let mock_hashes = LockedPackageHashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
@@ -481,7 +484,7 @@ mod tests {
             .user_tree(Some(tree_path.clone()))
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
         let result = tree.list().unwrap();
         // note: sorted_redaction doesn't work because we have a nested Vec
         let sorted_result: Vec<(package::Name, Vec<package::Version>)> = result
@@ -516,7 +519,7 @@ mod tests {
             .user_tree(Some(tree_path.clone()))
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
         let mock_hashes = LockedPackageHashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="

@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{
-    config::Config, lua_version::LuaVersion, package_db::PackageDB, workspace::Workspace,
-};
+use lux_lib::{config::Config, lua, package_db::PackageDB, workspace::Workspace};
 
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
@@ -27,7 +25,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     let tree = match &workspace {
         Some(project) => project.tree(&config)?,
         None => {
-            let lua_version = LuaVersion::from(&config)?.clone();
+            let lua_version = lua::Version::from(&config)?.clone();
             config.user_tree(lua_version)?
         }
     };

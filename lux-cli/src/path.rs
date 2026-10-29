@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use lux_lib::{
     config::Config,
-    lua_version::LuaVersion,
+    lua,
     path::{BinPath, PackagePath, Paths},
     tree::InstallTree,
 };
@@ -95,7 +95,7 @@ pub async fn path(path_data: Path, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
     let cmd = path_data.cmd.unwrap_or_default();
     let prepend = path_data.prepend;
-    if tree.version() == &LuaVersion::Luau {
+    if tree.version() == &lua::Version::Luau {
         return match cmd {
             PathCmd::Full(args) => {
                 let paths = Paths::new(&tree)?;

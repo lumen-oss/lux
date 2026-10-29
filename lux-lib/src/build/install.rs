@@ -14,8 +14,7 @@ use which::which;
 
 use crate::{
     config::Config,
-    fs,
-    lua_installation::LuaInstallation,
+    fs, lua,
     lua_rockspec::{DeploySpec, LuaModule},
     path::{self, Paths},
     tree::InstallTree,
@@ -86,7 +85,7 @@ pub(crate) async fn binary(
     source: &Path,
     target: &str,
     tree: &impl InstallTree,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     deploy: &DeploySpec,
     config: &Config,
 ) -> Result<PathBuf, Error> where
@@ -115,7 +114,7 @@ async fn wrapped_binary(
     source: &Path,
     target: &str,
     tree: &impl InstallTree,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     config: &Config,
 ) -> Result<PathBuf, Error> {
     let unwrapped_bin_dir = tree.unwrapped_bin();
@@ -183,7 +182,7 @@ exit /b %ERRORLEVEL%
 #[tracing::instrument(level = "trace")]
 async fn is_compatible_lua_script(
     file: &Path,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     paths: &Paths,
     config: &Config,
 ) -> bool {
@@ -223,7 +222,7 @@ async fn is_compatible_lua_script(
 #[tracing::instrument(level = "trace")]
 async fn is_compatible_lua_script_fallback(
     file: &Path,
-    lua_installation: &LuaInstallation,
+    lua_installation: &lua::Installation,
     config: &Config,
 ) -> bool {
     if let Ok(file_content) = fs::tokio::read_to_string(&file).await {
@@ -267,23 +266,20 @@ pub(crate) fn detect_binaries(build_dir: &Path) -> Vec<PathBuf> {
 mod tests {
     use tokio::process::Command;
 
-    use crate::{
-        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion, tree::Tree,
-    };
+    use crate::{config::ConfigBuilder, lua, tree::Tree};
 
     use super::*;
 
     #[tokio::test]
     async fn test_is_compatible_lua_script() {
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .lua_version(lua_version)
             .build()
             .unwrap();
         let lua_version = config.lua_version().unwrap();
-        let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
+        let lua = lua::Installation::new(lua_version, &config).await.unwrap();
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_valid");
         let temp_dir = assert_fs::TempDir::new().unwrap().to_path_buf();
@@ -297,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_wrapped_binary() {
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let temp = assert_fs::TempDir::new().unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
@@ -306,7 +302,7 @@ mod tests {
             .build()
             .unwrap();
         let lua_version = config.lua_version().unwrap();
-        let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
+        let lua = lua::Installation::new(lua_version, &config).await.unwrap();
         let tree = config.user_tree(lua_version.clone()).unwrap();
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_valid");

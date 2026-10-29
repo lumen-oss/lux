@@ -19,7 +19,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "luau-transpile"))]
-use crate::lua_version::LuaVersion;
+use crate::lua;
 
 use super::{compile, install};
 
@@ -63,7 +63,7 @@ pub enum Error {
     ))]
     LuauTranspileDisabled {
         module: String,
-        lua_version: LuaVersion,
+        lua_version: lua::Version,
     },
 }
 

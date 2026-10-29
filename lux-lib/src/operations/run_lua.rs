@@ -4,12 +4,7 @@
 
 use bon::Builder;
 
-use crate::{
-    config::Config,
-    lua_installation::{self, LuaInstallation},
-    lua_version::LuaVersion,
-    tree::InstallTree,
-};
+use crate::{config::Config, lua, tree::InstallTree};
 
 use std::{
     io,
@@ -22,7 +17,6 @@ use thiserror::Error;
 use tokio::process::Command;
 
 use crate::{
-    lua_installation::{LuaBinary, LuaBinaryError},
     path::{self, LuaEnvironment, Paths},
     tree,
     tree::Tree,
@@ -30,12 +24,9 @@ use crate::{
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum RunLuaError {
-    #[error("error running lua")]
-    #[diagnostic(forward(0))]
-    LuaBinary(#[from] LuaBinaryError),
     #[error("failed to detect or install the lua runtime")]
     #[diagnostic(forward(0))]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[error("failed to run {lua_cmd}: {source}")]
     LuaCommandFailed {
         lua_cmd: String,
@@ -62,7 +53,7 @@ pub struct RunLua<'a> {
     root: &'a Path,
     tree: &'a Tree,
     config: &'a Config,
-    lua_cmd: LuaBinary,
+    lua_cmd: lua::Binary,
     args: &'a Vec<String>,
     prepend_test_paths: Option<bool>,
     prepend_build_paths: Option<bool>,
@@ -177,19 +168,19 @@ async fn detect_lua_module(
 /// Resolves the interpreter binary for the given Lua version.
 ///
 /// Falls back to probing, reusing or building a toolchain via
-/// `LuaInstallation` when no suitable binary is found on the PATH.
+/// `Installation` when no suitable binary is found on the PATH.
 pub(crate) async fn resolve_lua_runtime(
-    version: &LuaVersion,
+    version: &lua::Version,
     config: &Config,
 ) -> Result<PathBuf, RunLuaError> {
-    match <LuaBinary as TryInto<PathBuf>>::try_into(LuaBinary::new(version.clone(), config)) {
+    match <lua::Binary as TryInto<PathBuf>>::try_into(lua::Binary::new(version.clone(), config)) {
         Ok(lua_cmd) => Ok(lua_cmd),
         Err(err) => {
-            let lua_installation = LuaInstallation::new(version, config).await?;
+            let lua_installation = lua::Installation::new(version, config).await?;
             lua_installation
                 .bin()
                 .clone()
-                .ok_or(RunLuaError::LuaBinary(err))
+                .ok_or(RunLuaError::LuaInstallation(err))
         }
     }
 }
@@ -217,7 +208,7 @@ mod tests {
         let package_path =
             PackagePath::from_str(lux_path_expr.to_slash_lossy().to_string().as_str()).unwrap();
         let package_cpath = PackagePath::default();
-        let paths = Paths::test(LuaVersion::Lua54, package_path, package_cpath);
+        let paths = Paths::test(lua::Version::Lua54, package_path, package_cpath);
         let lua_cmd = which("lua")
             .ok()
             .or(which("luajit").ok())

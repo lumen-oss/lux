@@ -1,5 +1,14 @@
 //! Special utilities for the Lua bridge.
 
+pub mod binary;
+pub mod detect;
+pub mod installation;
+pub mod version;
+
+pub use binary::Binary;
+pub use installation::Installation;
+pub use version::Version;
+
 use tokio::runtime::{Builder, Runtime};
 
 use lazy_static::lazy_static;
@@ -16,6 +25,6 @@ lazy_static! {
     };
 }
 
-pub fn lua_runtime() -> &'static Runtime {
+pub fn runtime() -> &'static Runtime {
     &LUA_RUNTIME
 }

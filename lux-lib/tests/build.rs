@@ -3,17 +3,12 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
-use lux_lib::lua_version::LuaVersion;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{
-    build::BuildBehaviour::Force,
-    config::ConfigBuilder,
-    lua_installation::{detect_installed_lua_version, LuaInstallation},
-    lua_rockspec::RemoteLuaRockspec,
-    pipeline::build_local::Build,
-    tree,
+    build::BuildBehaviour::Force, config::ConfigBuilder, lua, lua_rockspec::RemoteLuaRockspec,
+    pipeline::build_local::Build, tree,
 };
 use tokio::runtime::Builder;
 
@@ -35,7 +30,7 @@ async fn builtin_build() {
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -45,7 +40,7 @@ async fn builtin_build() {
         .build()
         .unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
 
@@ -75,7 +70,7 @@ async fn make_build() {
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -84,7 +79,7 @@ async fn make_build() {
         .build()
         .unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
 
@@ -112,8 +107,8 @@ async fn cmake_build() {
 async fn command_build() {
     // The rockspec appears to be broken when using luajit headers on macos
     let config = ConfigBuilder::new().unwrap().build().unwrap();
-    let lua_version = LuaVersion::from(&config).unwrap_or(&LuaVersion::Lua51);
-    if cfg!(target_os = "macos") && *lua_version == LuaVersion::LuaJIT {
+    let lua_version = lua::Version::from(&config).unwrap_or(&lua::Version::Lua51);
+    if cfg!(target_os = "macos") && *lua_version == lua::Version::LuaJIT {
         println!("luaposix is broken on macos/luajit! Skipping...");
         return;
     }
@@ -129,7 +124,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
     let content = String::from_utf8(std::fs::read(rockspec_path).unwrap()).unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -138,7 +133,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
         .build()
         .unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
 
@@ -168,7 +163,7 @@ async fn treesitter_parser_build() {
     let content = String::from_utf8(std::fs::read(rockspec).unwrap()).unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -177,10 +172,10 @@ async fn treesitter_parser_build() {
         .build()
         .unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config
-        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
 
     let package = Build::new()
@@ -214,7 +209,7 @@ async fn treesitter_parser_build_source_queries() {
     let content = String::from_utf8(std::fs::read(rockspec).unwrap()).unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -223,10 +218,10 @@ async fn treesitter_parser_build_source_queries() {
         .build()
         .unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config
-        .user_tree(LuaVersion::from(&config).unwrap().clone())
+        .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
 
     let package = Build::new()
@@ -275,7 +270,7 @@ async fn test_build_local_project_no_source() {
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
     let rockspec = workspace.members().first().local_remote_rockspec().unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -285,7 +280,7 @@ async fn test_build_local_project_no_source() {
 
     let tree = workspace.tree(&config).unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let package = Build::new()
         .rockspec(&rockspec)
@@ -338,7 +333,7 @@ async fn test_build_local_project_only_src() {
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
     let project_toml = workspace.members().first().toml().into_local().unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -348,7 +343,7 @@ async fn test_build_local_project_only_src() {
 
     let tree = workspace.tree(&config).unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let pkg = Build::new()
         .rockspec(&project_toml)
@@ -381,7 +376,7 @@ fn test_build_multiple_treesitter_parsers() {
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let runtime = Builder::new_multi_thread()
         .worker_threads(4)
@@ -400,7 +395,7 @@ fn test_build_multiple_treesitter_parsers() {
             .unwrap();
 
         let tree = config
-            .user_tree(LuaVersion::from(&config).unwrap().clone())
+            .user_tree(lua::Version::from(&config).unwrap().clone())
             .unwrap();
 
         let config = config.clone();
@@ -410,7 +405,7 @@ fn test_build_multiple_treesitter_parsers() {
         handles.push(
             runtime.spawn(
                 async move {
-                    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+                    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
                     Build::new()
                         .rockspec(&rockspec)
@@ -441,7 +436,7 @@ async fn build_project_with_git_dependency() {
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
     let project_toml = workspace.members().first().toml().into_local().unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -451,7 +446,7 @@ async fn build_project_with_git_dependency() {
 
     let tree = workspace.tree(&config).unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     Build::new()
         .rockspec(&project_toml)
@@ -475,7 +470,7 @@ async fn test_multiline_command_build() {
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
     let project_toml = workspace.members().first().toml().into_local().unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -485,7 +480,7 @@ async fn test_multiline_command_build() {
 
     let tree = workspace.tree(&config).unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let package = Build::new()
         .rockspec(&project_toml)
@@ -515,7 +510,7 @@ async fn builtin_build_install_include() {
     .unwrap();
     let rockspec = RemoteLuaRockspec::new(&content).unwrap();
 
-    let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+    let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
     let config = ConfigBuilder::new()
         .unwrap()
@@ -524,7 +519,7 @@ async fn builtin_build_install_include() {
         .build()
         .unwrap();
 
-    let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+    let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
 

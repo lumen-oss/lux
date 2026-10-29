@@ -9,8 +9,8 @@ use crate::{
     config::{self, Config, ConfigBuilder},
     fs,
     lockfile::{self, ReadOnly, WorkspaceLockfile},
+    lua,
     lua_rockspec::LuaVersionError,
-    lua_version::LuaVersion,
     project::{self, Project, TomlDeError, PROJECT_TOML},
     tree::{self, InstallTree, Tree},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
@@ -255,7 +255,7 @@ impl Workspace {
         self.lua_version_tree(self.lua_version(config)?, config)
     }
 
-    pub fn lua_version(&self, config: &Config) -> Result<LuaVersion, LuaVersionError> {
+    pub fn lua_version(&self, config: &Config) -> Result<lua::Version, LuaVersionError> {
         let mut lua_version = self.members().first().lua_version(config)?;
         // Ensure the lua version specified by the config matches all projects
         for project in self.members() {
@@ -266,7 +266,7 @@ impl Workspace {
 
     pub(crate) fn lua_version_tree(
         &self,
-        lua_version: LuaVersion,
+        lua_version: lua::Version,
         config: &Config,
     ) -> Result<Tree, TreeError> {
         let root_dir = config
@@ -448,7 +448,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::ConfigBuilder, fs, lua_version::LuaVersion};
+    use crate::{config::ConfigBuilder, fs, lua};
     use std::path::PathBuf;
 
     use assert_fs::prelude::*;
@@ -623,13 +623,13 @@ no_tfa = true
         let workspace_config = workspace.config().unwrap().unwrap();
 
         let config = ConfigBuilder::default()
-            .lua_version(Some(LuaVersion::Lua53))
+            .lua_version(Some(lua::Version::Lua53))
             .merge(workspace_config)
             .build()
             .unwrap();
 
         // The workspace-local config takes precedence over the base config,
-        assert_eq!(config.lua_version(), Some(&LuaVersion::Lua54));
+        assert_eq!(config.lua_version(), Some(&lua::Version::Lua54));
         assert!(!config.generate_luarc());
         assert!(config.no_tfa());
 

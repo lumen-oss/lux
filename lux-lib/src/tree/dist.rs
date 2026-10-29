@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     fs,
     lockfile::{LockedPackage, LockedPackageSpec, Lockfile, ReadOnly},
-    lua_version::LuaVersion,
+    lua,
 };
 use miette::{Diagnostic, Result};
 use thiserror::Error;
@@ -34,7 +34,11 @@ struct ConflictingPackageError {
 pub struct FlatDistTree(Tree);
 
 impl FlatDistTree {
-    pub fn new(root: PathBuf, version: LuaVersion, config: &Config) -> Result<Self, super::Error> {
+    pub fn new(
+        root: PathBuf,
+        version: lua::Version,
+        config: &Config,
+    ) -> Result<Self, super::Error> {
         let version_dir = root.join(version.to_string());
         let test_tree_dir = version_dir.join("test_dependencies");
         let build_tree_dir = version_dir.join("build_dependencies");
@@ -83,7 +87,7 @@ impl Drop for FlatDistTree {
 }
 
 impl InstallTree for FlatDistTree {
-    fn version(&self) -> &LuaVersion {
+    fn version(&self) -> &lua::Version {
         self.0.version()
     }
 

@@ -15,7 +15,7 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, EnumIter)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub enum LuaVersion {
+pub enum Version {
     #[serde(rename = "5.1")]
     Lua51,
     #[serde(rename = "5.2")]
@@ -37,31 +37,36 @@ pub enum LuaVersion {
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("unsupported Lua version: '{0}'")]
-    UnsupportedLuaVersion(package::Version),
+    UnsupportedVersion(package::Version),
+    #[error("lua version not set")]
+    Unset {
+        #[help]
+        help: String,
+    },
 }
 
-impl LuaVersion {
+impl Version {
     pub fn as_version(&self) -> package::Version {
         unsafe {
             match self {
-                LuaVersion::Lua51 => "5.1.0".parse().unwrap_unchecked(),
-                LuaVersion::Lua52 => "5.2.0".parse().unwrap_unchecked(),
-                LuaVersion::Lua53 => "5.3.0".parse().unwrap_unchecked(),
-                LuaVersion::Lua54 => "5.4.0".parse().unwrap_unchecked(),
-                LuaVersion::Lua55 => "5.5.0".parse().unwrap_unchecked(),
-                LuaVersion::LuaJIT => "5.1.0".parse().unwrap_unchecked(),
-                LuaVersion::LuaJIT52 => "5.2.0".parse().unwrap_unchecked(),
-                LuaVersion::Luau => "5.1.0".parse().unwrap_unchecked(),
+                Version::Lua51 => "5.1.0".parse().unwrap_unchecked(),
+                Version::Lua52 => "5.2.0".parse().unwrap_unchecked(),
+                Version::Lua53 => "5.3.0".parse().unwrap_unchecked(),
+                Version::Lua54 => "5.4.0".parse().unwrap_unchecked(),
+                Version::Lua55 => "5.5.0".parse().unwrap_unchecked(),
+                Version::LuaJIT => "5.1.0".parse().unwrap_unchecked(),
+                Version::LuaJIT52 => "5.2.0".parse().unwrap_unchecked(),
+                Version::Luau => "5.1.0".parse().unwrap_unchecked(),
             }
         }
     }
     pub fn version_compatibility_str(&self) -> String {
         match self {
-            LuaVersion::Lua51 | LuaVersion::LuaJIT | LuaVersion::Luau => "5.1".into(),
-            LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2".into(),
-            LuaVersion::Lua53 => "5.3".into(),
-            LuaVersion::Lua54 => "5.4".into(),
-            LuaVersion::Lua55 => "5.5".into(),
+            Version::Lua51 | Version::LuaJIT | Version::Luau => "5.1".into(),
+            Version::Lua52 | Version::LuaJIT52 => "5.2".into(),
+            Version::Lua53 => "5.3".into(),
+            Version::Lua54 => "5.4".into(),
+            Version::Lua55 => "5.5".into(),
         }
     }
     pub fn as_version_req(&self) -> package::VersionReq {
@@ -72,24 +77,24 @@ impl LuaVersion {
         }
     }
 
-    /// Get the LuaVersion from a version that has been parsed from the `lua -v` output
-    pub fn from_version(version: package::Version) -> Result<LuaVersion, Error> {
+    /// Get the Version from a version that has been parsed from the `lua -v` output
+    pub fn from_version(version: package::Version) -> Result<Version, Error> {
         // NOTE: Special case. luajit -v outputs 2.x.y as a version
         let luajit_version_req: package::VersionReq = unsafe { "~> 2".parse().unwrap_unchecked() };
         if luajit_version_req.matches(&version) {
-            Ok(LuaVersion::LuaJIT)
-        } else if LuaVersion::Lua51.as_version_req().matches(&version) {
-            Ok(LuaVersion::Lua51)
-        } else if LuaVersion::Lua52.as_version_req().matches(&version) {
-            Ok(LuaVersion::Lua52)
-        } else if LuaVersion::Lua53.as_version_req().matches(&version) {
-            Ok(LuaVersion::Lua53)
-        } else if LuaVersion::Lua54.as_version_req().matches(&version) {
-            Ok(LuaVersion::Lua54)
-        } else if LuaVersion::Lua55.as_version_req().matches(&version) {
-            Ok(LuaVersion::Lua55)
+            Ok(Version::LuaJIT)
+        } else if Version::Lua51.as_version_req().matches(&version) {
+            Ok(Version::Lua51)
+        } else if Version::Lua52.as_version_req().matches(&version) {
+            Ok(Version::Lua52)
+        } else if Version::Lua53.as_version_req().matches(&version) {
+            Ok(Version::Lua53)
+        } else if Version::Lua54.as_version_req().matches(&version) {
+            Ok(Version::Lua54)
+        } else if Version::Lua55.as_version_req().matches(&version) {
+            Ok(Version::Lua55)
         } else {
-            Err(Error::UnsupportedLuaVersion(version))
+            Err(Error::UnsupportedVersion(version))
         }
     }
 
@@ -109,8 +114,8 @@ impl LuaVersion {
             .or_else(|| self.probe_lux_lib_dir())
             .or_else(|| {
                 match self {
-                    LuaVersion::LuaJIT => Some(LuaVersion::Lua51),
-                    LuaVersion::LuaJIT52 => Some(LuaVersion::Lua52),
+                    Version::LuaJIT => Some(Version::Lua51),
+                    Version::LuaJIT52 => Some(Version::Lua52),
                     _ => None,
                 }
                 .and_then(|compat_version| compat_version.probe_lux_lib_dir())
@@ -130,62 +135,54 @@ impl LuaVersion {
     }
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-#[error("lua version not set")]
-pub struct LuaVersionUnset {
-    #[help]
-    help: String,
-}
-
-impl LuaVersion {
-    pub fn from(config: &Config) -> Result<&Self, LuaVersionUnset> {
-        config.lua_version().ok_or(LuaVersionUnset {
+impl Version {
+    pub fn from(config: &Config) -> Result<&Self, Error> {
+        config.lua_version().ok_or(Error::Unset {
             help: format!(
                 r#"provide a version through `lx --lua-version <ver> <cmd>`
 or make sure Lux can discover your Lua installation on your PATH.
 valid versions are: {}
 "#,
-                LuaVersion::iter().join(",")
+                Version::iter().join(",")
             ),
         })
     }
 }
 
-impl FromStr for LuaVersion {
+impl FromStr for Version {
     type Err = String;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            "5.1" | "51" => Ok(LuaVersion::Lua51),
-            "5.2" | "52" => Ok(LuaVersion::Lua52),
-            "5.3" | "53" => Ok(LuaVersion::Lua53),
-            "5.4" | "54" => Ok(LuaVersion::Lua54),
-            "5.5" | "55" => Ok(LuaVersion::Lua55),
-            "jit" | "luajit" => Ok(LuaVersion::LuaJIT),
-            "jit52" | "luajit52" => Ok(LuaVersion::LuaJIT52),
-            "luau" => Ok(LuaVersion::Luau),
+            "5.1" | "51" => Ok(Version::Lua51),
+            "5.2" | "52" => Ok(Version::Lua52),
+            "5.3" | "53" => Ok(Version::Lua53),
+            "5.4" | "54" => Ok(Version::Lua54),
+            "5.5" | "55" => Ok(Version::Lua55),
+            "jit" | "luajit" => Ok(Version::LuaJIT),
+            "jit52" | "luajit52" => Ok(Version::LuaJIT52),
+            "luau" => Ok(Version::Luau),
             _ => Err(format!(
                 r#"unrecognized Lua version.
 supported versions: {}
             "#,
-                LuaVersion::iter().join(",")
+                Version::iter().join(",")
             )),
         }
     }
 }
 
-impl Display for LuaVersion {
+impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            LuaVersion::Lua51 => "5.1",
-            LuaVersion::Lua52 => "5.2",
-            LuaVersion::Lua53 => "5.3",
-            LuaVersion::Lua54 => "5.4",
-            LuaVersion::Lua55 => "5.5",
-            LuaVersion::LuaJIT => "jit",
-            LuaVersion::LuaJIT52 => "jit52",
-            LuaVersion::Luau => "luau",
+            Version::Lua51 => "5.1",
+            Version::Lua52 => "5.2",
+            Version::Lua53 => "5.3",
+            Version::Lua54 => "5.4",
+            Version::Lua55 => "5.5",
+            Version::LuaJIT => "jit",
+            Version::LuaJIT52 => "jit52",
+            Version::Luau => "luau",
         })
     }
 }

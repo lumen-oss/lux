@@ -78,10 +78,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
 mod tests {
     use super::*;
 
-    use crate::{
-        config::ConfigBuilder, lua_installation::detect_installed_lua_version,
-        lua_version::LuaVersion,
-    };
+    use crate::{config::ConfigBuilder, lua};
     #[cfg(feature = "impure_tests")]
     use crate::{fs, tree::InstallTree};
     use assert_fs::prelude::PathCopy;
@@ -109,7 +106,7 @@ mod tests {
         fs::tokio::write(&bar_bin_file, "print('hello')")
             .await
             .unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .data_dir(Some(data_dir))
@@ -145,7 +142,7 @@ mod tests {
         fs::tokio::write(&init_lua_file, "print('hello')")
             .await
             .unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .data_dir(Some(data_dir))
@@ -174,7 +171,7 @@ mod tests {
         let temp_dir = assert_fs::TempDir::new().unwrap();
         temp_dir.copy_from(&project_root, &["**"]).unwrap();
         let project_root = temp_dir.path();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .data_dir(Some(data_dir))

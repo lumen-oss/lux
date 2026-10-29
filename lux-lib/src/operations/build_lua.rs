@@ -10,7 +10,7 @@ use crate::{
     config::Config,
     fs,
     hash::HasIntegrity,
-    lua_version::LuaVersion,
+    lua,
     operations::{self, UnpackError},
 };
 use bon::Builder;
@@ -42,7 +42,7 @@ const LUAU_VERSION: &str = "0.744";
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct BuildLua<'a> {
-    lua_version: &'a LuaVersion,
+    lua_version: &'a lua::Version,
     install_dir: &'a Path,
     config: &'a Config,
 }
@@ -101,13 +101,13 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
         let args = self._build();
         let lua_version = args.lua_version;
         match lua_version {
-            LuaVersion::Lua51
-            | LuaVersion::Lua52
-            | LuaVersion::Lua53
-            | LuaVersion::Lua54
-            | LuaVersion::Lua55 => do_build_lua(args).await,
-            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 => do_build_luajit(args).await,
-            LuaVersion::Luau => do_build_luau(args).await,
+            lua::Version::Lua51
+            | lua::Version::Lua52
+            | lua::Version::Lua53
+            | lua::Version::Lua54
+            | lua::Version::Lua55 => do_build_lua(args).await,
+            lua::Version::LuaJIT | lua::Version::LuaJIT52 => do_build_luajit(args).await,
+            lua::Version::Luau => do_build_luau(args).await,
         }
     }
 }
@@ -196,7 +196,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
         make_cmd.env("TARGET_LD", format!("{compiler_path} {compiler_args}"));
     }
     let mut xcflags = vec!["-fPIC"];
-    if lua_version == &LuaVersion::LuaJIT52 {
+    if lua_version == &lua::Version::LuaJIT52 {
         xcflags.push("-DLUAJIT_ENABLE_LUA52COMPAT");
     }
     if cfg!(debug_assertions) {
@@ -303,7 +303,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     let src_dir = build_dir.join("src");
     let mut msvcbuild = Command::new(src_dir.join("msvcbuild.bat"));
     msvcbuild.current_dir(&src_dir);
-    if lua_version == &LuaVersion::LuaJIT52 {
+    if lua_version == &lua::Version::LuaJIT52 {
         msvcbuild.arg("lua52compat");
     }
     let host = Triple::host();
@@ -468,12 +468,12 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 
     let (source_integrity, pkg_version): (Integrity, &str) = unsafe {
         match lua_version {
-            LuaVersion::Lua51 => (LUA51_HASH.parse().unwrap_unchecked(), LUA51_VERSION),
-            LuaVersion::Lua52 => (LUA52_HASH.parse().unwrap_unchecked(), LUA52_VERSION),
-            LuaVersion::Lua53 => (LUA53_HASH.parse().unwrap_unchecked(), LUA53_VERSION),
-            LuaVersion::Lua54 => (LUA54_HASH.parse().unwrap_unchecked(), LUA54_VERSION),
-            LuaVersion::Lua55 => (LUA55_HASH.parse().unwrap_unchecked(), LUA55_VERSION),
-            LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
+            lua::Version::Lua51 => (LUA51_HASH.parse().unwrap_unchecked(), LUA51_VERSION),
+            lua::Version::Lua52 => (LUA52_HASH.parse().unwrap_unchecked(), LUA52_VERSION),
+            lua::Version::Lua53 => (LUA53_HASH.parse().unwrap_unchecked(), LUA53_VERSION),
+            lua::Version::Lua54 => (LUA54_HASH.parse().unwrap_unchecked(), LUA54_VERSION),
+            lua::Version::Lua55 => (LUA55_HASH.parse().unwrap_unchecked(), LUA55_VERSION),
+            lua::Version::LuaJIT | lua::Version::LuaJIT52 | lua::Version::Luau => unreachable!(),
         }
     };
 
@@ -520,7 +520,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 async fn do_build_lua_unix(
     args: BuildLua<'_>,
     build_dir: &Path,
-    lua_version: &LuaVersion,
+    lua_version: &lua::Version,
     _pkg_version: &str,
 ) -> Result<(), BuildLuaError> {
     tracing::debug!(message = "Compiling Lua (Unix)...");
@@ -529,7 +529,7 @@ async fn do_build_lua_unix(
 
     let build_target = if cfg!(target_os = "linux") {
         // only lua 5.4 has a specific `linux-readline` target
-        if matches!(&lua_version, LuaVersion::Lua54) {
+        if matches!(&lua_version, lua::Version::Lua54) {
             "linux-readline"
         } else {
             "linux"
@@ -599,7 +599,7 @@ async fn do_build_lua_unix(
 async fn do_build_lua_msvc(
     args: BuildLua<'_>,
     build_dir: &Path,
-    lua_version: &LuaVersion,
+    lua_version: &lua::Version,
     _pkg_version: &str,
 ) -> Result<(), BuildLuaError> {
     tracing::debug!(message = "Compiling Lua (MSVC)...");
@@ -625,21 +625,21 @@ async fn do_build_lua_msvc(
     let lua_c_bin_name = "luac";
 
     let dll_name = match lua_version {
-        LuaVersion::Lua51 => "lua51",
-        LuaVersion::Lua52 => "lua52",
-        LuaVersion::Lua53 => "lua53",
-        LuaVersion::Lua54 => "lua54",
-        LuaVersion::Lua55 => "lua55",
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
+        lua::Version::Lua51 => "lua51",
+        lua::Version::Lua52 => "lua52",
+        lua::Version::Lua53 => "lua53",
+        lua::Version::Lua54 => "lua54",
+        lua::Version::Lua55 => "lua55",
+        lua::Version::LuaJIT | lua::Version::LuaJIT52 | lua::Version::Luau => unreachable!(),
     };
 
     let lib_name = match lua_version {
-        LuaVersion::Lua51 => "lua5.1",
-        LuaVersion::Lua52 => "lua5.2",
-        LuaVersion::Lua53 => "lua5.3",
-        LuaVersion::Lua54 => "lua5.4",
-        LuaVersion::Lua55 => "lua5.5",
-        LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
+        lua::Version::Lua51 => "lua5.1",
+        lua::Version::Lua52 => "lua5.2",
+        lua::Version::Lua53 => "lua5.3",
+        lua::Version::Lua54 => "lua5.4",
+        lua::Version::Lua55 => "lua5.5",
+        lua::Version::LuaJIT | lua::Version::LuaJIT52 | lua::Version::Luau => unreachable!(),
     };
 
     let host = Triple::host();

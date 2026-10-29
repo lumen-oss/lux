@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     drivers::install_packages::{self, InstallPackages},
     lockfile::{LockedPackage, OptState, PinnedState},
-    lua_installation,
+    lua,
     lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     operations::PackageInstallSpec,
@@ -23,7 +23,7 @@ use crate::{
 #[non_exhaustive]
 pub enum InstallRockspecError {
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[diagnostic(transparent)]
     LuaVersion(#[from] LuaVersionError),
     #[diagnostic(transparent)]

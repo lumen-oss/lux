@@ -11,8 +11,7 @@ use walkdir::WalkDir;
 
 use crate::{
     config::Config,
-    fs,
-    lua_installation::{self, LuaInstallation},
+    fs, lua,
     lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
     project::{project_toml::LocalProjectTomlValidationError, Project},
@@ -70,7 +69,7 @@ Cannot link the following binaries:
     CannotLinkBinaryLibs(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
     #[error(transparent)]
     CC(#[from] cc::Error),
     #[error(transparent)]
@@ -136,7 +135,7 @@ where
         .map(entrypoint_stem)
         .unwrap_or_else(|| pkg_name.clone());
 
-    let lua = LuaInstallation::new_from_config(args.config).await?;
+    let lua = lua::Installation::new_from_config(args.config).await?;
 
     let output = match args.output {
         Some(output) => output,
@@ -324,7 +323,7 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 async fn compile_binary(
     c_path: &Path,
     output: &Path,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     native_modules: &[PathBuf],
     work_dir: &tempfile::TempDir,
     config: &Config,
@@ -542,15 +541,15 @@ mod tests {
     #[cfg(target_os = "linux")]
     use crate::package;
 
+    #[cfg(feature = "impure_tests")]
+    use assert_fs::fixture::PathCopy;
     #[cfg(target_os = "linux")]
     use assert_fs::prelude::{PathChild, PathCreateDir};
     #[cfg(any(target_os = "linux", feature = "impure_tests"))]
     use assert_fs::TempDir;
-    #[cfg(feature = "impure_tests")]
-    use {crate::lua_installation::detect_installed_lua_version, assert_fs::fixture::PathCopy};
 
     #[cfg(any(target_os = "linux", feature = "impure_tests"))]
-    use crate::{config::ConfigBuilder, lua_version::LuaVersion, tree::FlatDistTree};
+    use crate::{config::ConfigBuilder, lua, tree::FlatDistTree};
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
@@ -583,10 +582,10 @@ mod tests {
         let staging = TempDir::new().unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
-        let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
+        let tree = FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(package::Spec::new("foo".into(), "1.0.0-1".parse().unwrap()));
         tree.prepare(&pkg_a.spec).unwrap();
@@ -627,7 +626,7 @@ mod tests {
             lockfile.add_entrypoint(&pkg_b);
         }
 
-        let tree = FlatDistTree::new(staging.to_path_buf(), LuaVersion::Lua51, &config).unwrap();
+        let tree = FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
         let files = collect_installed_files(&tree).unwrap();
 
         assert_eq!(files.src.len(), 2);
@@ -650,7 +649,7 @@ mod tests {
         project_dir.copy_from(&sample, &["**"]).unwrap();
 
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .lua_version(lua_version)
@@ -707,7 +706,7 @@ mod tests {
         project_dir.copy_from(&sample, &["**"]).unwrap();
 
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .lua_version(lua_version)

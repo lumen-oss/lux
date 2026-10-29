@@ -1,9 +1,7 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
 use crate::lockfile::{self, RemotePackageSourceUrl};
-use crate::lua_installation;
 use crate::lua_rockspec::LuaVersionError;
-use crate::lua_version::LuaVersion;
 use crate::operations::UnpackError;
 use crate::project;
 use crate::rockspec::Rockspec;
@@ -20,7 +18,7 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{LockedPackage, LockedPackageSpec},
-    lua_installation::LuaInstallation,
+    lua,
     lua_rockspec::BuildBackendSpec,
     operations::FetchSrcError,
 };
@@ -156,7 +154,7 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaInstallation(#[from] lua_installation::Error),
+    LuaInstallation(#[from] lua::installation::Error),
 }
 
 impl From<source::Error> for Error {
@@ -182,7 +180,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
 ) -> Result<BuildInfo, Error> {
-    if args.tree.version() == &LuaVersion::Luau
+    if args.tree.version() == &lua::Version::Luau
         && rockspec
             .build()
             .current_platform()
@@ -228,7 +226,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
     tree: &T,
     package: &LockedPackageSpec,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     build_dir: &Path,
     entry_type: &EntryType,
     config: &Config,
@@ -320,7 +318,7 @@ pub(crate) struct Deploy<'a, R: Rockspec + HasIntegrity, T: InstallTree + Sync> 
     #[builder(start_fn)]
     tree: &'a T,
     package: LockedPackage,
-    lua: &'a LuaInstallation,
+    lua: &'a lua::Installation,
     source_root: &'a Path,
     entry_type: EntryType,
     config: &'a Config,
@@ -531,9 +529,8 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
-        lua_installation::{detect_installed_lua_version, LuaInstallation},
+        lua,
         lua_rockspec::RemoteLuaRockspec,
-        lua_version::LuaVersion,
         project::Project,
         remote_package_source::RemotePackageSource,
     };
@@ -545,7 +542,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_builtin_build() {
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample-projects/no-build-spec/");
         let tree_dir = assert_fs::TempDir::new().unwrap();
@@ -560,8 +557,8 @@ mod tests {
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
-        let lua_version = config.lua_version().unwrap_or(&LuaVersion::Lua51);
-        let lua = LuaInstallation::new(lua_version, &config).await.unwrap();
+        let lua_version = config.lua_version().unwrap_or(&lua::Version::Lua51);
+        let lua = lua::Installation::new(lua_version, &config).await.unwrap();
         let project = Project::from_exact(&project_root).unwrap().unwrap();
         let rockspec = project.toml().into_remote(None).unwrap();
         let package = LockedPackage::from(
@@ -640,7 +637,7 @@ deploy = { wrap_bin_scripts = false }
 "#,
         )
         .unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let tree_dir = assert_fs::TempDir::new().unwrap();
         let build_dir = assert_fs::TempDir::new().unwrap();
         let config = ConfigBuilder::new()
@@ -649,7 +646,7 @@ deploy = { wrap_bin_scripts = false }
             .user_tree(Some(tree_dir.to_path_buf()))
             .build()
             .unwrap();
-        let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        let lua = lua::Installation::new_from_config(&config).await.unwrap();
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
@@ -683,14 +680,14 @@ deploy = { wrap_bin_scripts = false }
     #[tokio::test]
     async fn git_src_rock_with_repo_directory_builds() {
         let dir = assert_fs::TempDir::new().unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let config = ConfigBuilder::new()
             .unwrap()
             .user_tree(Some(dir.to_path_buf()))
             .lua_version(lua_version)
             .build()
             .unwrap();
-        let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        let lua = lua::Installation::new_from_config(&config).await.unwrap();
         let tree = config.user_tree(lua.version.clone()).unwrap();
 
         let rockspec_content = r#"
@@ -770,7 +767,7 @@ build = {
 "#,
         )
         .unwrap();
-        let lua_version = detect_installed_lua_version().or(Some(LuaVersion::Lua51));
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let tree_dir = assert_fs::TempDir::new().unwrap();
         let build_dir = assert_fs::TempDir::new().unwrap();
         let config = ConfigBuilder::new()
@@ -779,7 +776,7 @@ build = {
             .user_tree(Some(tree_dir.to_path_buf()))
             .build()
             .unwrap();
-        let lua = LuaInstallation::new_from_config(&config).await.unwrap();
+        let lua = lua::Installation::new_from_config(&config).await.unwrap();
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
@@ -835,7 +832,7 @@ build = {
         ConfigBuilder::new()
             .unwrap()
             .user_tree(Some(dir.to_path_buf()))
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap()
     }
@@ -858,7 +855,7 @@ build = {
                 .unwrap(),
         };
         let rockspec = unpack_rockspec(&rock).await.unwrap();
-        let lua = LuaInstallation::new_from_config(config).await.unwrap();
+        let lua = lua::Installation::new_from_config(config).await.unwrap();
         Build::new()
             .rockspec(&rockspec)
             .lua(&lua)
@@ -884,7 +881,7 @@ build = {
     async fn luatest_src_rock_produces_expected_hashes() {
         let dir = assert_fs::TempDir::new().unwrap();
         let config = luatest_config(&dir);
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
         let package =
             build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
@@ -909,11 +906,11 @@ build = {
     async fn force_build_is_deterministic() {
         let dir1 = assert_fs::TempDir::new().unwrap();
         let config1 = luatest_config(&dir1);
-        let tree1 = config1.user_tree(LuaVersion::Lua51).unwrap();
+        let tree1 = config1.user_tree(lua::Version::Lua51).unwrap();
 
         let dir2 = assert_fs::TempDir::new().unwrap();
         let config2 = luatest_config(&dir2);
-        let tree2 = config2.user_tree(LuaVersion::Lua51).unwrap();
+        let tree2 = config2.user_tree(lua::Version::Lua51).unwrap();
 
         let package1 = build_luatest(
             &config1,
@@ -939,7 +936,7 @@ build = {
     async fn noforce_skips_rebuild_when_package_is_locked() {
         let dir = assert_fs::TempDir::new().unwrap();
         let config = luatest_config(&dir);
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
         let package =
             build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;

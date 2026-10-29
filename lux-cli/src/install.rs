@@ -5,8 +5,7 @@ use lux_lib::{
     config::Config,
     drivers::install_packages::InstallPackages,
     lockfile::PinnedState,
-    lua_version::LuaVersion,
-    operations,
+    lua, operations,
     package_db::PackageDB,
     workspace::{self, Workspace},
 };
@@ -74,7 +73,7 @@ async fn install_from_path(
 async fn install_remote(data: Install, config: Config) -> Result<()> {
     let pin = PinnedState::from(data.pin);
 
-    let lua_version = LuaVersion::from(&config)?.clone();
+    let lua_version = lua::Version::from(&config)?.clone();
     let tree = config.user_tree(lua_version)?;
 
     let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree, &config)?;

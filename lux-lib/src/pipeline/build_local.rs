@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
-    lua_installation::LuaInstallation,
+    lua,
     remote_package_source::RemotePackageSource,
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{EntryType, InstallTree},
@@ -23,7 +23,7 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     tree: &'a T,
     entry_type: EntryType,
     config: &'a Config,
-    lua: &'a LuaInstallation,
+    lua: &'a lua::Installation,
 
     #[builder(default)]
     pin: PinnedState,

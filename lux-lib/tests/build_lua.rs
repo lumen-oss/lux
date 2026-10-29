@@ -1,17 +1,17 @@
 use assert_fs::{assert::PathAssert, prelude::PathChild};
 use flaky_test::flaky_test;
-use lux_lib::lua_version::LuaVersion;
+use lux_lib::lua;
 use lux_lib::{config::ConfigBuilder, operations::BuildLua};
 use predicates::prelude::predicate;
 
 #[flaky_test(tokio, times = 5)]
 async fn test_build_lua() {
     for lua_version in [
-        LuaVersion::Lua51,
-        LuaVersion::Lua52,
-        LuaVersion::Lua53,
-        LuaVersion::Lua54,
-        LuaVersion::Lua55,
+        lua::Version::Lua51,
+        lua::Version::Lua52,
+        lua::Version::Lua53,
+        lua::Version::Lua54,
+        lua::Version::Lua55,
     ] {
         let target_dir = assert_fs::TempDir::new().unwrap();
         let target_path = target_dir.to_path_buf();
@@ -45,12 +45,14 @@ async fn test_build_lua() {
         lua_lib_dir.assert(predicate::path::is_dir());
         let lua_lib = if cfg!(target_env = "msvc") {
             let lib_name = match lua_version {
-                LuaVersion::Lua51 => "lua5.1.lib",
-                LuaVersion::Lua52 => "lua5.2.lib",
-                LuaVersion::Lua53 => "lua5.3.lib",
-                LuaVersion::Lua54 => "lua5.4.lib",
-                LuaVersion::Lua55 => "lua5.5.lib",
-                LuaVersion::LuaJIT | LuaVersion::LuaJIT52 | LuaVersion::Luau => unreachable!(),
+                lua::Version::Lua51 => "lua5.1.lib",
+                lua::Version::Lua52 => "lua5.2.lib",
+                lua::Version::Lua53 => "lua5.3.lib",
+                lua::Version::Lua54 => "lua5.4.lib",
+                lua::Version::Lua55 => "lua5.5.lib",
+                lua::Version::LuaJIT | lua::Version::LuaJIT52 | lua::Version::Luau => {
+                    unreachable!()
+                }
             };
             lua_lib_dir.child(lib_name)
         } else {
@@ -62,7 +64,7 @@ async fn test_build_lua() {
 
 #[flaky_test(tokio, times = 5)]
 async fn test_build_luajit() {
-    for lua_version in [LuaVersion::LuaJIT, LuaVersion::LuaJIT52] {
+    for lua_version in [lua::Version::LuaJIT, lua::Version::LuaJIT52] {
         let target_dir = assert_fs::TempDir::new().unwrap();
         let target_path = target_dir.to_path_buf();
         let user_tree = assert_fs::TempDir::new().unwrap();

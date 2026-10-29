@@ -11,9 +11,7 @@ use thiserror::Error;
 use crate::{
     build,
     config::Config,
-    fs,
-    lua_installation::LuaInstallation,
-    lua_version::{LuaVersion, LuaVersionUnset},
+    fs, lua,
     operations::UnpackError,
     path::{self, Paths},
     tree::InstallTree,
@@ -54,7 +52,7 @@ build = {
 pub enum LuaRocksError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     // #[error(transparent)]
     // Io(#[from] io::Error),
     #[error(transparent)]
@@ -96,7 +94,7 @@ impl From<build::Error> for LuaRocksInstallError {
 pub enum ExecLuaRocksError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error(
         "could not substitute '$(LUA_LIBDIR)' and '$(LUA_INCDIR)' variables in the luarocks config template"
     )]
@@ -152,7 +150,7 @@ impl LuaRocksInstallation {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn ensure_installed(
         &self,
-        lua: &LuaInstallation,
+        lua: &lua::Installation,
     ) -> Result<(), LuaRocksInstallError> {
         use crate::{lua_rockspec::RemoteLuaRockspec, package};
 
@@ -183,7 +181,7 @@ impl LuaRocksInstallation {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn ensure_installed(
         &self,
-        _lua: &LuaInstallation,
+        _lua: &lua::Installation,
     ) -> Result<(), LuaRocksInstallError> {
         use crate::{hash::HasIntegrity, operations};
         use std::io::Cursor;
@@ -225,7 +223,7 @@ impl LuaRocksInstallation {
         rockspec_path: &Path,
         build_dir: &Path,
         dest_dir: &Path,
-        lua: &LuaInstallation,
+        lua: &lua::Installation,
     ) -> Result<(), ExecLuaRocksError> {
         fs::sync::create_dir_all(dest_dir)?;
         let dest_dir_str = dest_dir.to_slash_lossy().to_string();
@@ -245,18 +243,18 @@ impl LuaRocksInstallation {
         self,
         args: Vec<&str>,
         cwd: &Path,
-        lua: &LuaInstallation,
+        lua: &lua::Installation,
     ) -> Result<(), ExecLuaRocksError> {
         let luarocks_paths = Paths::new(&self.tree)?;
         // Ensure a pure environment so we can do parallel builds
         let temp_dir = fs::tempfile::tempdir()?;
         let lua_version_str = match lua.version {
-            LuaVersion::Lua51 | LuaVersion::LuaJIT => "5.1",
-            LuaVersion::Lua52 | LuaVersion::LuaJIT52 => "5.2",
-            LuaVersion::Lua53 => "5.3",
-            LuaVersion::Lua54 => "5.4",
-            LuaVersion::Lua55 => "5.5",
-            LuaVersion::Luau => return Err(ExecLuaRocksError::LuauUnsupported),
+            lua::Version::Lua51 | lua::Version::LuaJIT => "5.1",
+            lua::Version::Lua52 | lua::Version::LuaJIT52 => "5.2",
+            lua::Version::Lua53 => "5.3",
+            lua::Version::Lua54 => "5.4",
+            lua::Version::Lua55 => "5.5",
+            lua::Version::Luau => return Err(ExecLuaRocksError::LuauUnsupported),
         };
         let luarocks_config_content = format!(
             r#"
@@ -269,7 +267,7 @@ variables = {{
 }}
 "#,
             lua_version_str,
-            LuaVersion::from(&self.config)?,
+            lua::Version::from(&self.config)?,
             self.config.make_cmd()
         );
         let luarocks_config_content =

@@ -2,7 +2,7 @@ use std::io;
 
 use crate::fs;
 use crate::lockfile::{FlushLockfileError, LockedPackage, LockedPackageId};
-use crate::lua_version::{LuaVersion, LuaVersionUnset};
+use crate::lua;
 use crate::tree::{self, EntryType, InstallTree};
 use crate::{config::Config, tree::Tree};
 use bon::Builder;
@@ -15,7 +15,7 @@ use tracing::Instrument;
 #[error(transparent)]
 pub enum RemoveError {
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -66,7 +66,7 @@ where
         let args = self._build();
         let tree = args.tree.unwrap_or(
             args.config
-                .user_tree(LuaVersion::from(args.config)?.clone())?,
+                .user_tree(lua::Version::from(args.config)?.clone())?,
         );
         remove(args.packages, tree, args.config).await
     }

@@ -1,5 +1,5 @@
 use inquire::Confirm;
-use lux_lib::{config::Config, lua_version::LuaVersion, tree::InstallTree};
+use lux_lib::{config::Config, lua, tree::InstallTree};
 
 use miette::{IntoDiagnostic, Result};
 use path_slash::PathBufExt;
@@ -7,7 +7,7 @@ use tracing::Instrument;
 
 /// Purge the user tree
 pub async fn purge(config: Config) -> Result<()> {
-    let tree = config.user_tree(LuaVersion::from(&config)?.clone())?;
+    let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
 
     let len = tree.list().ok().map(|rocks| rocks.len());
 

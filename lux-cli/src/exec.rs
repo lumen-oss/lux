@@ -1,9 +1,7 @@
 use std::env;
 
 use clap::Args;
-use lux_lib::{
-    config::Config, lua_version::LuaVersion, operations, path::Paths, workspace::Workspace,
-};
+use lux_lib::{config::Config, lua, operations, path::Paths, workspace::Workspace};
 use miette::Result;
 
 #[derive(Args)]
@@ -25,7 +23,7 @@ pub async fn exec(run: Exec, config: Config) -> Result<()> {
     let tree = match &workspace {
         Some(project) => project.tree(&config)?,
         None => {
-            let lua_version = LuaVersion::from(&config)?.clone();
+            let lua_version = lua::Version::from(&config)?.clone();
             config.user_tree(lua_version)?
         }
     };

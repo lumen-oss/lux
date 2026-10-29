@@ -2,7 +2,7 @@ use crate::{
     config::Config,
     fs,
     lockfile::LockedPackageLockType,
-    lua_version::LuaVersion,
+    lua,
     tree::InstallTree,
     workspace::{self, TreeError, Workspace, LUX_DIR_NAME},
 };
@@ -64,7 +64,7 @@ struct LuauRc {
 async fn do_generate_luau_rc(args: GenLuauRc<'_>) -> Result<(), GenLuauRcError> {
     let workspace = args.workspace;
     let tree = workspace.tree(args.config)?;
-    if tree.version() != &LuaVersion::Luau {
+    if tree.version() != &lua::Version::Luau {
         return Ok(());
     }
     let lockfile = workspace.lockfile()?;

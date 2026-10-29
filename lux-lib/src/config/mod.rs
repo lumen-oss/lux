@@ -14,7 +14,7 @@ use url::Url;
 
 use crate::config::access_tokens::AccessToken;
 use crate::fs;
-use crate::lua_version::LuaVersion;
+use crate::lua;
 use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
 use crate::tree::{self, CustomRockLayout, Tree};
@@ -48,7 +48,7 @@ pub struct Config {
     extra_wally_registries: Vec<Url>,
     namespace: Option<String>,
     lua_dir: Option<PathBuf>,
-    lua_version: Option<LuaVersion>,
+    lua_version: Option<lua::Version>,
     user_tree: PathBuf,
     workspace_tree: Option<PathBuf>,
     verbose: bool,
@@ -117,7 +117,7 @@ impl Config {
     }
 
     /// Create a copy of this config for the specified Lua version
-    pub fn with_lua_version(self, lua_version: LuaVersion) -> Self {
+    pub fn with_lua_version(self, lua_version: lua::Version) -> Self {
         Self {
             lua_version: Some(lua_version),
             ..self
@@ -196,14 +196,14 @@ impl Config {
         self.lua_dir.as_ref()
     }
 
-    // TODO(vhyrro): Remove `LuaVersion::from(&config)` and keep this only.
-    pub fn lua_version(&self) -> Option<&LuaVersion> {
+    // TODO(vhyrro): Remove `Version::from(&config)` and keep this only.
+    pub fn lua_version(&self) -> Option<&lua::Version> {
         self.lua_version.as_ref()
     }
 
     /// The tree in which to install rocks.
     /// If installing packages for a project, use `Project::tree` instead.
-    pub fn user_tree(&self, version: LuaVersion) -> Result<Tree, tree::Error> {
+    pub fn user_tree(&self, version: lua::Version) -> Result<Tree, tree::Error> {
         Tree::new(self.user_tree.clone(), version, self)
     }
 
@@ -444,7 +444,7 @@ pub struct ConfigBuilder {
     /// The LuaRocks server namespace to use.
     namespace: Option<String>,
     /// The Lua version to use. Default: the detected installed Lua version.
-    lua_version: Option<LuaVersion>,
+    lua_version: Option<lua::Version>,
     /// The tree in which to install rocks.
     user_tree: Option<PathBuf>,
     /// The tree to use when in a workspace.
@@ -607,7 +607,7 @@ impl ConfigBuilder {
 
     /// Which Lua version to use.
     /// Default: The installed Lua version, if detected
-    pub fn lua_version(self, lua_version: Option<LuaVersion>) -> Self {
+    pub fn lua_version(self, lua_version: Option<lua::Version>) -> Self {
         Self {
             lua_version: lua_version.or(self.lua_version),
             ..self
@@ -898,9 +898,7 @@ impl ConfigBuilder {
         let cache_dir = self.cache_dir.unwrap_or(Config::default_cache_path());
         let user_tree = self.user_tree.unwrap_or(data_dir.join("tree"));
 
-        let lua_version = self
-            .lua_version
-            .or(crate::lua_installation::detect_installed_lua_version());
+        let lua_version = self.lua_version.or(lua::detect::installed_version());
 
         Ok(normalise_base_urls(Config {
             enable_development_packages: self.enable_development_packages.unwrap_or(false),

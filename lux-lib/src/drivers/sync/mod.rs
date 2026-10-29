@@ -352,8 +352,8 @@ mod tests {
     use assert_fs::prelude::{FileWriteStr, PathChild, PathCopy};
 
     use crate::{
-        config::ConfigBuilder, lockfile::LockedPackageLockType, lua_version::LuaVersion,
-        package_db::PackageDB, tree::InstallTree, workspace::Workspace,
+        config::ConfigBuilder, lockfile::LockedPackageLockType, lua, package_db::PackageDB,
+        tree::InstallTree, workspace::Workspace,
     };
 
     use super::{Sync, SyncMode, TargetSet};
@@ -368,7 +368,7 @@ mod tests {
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
 
@@ -411,7 +411,7 @@ mod tests {
 
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
         let name = package::Name::from("argparse");
@@ -492,7 +492,7 @@ mod tests {
 
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
         let name = package::Name::from("argparse");
@@ -544,7 +544,7 @@ mod tests {
 
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
         let name = package::Name::from("argparse");

@@ -12,11 +12,11 @@ pub mod lua_dependency;
 
 use crate::{
     config::Config,
+    lua,
     lua_rockspec::{
         BuildSpec, DeploySpec, ExternalDependencySpec, LuaVersionError, PerPlatform,
         PlatformSupport, RemoteRockSource, RockDescription, RockspecFormat, TestSpec,
     },
-    lua_version::LuaVersion,
 };
 
 pub trait Rockspec {
@@ -64,7 +64,7 @@ pub trait Rockspec {
 pub trait LuaVersionCompatibility {
     /// Ensures that the rockspec is compatible with the specified lua version.
     /// Returns an error if the rockspec is not compatible.
-    fn validate_lua_version(&self, lua_version: &LuaVersion) -> Result<(), LuaVersionError>;
+    fn validate_lua_version(&self, lua_version: &lua::Version) -> Result<(), LuaVersionError>;
 
     /// Ensures that the rockspec is compatible with the lua version established in the config.
     /// Returns an error if the rockspec is not compatible.
@@ -72,17 +72,17 @@ pub trait LuaVersionCompatibility {
 
     /// Ensures that the rockspec is compatible with the lua version established in the config,
     /// and returns the lua version from the config if it is compatible.
-    fn lua_version_matches(&self, config: &Config) -> Result<LuaVersion, LuaVersionError>;
+    fn lua_version_matches(&self, config: &Config) -> Result<lua::Version, LuaVersionError>;
 
     /// Checks if the rockspec supports the given lua version.
-    fn supports_lua_version(&self, lua_version: &LuaVersion) -> bool;
+    fn supports_lua_version(&self, lua_version: &lua::Version) -> bool;
 
     /// Returns the lua version required by the rockspec.
-    fn lua_version(&self) -> Option<LuaVersion>;
+    fn lua_version(&self) -> Option<lua::Version>;
 }
 
 impl<T: Rockspec> LuaVersionCompatibility for T {
-    fn validate_lua_version(&self, version: &LuaVersion) -> Result<(), LuaVersionError> {
+    fn validate_lua_version(&self, version: &lua::Version) -> Result<(), LuaVersionError> {
         if self.supports_lua_version(version) {
             Ok(())
         } else {
@@ -99,8 +99,8 @@ impl<T: Rockspec> LuaVersionCompatibility for T {
         Ok(())
     }
 
-    fn lua_version_matches(&self, config: &Config) -> Result<LuaVersion, LuaVersionError> {
-        let version = LuaVersion::from(config)?.clone();
+    fn lua_version_matches(&self, config: &Config) -> Result<lua::Version, LuaVersionError> {
+        let version = lua::Version::from(config)?.clone();
         if self.supports_lua_version(&version) {
             Ok(version)
         } else {
@@ -112,23 +112,23 @@ impl<T: Rockspec> LuaVersionCompatibility for T {
         }
     }
 
-    fn supports_lua_version(&self, lua_version: &LuaVersion) -> bool {
+    fn supports_lua_version(&self, lua_version: &lua::Version) -> bool {
         if self.lua().is_luau() {
-            return matches!(lua_version, LuaVersion::Luau);
+            return matches!(lua_version, lua::Version::Luau);
         }
         self.lua().matches(&lua_version.as_version())
     }
 
-    fn lua_version(&self) -> Option<LuaVersion> {
+    fn lua_version(&self) -> Option<lua::Version> {
         if self.lua().is_luau() {
-            return Some(LuaVersion::Luau);
+            return Some(lua::Version::Luau);
         }
         for (possibility, version) in [
-            ("5.5.0", LuaVersion::Lua54),
-            ("5.4.0", LuaVersion::Lua54),
-            ("5.3.0", LuaVersion::Lua53),
-            ("5.2.0", LuaVersion::Lua52),
-            ("5.1.0", LuaVersion::Lua51),
+            ("5.5.0", lua::Version::Lua54),
+            ("5.4.0", lua::Version::Lua54),
+            ("5.3.0", lua::Version::Lua53),
+            ("5.2.0", lua::Version::Lua52),
+            ("5.1.0", lua::Version::Lua51),
         ] {
             let possibility = unsafe { possibility.parse().unwrap_unchecked() };
             if self.lua().matches(&possibility) {

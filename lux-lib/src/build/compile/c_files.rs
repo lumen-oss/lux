@@ -8,8 +8,8 @@ use target_lexicon::Triple;
 use thiserror::Error;
 
 use crate::{
-    build::external_dependency::ExternalDependencyInfo, config::Config, fs,
-    lua_installation::LuaInstallation, lua_rockspec::LuaModule,
+    build::external_dependency::ExternalDependencyInfo, config::Config, fs, lua,
+    lua_rockspec::LuaModule,
 };
 
 use super::{c_link, CCExt};
@@ -50,7 +50,7 @@ pub(crate) async fn compile(
     files: &Vec<PathBuf>,
     target_module: &LuaModule,
     target_dir: &Path,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<(), Error> {

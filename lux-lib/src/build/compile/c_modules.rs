@@ -9,8 +9,7 @@ use thiserror::Error;
 use crate::{
     build::external_dependency::ExternalDependencyInfo,
     config::Config,
-    fs,
-    lua_installation::LuaInstallation,
+    fs, lua,
     lua_rockspec::{LuaModule, ModulePaths},
     variables::{self, Environment, VariableSubstitutionError},
 };
@@ -59,7 +58,7 @@ pub(crate) async fn compile(
     source_dir: &Path,
     target_module: &LuaModule,
     target_dir: &Path,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
 ) -> Result<(), Error> {

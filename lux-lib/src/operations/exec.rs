@@ -6,8 +6,8 @@ use crate::{
     build::BuildBehaviour,
     config::Config,
     drivers::install_packages::{self, InstallPackages},
+    lua,
     lua_rockspec::LuaVersionError,
-    lua_version::{LuaVersion, LuaVersionUnset},
     operations::{BuildWorkspace, BuildWorkspaceError},
     package_db::{self, PackageDB},
     path::{self, Paths},
@@ -81,7 +81,7 @@ pub enum ExecError {
     RunCommandNonZeroExitCode { cmd: String, exit_code: Option<i32> },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
@@ -123,7 +123,7 @@ pub enum InstallCommandError {
     PackageVersionReqError(#[from] package::version::ReqError),
     PackageDB(#[from] package_db::Error),
     Tree(#[from] tree::Error),
-    LuaVersionUnset(#[from] LuaVersionUnset),
+    LuaVersion(#[from] lua::version::Error),
 }
 
 impl From<install_packages::Error> for InstallCommandError {
@@ -137,7 +137,7 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
         .workspace
         .map(|project| project.lua_version(run.config))
         .transpose()?
-        .unwrap_or(LuaVersion::from(run.config)?.clone());
+        .unwrap_or(lua::Version::from(run.config)?.clone());
 
     if let Some(project) = run.workspace {
         BuildWorkspace::new(project, run.config)
@@ -223,7 +223,7 @@ To suppress this warning, set the `--no-loader` option."#
 /// This defaults to the local project tree if cwd is a project root.
 async fn install_command(command: &str, config: &Config) -> Result<(), InstallCommandError> {
     let package = package::Req::new(command.into(), None)?;
-    let tree = config.user_tree(LuaVersion::from(config)?.clone())?;
+    let tree = config.user_tree(lua::Version::from(config)?.clone())?;
 
     if tree
         .match_rocks(&package)

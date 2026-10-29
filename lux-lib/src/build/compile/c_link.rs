@@ -12,8 +12,8 @@ use thiserror::Error;
 use tokio::process::Command;
 
 use crate::{
-    build::external_dependency::ExternalDependencyInfo, config::Config, fs,
-    lua_installation::LuaInstallation, lua_rockspec::LuaModule,
+    build::external_dependency::ExternalDependencyInfo, config::Config, fs, lua,
+    lua_rockspec::LuaModule,
 };
 
 #[derive(Error, Debug, Diagnostic)]
@@ -80,7 +80,7 @@ luaopen_{exported_name}
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn artifacts(
     build: &mut cc::Build,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     target_file_name: &str,
     libdir_args: Vec<String>,
@@ -149,7 +149,7 @@ pub(crate) async fn artifacts(
 }
 
 /// NOTE: In luarocks, these are behind a link_lua_explicity config option
-fn lua_lib_link_args(lua: &LuaInstallation, compiler: &cc::Tool) -> Vec<String> {
+fn lua_lib_link_args(lua: &lua::Installation, compiler: &cc::Tool) -> Vec<String> {
     if cfg!(target_os = "macos") {
         // On macos, linking Lua can lead to duplicate symbol errors
         Vec::new()

@@ -13,7 +13,7 @@ use which::which;
 use crate::{
     build::backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
     config::Config,
-    lua_installation::LuaInstallation,
+    lua,
     lua_rockspec::CommandBuildSpec,
     path::{self, Paths},
     tree::{self, InstallTree, RockLayout},
@@ -129,7 +129,7 @@ impl BuildBackend for CommandBuildSpec {
 async fn run_command(
     command: &str,
     output_paths: &RockLayout,
-    lua: &LuaInstallation,
+    lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
     build_dir: &Path,

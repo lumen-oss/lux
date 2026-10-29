@@ -446,8 +446,8 @@ mod tests {
     #[tokio::test]
     async fn test_load_c_module_from_built_project() {
         use lux_lib::{
-            config::ConfigBuilder, lua_version::LuaVersion, operations::InstallProject,
-            path::Paths, project::Project, tree::InstallTree,
+            config::ConfigBuilder, lua, operations::InstallProject, path::Paths, project::Project,
+            tree::InstallTree,
         };
 
         let sample = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -458,10 +458,10 @@ mod tests {
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
         let config = ConfigBuilder::new()
             .unwrap()
-            .lua_version(Some(LuaVersion::Lua51))
+            .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
-        let tree = config.user_tree(LuaVersion::Lua51).unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
         InstallProject::new()
             .project(&project)
             .config(&config)
