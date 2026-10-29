@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.70.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.70.0...lux-lib-v0.70.1) `lux-lib` - 2026-10-29
+
+### Other
+- make clippy happy
+
 ## [0.70.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.69.0...lux-lib-v0.70.0) `lux-lib` - 2026-10-29
 
 ### Fixed
@@ -13,6 +18,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(pack)* pack binary path to `bin/` of zip file ([#2155](https://github.com/lumen-oss/lux/pull/2155))
 - *(build)* reread `lux.lock` to keep `.binaries` ([#2156](https://github.com/lumen-oss/lux/pull/2156))
 - *(build/tree-sitter)* enable parser by default ([#2145](https://github.com/lumen-oss/lux/pull/2145))
+
+## [0.52.1](https://github.com/lumen-oss/lux/compare/v0.52.0...v0.52.1) `lux-cli` - 2026-10-29
+
+### Other
+- updated the following local packages: lux-lib
 
 ## [0.69.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.68.0...lux-lib-v0.69.0) `lux-lib` - 2026-10-28
 
