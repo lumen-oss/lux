@@ -28,7 +28,7 @@ version = "0.70.2"
 path = "../lux-lib"
 
 [dev-dependencies]
-assert_fs = "1.1"
+assert_fs = "1"
 tokio = { workspace = true }
 zip = { workspace = true }
 flaky_test = "0.2"

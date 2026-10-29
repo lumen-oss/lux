@@ -14,7 +14,7 @@ edition = "2021"
 [dependencies]
 darklua = { workspace = true }
 miette = { workspace = true }
-thiserror = "2.0"
+thiserror = { workspace = true }
 
 [dev-dependencies]
 mlua = { workspace = true, features = ["lua51", "vendored"] }

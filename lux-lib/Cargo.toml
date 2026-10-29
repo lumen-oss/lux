@@ -60,7 +60,6 @@ shell-words = "1.1"
 shlex = "2.0"
 ssri = "9.2"
 tar = "0.4"
-thiserror = "2.0"
 toml_edit = "0.25"
 tree-sitter = "0.27"
 tree-sitter-config = "0.27"
@@ -93,6 +92,7 @@ strum_macros = { workspace = true }
 stylua = { workspace = true }
 target-lexicon = { workspace = true }
 tempfile = { workspace = true }
+thiserror = { workspace = true }
 toml = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
@@ -101,21 +101,21 @@ zip = { workspace = true }
 
 
 gpgme = { version = "0.11", optional = true }
-ottavino = "0.4.0"
-ottavino-util = "0.4.0"
-serde-value = "0.7.0"
-auth-git2 = "0.6.0"
-gag = "1.0.0"
+ottavino = "0.4"
+ottavino-util = "0.4"
+serde-value = "0.7"
+auth-git2 = "0.6"
+gag = "1"
 
 [dev-dependencies]
 mlua = { workspace = true, features = ["lua51", "vendored"] }
 httptest = { version = "0.16" }
-serial_test = { version = "4.0" }
-proptest = "1.11"
+serial_test = { version = "4" }
+proptest = "1"
 dir-diff = "0.3"
-insta = { version = "1.47", features = ["redactions", "yaml", "json"] }
-assert_fs = "1.1"
-predicates = "3.1"
+insta = { version = "1", features = ["redactions", "yaml", "json"] }
+assert_fs = "1"
+predicates = "3"
 flaky_test = "0.2"
 
 [features]

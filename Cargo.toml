@@ -21,30 +21,30 @@ version = "0.52.2"
 clap_mangen = "0.3"
 clap_complete = "4"
 darklua = "0.19"
-mlua = { version = "0.11", features = [
+mlua = { version = "0.12", features = [
   "serialize",
   "macros",
   "error-send",
   "async",
 ] }
-mlua-extras = { version = "11.6", features = ["mlua", "macros", "async"] }
+mlua-extras = { version = "12", features = ["mlua", "macros", "async"] }
 git2 = { version = "0.21", features = ["ssh", "https"] }
 ignore = "0.4"
 itertools = "0.15"
 lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
-rustix = { version = "1.1", features = ["process"] }
+rustix = { version = "1", features = ["process"] }
 check_elevation = "0.3"
 ci_env = "0.5"
 lux-macros = { version = "0.2", path = "./lux-macros" }
 kalua = { version = "0.1.1", path = "./kalua" }
-miette = { version = "7.6", features = ["derive"] }
+miette = { version = "7", features = ["derive"] }
 path-absolutize = "4.0"
 path-slash = "0.2"
 pathdiff = "0.2"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 strum = { version = "0.28" }
 strum_macros = "0.28"
-stylua = { version = "2.3", features = [
+stylua = { version = "2", features = [
   "fromstr",
   "luau",
   "lua52",
@@ -54,12 +54,13 @@ stylua = { version = "2.3", features = [
   "editorconfig",
 ] }
 target-lexicon = "0.13"
-tempfile = "3.27"
-toml = "1.0"
-tokio = { version = "1.52", features = ["full"] }
-walkdir = "2.5"
-which = "8.0"
-zip = "9.0"
+tempfile = "3"
+thiserror = "2"
+toml = "1"
+tokio = { version = "1", features = ["full"] }
+walkdir = "2"
+which = "8"
+zip = "9"
 
 [profile.release]
 lto = true
