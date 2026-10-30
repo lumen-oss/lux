@@ -16,38 +16,38 @@ pub fn definitions() -> Definitions {
         .method::<(), ()>("loader", "Load the lux loader into the current Lua session")
         .field(
             "config",
-            Type::named("ConfigModule"),
+            Type::named("config.Module"),
             "build::backend::Module for building a Lux `Config`",
         )
         .field(
             "workspace",
-            Type::named("WorkspaceModule"),
+            Type::named("workspace.Module"),
             "build::backend::Module for interacting with a Lux workspace",
         )
         .field(
             "project",
-            Type::named("ProjectModule"),
+            Type::named("project.Module"),
             "build::backend::Module for interacting with a Lux project",
         )
         .field(
             "operations",
-            Type::named("OperationsModule"),
+            Type::named("operations.Module"),
             "build::backend::Module for Lux operations",
         )
         .field(
             "progress",
-            Type::named("ProgressModule"),
+            Type::named("progress.Module"),
             "build::backend::Module for connecting Lux progress reports to the LSP server",
         )
         .build();
 
     let def = inventory::iter::<LuxDefinition>
         .into_iter()
-        .filter(|item| item.name != "LuxModule")
+        .filter(|item| item.name != "lux.Module")
         .fold(Definition::start(), |def, item| {
             def.register_as(item.name, (item.build)())
         })
-        .register_as("LuxModule", Type::class(lux_class))
+        .register_as("lux.Module", Type::class(lux_class))
         .value::<crate::LuxModule>("lux")
         .finish();
 

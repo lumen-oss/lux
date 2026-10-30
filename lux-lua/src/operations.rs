@@ -31,7 +31,7 @@ pub(crate) struct OperationsModule;
 
 impl Typed for OperationsModule {
     fn ty() -> Type {
-        Type::named("OperationsModule")
+        Type::named("operations.Module")
     }
 }
 
@@ -373,7 +373,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "OperationsModule",
+            name: "operations.Module",
             build: || Type::class(TypedClassBuilder::new::<OperationsModule>().build()),
         }
     }

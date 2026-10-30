@@ -11,7 +11,7 @@ pub(crate) struct ProjectModule;
 
 impl Typed for ProjectModule {
     fn ty() -> Type {
-        Type::named("ProjectModule")
+        Type::named("project.Module")
     }
 }
 
@@ -51,7 +51,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "ProjectModule",
+            name: "project.Module",
             build: || Type::class(TypedClassBuilder::new::<ProjectModule>().build()),
         }
     }
