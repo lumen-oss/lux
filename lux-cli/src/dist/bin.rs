@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use lux_lib::{
-    config::{Config, ConfigBuilder},
+    config::{self, Config},
     lua,
     operations::DistProjectBin,
     tree::FlatDistTree,
@@ -34,7 +34,7 @@ pub struct Bin {
 
 pub async fn bin(data: Bin, config: Config) -> Result<()> {
     let staging_dir = tempdir().into_diagnostic()?;
-    let config = ConfigBuilder::from(config)
+    let config = config::Builder::from(config)
         .wrap_bin_scripts(Some(false))
         .user_tree(Some(staging_dir.path().to_path_buf()))
         .build()?;

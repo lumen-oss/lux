@@ -413,7 +413,7 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::{
-        config::ConfigBuilder,
+        config,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         lua,
         tree::{InstallTree, RockLayout},
@@ -429,7 +429,7 @@ mod tests {
         temp.copy_from(&tree_path, &["**"]).unwrap();
         let tree_path = temp.to_path_buf();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(tree_path.clone()))
             .build()
@@ -479,7 +479,7 @@ mod tests {
         temp.copy_from(&tree_path, &["**"]).unwrap();
         let tree_path = temp.to_path_buf();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(tree_path.clone()))
             .build()
@@ -514,7 +514,7 @@ mod tests {
         temp.copy_from(&tree_path, &["**"]).unwrap();
         let tree_path = temp.to_path_buf();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(tree_path.clone()))
             .build()

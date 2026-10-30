@@ -24,7 +24,7 @@ use crate::{
     fs,
     lockfile::LockedPackageLockType,
     operations::{self, PackageInstallSpec, UnpackError},
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     pipeline::{
         materialise::{Error as MaterialiseError, Materialise, MaterialisedPackage, PackageSource},
         resolve::{self, luarocks_build_backend_name, ResolvePackageDependencies},
@@ -75,7 +75,7 @@ pub enum VendorError {
     LocalProjectTomlValidation(#[from] rockspec::toml::Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolve(#[from] resolve::Error),
@@ -516,11 +516,11 @@ mod tests {
         lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
     };
     #[cfg(feature = "impure_tests")]
-    use {crate::config::ConfigBuilder, assert_fs::prelude::PathCopy, std::path::PathBuf};
+    use {crate::config, assert_fs::prelude::PathCopy, std::path::PathBuf};
 
     #[cfg(feature = "impure_tests")]
     fn test_config() -> Config {
-        ConfigBuilder::new()
+        config::Builder::new()
             .unwrap()
             .lua_version(Some(crate::lua::Version::Lua51))
             .build()

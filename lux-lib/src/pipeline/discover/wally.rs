@@ -401,7 +401,7 @@ mod tests {
     use semver::Version;
 
     use crate::{
-        config::ConfigBuilder,
+        config,
         wally::package::{Package, PlaceInfo, Realm},
     };
 
@@ -622,7 +622,7 @@ mod tests {
             Some(RemotePackageSourceUrl::Url { url: content_url }),
         );
         let cache = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .cache_dir(Some(cache.path().to_path_buf()))
             .build()
@@ -651,7 +651,7 @@ mod tests {
         );
 
         let cache = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .cache_dir(Some(cache.path().to_path_buf()))
             .extra_wally_registries(Some(vec![index_url.clone()]))

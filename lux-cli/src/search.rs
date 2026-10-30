@@ -6,7 +6,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
-use lux_lib::{config::Config, package_db::PackageDB};
+use lux_lib::{config::Config, package::db::PackageDB};
 
 use crate::args::OutputFormat;
 

@@ -19,7 +19,7 @@ use url::Url;
 
 use lux_lib::{
     build::BuildBehaviour,
-    config::{Config, ConfigBuilder},
+    config::{self, Config},
     git::{shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, GitRef, GitSource},
     lockfile::{
         LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile,
@@ -27,7 +27,7 @@ use lux_lib::{
     },
     lua,
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
-    package_db::PackageDB,
+    package::db::PackageDB,
     project::Project,
     rockspec,
     rockspec::{dependency, lua_dependency, Rockspec},
@@ -1148,7 +1148,7 @@ impl FromLua for ConfigLua {
 impl TypedUserData for ConfigLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.add_function("builder", |_, ()| {
-            ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
+            config::Builder::new().map(ConfigBuilderLua).into_lua_err()
         });
         methods.document("The luarocks repository server");
         methods.add_method("server", |_, this, ()| Ok(this.0.server().to_string()));
@@ -1239,7 +1239,7 @@ with these before building."#,
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add(
             r#"The resolved configuration for a Lux session.
-Can be constructed via `ConfigBuilder`, which supports layering multiple
+Can be constructed via `config::Builder`, which supports layering multiple
 configuration sources (config file, CLI flags, environment variables)
         "#,
         );
@@ -1259,11 +1259,11 @@ impl mlua::UserData for ConfigLua {
 }
 
 #[derive(Clone)]
-pub struct ConfigBuilderLua(pub ConfigBuilder);
+pub struct ConfigBuilderLua(pub config::Builder);
 
 impl Typed for ConfigBuilderLua {
     fn ty() -> Type {
-        Type::named("ConfigBuilder")
+        Type::named("config.Builder")
     }
 }
 
@@ -2871,7 +2871,7 @@ pub struct PackageDBLua(pub PackageDB);
 
 impl Typed for PackageDBLua {
     fn ty() -> Type {
-        Type::named("PackageDB")
+        Type::named("package.db.PackageDB")
     }
 }
 
@@ -3421,7 +3421,7 @@ mod definitions_registry {
         "Tree" => TreeLua,
         "NvimLayout" => NvimLayoutLua,
         "Config" => ConfigLua,
-        "ConfigBuilder" => ConfigBuilderLua,
+        "config.Builder" => ConfigBuilderLua,
         "rockspec.lua_dependency.Spec" => LuaDependencySpecLua,
         "rockspec.platform.Support" => PlatformSupportLua,
         "rockspec.description.Spec" => RockDescriptionLua,
@@ -3445,7 +3445,7 @@ mod definitions_registry {
         "rockspec.toml.Partial" => PartialProjectTomlLua,
         "rockspec.toml.Local" => LocalProjectTomlLua,
         "rockspec.toml.Remote" => RemoteProjectTomlLua,
-        "PackageDB" => PackageDBLua,
+        "package.db.PackageDB" => PackageDBLua,
         "LockfileReadOnly" => LockfileReadOnlyLua,
         "LockfileGuard" => LockfileGuardLua,
         "LockfileReadWrite" => LockfileReadWriteLua,

@@ -19,7 +19,7 @@ use crate::{
     git::{GitRef, GitSource},
     lockfile::RemotePackageSourceUrl,
     luarocks,
-    package_db::{self, PackageDB, SearchError},
+    package::db::{search, PackageDB},
     remote,
     reqwest::{RequestBuilderExt, RequestError},
     rockspec::Rockspec,
@@ -232,7 +232,7 @@ if the issue persists, the server may be temporarily unavailable."#
     ResponseConversion(#[from] FromUtf8Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     DownloadSrcRock(#[from] DownloadSrcRockError),
@@ -387,7 +387,7 @@ pub enum SearchAndDownloadError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Search(#[from] SearchError),
+    Search(#[from] search::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Download(#[from] DownloadSrcRockError),
@@ -409,7 +409,7 @@ if the issue persists, the server may be temporarily unavailable."#
     Rockspec(#[from] rockspec::Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error("failed to read packed rock {0}:\n{1}")]
     #[diagnostic(help(
         r#"the downloaded rock may be corrupted.

@@ -237,7 +237,7 @@ fn lua_version_to_luafmt_syntax_level(
 mod tests {
     use assert_fs::fixture::PathChild;
     use assert_fs::{prelude::PathCopy, TempDir};
-    use lux_lib::config::ConfigBuilder;
+    use lux_lib::config;
     use serial_test::serial;
 
     use super::*;
@@ -263,7 +263,7 @@ mod tests {
         let cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(&cwd_project_root).unwrap();
 
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let fmt = Fmt {
             path: Some(unformatted_project_root.to_path_buf()),
             backend: FmtBackend::Stylua,
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn test_format_plain_directory_without_lux_toml() {
         let dir = loose_lua_temp_dir();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
 
         format(fmt(Some(dir.to_path_buf())), config).unwrap();
 
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn test_format_single_lua_file() {
         let dir = loose_lua_temp_dir();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
 
         format(fmt(Some(dir.child("a.lua").to_path_buf())), config).unwrap();
 
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_format_nonexistent_path_errors() {
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let result = format(fmt(Some("/no/such/path".into())), config);
         assert!(result.is_err());
     }
@@ -340,7 +340,7 @@ mod tests {
             .join("resources/test/sample-projects/stylua-config/");
         let workspace = TempDir::new().unwrap();
         workspace.copy_from(&fixture, &["**"]).unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
 
         format(fmt(Some(workspace.child("src").to_path_buf())), config).unwrap();
 

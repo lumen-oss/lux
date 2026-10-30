@@ -2,8 +2,8 @@ use crate::package;
 use std::{env, io};
 
 use crate::operations::SearchAndDownloadError;
+use crate::package::db::PackageDB;
 use crate::package::SpecRevIterator;
-use crate::package_db::PackageDB;
 use crate::rockspec;
 use crate::rockspec::Rockspec;
 use crate::TOOL_VERSION;
@@ -739,7 +739,7 @@ mod helpers {
 mod test {
     use super::*;
 
-    use crate::config::ConfigBuilder;
+    use crate::config;
     use crate::lua;
     use assert_fs::prelude::*;
     use httptest::matchers::{contains, request};
@@ -839,7 +839,7 @@ type = "builtin"
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
 
         let config_dir = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::default()
+        let config = config::Builder::default()
             .server(Some(Url::parse(&server.url_str("/")).unwrap()))
             .data_dir(Some(config_dir.path().to_path_buf()))
             .cache_dir(Some(config_dir.path().to_path_buf()))

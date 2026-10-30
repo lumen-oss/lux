@@ -25,7 +25,7 @@ use install::Install;
 use install_rockspec::InstallRockspec;
 use lint::Lint;
 use list::ListCmd;
-use lux_lib::{config::ConfigBuilder, lua, workspace::Workspace};
+use lux_lib::{lua, workspace::Workspace};
 use miette::IntoDiagnostic;
 use outdated::Outdated;
 use pack::Pack;
@@ -473,10 +473,10 @@ impl Commands {
         }
     }
 
-    /// Load the user [`ConfigBuilder`], merged with the workspace-local [`ConfigBuilder`],
+    /// Load the user [`lux_lib::config::Builder`], merged with the workspace-local [`lux_lib::config::Builder`],
     /// if present and running a workspace command.
-    pub fn config(&self) -> Result<ConfigBuilder> {
-        let config = ConfigBuilder::new()?;
+    pub fn config(&self) -> Result<lux_lib::config::Builder> {
+        let config = lux_lib::config::Builder::new()?;
         if let Some(workspace) = self.workspace()? {
             let config = if let Some(workspace_config) = workspace.config()? {
                 config.merge(workspace_config)

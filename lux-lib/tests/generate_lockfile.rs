@@ -7,7 +7,7 @@
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
 use lux_lib::{
-    config::{Config, ConfigBuilder},
+    config::{self, Config},
     drivers::sync::{Sync, SyncMode, TargetSet},
     lua,
     operations::GenerateLockfile,
@@ -37,7 +37,7 @@ type = "builtin"
 }
 
 fn test_config() -> Config {
-    ConfigBuilder::new()
+    config::Builder::new()
         .unwrap()
         .lua_version(lua::detect::installed_version().or(Some(lua::Version::Lua51)))
         .build()

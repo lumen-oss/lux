@@ -165,7 +165,7 @@ mod tests {
     #[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "impure_tests"))]
     use crate::luarocks::rock_manifest::RockManifest;
     use crate::{
-        config::ConfigBuilder,
+        config,
         lockfile::{LockConstraint, LockedPackageId, OptState, PinnedState},
         lua,
         operations::{unpack_rockspec, DownloadedPackedRockBytes},
@@ -212,7 +212,7 @@ mod tests {
         };
         let rockspec = unpack_rockspec(&rock).await.unwrap();
         let install_root = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(install_root.to_path_buf()))
             .build()
@@ -283,7 +283,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         };
         let rockspec = unpack_rockspec(&rock).await.unwrap();
         let install_root = TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(install_root.to_path_buf()))
             .build()
@@ -333,7 +333,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             &OptState::default(),
         );
         let install_root = TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .user_tree(Some(install_root.to_path_buf()))
@@ -393,7 +393,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         };
         let rockspec = unpack_rockspec(&rock).await.unwrap();
         let install_root = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(install_root.to_path_buf()))
             .build()

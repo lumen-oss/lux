@@ -9,7 +9,7 @@ use lux_lib::{
     lockfile::LockedPackageId,
     lua,
     operations::{self, PackageInstallSpec},
-    package_db::PackageDB,
+    package::db::PackageDB,
     tree::{self, InstallTree, RockMatches},
 };
 

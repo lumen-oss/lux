@@ -4,12 +4,12 @@ use itertools::Itertools;
 use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
-    config::ConfigBuilder,
+    config,
     drivers::InstallPackages,
     git::{GitRef, GitSource},
     lua,
     operations::{Exec, PackageInstallSpec},
-    package_db::PackageDB,
+    package::db::PackageDB,
     rockspec,
     tree::EntryType,
 };
@@ -68,7 +68,7 @@ async fn install_and_use(package: package::Req, module_name: &str) {
     let dir = TempDir::new().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)
@@ -123,7 +123,7 @@ async fn test_install(install_spec: PackageInstallSpec) {
     let dir = TempDir::new().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)

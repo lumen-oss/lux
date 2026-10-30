@@ -37,7 +37,7 @@ const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 pub struct NoValidHomeDirectory;
 
 /// The resolved configuration for a Lux session.
-/// Can be constructed via [`ConfigBuilder`], which supports layering multiple
+/// Can be constructed via [`Builder`], which supports layering multiple
 /// configuration sources (config file, CLI flags, environment variables).
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -165,7 +165,7 @@ impl Config {
     pub fn enabled_dev_servers(&self) -> Result<Vec<Url>, Error> {
         let mut enabled_dev_servers = Vec::new();
         if self.enable_development_packages {
-            let config_file = ConfigBuilder::config_file()
+            let config_file = Builder::config_file()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
             enabled_dev_servers.push(self.server().join(DEV_PATH).map_err(|source| {
@@ -400,13 +400,13 @@ pub enum Error {
 
 /// Incrementally builds a [`Config`] by layering configuration sources.
 ///
-/// - Call [`ConfigBuilder::default`] to start with a blank slate,
-///   or call [`ConfigBuilder::new`] to start from a deserialised configuration file.
+/// - Call [`Builder::default`] to start with a blank slate,
+///   or call [`Builder::new`] to start from a deserialised configuration file.
 /// - Populate the fields from overriding sources (e.g. CLI arguments).
-/// - Finish with [`ConfigBuilder::build`].
+/// - Finish with [`Builder::build`].
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct ConfigBuilder {
+pub struct Builder {
     /// The LuaRocks repository server to fetch rocks and rockspecs from.
     /// Default: "https://luarocks.org/".
     #[serde(
@@ -507,8 +507,8 @@ pub struct ConfigBuilder {
 }
 
 /// A builder for the lux `Config`.
-impl ConfigBuilder {
-    /// Create a new `ConfigBuilder` by deserializing from a config file
+impl Builder {
+    /// Create a new `Builder` by deserializing from a config file
     /// if present, or otherwise by instantiating the default config.
     pub fn new() -> Result<Self, Error> {
         let config_file = Self::config_file()?;
@@ -851,7 +851,7 @@ impl ConfigBuilder {
         }
     }
 
-    /// Merge with another [`ConfigBuilder`]. The other one takes precedence.
+    /// Merge with another [`Builder`]. The other one takes precedence.
     pub fn merge(self, other: Self) -> Self {
         Self {
             server: other.server.or(self.server),
@@ -952,10 +952,10 @@ impl ConfigBuilder {
 }
 
 /// Useful for printing the current config
-impl From<Config> for ConfigBuilder {
+impl From<Config> for Builder {
     fn from(value: Config) -> Self {
         let no_manifest_cache = Some(value.manifest_cache_url.is_none());
-        ConfigBuilder {
+        Builder {
             enable_development_packages: Some(value.enable_development_packages),
             server: Some(value.server),
             extra_servers: Some(value.extra_servers),
@@ -1079,7 +1079,7 @@ mod tests {
     #[tokio::test]
     async fn wrapped_command_without_runner() {
         let echo = which::which("echo").unwrap();
-        let config = ConfigBuilder::default().build().unwrap();
+        let config = Builder::default().build().unwrap();
         let output = config
             .wrapped_command(&echo, ["hello", "world"])
             .output()
@@ -1095,7 +1095,7 @@ mod tests {
     #[tokio::test]
     async fn wrapped_command_prepends_runner_argv() {
         let echo = which::which("echo").unwrap();
-        let config = ConfigBuilder::default()
+        let config = Builder::default()
             .build_runner(Some(vec![echo.to_string_lossy().into(), "--prefix".into()]))
             .build()
             .unwrap();
@@ -1113,7 +1113,7 @@ mod tests {
 
     #[test]
     fn base_urls_resolve_relative_paths() {
-        let config = ConfigBuilder::default()
+        let config = Builder::default()
             .server(Some(Url::parse("https://example.com/texrocks").unwrap()))
             .extra_servers(Some(vec![
                 Url::parse("https://example.com/texrocks").unwrap()
@@ -1133,7 +1133,7 @@ mod tests {
             "https://example.com/texrocks/manifest-5.1.zip"
         );
 
-        let rebuilt = ConfigBuilder::from(config.clone()).build().unwrap();
+        let rebuilt = Builder::from(config.clone()).build().unwrap();
         assert_eq!(rebuilt.server(), config.server());
         assert_eq!(rebuilt.extra_servers(), config.extra_servers());
     }
@@ -1141,7 +1141,7 @@ mod tests {
     #[test]
     fn debug_redacts_access_tokens() {
         let config: Config =
-            toml::from_str::<ConfigBuilder>("[access_tokens]\n\"github.com\" = \"supersecret\"\n")
+            toml::from_str::<Builder>("[access_tokens]\n\"github.com\" = \"supersecret\"\n")
                 .unwrap()
                 .build()
                 .unwrap();
@@ -1152,7 +1152,7 @@ mod tests {
 
     #[test]
     fn external_deps_prefixes_default_empty() {
-        let config = toml::from_str::<ConfigBuilder>(
+        let config = toml::from_str::<Builder>(
             "[external_deps]\nlib_subdirs = [\"lib/x86_64-linux-gnu\"]\n",
         )
         .unwrap()

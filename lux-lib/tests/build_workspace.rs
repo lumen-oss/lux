@@ -7,7 +7,7 @@ use flaky_test::flaky_test;
 use lux_lib::operations::BuildWorkspace;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
-use lux_lib::{config::ConfigBuilder, lua};
+use lux_lib::{config, lua};
 
 #[flaky_test(tokio, times = 5)]
 async fn test_build_multi_workspace_local_dependencies() {
@@ -18,7 +18,7 @@ async fn test_build_multi_workspace_local_dependencies() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version.clone())
         .build()

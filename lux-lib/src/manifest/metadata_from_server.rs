@@ -254,7 +254,7 @@ mod tests {
     use httptest::{matchers::request, responders::status_code, Expectation, Server};
     use serial_test::serial;
 
-    use crate::{config::ConfigBuilder, fs};
+    use crate::{config, fs};
 
     use super::*;
 
@@ -289,7 +289,7 @@ mod tests {
         let server = start_test_server("manifest-5.1".into());
         let mut url_str = server.url_str("/");
         url_str.pop(); // Remove trailing "/"
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
             .lua_version(Some(lua::Version::LuaJIT))
@@ -309,7 +309,7 @@ mod tests {
         let mut url_str = server.url_str("/");
         url_str.pop(); // Remove trailing "/"
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .cache_dir(Some(cache_dir))
             .lua_version(Some(lua::Version::Lua51))
@@ -333,7 +333,7 @@ mod tests {
         )
         .unwrap();
         let cache_dir = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .cache_dir(Some(cache_dir.to_path_buf()))
             .lua_version(Some(lua::Version::Lua51))

@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    config::{self, Config, ConfigBuilder},
+    config::{self, Config},
     fs,
     lockfile::{self, ReadOnly, WorkspaceLockfile},
     lua,
@@ -294,12 +294,12 @@ impl Workspace {
         self.workspace_dir().join(CONFIG_TOML)
     }
 
-    /// Load a [`ConfigBuilder`] from a config.toml that resides in [`Self::workspace_dir`],
+    /// Load a [`config::Builder`] from a config.toml that resides in [`Self::workspace_dir`],
     /// if present.
-    pub fn config(&self) -> Result<Option<ConfigBuilder>, ConfigError> {
+    pub fn config(&self) -> Result<Option<config::Builder>, ConfigError> {
         let config_file = self.config_file();
         if config_file.is_file() {
-            Ok(Some(ConfigBuilder::from_file(&config_file).map_err(
+            Ok(Some(config::Builder::from_file(&config_file).map_err(
                 |err| ConfigError {
                     path: config_file.to_path_buf(),
                     source: Box::new(err),
@@ -448,7 +448,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::ConfigBuilder, fs, lua};
+    use crate::{config, fs, lua};
     use std::path::PathBuf;
 
     use assert_fs::prelude::*;
@@ -552,7 +552,7 @@ members = [ "glob:projects/*" ]
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
 
-        let config = ConfigBuilder::default()
+        let config = config::Builder::default()
             .luarc_file_name(Some("custom_config.json".to_string()))
             .build()
             .unwrap();
@@ -572,7 +572,7 @@ members = [ "glob:projects/*" ]
         luarc_file.touch().unwrap();
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
-        let config = ConfigBuilder::default().build().unwrap();
+        let config = config::Builder::default().build().unwrap();
 
         let path = workspace.luarc_path(&config);
         assert_eq!(path, luarc_file.path().to_path_buf());
@@ -589,7 +589,7 @@ members = [ "glob:projects/*" ]
         emmyrc_file.touch().unwrap();
 
         let workspace = Workspace::from(&project_root).unwrap().unwrap();
-        let config = ConfigBuilder::default().build().unwrap();
+        let config = config::Builder::default().build().unwrap();
 
         let path = workspace.luarc_path(&config);
         assert_eq!(path, emmyrc_file.path().to_path_buf());
@@ -622,7 +622,7 @@ no_tfa = true
         let workspace = Workspace::from(&workspace_root).unwrap().unwrap();
         let workspace_config = workspace.config().unwrap().unwrap();
 
-        let config = ConfigBuilder::default()
+        let config = config::Builder::default()
             .lua_version(Some(lua::Version::Lua53))
             .merge(workspace_config)
             .build()

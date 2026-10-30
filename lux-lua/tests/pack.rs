@@ -2,8 +2,7 @@ use std::{fs::File, io::Read, path::PathBuf};
 
 use assert_fs::{prelude::PathCopy, TempDir};
 use lux_lib::{
-    config::ConfigBuilder,
-    lua,
+    config, lua,
     operations::{BuildWorkspace, Pack},
     workspace::Workspace,
 };
@@ -51,7 +50,7 @@ url = "https://github.com/lumen-oss/luarocks-stub"
         .unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version)
         .build()

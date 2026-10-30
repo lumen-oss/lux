@@ -11,7 +11,6 @@ pub mod manifest;
 pub mod manifest_cache;
 pub mod operations;
 pub mod package;
-pub mod package_db;
 pub mod path;
 pub mod pipeline;
 pub mod progress;

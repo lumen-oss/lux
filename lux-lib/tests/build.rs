@@ -7,9 +7,7 @@ use lux_lib::rockspec;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
-use lux_lib::{
-    build::BuildBehaviour::Force, config::ConfigBuilder, lua, pipeline::build_local::Build, tree,
-};
+use lux_lib::{build::BuildBehaviour::Force, config, lua, pipeline::build_local::Build, tree};
 use tokio::runtime::Builder;
 
 #[cfg(not(target_env = "msvc"))]
@@ -32,7 +30,7 @@ async fn builtin_build() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)
@@ -72,7 +70,7 @@ async fn make_build() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)
@@ -106,7 +104,7 @@ async fn cmake_build() {
 #[flaky_test(tokio, times = 5)]
 async fn command_build() {
     // The rockspec appears to be broken when using luajit headers on macos
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
     let lua_version = lua::Version::from(&config).unwrap_or(&lua::Version::Lua51);
     if cfg!(target_os = "macos") && *lua_version == lua::Version::LuaJIT {
         println!("luaposix is broken on macos/luajit! Skipping...");
@@ -126,7 +124,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)
@@ -165,7 +163,7 @@ async fn treesitter_parser_build() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)
@@ -211,7 +209,7 @@ async fn treesitter_parser_build_source_queries() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version)
@@ -272,7 +270,7 @@ async fn test_build_local_project_no_source() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version)
         .build()
@@ -335,7 +333,7 @@ async fn test_build_local_project_only_src() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version)
         .build()
@@ -387,7 +385,7 @@ fn test_build_multiple_treesitter_parsers() {
     let mut handles = vec![];
 
     for i in 0..4 {
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(dir.join(format!("{i}"))))
             .lua_version(lua_version.clone())
@@ -438,7 +436,7 @@ async fn build_project_with_git_dependency() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version)
         .build()
@@ -472,7 +470,7 @@ async fn test_multiline_command_build() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version)
         .build()
@@ -512,7 +510,7 @@ async fn builtin_build_install_include() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version.clone())

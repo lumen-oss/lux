@@ -2,7 +2,7 @@
 
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
-use lux_lib::{config::ConfigBuilder, lua, operations::Test, workspace::Workspace};
+use lux_lib::{config, lua, operations::Test, workspace::Workspace};
 use std::path::PathBuf;
 
 #[flaky_test(tokio, times = 5)]
@@ -13,7 +13,7 @@ async fn test_luau_tiniest() {
     temp_dir.copy_from(project_root, &["**/*"]).unwrap();
     let tree_root = temp_dir.path().join(".lux");
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(tree_root))
         .lua_version(Some(lua::Version::Luau))

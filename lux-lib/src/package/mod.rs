@@ -9,6 +9,7 @@ use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::{fmt::Display, str::FromStr};
 use thiserror::Error;
+pub mod db;
 mod outdated;
 pub mod version;
 

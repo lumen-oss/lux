@@ -7,7 +7,7 @@ use assert_fs::{
 use flaky_test::flaky_test;
 use lux_lib::rockspec;
 use lux_lib::{
-    config::ConfigBuilder,
+    config,
     operations::{Vendor, VendorTarget},
     workspace::Workspace,
 };
@@ -37,7 +37,7 @@ async fn vendor_dependencies() {
         "say@1.4.1-3",
     ];
 
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
     let vendor_dir = assert_fs::TempDir::new().unwrap();
 
     Vendor::new()

@@ -7,7 +7,7 @@ use crate::{
     fs,
     lockfile::RemotePackageSourceUrl,
     operations::{DownloadedRockspec, RemoteRockDownload},
-    package_db::{PackageDB, SearchError},
+    package::db::{search, PackageDB},
 };
 use bon::Builder;
 use miette::Diagnostic;
@@ -26,7 +26,7 @@ pub(crate) struct FetchVendored<'a> {
 pub enum FetchVendoredError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Search(#[from] SearchError),
+    Search(#[from] search::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),

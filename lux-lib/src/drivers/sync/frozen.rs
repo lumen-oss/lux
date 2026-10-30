@@ -16,7 +16,7 @@ use crate::{
     },
     luarocks::luarocks_installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError, GenLuauRcError},
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     pipeline::resolve::luarocks_build_backend_name,
     project,
     rockspec::{self, lua_dependency, Rockspec},
@@ -167,7 +167,7 @@ pub enum SyncError {
     GenLuauRc(#[from] GenLuauRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(Box<package_db::Error>),
+    PackageDB(Box<package::db::Error>),
 }
 
 impl From<InstallPackagesError> for SyncError {
@@ -176,8 +176,8 @@ impl From<InstallPackagesError> for SyncError {
     }
 }
 
-impl From<package_db::Error> for SyncError {
-    fn from(source: package_db::Error) -> Self {
+impl From<package::db::Error> for SyncError {
+    fn from(source: package::db::Error) -> Self {
         Self::PackageDB(Box::new(source))
     }
 }
@@ -443,7 +443,7 @@ where
 mod tests {
     use super::Sync;
     use crate::package;
-    use crate::{config::ConfigBuilder, lockfile::LockedPackageLockType, workspace::Workspace};
+    use crate::{config, lockfile::LockedPackageLockType, workspace::Workspace};
     use assert_fs::{prelude::PathCopy, TempDir};
     use flaky_test::flaky_test;
     use std::path::PathBuf;
@@ -459,7 +459,7 @@ mod tests {
             )
             .unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let report = Sync::new(&workspace, &config).sync().await.unwrap();
         assert!(report.removed.is_empty());
         assert!(!report.added.is_empty());
@@ -481,7 +481,7 @@ mod tests {
             )
             .unwrap();
         let temp_dir = temp_dir.into_persistent();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         {
             let report = Sync::new(&workspace, &config)
@@ -514,7 +514,7 @@ mod tests {
                 &["**"],
             )
             .unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         {
             let report = Sync::new(&workspace, &config)
@@ -545,7 +545,7 @@ mod tests {
                 &["**"],
             )
             .unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
         // First sync to create the tree and lockfile
         Sync::new(&workspace, &config)

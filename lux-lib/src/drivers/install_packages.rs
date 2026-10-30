@@ -16,7 +16,7 @@ use crate::{
     },
     lua,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     tree::{self, InstallTree},
     workspace::TreeError,
 };
@@ -301,7 +301,7 @@ pub enum Error {
     LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error("cannot install duplicate entrypoints:\n{0}")]
     DuplicateEntrypoints(package::List),
     #[error("cannot install conflicting entrypoints:\n{0}")]

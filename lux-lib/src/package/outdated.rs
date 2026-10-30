@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::package_db::PackageDB;
+use crate::package::db::PackageDB;
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -72,10 +72,10 @@ mod tests {
     use url::Url;
 
     use crate::{
-        config::ConfigBuilder,
+        config,
         manifest::{Manifest, ManifestMetadata},
+        package::db::PackageDB,
         package::Spec,
-        package_db::PackageDB,
     };
 
     #[tokio::test]
@@ -84,7 +84,7 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
         let metadata = ManifestMetadata::new(&content).unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let package_db = PackageDB::from_manifest(
             Manifest::new(
                 Url::parse("https://example.com").unwrap(),

@@ -128,7 +128,7 @@ mod tests {
     use super::*;
 
     fn config_with_token(host: &str, raw_token: &str) -> crate::config::Config {
-        let config: crate::config::ConfigBuilder =
+        let config: crate::config::Builder =
             toml::from_str(&format!("[access_tokens]\n\"{host}\" = {raw_token:?}\n")).unwrap();
         config.build().unwrap()
     }

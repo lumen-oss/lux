@@ -3,11 +3,11 @@ use flaky_test::flaky_test;
 use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
-    config::ConfigBuilder,
+    config,
     drivers::InstallPackages,
     lua,
     operations::PackageInstallSpec,
-    package_db::PackageDB,
+    package::db::PackageDB,
     tree::{EntryType, InstallTree},
 };
 use std::str::FromStr;
@@ -17,7 +17,7 @@ async fn install_rock_lockfile(rock: &str, manifest_cache: bool) -> String {
     let dir = TempDir::new().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let mut config_builder = ConfigBuilder::new()
+    let mut config_builder = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.to_path_buf()))
         .lua_version(lua_version);

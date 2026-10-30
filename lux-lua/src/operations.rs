@@ -12,7 +12,7 @@ use lux_lib::{
     lockfile::LockedPackageId,
     lua,
     operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
-    package_db::PackageDB,
+    package::db::PackageDB,
     rockspec::dependency,
     tree::{RockMatches, Tree},
 };

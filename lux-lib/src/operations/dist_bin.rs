@@ -551,7 +551,7 @@ mod tests {
     use assert_fs::TempDir;
 
     #[cfg(any(target_os = "linux", feature = "impure_tests"))]
-    use crate::{config::ConfigBuilder, lua, tree::FlatDistTree};
+    use crate::{config, lua, tree::FlatDistTree};
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
@@ -581,7 +581,7 @@ mod tests {
     #[tokio::test]
     async fn test_collect_installed_files() {
         let staging = TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()
@@ -651,7 +651,7 @@ mod tests {
 
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .build()
@@ -708,7 +708,7 @@ mod tests {
 
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .build()

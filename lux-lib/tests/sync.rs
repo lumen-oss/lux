@@ -1,7 +1,7 @@
 use assert_fs::{prelude::PathCopy, TempDir};
 use flaky_test::flaky_test;
 use lux_lib::{
-    config::ConfigBuilder,
+    config,
     drivers::sync::{Sync, SyncMode, TargetSet},
     tree::{InstallTree, RockMatches},
     workspace::Workspace,
@@ -16,7 +16,7 @@ async fn sync_test_dependencies_empty_project() {
     let temp_dir = TempDir::new().unwrap();
     temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
     let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
 
     let lockfile_content_before_sync =
         String::from_utf8(tokio::fs::read(workspace.lockfile_path()).await.unwrap());
@@ -68,7 +68,7 @@ async fn sync_multi_projects_same_dependencies() {
     let temp_dir = TempDir::new().unwrap();
     temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
     let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
@@ -111,7 +111,7 @@ fallo = "2.2.0"
     let workspace_tree = TempDir::new().unwrap();
     let workspace = Workspace::from_exact(project_dir.path()).unwrap().unwrap();
     let lua_version = lua::detect::installed_version().unwrap_or(lua::Version::Lua51);
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(Some(lua_version.clone()))
         .workspace_tree(Some(workspace_tree.to_path_buf()))
@@ -159,7 +159,7 @@ async fn sync_dependencies_adds_luarocks_build_backend() {
     let temp_dir = TempDir::new().unwrap();
     temp_dir.copy_from(&sample_project_dir, &["**"]).unwrap();
     let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)
@@ -188,7 +188,7 @@ async fn sync_dependencies_adds_transitive_build_dependencies() {
     let temp_dir = TempDir::new().unwrap();
     temp_dir.copy_from(&sample_project_dir, &["**"]).unwrap();
     let workspace = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
 
     Sync::new(&workspace, &config)
         .mode(SyncMode::Frozen)

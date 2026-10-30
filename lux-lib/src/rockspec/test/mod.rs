@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::lua;
 
 use crate::{
-    config::{self, Config, ConfigBuilder},
+    config::{self, Config},
     project::Project,
     rockspec::platform::per_platform_from_intermediate,
     rockspec::Rockspec,
@@ -208,7 +208,7 @@ pub(crate) mod internal {
         pub(crate) fn test_config(&self, config: &Config) -> Result<Config, config::Error> {
             match self {
                 Self::BustedNlua { .. } => {
-                    let config_builder: ConfigBuilder = config.clone().into();
+                    let config_builder: config::Builder = config.clone().into();
 
                     // XXX: On macos and msvc, Neovim and LuaJIT segfault when
                     // requiring luafilesystem's `lfs` module

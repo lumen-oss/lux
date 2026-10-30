@@ -1,10 +1,12 @@
 use crate::package;
+
+pub mod search;
 use crate::rockspec;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     config::{self, Config},
-    lockfile::{IntegrityError, PackageLock},
+    lockfile::PackageLock,
     manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
     operations::PackageInstallSpec,
@@ -21,7 +23,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub struct PackageDB {
-    providers: Vec<PackageProvider>,
+    providers: Vec<Provider>,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -43,27 +45,9 @@ impl From<workspace::Error> for Error {
     }
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum SearchError {
-    #[error("no rock that matches '{0}' found in the lockfile or in the manifests")]
-    RockNotFound(package::Req),
-    #[error("error when pulling manifest")]
-    #[diagnostic(forward(0))]
-    Manifest(#[from] manifest::Error),
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum RemotePackageDbIntegrityError {
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Lockfile(#[from] IntegrityError),
-}
-
 /// A source of package metadata consulted by a [`PackageDB`].
 #[derive(Clone, Debug)]
-pub(crate) enum PackageProvider {
+pub(crate) enum Provider {
     /// Locally available packages, e.g. workspace members.
     Local(Vec<FoundPackage>),
     /// Packages pinned in the lockfile.
@@ -108,12 +92,12 @@ impl ManifestProvider {
     }
 }
 
-impl PackageProvider {
+impl Provider {
     async fn find(
         &self,
         package_req: &package::Req,
         filter: Option<remote::package::kind::FilterSpec>,
-    ) -> Result<Option<remote::Package>, SearchError> {
+    ) -> Result<Option<remote::Package>, search::Error> {
         match self {
             Self::Local(packages) => Ok(packages
                 .iter()
@@ -153,7 +137,7 @@ impl PackageProvider {
     async fn search(
         &self,
         package_req: &package::Req,
-    ) -> Result<Vec<(package::Name, Vec<package::Version>)>, SearchError> {
+    ) -> Result<Vec<(package::Name, Vec<package::Version>)>, search::Error> {
         match self {
             Self::Local(packages) => Ok(packages
                 .iter()
@@ -325,22 +309,18 @@ impl PackageDB {
     pub async fn from_config(config: &Config) -> Result<Self, Error> {
         let mut providers = Vec::new();
         if let Some(cache) = ManifestCache::from_config(config) {
-            providers.push(PackageProvider::Closure(ClosureProvider::new(
-                cache, config,
-            )));
+            providers.push(Provider::Closure(ClosureProvider::new(cache, config)));
         }
         for server in config.enabled_dev_servers()? {
-            providers.push(PackageProvider::Manifest(ManifestProvider::new(
-                server, config,
-            )));
+            providers.push(Provider::Manifest(ManifestProvider::new(server, config)));
         }
         for server in config.extra_servers() {
-            providers.push(PackageProvider::Manifest(ManifestProvider::new(
+            providers.push(Provider::Manifest(ManifestProvider::new(
                 server.clone(),
                 config,
             )));
         }
-        providers.push(PackageProvider::Manifest(ManifestProvider::new(
+        providers.push(Provider::Manifest(ManifestProvider::new(
             config.server().clone(),
             config,
         )));
@@ -351,7 +331,7 @@ impl PackageDB {
     #[cfg(test)]
     pub(crate) fn from_manifest(manifest: Manifest, config: &Config) -> Self {
         Self {
-            providers: vec![PackageProvider::Manifest(ManifestProvider::from_manifest(
+            providers: vec![Provider::Manifest(ManifestProvider::from_manifest(
                 manifest, config,
             ))],
         }
@@ -368,34 +348,28 @@ impl PackageDB {
     #[cfg(test)]
     pub(crate) fn from_local(packages: Vec<FoundPackage>) -> Self {
         Self {
-            providers: vec![PackageProvider::Local(packages)],
+            providers: vec![Provider::Local(packages)],
         }
     }
 
     /// Sets the local packages to look up first.
     pub(crate) fn with_local(mut self, packages: Vec<FoundPackage>) -> Self {
         self.providers
-            .retain(|provider| !matches!(provider, PackageProvider::Local(_)));
-        self.providers.insert(0, PackageProvider::Local(packages));
+            .retain(|provider| !matches!(provider, Provider::Local(_)));
+        self.providers.insert(0, Provider::Local(packages));
         self
     }
 
     /// Sets the locked packages to look up after local packages, ahead of manifests.
     pub(crate) fn with_locks(mut self, locks: Vec<PackageLock>) -> Self {
         self.providers
-            .retain(|provider| !matches!(provider, PackageProvider::Lockfile(_)));
+            .retain(|provider| !matches!(provider, Provider::Lockfile(_)));
         let index = self
             .providers
             .iter()
-            .position(|provider| {
-                matches!(
-                    provider,
-                    PackageProvider::Closure(_) | PackageProvider::Manifest(_)
-                )
-            })
+            .position(|provider| matches!(provider, Provider::Closure(_) | Provider::Manifest(_)))
             .unwrap_or(self.providers.len());
-        self.providers
-            .insert(index, PackageProvider::Lockfile(locks));
+        self.providers.insert(index, Provider::Lockfile(locks));
         self
     }
 
@@ -403,95 +377,16 @@ impl PackageDB {
         self.providers.iter().any(|provider| {
             matches!(
                 provider,
-                PackageProvider::Lockfile(_)
-                    | PackageProvider::Manifest(_)
-                    | PackageProvider::Closure(_)
+                Provider::Lockfile(_) | Provider::Manifest(_) | Provider::Closure(_)
             )
         })
-    }
-
-    /// Find a remote package that matches the requirement, returning the latest match.
-    #[tracing::instrument(
-          name = "Searching",
-          level = "info",
-          skip_all,
-          fields(package = package_req.to_string()),
-    )]
-    pub(crate) async fn find(
-        &self,
-        package_req: &package::Req,
-        filter: Option<remote::package::kind::FilterSpec>,
-    ) -> Result<remote::Package, SearchError> {
-        for provider in &self.providers {
-            if let Some(package) = provider.find(package_req, filter.clone()).await? {
-                return Ok(package);
-            }
-        }
-
-        Err(SearchError::RockNotFound(package_req.clone()))
-    }
-
-    /// Resolves a package install spec to a package that is already available.
-    pub(crate) async fn resolve(
-        &self,
-        spec: &PackageInstallSpec,
-        config: &Config,
-    ) -> Result<Option<FoundPackage>, discover::Error> {
-        for provider in &self.providers {
-            // Providers that can serve a package without downloading it (local packages and the
-            // manifest cache) resolve early.
-            if let Some(found) = provider.resolve(spec, config).await? {
-                return Ok(Some(found));
-            }
-
-            // Otherwise break on the first provider that has the package. The `break` prevents a
-            // further invocation of `provider.resolve` on a provider we don't want.
-            if provider.find(&spec.package, None).await?.is_some() {
-                break;
-            }
-        }
-        Ok(None)
-    }
-
-    /// Search for all packages that match the requirement.
-    pub async fn search(
-        &self,
-        package_req: &package::Req,
-    ) -> Result<Vec<(package::Name, Vec<package::Version>)>, SearchError> {
-        let mut results = Vec::new();
-        for provider in &self.providers {
-            results.extend(provider.search(package_req).await?);
-        }
-        Ok(results)
-    }
-
-    /// Find the latest version for a package by name.
-    pub(crate) async fn latest_version(
-        &self,
-        rock_name: &package::Name,
-    ) -> Option<package::Version> {
-        self.latest_match(&rock_name.clone().into(), None)
-            .await
-            .map(|result| result.version().clone())
-    }
-
-    /// Find the latest package that matches the requirement.
-    pub async fn latest_match(
-        &self,
-        package_req: &package::Req,
-        filter: Option<remote::package::kind::FilterSpec>,
-    ) -> Option<package::Spec> {
-        match self.find(package_req, filter).await {
-            Ok(result) => Some(result.spec),
-            Err(_) => None,
-        }
     }
 }
 
 impl From<Vec<PackageLock>> for PackageDB {
     fn from(locks: Vec<PackageLock>) -> Self {
         Self {
-            providers: vec![PackageProvider::Lockfile(locks)],
+            providers: vec![Provider::Lockfile(locks)],
         }
     }
 }

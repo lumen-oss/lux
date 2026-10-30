@@ -293,7 +293,7 @@ async fn run_project_tests(
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use crate::{config::ConfigBuilder, fs, lua};
+    use crate::{config, fs, lua};
 
     use super::*;
     use assert_fs::{prelude::PathCopy, TempDir};
@@ -322,7 +322,7 @@ mod tests {
 
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(tree_root))
             .lua_version(lua_version)

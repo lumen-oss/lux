@@ -9,12 +9,12 @@ use std::{
 use clap::Args;
 use lux_lib::{
     build::BuildBehaviour,
-    config::{Config, ConfigBuilder},
+    config::{self, Config},
     drivers::InstallPackages,
     lockfile::LockedPackage,
     lua,
     operations::{InstallProject, PackageInstallSpec},
-    package_db::PackageDB,
+    package::db::PackageDB,
     pipeline::build_local::Build,
     tree::{self, FlatDistTree, InstallTree},
     workspace::Workspace,
@@ -82,7 +82,7 @@ enum CompressionMethod {
 
 pub async fn dist_archive(args: FlatArchive, config: Config) -> Result<()> {
     let staging_dir = tempdir().into_diagnostic()?;
-    let config = ConfigBuilder::from(config)
+    let config = config::Builder::from(config)
         // Wrapping bin scripts does not make sense for distributed packages.
         .wrap_bin_scripts(Some(false))
         .user_tree(Some(staging_dir.path().to_path_buf()))

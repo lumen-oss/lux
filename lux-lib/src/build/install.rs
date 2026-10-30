@@ -266,14 +266,14 @@ pub(crate) fn detect_binaries(build_dir: &Path) -> Vec<PathBuf> {
 mod tests {
     use tokio::process::Command;
 
-    use crate::{config::ConfigBuilder, lua, tree::Tree};
+    use crate::{config, lua, tree::Tree};
 
     use super::*;
 
     #[tokio::test]
     async fn test_is_compatible_lua_script() {
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .build()
@@ -295,7 +295,7 @@ mod tests {
     async fn test_wrapped_binary() {
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let temp = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .user_tree(Some(temp.to_path_buf()))

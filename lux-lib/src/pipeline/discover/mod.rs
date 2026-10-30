@@ -14,7 +14,7 @@ use crate::{
     config::Config,
     operations,
     operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
-    package_db::{PackageDB, SearchError},
+    package::db::{search, PackageDB},
     project::Project,
     rockspec::Rockspec,
 };
@@ -69,7 +69,7 @@ impl FoundPackage {
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Search(#[from] SearchError),
+    Search(#[from] search::Error),
     #[error("failed to acquire metadata for '{0}'")]
     #[diagnostic(forward(1))]
     Download(package::Req, Box<operations::SearchAndDownloadError>),
@@ -242,7 +242,7 @@ async fn download_remote(
             artifact,
         })
     } else {
-        Err(Error::Search(SearchError::RockNotFound(
+        Err(Error::Search(search::Error::RockNotFound(
             spec.package.clone(),
         )))
     }
@@ -253,7 +253,7 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    use crate::{build::BuildBehaviour, config::ConfigBuilder, tree::EntryType};
+    use crate::{build::BuildBehaviour, config, tree::EntryType};
 
     #[test]
     fn from_rockspec_builds_local_found_package() {
@@ -279,7 +279,7 @@ mod tests {
         let bar_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample-projects/multi-project-local-deps/projects/bar");
 
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let spec = PackageInstallSpec::new(
             package::Req::new("bar".into(), Some("1.0.0".into())).unwrap(),
             EntryType::DependencyOnly,

@@ -115,7 +115,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ConfigBuilder;
+    use crate::config;
     use assert_fs::prelude::PathCopy;
     use std::{path::PathBuf, str::FromStr};
 
@@ -126,7 +126,7 @@ mod tests {
         let temp = assert_fs::TempDir::new().unwrap();
         temp.copy_from(&tree_path, &["**"]).unwrap();
         let tree_path = temp.to_path_buf();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(tree_path.clone()))
             .lua_version(Some(lua::Version::Lua51))

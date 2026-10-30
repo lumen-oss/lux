@@ -2,8 +2,7 @@
 
 use assert_fs::prelude::*;
 use lux_lib::{
-    config::ConfigBuilder,
-    lua,
+    config, lua,
     operations::{RunLua, RunLuaError},
     path::LuaEnvironment,
 };
@@ -34,7 +33,7 @@ async fn pure_environment_hides_inherited_lua_paths() {
     let external_path = external.child("?.lua");
     std::env::set_var("LUA_PATH_5_1", external_path.to_string_lossy().to_string());
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(temp.path().to_path_buf()))
         .data_dir(Some(temp.child("data").to_path_buf()))

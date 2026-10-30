@@ -11,7 +11,7 @@ use lux_lib::{
     drivers::InstallPackages,
     lua,
     operations::{self, PackageInstallSpec},
-    package_db::PackageDB,
+    package::db::PackageDB,
     pipeline::build_local::Build,
     rockspec::Rockspec as _,
     tree::{self, InstallTree},

@@ -10,8 +10,8 @@ use crate::{
         WorkspaceLockfile,
     },
     lua,
+    package::db::PackageDB,
     package::RockConstraintUnsatisfied,
-    package_db::{self, PackageDB},
     tree::{self, InstallTree, Tree},
     workspace::{self, TreeError, Workspace},
 };
@@ -38,7 +38,7 @@ pub enum UpdateError {
     Remove(#[from] RemoveError),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error("error loading the workspace")]
     #[diagnostic(forward(0))]
     Workspace(#[from] workspace::Error),
@@ -346,8 +346,7 @@ mod tests {
     use assert_fs::prelude::PathCopy;
 
     use crate::{
-        config::ConfigBuilder, lockfile::LockedPackageLockType, lua, package_db::PackageDB,
-        workspace::Workspace,
+        config, lockfile::LockedPackageLockType, lua, package::db::PackageDB, workspace::Workspace,
     };
 
     use super::Update;
@@ -366,7 +365,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()

@@ -1,5 +1,5 @@
 use assert_fs::TempDir;
-use lux_lib::{config::ConfigBuilder, lua};
+use lux_lib::{config, lua};
 use lux_lua::lua_impls::TreeLua;
 use mlua::{IntoLua, Lua};
 
@@ -11,7 +11,7 @@ async fn tree_userdata() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(temp.to_path_buf()))
         .lua_version(lua_version)

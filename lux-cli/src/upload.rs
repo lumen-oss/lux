@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use clap::Args;
 use lux_lib::{
     config::Config,
-    package_db::PackageDB,
+    package::db::PackageDB,
     upload::{Mode, PreparedRockspec, ProjectUpload, RockspecUpload},
     workspace::Workspace,
 };

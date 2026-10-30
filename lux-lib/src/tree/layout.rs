@@ -209,7 +209,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::{
-        config::ConfigBuilder,
+        config,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         lua,
         tree::{EntryType, InstallTree, NvimLayout, RojoLayout},
@@ -232,7 +232,7 @@ mod tests {
         let temp = assert_fs::TempDir::new().unwrap();
         temp.copy_from(&tree_path, &["**"]).unwrap();
         let tree_path = temp.to_path_buf();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(tree_path.clone()))
             .entrypoint_layout(NvimLayout)
@@ -320,7 +320,7 @@ mod tests {
 
     fn luau_tree() -> (assert_fs::TempDir, crate::tree::Tree) {
         let temp = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.path().join(".lux")))
             .entrypoint_layout(RojoLayout)
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn rojo_layout_skips_non_luau() {
         let temp = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.path().join(".lux")))
             .entrypoint_layout(RojoLayout)
