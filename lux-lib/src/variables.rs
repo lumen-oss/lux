@@ -65,7 +65,7 @@ fn parser<'a>(
                         {
                             v.get_variable(&s)
                         } else {
-                            Ok(Some(s.clone()))
+                            Ok(Some(format!("$({s})")))
                         }
                     })
                     .collect::<Result<Vec<Option<String>>, GetVariableError>>()
@@ -194,5 +194,25 @@ mod tests {
     #[test]
     fn substitute_empty_string() {
         assert_eq!(substitute(&[&TestVariables], "").unwrap(), "".to_string());
+    }
+
+    #[test]
+    fn shell_expansion_is_left_alone() {
+        let input = r#"eval "$(sed 's,auxdir/auxsub,texk/web2c,g' subsubdir-conf.cmd)""#;
+        assert_eq!(substitute(&[&TestVariables], input).unwrap(), input);
+    }
+
+    #[test]
+    fn nested_shell_expansion_is_left_alone() {
+        let input = "$($(which lua))";
+        assert_eq!(substitute(&[&TestVariables], input).unwrap(), input);
+    }
+
+    #[test]
+    fn variables_inside_shell_expansion_are_substituted() {
+        assert_eq!(
+            substitute(&[&TestVariables], "$(cd $(TEST_VAR) && pwd)").unwrap(),
+            "$(cd foo && pwd)".to_string()
+        );
     }
 }
