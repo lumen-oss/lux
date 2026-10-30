@@ -30,7 +30,7 @@ use lux_lib::{
     package_db::PackageDB,
     project::Project,
     rockspec,
-    rockspec::{DependencyType, LuaDependencySpec, LuaDependencyType, Rockspec},
+    rockspec::{dependency, lua_dependency, Rockspec},
     tree::{EntryType, InstallTree, NvimLayout, RockLayout, RockMatches, Tree},
     workspace::Workspace,
 };
@@ -304,7 +304,7 @@ impl FromLua for LockConstraintLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExternalDependencySpecLua(pub rockspec::ExternalDependencySpec);
+pub struct ExternalDependencySpecLua(pub rockspec::external_dependency::Spec);
 
 impl Typed for ExternalDependencySpecLua {
     fn ty() -> Type {
@@ -331,7 +331,7 @@ impl FromLua for ExternalDependencySpecLua {
             let header: Option<PathBuf> = table.get("header")?;
             let library: Option<PathBuf> = table.get("library")?;
             Ok(ExternalDependencySpecLua(
-                rockspec::ExternalDependencySpec { header, library },
+                rockspec::external_dependency::Spec { header, library },
             ))
         } else {
             Err(LuaError::FromLuaConversionError {
@@ -344,7 +344,7 @@ impl FromLua for ExternalDependencySpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlatformIdentifierLua(pub rockspec::PlatformIdentifier);
+pub struct PlatformIdentifierLua(pub rockspec::platform::Identifier);
 
 impl IntoLuaTypeLiteral for PlatformIdentifierLua {
     fn into_lua_type_literal(self) -> String {
@@ -355,7 +355,7 @@ impl IntoLuaTypeLiteral for PlatformIdentifierLua {
 impl Typed for PlatformIdentifierLua {
     fn ty() -> Type {
         Type::union(
-            rockspec::PlatformIdentifier::iter().map(|p| Type::literal(PlatformIdentifierLua(p))),
+            rockspec::platform::Identifier::iter().map(|p| Type::literal(PlatformIdentifierLua(p))),
         )
     }
 }
@@ -365,7 +365,7 @@ impl FromLua for PlatformIdentifierLua {
         let s = String::from_lua(value, lua)?;
         Ok(PlatformIdentifierLua(
             s.parse()
-                .unwrap_or(rockspec::PlatformIdentifier::Unknown(s)),
+                .unwrap_or(rockspec::platform::Identifier::Unknown(s)),
         ))
     }
 }
@@ -401,7 +401,7 @@ impl IntoLua for RockspecFormatLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaModuleLua(pub rockspec::build::Module);
+pub struct LuaModuleLua(pub rockspec::build::backend::Module);
 
 impl Typed for LuaModuleLua {
     fn ty() -> Type {
@@ -419,30 +419,30 @@ impl FromLua for LuaModuleLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
         Ok(LuaModuleLua(
-            rockspec::build::Module::from_str(&s).into_lua_err()?,
+            rockspec::build::backend::Module::from_str(&s).into_lua_err()?,
         ))
     }
 }
 
-pub struct DependencyTypeLua<T>(pub DependencyType<T>);
+pub struct DependencyKindLua<T>(pub dependency::Kind<T>);
 
-impl<T: Typed> Typed for DependencyTypeLua<T> {
+impl<T: Typed> Typed for DependencyKindLua<T> {
     fn ty() -> Type {
         Type::named("table")
     }
 }
 
-impl<T> IntoLua for DependencyTypeLua<T>
+impl<T> IntoLua for DependencyKindLua<T>
 where
     T: IntoLua,
 {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            DependencyType::Regular(deps) => table.set("regular", deps)?,
-            DependencyType::Build(deps) => table.set("build", deps)?,
-            DependencyType::Test(deps) => table.set("test", deps)?,
-            DependencyType::External(deps) => {
+            dependency::Kind::Regular(deps) => table.set("regular", deps)?,
+            dependency::Kind::Build(deps) => table.set("build", deps)?,
+            dependency::Kind::Test(deps) => table.set("test", deps)?,
+            dependency::Kind::External(deps) => {
                 let wrapped: HashMap<String, ExternalDependencySpecLua> = deps
                     .into_iter()
                     .map(|(k, v)| (k, ExternalDependencySpecLua(v)))
@@ -454,7 +454,7 @@ where
     }
 }
 
-impl<T> FromLua for DependencyTypeLua<T>
+impl<T> FromLua for DependencyKindLua<T>
 where
     T: FromLua,
 {
@@ -463,56 +463,56 @@ where
             .as_table()
             .ok_or_else(|| LuaError::FromLuaConversionError {
                 from: "Value",
-                to: "DependencyTypeLua".to_string(),
+                to: "DependencyKindLua".to_string(),
                 message: Some("Expected a table".to_string()),
             })?;
         let deps = if let Some(regular) = tbl.get("regular")? {
-            DependencyType::Regular(regular)
+            dependency::Kind::Regular(regular)
         } else if let Some(build) = tbl.get("build")? {
-            DependencyType::Build(build)
+            dependency::Kind::Build(build)
         } else if let Some(test) = tbl.get("test")? {
-            DependencyType::Test(test)
+            dependency::Kind::Test(test)
         } else if let Some(external) =
             tbl.get::<Option<HashMap<String, ExternalDependencySpecLua>>>("external")?
         {
-            DependencyType::External(external.into_iter().map(|(k, v)| (k, v.0)).collect())
+            dependency::Kind::External(external.into_iter().map(|(k, v)| (k, v.0)).collect())
         } else {
             return Err(LuaError::FromLuaConversionError {
                 from: "table",
-                to: "DependencyTypeLua".to_string(),
+                to: "DependencyKindLua".to_string(),
                 message: Some(
                     "expected a table with `regular`, `build`, `test` or `external`".to_string(),
                 ),
             });
         };
-        Ok(DependencyTypeLua(deps))
+        Ok(DependencyKindLua(deps))
     }
 }
 
-pub struct LuaDependencyTypeLua<T>(pub LuaDependencyType<T>);
+pub struct LuaDependencyKindLua<T>(pub lua_dependency::Kind<T>);
 
-impl<T: Typed> Typed for LuaDependencyTypeLua<T> {
+impl<T: Typed> Typed for LuaDependencyKindLua<T> {
     fn ty() -> Type {
         Type::named("table")
     }
 }
 
-impl<T> IntoLua for LuaDependencyTypeLua<T>
+impl<T> IntoLua for LuaDependencyKindLua<T>
 where
     T: IntoLua,
 {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            LuaDependencyType::Regular(deps) => table.set("regular", deps)?,
-            LuaDependencyType::Build(deps) => table.set("build", deps)?,
-            LuaDependencyType::Test(deps) => table.set("test", deps)?,
+            lua_dependency::Kind::Regular(deps) => table.set("regular", deps)?,
+            lua_dependency::Kind::Build(deps) => table.set("build", deps)?,
+            lua_dependency::Kind::Test(deps) => table.set("test", deps)?,
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-impl<T> FromLua for LuaDependencyTypeLua<T>
+impl<T> FromLua for LuaDependencyKindLua<T>
 where
     T: FromLua,
 {
@@ -521,23 +521,23 @@ where
             .as_table()
             .ok_or_else(|| LuaError::FromLuaConversionError {
                 from: "Value",
-                to: "LuaDependencyTypeLua".to_string(),
+                to: "LuaDependencyKindLua".to_string(),
                 message: Some("Expected a table".to_string()),
             })?;
         let deps = if let Some(regular) = tbl.get("regular")? {
-            LuaDependencyType::Regular(regular)
+            lua_dependency::Kind::Regular(regular)
         } else if let Some(build) = tbl.get("build")? {
-            LuaDependencyType::Build(build)
+            lua_dependency::Kind::Build(build)
         } else if let Some(test) = tbl.get("test")? {
-            LuaDependencyType::Test(test)
+            lua_dependency::Kind::Test(test)
         } else {
             return Err(LuaError::FromLuaConversionError {
                 from: "table",
-                to: "LuaDependencyTypeLua".to_string(),
+                to: "LuaDependencyKindLua".to_string(),
                 message: Some("expected a table with `regular`, `build`, or `test`".to_string()),
             });
         };
-        Ok(LuaDependencyTypeLua(deps))
+        Ok(LuaDependencyKindLua(deps))
     }
 }
 
@@ -566,7 +566,7 @@ impl IntoLua for RockMatchesLua {
     }
 }
 
-pub struct RockSourceSpecLua(pub rockspec::RockSourceSpec);
+pub struct RockSourceSpecLua(pub rockspec::source::Spec);
 
 impl Typed for RockSourceSpecLua {
     fn ty() -> Type {
@@ -578,16 +578,16 @@ impl IntoLua for RockSourceSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            rockspec::RockSourceSpec::Git(git) => {
+            rockspec::source::Spec::Git(git) => {
                 table.set("git", GitSourceLua(git))?;
             }
-            rockspec::RockSourceSpec::File(path) => {
+            rockspec::source::Spec::File(path) => {
                 table.set("file", path.to_slash_lossy().to_string())?;
             }
-            rockspec::RockSourceSpec::Url(url) => {
+            rockspec::source::Spec::Url(url) => {
                 table.set("url", url.to_string())?;
             }
-            rockspec::RockSourceSpec::Wally(package_req) => {
+            rockspec::source::Spec::Wally(package_req) => {
                 table.set("wally", package_req.to_string())?;
             }
         };
@@ -595,7 +595,7 @@ impl IntoLua for RockSourceSpecLua {
     }
 }
 
-pub struct TestSpecLua(pub rockspec::TestSpec);
+pub struct TestSpecLua(pub rockspec::test::Spec);
 
 impl Typed for TestSpecLua {
     fn ty() -> Type {
@@ -607,20 +607,24 @@ impl IntoLua for TestSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            rockspec::TestSpec::AutoDetect => table.set("auto_detect", true)?,
-            rockspec::TestSpec::Busted(spec) => table.set("busted", BustedTestSpecLua(spec))?,
-            rockspec::TestSpec::BustedNlua(spec) => {
+            rockspec::test::Spec::AutoDetect => table.set("auto_detect", true)?,
+            rockspec::test::Spec::Busted(spec) => table.set("busted", BustedTestSpecLua(spec))?,
+            rockspec::test::Spec::BustedNlua(spec) => {
                 table.set("busted_nlua", BustedTestSpecLua(spec))?
             }
-            rockspec::TestSpec::Command(spec) => table.set("command", CommandTestSpecLua(spec))?,
-            rockspec::TestSpec::Script(spec) => table.set("script", LuaScriptTestSpecLua(spec))?,
-            rockspec::TestSpec::Tiniest => table.set("tiniest", true)?,
+            rockspec::test::Spec::Command(spec) => {
+                table.set("command", CommandTestSpecLua(spec))?
+            }
+            rockspec::test::Spec::Script(spec) => {
+                table.set("script", LuaScriptTestSpecLua(spec))?
+            }
+            rockspec::test::Spec::Tiniest => table.set("tiniest", true)?,
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-pub struct ModuleSpecLua(pub rockspec::build::ModuleSpec);
+pub struct ModuleSpecLua(pub rockspec::build::backend::ModuleSpec);
 
 impl Typed for ModuleSpecLua {
     fn ty() -> Type {
@@ -632,17 +636,17 @@ impl IntoLua for ModuleSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            rockspec::build::ModuleSpec::SourcePath(path) => {
+            rockspec::build::backend::ModuleSpec::SourcePath(path) => {
                 table.set("source", path.to_slash_lossy().to_string())?
             }
-            rockspec::build::ModuleSpec::SourcePaths(paths) => table.set(
+            rockspec::build::backend::ModuleSpec::SourcePaths(paths) => table.set(
                 "sources",
                 paths
                     .into_iter()
                     .map(|p| p.to_slash_lossy().into_owned())
                     .collect::<Vec<_>>(),
             )?,
-            rockspec::build::ModuleSpec::ModulePaths(mp) => {
+            rockspec::build::backend::ModuleSpec::ModulePaths(mp) => {
                 table.set("modules", ModulePathsLua(mp))?
             }
         }
@@ -650,7 +654,7 @@ impl IntoLua for ModuleSpecLua {
     }
 }
 
-pub struct BuiltinBuildSpecLua(pub rockspec::build::BuiltinBuildSpec);
+pub struct BuiltinBuildSpecLua(pub rockspec::build::backend::Builtin);
 
 impl Typed for BuiltinBuildSpecLua {
     fn ty() -> Type {
@@ -668,7 +672,7 @@ impl IntoLua for BuiltinBuildSpecLua {
     }
 }
 
-pub struct BuildBackendSpecLua(pub rockspec::build::BuildBackendSpec);
+pub struct BuildBackendSpecLua(pub rockspec::build::backend::Spec);
 
 impl Typed for BuildBackendSpecLua {
     fn ty() -> Type {
@@ -679,25 +683,25 @@ impl Typed for BuildBackendSpecLua {
 impl IntoLua for BuildBackendSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         match self.0 {
-            rockspec::build::BuildBackendSpec::Builtin(spec) => {
+            rockspec::build::backend::Spec::Builtin(spec) => {
                 BuiltinBuildSpecLua(spec).into_lua(lua)
             }
-            rockspec::build::BuildBackendSpec::Make(spec) => MakeBuildSpecLua(spec).into_lua(lua),
-            rockspec::build::BuildBackendSpec::CMake(spec) => CMakeBuildSpecLua(spec).into_lua(lua),
-            rockspec::build::BuildBackendSpec::Command(spec) => {
+            rockspec::build::backend::Spec::Make(spec) => MakeBuildSpecLua(spec).into_lua(lua),
+            rockspec::build::backend::Spec::CMake(spec) => CMakeBuildSpecLua(spec).into_lua(lua),
+            rockspec::build::backend::Spec::Command(spec) => {
                 CommandBuildSpecLua(spec).into_lua(lua)
             }
-            rockspec::build::BuildBackendSpec::LuaRock(s) => s.into_lua(lua),
-            rockspec::build::BuildBackendSpec::RustMlua(spec) => {
+            rockspec::build::backend::Spec::LuaRock(s) => s.into_lua(lua),
+            rockspec::build::backend::Spec::RustMlua(spec) => {
                 RustMluaBuildSpecLua(spec).into_lua(lua)
             }
-            rockspec::build::BuildBackendSpec::RustBinary(spec) => {
+            rockspec::build::backend::Spec::RustBinary(spec) => {
                 RustBinaryBuildSpecLua(spec).into_lua(lua)
             }
-            rockspec::build::BuildBackendSpec::TreesitterParser(spec) => {
+            rockspec::build::backend::Spec::TreesitterParser(spec) => {
                 TreesitterParserBuildSpecLua(spec).into_lua(lua)
             }
-            rockspec::build::BuildBackendSpec::Source => "source".into_lua(lua),
+            rockspec::build::backend::Spec::Source => "source".into_lua(lua),
         }
     }
 }
@@ -1438,11 +1442,11 @@ impl mlua::UserData for ConfigBuilderLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaDependencySpecLua(pub LuaDependencySpec);
+pub struct LuaDependencySpecLua(pub lua_dependency::Spec);
 
 impl Typed for LuaDependencySpecLua {
     fn ty() -> Type {
-        Type::named("LuaDependencySpec")
+        Type::named("rockspec.lua_dependency.Spec")
     }
 }
 
@@ -1455,7 +1459,7 @@ impl FromLua for LuaDependencySpecLua {
                 }
 
                 let s: String = lua.from_value(value)?;
-                s.parse::<LuaDependencySpec>()
+                s.parse::<lua_dependency::Spec>()
                     .map(LuaDependencySpecLua)
                     .into_lua_err()
             }
@@ -1466,13 +1470,15 @@ impl FromLua for LuaDependencySpecLua {
             }
             _ => {
                 let package_req: package::Req = lua.from_value(value)?;
-                Ok(LuaDependencySpecLua(LuaDependencySpec::from(package_req)))
+                Ok(LuaDependencySpecLua(lua_dependency::Spec::from(
+                    package_req,
+                )))
             }
         }
     }
 }
 
-fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<LuaDependencySpec> {
+fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<lua_dependency::Spec> {
     let package: Option<String> = table.get("package")?;
     let name: Option<String> = table.get("name")?;
     let version: Option<String> = table.get("version")?;
@@ -1515,28 +1521,28 @@ fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<LuaDependencyS
             .parse::<RemoteGitUrlShorthand>()
             .map_err(|err| LuaError::DeserializeError(err.to_string()))?;
         let url: RemoteGitUrl = shorthand.into();
-        Some(rockspec::RockSourceSpec::Git(GitSource {
+        Some(rockspec::source::Spec::Git(GitSource {
             url,
             git_ref: rev.map(GitRef::Tag),
         }))
     } else {
-        path.map(|path| rockspec::RockSourceSpec::File(PathBuf::from(path)))
+        path.map(|path| rockspec::source::Spec::File(PathBuf::from(path)))
     };
 
-    Ok(LuaDependencySpec::new(package_req, pin, opt, source))
+    Ok(lua_dependency::Spec::new(package_req, pin, opt, source))
 }
 
-pub struct AddDependenciesLua(pub LuaDependencyType<AddDependencyLua>);
+pub struct AddDependenciesLua(pub lua_dependency::Kind<AddDependencyLua>);
 
 impl Typed for AddDependenciesLua {
     fn ty() -> Type {
-        Type::named("LuxDependencyType")
+        Type::named("LuxDependencyKind")
     }
 }
 
 impl FromLua for AddDependenciesLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
-        LuaDependencyTypeLua::<AddDependencyLua>::from_lua(value, lua).map(|deps| Self(deps.0))
+        LuaDependencyKindLua::<AddDependencyLua>::from_lua(value, lua).map(|deps| Self(deps.0))
     }
 }
 
@@ -1544,7 +1550,7 @@ impl FromLua for AddDependenciesLua {
 pub enum AddDependencyLua {
     Req(package::Req),
     GitShorthand(RemoteGitUrlShorthand),
-    Spec(LuaDependencySpec),
+    Spec(lua_dependency::Spec),
 }
 
 impl Typed for AddDependencyLua {
@@ -1623,11 +1629,11 @@ impl mlua::UserData for LuaDependencySpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlatformSupportLua(pub rockspec::PlatformSupport);
+pub struct PlatformSupportLua(pub rockspec::platform::Support);
 
 impl Typed for PlatformSupportLua {
     fn ty() -> Type {
-        Type::named("rockspec.PlatformSupport")
+        Type::named("rockspec.platform.Support")
     }
 }
 
@@ -1658,11 +1664,11 @@ impl mlua::UserData for PlatformSupportLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RockDescriptionLua(pub rockspec::RockDescription);
+pub struct RockDescriptionLua(pub rockspec::description::Spec);
 
 impl Typed for RockDescriptionLua {
     fn ty() -> Type {
-        Type::named("rockspec.RockDescription")
+        Type::named("rockspec.description.Spec")
     }
 }
 
@@ -1755,11 +1761,11 @@ impl mlua::UserData for GitSourceLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RemoteRockSourceLua(pub rockspec::RemoteRockSource);
+pub struct RemoteRockSourceLua(pub rockspec::source::Remote);
 
 impl Typed for RemoteRockSourceLua {
     fn ty() -> Type {
-        Type::named("rockspec.RemoteRockSource")
+        Type::named("rockspec.source.Remote")
     }
 }
 
@@ -1801,11 +1807,11 @@ impl mlua::UserData for RemoteRockSourceLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct BustedTestSpecLua(pub rockspec::BustedTestSpec);
+pub struct BustedTestSpecLua(pub rockspec::test::Busted);
 
 impl Typed for BustedTestSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.BustedTestSpec")
+        Type::named("rockspec.test.Busted")
     }
 }
 
@@ -1832,11 +1838,11 @@ impl mlua::UserData for BustedTestSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommandTestSpecLua(pub rockspec::CommandTestSpec);
+pub struct CommandTestSpecLua(pub rockspec::test::Command);
 
 impl Typed for CommandTestSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.CommandTestSpec")
+        Type::named("rockspec.test.Command")
     }
 }
 
@@ -1866,11 +1872,11 @@ impl mlua::UserData for CommandTestSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaScriptTestSpecLua(pub rockspec::LuaScriptTestSpec);
+pub struct LuaScriptTestSpecLua(pub rockspec::test::LuaScript);
 
 impl Typed for LuaScriptTestSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.LuaScriptTestSpec")
+        Type::named("rockspec.test.LuaScript")
     }
 }
 
@@ -1902,11 +1908,11 @@ impl mlua::UserData for LuaScriptTestSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct ModulePathsLua(pub rockspec::build::ModulePaths);
+pub struct ModulePathsLua(pub rockspec::build::backend::ModulePaths);
 
 impl Typed for ModulePathsLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.ModulePaths")
+        Type::named("rockspec.build.backend.ModulePaths")
     }
 }
 
@@ -1981,11 +1987,11 @@ impl mlua::UserData for ModulePathsLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct CMakeBuildSpecLua(pub rockspec::build::CMakeBuildSpec);
+pub struct CMakeBuildSpecLua(pub rockspec::build::backend::CMake);
 
 impl Typed for CMakeBuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.CMakeBuildSpec")
+        Type::named("rockspec.build.backend.CMake")
     }
 }
 
@@ -2021,11 +2027,11 @@ impl mlua::UserData for CMakeBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct MakeBuildSpecLua(pub rockspec::build::MakeBuildSpec);
+pub struct MakeBuildSpecLua(pub rockspec::build::backend::Make);
 
 impl Typed for MakeBuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.MakeBuildSpec")
+        Type::named("rockspec.build.backend.Make")
     }
 }
 
@@ -2083,11 +2089,11 @@ impl mlua::UserData for MakeBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct TreesitterParserBuildSpecLua(pub rockspec::build::TreesitterParserBuildSpec);
+pub struct TreesitterParserBuildSpecLua(pub rockspec::build::backend::Treesitter);
 
 impl Typed for TreesitterParserBuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.TreesitterParserBuildSpec")
+        Type::named("rockspec.build.backend.Treesitter")
     }
 }
 
@@ -2139,11 +2145,11 @@ impl mlua::UserData for TreesitterParserBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RustMluaBuildSpecLua(pub rockspec::build::RustMluaBuildSpec);
+pub struct RustMluaBuildSpecLua(pub rockspec::build::backend::RustMlua);
 
 impl Typed for RustMluaBuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.RustMluaBuildSpec")
+        Type::named("rockspec.build.backend.RustMlua")
     }
 }
 
@@ -2218,11 +2224,11 @@ impl mlua::UserData for RustMluaBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RustBinaryBuildSpecLua(pub rockspec::build::RustBinaryBuildSpec);
+pub struct RustBinaryBuildSpecLua(pub rockspec::build::backend::RustBinary);
 
 impl Typed for RustBinaryBuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.RustBinaryBuildSpec")
+        Type::named("rockspec.build.backend.RustBinary")
     }
 }
 
@@ -2254,11 +2260,11 @@ impl mlua::UserData for RustBinaryBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommandBuildSpecLua(pub rockspec::build::CommandBuildSpec);
+pub struct CommandBuildSpecLua(pub rockspec::build::backend::Command);
 
 impl Typed for CommandBuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.CommandBuildSpec")
+        Type::named("rockspec.build.backend.Command")
     }
 }
 
@@ -2289,11 +2295,11 @@ impl mlua::UserData for CommandBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct InstallSpecLua(pub rockspec::build::InstallSpec);
+pub struct InstallSpecLua(pub rockspec::build::Install);
 
 impl Typed for InstallSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.InstallSpec")
+        Type::named("rockspec.build.Install")
     }
 }
 
@@ -2367,11 +2373,11 @@ impl mlua::UserData for InstallSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct BuildSpecLua(pub rockspec::build::BuildSpec);
+pub struct BuildSpecLua(pub rockspec::build::Spec);
 
 impl Typed for BuildSpecLua {
     fn ty() -> Type {
-        Type::named("rockspec.build.BuildSpec")
+        Type::named("rockspec.build.Spec")
     }
 }
 
@@ -2379,7 +2385,7 @@ impl TypedUserData for BuildSpecLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.document("Determines the build backend to use");
         methods.add_method("build_backend", |_, this, ()| {
-            Ok(this.0.build_backend.clone().map(BuildBackendSpecLua))
+            Ok(this.0.backend.clone().map(BuildBackendSpecLua))
         });
 
         methods.document("A set of instructions on how/where to copy files from the project");
@@ -3279,7 +3285,7 @@ impl TypedUserData for ProjectLua {
             "set_pinned_state",
             |_,
              mut this,
-             (deps, pinned): (LuaDependencyTypeLua<PackageNameLua>, PinnedStateLua)| async move {
+             (deps, pinned): (LuaDependencyKindLua<PackageNameLua>, PinnedStateLua)| async move {
                 let _guard = lux_lib::lua::runtime().enter();
                 let deps = map_lua_dependency_type_names(deps.0);
                 this.0
@@ -3293,7 +3299,7 @@ impl TypedUserData for ProjectLua {
         methods.param("opt", "Whether the dependencies should be optional");
         methods.add_async_method_mut(
             "set_opt_state",
-            |_, mut this, (deps, opt): (LuaDependencyTypeLua<PackageNameLua>, OptStateLua)| async move {
+            |_, mut this, (deps, opt): (LuaDependencyKindLua<PackageNameLua>, OptStateLua)| async move {
                 let _guard = lux_lib::lua::runtime().enter();
                 let deps = map_lua_dependency_type_names(deps.0);
                 this.0
@@ -3306,7 +3312,7 @@ impl TypedUserData for ProjectLua {
         methods.param("deps", "Dependencies to remove");
         methods.add_async_method_mut(
             "remove",
-            |_, mut this, deps: DependencyTypeLua<PackageNameLua>| async move {
+            |_, mut this, deps: DependencyKindLua<PackageNameLua>| async move {
                 let _guard = lux_lib::lua::runtime().enter();
                 let deps = map_dependency_type_names(deps.0);
                 this.0.remove(deps.as_ref()).await.into_lua_err()
@@ -3416,23 +3422,23 @@ mod definitions_registry {
         "NvimLayout" => NvimLayoutLua,
         "Config" => ConfigLua,
         "ConfigBuilder" => ConfigBuilderLua,
-        "LuaDependencySpec" => LuaDependencySpecLua,
-        "rockspec.PlatformSupport" => PlatformSupportLua,
-        "rockspec.RockDescription" => RockDescriptionLua,
+        "rockspec.lua_dependency.Spec" => LuaDependencySpecLua,
+        "rockspec.platform.Support" => PlatformSupportLua,
+        "rockspec.description.Spec" => RockDescriptionLua,
         "GitSource" => GitSourceLua,
-        "rockspec.RemoteRockSource" => RemoteRockSourceLua,
-        "rockspec.BustedTestSpec" => BustedTestSpecLua,
-        "rockspec.CommandTestSpec" => CommandTestSpecLua,
-        "rockspec.LuaScriptTestSpec" => LuaScriptTestSpecLua,
-        "rockspec.build.ModulePaths" => ModulePathsLua,
-        "rockspec.build.CMakeBuildSpec" => CMakeBuildSpecLua,
-        "rockspec.build.MakeBuildSpec" => MakeBuildSpecLua,
-        "rockspec.build.TreesitterParserBuildSpec" => TreesitterParserBuildSpecLua,
-        "rockspec.build.RustMluaBuildSpec" => RustMluaBuildSpecLua,
-        "rockspec.build.RustBinaryBuildSpec" => RustBinaryBuildSpecLua,
-        "rockspec.build.CommandBuildSpec" => CommandBuildSpecLua,
-        "rockspec.build.InstallSpec" => InstallSpecLua,
-        "rockspec.build.BuildSpec" => BuildSpecLua,
+        "rockspec.source.Remote" => RemoteRockSourceLua,
+        "rockspec.test.Busted" => BustedTestSpecLua,
+        "rockspec.test.Command" => CommandTestSpecLua,
+        "rockspec.test.LuaScript" => LuaScriptTestSpecLua,
+        "rockspec.build.backend.ModulePaths" => ModulePathsLua,
+        "rockspec.build.backend.CMake" => CMakeBuildSpecLua,
+        "rockspec.build.backend.Make" => MakeBuildSpecLua,
+        "rockspec.build.backend.Treesitter" => TreesitterParserBuildSpecLua,
+        "rockspec.build.backend.RustMlua" => RustMluaBuildSpecLua,
+        "rockspec.build.backend.RustBinary" => RustBinaryBuildSpecLua,
+        "rockspec.build.backend.Command" => CommandBuildSpecLua,
+        "rockspec.build.Install" => InstallSpecLua,
+        "rockspec.build.Spec" => BuildSpecLua,
         "rockspec.lua.Local" => LocalLuaRockspecLua,
         "rockspec.lua.Remote" => RemoteLuaRockspecLua,
         "rockspec.lua.Partial" => PartialLuaRockspecLua,
@@ -3500,7 +3506,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "LuxDependencyType",
+            name: "LuxDependencyKind",
             build: || Type::class(
                 TypedClassBuilder::default()
                     .field(
@@ -3537,46 +3543,52 @@ mod definitions_registry {
 }
 
 pub(crate) fn map_dependency_type(
-    deps: DependencyType<PackageReqLua>,
-) -> DependencyType<package::Req> {
+    deps: dependency::Kind<PackageReqLua>,
+) -> dependency::Kind<package::Req> {
     match deps {
-        DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::External(m) => DependencyType::External(m),
+        dependency::Kind::Regular(v) => {
+            dependency::Kind::Regular(v.into_iter().map(|x| x.0).collect())
+        }
+        dependency::Kind::Build(v) => dependency::Kind::Build(v.into_iter().map(|x| x.0).collect()),
+        dependency::Kind::Test(v) => dependency::Kind::Test(v.into_iter().map(|x| x.0).collect()),
+        dependency::Kind::External(m) => dependency::Kind::External(m),
     }
 }
 
 pub(crate) fn map_dependency_type_names(
-    deps: DependencyType<PackageNameLua>,
-) -> DependencyType<package::Name> {
+    deps: dependency::Kind<PackageNameLua>,
+) -> dependency::Kind<package::Name> {
     match deps {
-        DependencyType::Regular(v) => DependencyType::Regular(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Build(v) => DependencyType::Build(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::Test(v) => DependencyType::Test(v.into_iter().map(|x| x.0).collect()),
-        DependencyType::External(m) => DependencyType::External(m),
+        dependency::Kind::Regular(v) => {
+            dependency::Kind::Regular(v.into_iter().map(|x| x.0).collect())
+        }
+        dependency::Kind::Build(v) => dependency::Kind::Build(v.into_iter().map(|x| x.0).collect()),
+        dependency::Kind::Test(v) => dependency::Kind::Test(v.into_iter().map(|x| x.0).collect()),
+        dependency::Kind::External(m) => dependency::Kind::External(m),
     }
 }
 
 fn map_lua_dependency_type_names(
-    deps: LuaDependencyType<PackageNameLua>,
-) -> LuaDependencyType<package::Name> {
+    deps: lua_dependency::Kind<PackageNameLua>,
+) -> lua_dependency::Kind<package::Name> {
     match deps {
-        LuaDependencyType::Regular(v) => {
-            LuaDependencyType::Regular(v.into_iter().map(|x| x.0).collect())
+        lua_dependency::Kind::Regular(v) => {
+            lua_dependency::Kind::Regular(v.into_iter().map(|x| x.0).collect())
         }
-        LuaDependencyType::Build(v) => {
-            LuaDependencyType::Build(v.into_iter().map(|x| x.0).collect())
+        lua_dependency::Kind::Build(v) => {
+            lua_dependency::Kind::Build(v.into_iter().map(|x| x.0).collect())
         }
-        LuaDependencyType::Test(v) => LuaDependencyType::Test(v.into_iter().map(|x| x.0).collect()),
+        lua_dependency::Kind::Test(v) => {
+            lua_dependency::Kind::Test(v.into_iter().map(|x| x.0).collect())
+        }
     }
 }
 
-fn lua_dependency_type_as_ref<T>(deps: &LuaDependencyType<T>) -> LuaDependencyType<&T> {
+fn lua_dependency_type_as_ref<T>(deps: &lua_dependency::Kind<T>) -> lua_dependency::Kind<&T> {
     match deps {
-        LuaDependencyType::Regular(v) => LuaDependencyType::Regular(v.iter().collect()),
-        LuaDependencyType::Build(v) => LuaDependencyType::Build(v.iter().collect()),
-        LuaDependencyType::Test(v) => LuaDependencyType::Test(v.iter().collect()),
+        lua_dependency::Kind::Regular(v) => lua_dependency::Kind::Regular(v.iter().collect()),
+        lua_dependency::Kind::Build(v) => lua_dependency::Kind::Build(v.iter().collect()),
+        lua_dependency::Kind::Test(v) => lua_dependency::Kind::Test(v.iter().collect()),
     }
 }
 
@@ -3603,7 +3615,7 @@ fn split_add_deps(
 
                 match spec.source() {
                     None => packages.push(spec.package_req().clone()),
-                    Some(rockspec::RockSourceSpec::Git(git_source)) => {
+                    Some(rockspec::source::Spec::Git(git_source)) => {
                         if git_source.git_ref.is_some() {
                             return Err(LuaError::RuntimeError(
                                 "git revisions in add tables must be declared directly in lux.toml"
@@ -3646,34 +3658,34 @@ async fn add_dependencies_for_variant(
     let (packages, git, flags) = split_add_deps(deps)?;
     if !packages.is_empty() {
         let packages = match kind {
-            AddDependencyKind::Regular => DependencyType::Regular(packages.iter().collect()),
-            AddDependencyKind::Build => DependencyType::Build(packages.iter().collect()),
-            AddDependencyKind::Test => DependencyType::Test(packages.iter().collect()),
+            AddDependencyKind::Regular => dependency::Kind::Regular(packages.iter().collect()),
+            AddDependencyKind::Build => dependency::Kind::Build(packages.iter().collect()),
+            AddDependencyKind::Test => dependency::Kind::Test(packages.iter().collect()),
         };
         project.add(packages, package_db).await.into_lua_err()?;
     }
     if !git.is_empty() {
         let git = match kind {
-            AddDependencyKind::Regular => LuaDependencyType::Regular(git.iter().collect()),
-            AddDependencyKind::Build => LuaDependencyType::Build(git.iter().collect()),
-            AddDependencyKind::Test => LuaDependencyType::Test(git.iter().collect()),
+            AddDependencyKind::Regular => lua_dependency::Kind::Regular(git.iter().collect()),
+            AddDependencyKind::Build => lua_dependency::Kind::Build(git.iter().collect()),
+            AddDependencyKind::Test => lua_dependency::Kind::Test(git.iter().collect()),
         };
         project.add_git(git, config).await.into_lua_err()?;
     }
     for (name, opt, pin) in flags {
         if opt != OptState::Required {
             let names = match kind {
-                AddDependencyKind::Regular => LuaDependencyType::Regular(vec![&name]),
-                AddDependencyKind::Build => LuaDependencyType::Build(vec![&name]),
-                AddDependencyKind::Test => LuaDependencyType::Test(vec![&name]),
+                AddDependencyKind::Regular => lua_dependency::Kind::Regular(vec![&name]),
+                AddDependencyKind::Build => lua_dependency::Kind::Build(vec![&name]),
+                AddDependencyKind::Test => lua_dependency::Kind::Test(vec![&name]),
             };
             project.set_opt_state(names, opt).await.into_lua_err()?;
         }
         if pin != PinnedState::Unpinned {
             let names = match kind {
-                AddDependencyKind::Regular => LuaDependencyType::Regular(vec![&name]),
-                AddDependencyKind::Build => LuaDependencyType::Build(vec![&name]),
-                AddDependencyKind::Test => LuaDependencyType::Test(vec![&name]),
+                AddDependencyKind::Regular => lua_dependency::Kind::Regular(vec![&name]),
+                AddDependencyKind::Build => lua_dependency::Kind::Build(vec![&name]),
+                AddDependencyKind::Test => lua_dependency::Kind::Test(vec![&name]),
             };
             project.set_pinned_state(names, pin).await.into_lua_err()?;
         }
@@ -3683,12 +3695,12 @@ async fn add_dependencies_for_variant(
 
 pub(crate) async fn project_add_dependencies(
     project: &mut Project,
-    deps: LuaDependencyType<AddDependencyLua>,
+    deps: lua_dependency::Kind<AddDependencyLua>,
     package_db: &PackageDB,
     config: &Config,
 ) -> LuaResult<()> {
     match deps {
-        LuaDependencyType::Regular(deps) => {
+        lua_dependency::Kind::Regular(deps) => {
             add_dependencies_for_variant(
                 project,
                 AddDependencyKind::Regular,
@@ -3698,7 +3710,7 @@ pub(crate) async fn project_add_dependencies(
             )
             .await?;
         }
-        LuaDependencyType::Build(deps) => {
+        lua_dependency::Kind::Build(deps) => {
             add_dependencies_for_variant(
                 project,
                 AddDependencyKind::Build,
@@ -3708,7 +3720,7 @@ pub(crate) async fn project_add_dependencies(
             )
             .await?;
         }
-        LuaDependencyType::Test(deps) => {
+        lua_dependency::Kind::Test(deps) => {
             add_dependencies_for_variant(
                 project,
                 AddDependencyKind::Test,

@@ -1,16 +1,17 @@
+use super::platform;
 use std::convert::Infallible;
 
 use serde::Deserialize;
 
-use super::{PartialOverride, PerPlatform, PlatformOverridable};
+use super::PerPlatform;
 
 /// An undocumented part of the rockspec format.
 ///
 /// Specifies additional install options
-#[derive(Clone, Debug, PartialEq, Deserialize, lux_macros::DisplayAsLuaKV)]
+#[derive(Clone, Debug, PartialEq, Deserialize, lux_macros::AsLuaKV)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "deploy")]
-pub struct DeploySpec {
+pub struct Spec {
     /// Whether to wrap installed Lua bin scripts to be executed with
     /// the detected or configured Lua installation.
     /// Defaults to `true`.
@@ -18,7 +19,7 @@ pub struct DeploySpec {
     pub wrap_bin_scripts: bool,
 }
 
-impl Default for DeploySpec {
+impl Default for Spec {
     fn default() -> Self {
         Self {
             wrap_bin_scripts: true,
@@ -26,7 +27,7 @@ impl Default for DeploySpec {
     }
 }
 
-impl PartialOverride for DeploySpec {
+impl platform::PartialOverride for Spec {
     type Err = Infallible;
 
     fn apply_overrides(&self, override_spec: &Self) -> Result<Self, Self::Err> {
@@ -36,12 +37,12 @@ impl PartialOverride for DeploySpec {
     }
 }
 
-impl PlatformOverridable for DeploySpec {
+impl platform::Overridable for Spec {
     type Err = Infallible;
 
-    fn on_nil<T>() -> Result<PerPlatform<T>, <Self as PlatformOverridable>::Err>
+    fn on_nil<T>() -> Result<PerPlatform<T>, <Self as platform::Overridable>::Err>
     where
-        T: PlatformOverridable,
+        T: platform::Overridable,
         T: Default,
     {
         Ok(PerPlatform::default())
@@ -54,7 +55,7 @@ fn default_wrap_bin_scripts() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::rockspec::DisplayAsLuaKV;
+    use crate::rockspec::display::AsLuaKV;
 
     use super::*;
 
@@ -73,21 +74,21 @@ mod tests {
 
     #[test]
     pub fn deploy_spec_roundtrip_true() {
-        let spec = DeploySpec {
+        let spec = Spec {
             wrap_bin_scripts: true,
         };
         let lua = spec.display_lua().to_string();
-        let restored: DeploySpec = eval_lua_global(&lua, "deploy");
+        let restored: Spec = eval_lua_global(&lua, "deploy");
         assert_eq!(spec, restored);
     }
 
     #[test]
     pub fn deploy_spec_roundtrip_false() {
-        let spec = DeploySpec {
+        let spec = Spec {
             wrap_bin_scripts: false,
         };
         let lua = spec.display_lua().to_string();
-        let restored: DeploySpec = eval_lua_global(&lua, "deploy");
+        let restored: Spec = eval_lua_global(&lua, "deploy");
         assert_eq!(spec, restored);
     }
 }

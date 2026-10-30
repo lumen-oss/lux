@@ -1,24 +1,22 @@
+use super::platform;
 use std::{collections::HashMap, convert::Infallible, path::PathBuf};
 
 use path_slash::PathBufExt;
 use serde::Deserialize;
 
-use super::{
-    DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, PartialOverride, PerPlatform,
-    PlatformOverridable,
-};
+use super::{display, PerPlatform};
 
 /// Can be defined in a [platform-agnostic](https://github.com/luarocks/luarocks/wiki/platform-agnostic-external-dependencies) manner
 #[derive(Debug, PartialEq, Clone, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct ExternalDependencySpec {
+pub struct Spec {
     /// A header file, e.g. "foo.h"
     pub header: Option<PathBuf>,
     /// A library file, e.g. "libfoo.so"
     pub library: Option<PathBuf>,
 }
 
-impl PartialOverride for ExternalDependencySpec {
+impl platform::PartialOverride for Spec {
     type Err = Infallible;
 
     fn apply_overrides(&self, override_val: &Self) -> Result<Self, Self::Err> {
@@ -29,7 +27,7 @@ impl PartialOverride for ExternalDependencySpec {
     }
 }
 
-impl PartialOverride for HashMap<String, ExternalDependencySpec> {
+impl platform::PartialOverride for HashMap<String, Spec> {
     type Err = Infallible;
 
     fn apply_overrides(&self, override_map: &Self) -> Result<Self, Self::Err> {
@@ -52,44 +50,44 @@ impl PartialOverride for HashMap<String, ExternalDependencySpec> {
     }
 }
 
-impl PlatformOverridable for HashMap<String, ExternalDependencySpec> {
+impl platform::Overridable for HashMap<String, Spec> {
     type Err = Infallible;
 
-    fn on_nil<T>() -> Result<super::PerPlatform<T>, <Self as PlatformOverridable>::Err>
+    fn on_nil<T>() -> Result<super::PerPlatform<T>, <Self as platform::Overridable>::Err>
     where
-        T: PlatformOverridable,
+        T: platform::Overridable,
         T: Default,
     {
         Ok(PerPlatform::default())
     }
 }
 
-pub(crate) struct ExternalDependencies<'a>(pub(crate) &'a HashMap<String, ExternalDependencySpec>);
+pub(crate) struct Dependencies<'a>(pub(crate) &'a HashMap<String, Spec>);
 
-impl DisplayAsLuaKV for ExternalDependencies<'_> {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
+impl display::AsLuaKV for Dependencies<'_> {
+    fn display_lua(&self) -> display::LuaKV {
+        display::LuaKV {
             key: "external_dependencies".to_string(),
-            value: DisplayLuaValue::Table(
+            value: display::LuaValue::Table(
                 self.0
                     .iter()
                     .map(|(key, value)| {
                         let mut value_entries = Vec::new();
                         if let Some(path) = &value.header {
-                            value_entries.push(DisplayLuaKV {
+                            value_entries.push(display::LuaKV {
                                 key: "header".to_string(),
-                                value: DisplayLuaValue::String(path.to_slash_lossy().to_string()),
+                                value: display::LuaValue::String(path.to_slash_lossy().to_string()),
                             });
                         }
                         if let Some(path) = &value.library {
-                            value_entries.push(DisplayLuaKV {
+                            value_entries.push(display::LuaKV {
                                 key: "library".to_string(),
-                                value: DisplayLuaValue::String(path.to_slash_lossy().to_string()),
+                                value: display::LuaValue::String(path.to_slash_lossy().to_string()),
                             });
                         }
-                        DisplayLuaKV {
+                        display::LuaKV {
                             key: key.clone(),
-                            value: DisplayLuaValue::Table(value_entries),
+                            value: display::LuaValue::Table(value_entries),
                         }
                     })
                     .collect(),
@@ -123,7 +121,7 @@ mod tests {
                 baz = { library = "libbaz.so" },
             }
         "#;
-        let deps: HashMap<String, ExternalDependencySpec> = eval_lua(lua_code).unwrap();
+        let deps: HashMap<String, Spec> = eval_lua(lua_code).unwrap();
         assert_eq!(deps.len(), 3);
         assert_eq!(
             deps["foo"].header.as_ref().unwrap().to_slash_lossy(),

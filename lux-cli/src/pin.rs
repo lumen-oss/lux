@@ -6,7 +6,7 @@ use lux_lib::lockfile::PinnedState;
 use lux_lib::lua;
 use lux_lib::operations;
 use lux_lib::package;
-use lux_lib::rockspec::LuaDependencyType;
+use lux_lib::rockspec::lua_dependency;
 use lux_lib::tree::RockMatches;
 use lux_lib::workspace::Workspace;
 
@@ -58,14 +58,17 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
                 .collect_vec();
             if !packages.is_empty() {
                 project
-                    .set_pinned_state(LuaDependencyType::Regular(packages.iter().collect()), pin)
+                    .set_pinned_state(
+                        lua_dependency::Kind::Regular(packages.iter().collect()),
+                        pin,
+                    )
                     .await?;
             }
             let build_packages = data.build.unwrap_or_default();
             if !build_packages.is_empty() {
                 project
                     .set_pinned_state(
-                        LuaDependencyType::Build(build_packages.iter().collect()),
+                        lua_dependency::Kind::Build(build_packages.iter().collect()),
                         pin,
                     )
                     .await?;
@@ -73,7 +76,10 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
             let test_packages = data.test.unwrap_or_default();
             if !test_packages.is_empty() {
                 project
-                    .set_pinned_state(LuaDependencyType::Test(test_packages.iter().collect()), pin)
+                    .set_pinned_state(
+                        lua_dependency::Kind::Test(test_packages.iter().collect()),
+                        pin,
+                    )
                     .await?;
             }
             Sync::new(&workspace, &config)

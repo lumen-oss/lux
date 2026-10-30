@@ -181,10 +181,10 @@ fn cargo_dependencies(
         .iter()
         .filter_map(|package| {
             let rockspec = &package.rockspec;
-            match rockspec.build().current_platform().build_backend {
+            match rockspec.build().current_platform().backend {
                 Some(
-                    rockspec::build::BuildBackendSpec::RustMlua(_)
-                    | rockspec::build::BuildBackendSpec::RustBinary(_),
+                    rockspec::build::backend::Spec::RustMlua(_)
+                    | rockspec::build::backend::Spec::RustBinary(_),
                 ) => Some((
                     package.package.spec.to_package(),
                     rockspec.source().current_platform().unpack_dir.clone(),
@@ -437,19 +437,19 @@ fn is_cargo_build_backend(target: &VendorTarget) -> bool {
         VendorTarget::Workspace(workspace) => workspace.members().iter().any(|project| {
             project.toml().into_local().is_ok_and(|toml| {
                 matches!(
-                    toml.build().current_platform().build_backend.to_owned(),
+                    toml.build().current_platform().backend.to_owned(),
                     Some(
-                        rockspec::build::BuildBackendSpec::RustMlua(_)
-                            | rockspec::build::BuildBackendSpec::RustBinary(_)
+                        rockspec::build::backend::Spec::RustMlua(_)
+                            | rockspec::build::backend::Spec::RustBinary(_)
                     )
                 )
             })
         }),
         VendorTarget::Rockspec(rockspec) => matches!(
-            rockspec.build().current_platform().build_backend.to_owned(),
+            rockspec.build().current_platform().backend.to_owned(),
             Some(
-                rockspec::build::BuildBackendSpec::RustMlua(_)
-                    | rockspec::build::BuildBackendSpec::RustBinary(_)
+                rockspec::build::backend::Spec::RustMlua(_)
+                    | rockspec::build::backend::Spec::RustBinary(_)
             )
         ),
     }
@@ -573,7 +573,7 @@ mod tests {
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
         let rockspec = rockspec::lua::Remote::from_source_spec(
             "rockspec-only-url@1.0.0".parse().unwrap(),
-            rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
+            rockspec::source::Spec::File(src_dir.path().to_path_buf()),
             Vec::new(),
             HashMap::new(),
         );
@@ -616,7 +616,7 @@ mod tests {
         std::fs::write(src_dir.path().join("hello.lua"), "return 'hello'").unwrap();
         let rockspec = rockspec::lua::Remote::from_source_spec(
             "rockspec-only-url@1.0.0".parse().unwrap(),
-            rockspec::RockSourceSpec::File(src_dir.path().to_path_buf()),
+            rockspec::source::Spec::File(src_dir.path().to_path_buf()),
             Vec::new(),
             HashMap::new(),
         );

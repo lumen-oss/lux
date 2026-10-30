@@ -6,7 +6,7 @@ use miette::Result;
 #[derive(Args)]
 pub struct Which {
     /// The module to search for.
-    module: rockspec::build::Module,
+    module: rockspec::build::backend::Module,
     /// Only search in these packages.
     packages: Option<Vec<package::Req>>,
 }

@@ -172,14 +172,14 @@ impl RemoteRockDownload {
         }
     }
 
-    // Instead of downloading a rockspec, generate one from a `Req` and a `RockSourceSpec`.
+    // Instead of downloading a rockspec, generate one from a `Req` and a `source::Spec`.
     pub(crate) fn from_package_req_and_source_spec(
         package_req: package::Req,
-        source_spec: rockspec::RockSourceSpec,
+        source_spec: rockspec::source::Spec,
     ) -> Result<Self, SearchAndDownloadError> {
         let package_spec: package::Spec = package_req.try_into()?;
         let source_url = Some(match &source_spec {
-            rockspec::RockSourceSpec::Git(GitSource { url, git_ref }) => {
+            rockspec::source::Spec::Git(GitSource { url, git_ref }) => {
                 let checkout_ref = match git_ref {
                     Some(GitRef::Tag(tag)) => tag.clone(),
                     Some(GitRef::Branch(branch)) => branch.clone(),
@@ -193,11 +193,11 @@ impl RemoteRockDownload {
                     submodules: false, // unknown until the source is fetched
                 }
             }
-            rockspec::RockSourceSpec::File(path) => {
+            rockspec::source::Spec::File(path) => {
                 RemotePackageSourceUrl::File { path: path.clone() }
             }
-            rockspec::RockSourceSpec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
-            rockspec::RockSourceSpec::Wally(_) => {
+            rockspec::source::Spec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
+            rockspec::source::Spec::Wally(_) => {
                 return Err(SearchAndDownloadError::WallySource(
                     package_spec.name().to_string(),
                 ))

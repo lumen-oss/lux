@@ -20,7 +20,7 @@ use crate::{
     remote_package_source::RemotePackageSource,
     reqwest::RequestError,
     rockspec,
-    rockspec::LuaDependencySpec,
+    rockspec::lua_dependency,
     wally,
 };
 
@@ -164,18 +164,18 @@ fn content_url(
         })
 }
 
-fn dependencies(manifest: wally::package::Manifest) -> Vec<LuaDependencySpec> {
+fn dependencies(manifest: wally::package::Manifest) -> Vec<lua_dependency::Spec> {
     manifest
         .dependencies
         .into_iter()
-        .map(|(alias, dep_req)| LuaDependencySpec {
+        .map(|(alias, dep_req)| lua_dependency::Spec {
             package_req: package::Req {
                 name: package::Name::new(alias),
                 version_req: package::VersionReq::SemVer(dep_req.version_req().clone()),
             },
             pin: PinnedState::default(),
             opt: OptState::default(),
-            source: Some(rockspec::RockSourceSpec::Wally(dep_req)),
+            source: Some(rockspec::source::Spec::Wally(dep_req)),
         })
         .collect()
 }
@@ -190,7 +190,7 @@ fn found_package(
     let version = package::Version::parse(&manifest.package.version.to_string())?;
     let package_spec = package::Spec::new(package_req.name().clone(), version);
     let modules = modules_from_zip(contents)?;
-    let source_spec = rockspec::RockSourceSpec::Url(content_url.clone());
+    let source_spec = rockspec::source::Spec::Url(content_url.clone());
     let rockspec = rockspec::lua::Remote::from_source_spec(
         package_spec.clone(),
         source_spec,
@@ -316,7 +316,10 @@ pub enum WallyIndexError {
 
 fn modules_from_zip(
     bytes: &[u8],
-) -> Result<HashMap<rockspec::build::Module, rockspec::build::ModuleSpec>, WallyModulesError> {
+) -> Result<
+    HashMap<rockspec::build::backend::Module, rockspec::build::backend::ModuleSpec>,
+    WallyModulesError,
+> {
     let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes))?;
     let mut modules = HashMap::new();
     for index in 0..archive.len() {
@@ -328,7 +331,7 @@ fn modules_from_zip(
             Some(path) if is_lua_path(&path) && !is_test_file(&path) => {
                 modules.insert(
                     lua_module_from_entry(&path)?,
-                    rockspec::build::ModuleSpec::SourcePath(path),
+                    rockspec::build::backend::ModuleSpec::SourcePath(path),
                 );
             }
             _ => {}
@@ -352,7 +355,7 @@ fn is_test_file(path: &Path) -> bool {
 
 fn lua_module_from_entry(
     path: &Path,
-) -> Result<rockspec::build::Module, rockspec::build::ParseLuaModuleError> {
+) -> Result<rockspec::build::backend::Module, rockspec::build::backend::ParseLuaModuleError> {
     let stripped: PathBuf = match path.components().next() {
         Some(component)
             if matches!(component.as_os_str().to_str(), Some("src" | "lua" | "lib")) =>
@@ -367,15 +370,16 @@ fn lua_module_from_entry(
     {
         let mut file = stripped;
         file.set_extension("");
-        rockspec::build::Module::from_pathbuf(file)
+        rockspec::build::backend::Module::from_pathbuf(file)
     } else {
-        let mut module = rockspec::build::Module::from_pathbuf(stripped.to_path_buf())?;
+        let mut module = rockspec::build::backend::Module::from_pathbuf(stripped.to_path_buf())?;
         if matches!(
             stripped.file_name().and_then(|name| name.to_str()),
             Some("init.lua" | "init.luau")
         ) {
-            module = module
-                .join(unsafe { &rockspec::build::Module::from_str("init").unwrap_unchecked() });
+            module = module.join(unsafe {
+                &rockspec::build::backend::Module::from_str("init").unwrap_unchecked()
+            });
         }
         Ok(module)
     }
@@ -386,7 +390,7 @@ pub enum WallyModulesError {
     #[error("failed to read package contents archive")]
     Zip(#[from] zip::result::ZipError),
     #[error("invalid module path in package contents")]
-    Module(#[from] rockspec::build::ParseLuaModuleError),
+    Module(#[from] rockspec::build::backend::ParseLuaModuleError),
 }
 
 #[cfg(test)]
@@ -560,8 +564,8 @@ mod tests {
         names.sort();
         assert_eq!(names, vec!["bar.baz", "foo", "init", "sub.init"]);
         assert_eq!(
-            modules.get(&rockspec::build::Module::from_str("foo").unwrap()),
-            Some(&rockspec::build::ModuleSpec::SourcePath(
+            modules.get(&rockspec::build::backend::Module::from_str("foo").unwrap()),
+            Some(&rockspec::build::backend::ModuleSpec::SourcePath(
                 "src/foo.luau".into()
             ))
         );

@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 /// Specification for building a rock with the `rust-mlua` build backend
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct RustMluaBuildSpec {
+pub struct RustMlua {
     /// Keys are module names in the format normally used by the `require()` function.
     /// values are the library names in the target directory (without the `lib` prefix).
     pub modules: HashMap<String, PathBuf>,

@@ -1,4 +1,6 @@
-mod partial;
+pub mod partial;
+
+pub use partial::Partial;
 
 use crate::package;
 use std::{collections::HashMap, io, path::PathBuf};
@@ -8,19 +10,17 @@ use ottavino_util::serde::from_value;
 use serde::{de::DeserializeOwned, Deserialize};
 
 use miette::{Diagnostic, NamedSource, SourceSpan};
-pub use partial::*;
 use ssri::Integrity;
 use thiserror::Error;
 
 use super::{
-    build::{BuildBackendSpec, BuildSpec, BuiltinBuildSpec, Module, ModuleSpec},
-    DeploySpec, DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue,
-    ExternalDependencySpec, Format, PerPlatform, PlatformSupport, RemoteRockSource,
-    RockDescription, RockSourceSpec, TestSpec,
+    build, deploy, description,
+    display::{self, AsLuaKV, AsLuaValue},
+    external_dependency, platform, source, test, Format, PerPlatform,
 };
 use crate::{
     hash::HasIntegrity,
-    rockspec::{LuaDependencySpec, Rockspec},
+    rockspec::{lua_dependency, Rockspec},
     ROCKSPEC_FUEL_LIMIT,
 };
 
@@ -133,18 +133,18 @@ pub struct Local {
     package: package::Name,
     /// The version of the package, plus a suffix indicating the revision of the rockspec. Example: "2.0.1-1"
     version: package::Version,
-    description: RockDescription,
-    supported_platforms: PlatformSupport,
+    description: description::Spec,
+    supported_platforms: platform::Support,
     /// The Lua version requirement for this rock
     lua: package::VersionReq,
-    dependencies: PerPlatform<Vec<LuaDependencySpec>>,
-    build_dependencies: PerPlatform<Vec<LuaDependencySpec>>,
-    external_dependencies: PerPlatform<HashMap<String, ExternalDependencySpec>>,
-    test_dependencies: PerPlatform<Vec<LuaDependencySpec>>,
-    build: PerPlatform<BuildSpec>,
-    source: PerPlatform<RemoteRockSource>,
-    test: PerPlatform<TestSpec>,
-    deploy: PerPlatform<DeploySpec>,
+    dependencies: PerPlatform<Vec<lua_dependency::Spec>>,
+    build_dependencies: PerPlatform<Vec<lua_dependency::Spec>>,
+    external_dependencies: PerPlatform<HashMap<String, external_dependency::Spec>>,
+    test_dependencies: PerPlatform<Vec<lua_dependency::Spec>>,
+    build: PerPlatform<build::Spec>,
+    source: PerPlatform<source::Remote>,
+    test: PerPlatform<test::Spec>,
+    deploy: PerPlatform<deploy::Spec>,
     /// The original content of this rockspec, needed by luarocks
     raw_content: String,
 }
@@ -207,7 +207,7 @@ impl Local {
 
     /// Wraps this rockspec into a [`Remote`], overriding its source
     /// with the given `source`.
-    pub fn into_remote_with_source(self, source: PerPlatform<RemoteRockSource>) -> Remote {
+    pub fn into_remote_with_source(self, source: PerPlatform<source::Remote>) -> Remote {
         Remote {
             local: self,
             source,
@@ -231,7 +231,7 @@ impl Local {
 
                 let globals = ctx.globals();
 
-                let dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+                let dependencies: PerPlatform<Vec<lua_dependency::Spec>> =
                     globals.get_rockspec_key(ctx, "dependencies")?;
 
                 let lua_version_req = dependencies
@@ -243,8 +243,8 @@ impl Local {
                     .unwrap_or(package::VersionReq::Any);
 
                 fn strip_lua(
-                    dependencies: PerPlatform<Vec<LuaDependencySpec>>,
-                ) -> PerPlatform<Vec<LuaDependencySpec>> {
+                    dependencies: PerPlatform<Vec<lua_dependency::Spec>>,
+                ) -> PerPlatform<Vec<lua_dependency::Spec>> {
                     dependencies.map(|deps| {
                         deps.iter()
                             .filter(|dep| dep.name().to_string() != "lua")
@@ -253,15 +253,15 @@ impl Local {
                     })
                 }
 
-                let build_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+                let build_dependencies: PerPlatform<Vec<lua_dependency::Spec>> =
                     globals.get_rockspec_key(ctx, "build_dependencies")?;
 
-                let test_dependencies: PerPlatform<Vec<LuaDependencySpec>> =
+                let test_dependencies: PerPlatform<Vec<lua_dependency::Spec>> =
                     globals.get_rockspec_key(ctx, "test_dependencies")?;
 
-                let source: PerPlatform<RemoteRockSource> = match globals.get_value(ctx, "source") {
+                let source: PerPlatform<source::Remote> = match globals.get_value(ctx, "source") {
                     ottavino::Value::Nil => {
-                        PerPlatform::new(RockSourceSpec::File(project_root).into())
+                        PerPlatform::new(source::Spec::File(project_root).into())
                     }
                     value => from_value(value).map_err(|source| {
                         ParseLuaRockspecFieldError::Deserialize {
@@ -329,11 +329,11 @@ impl Rockspec for Local {
         &self.version
     }
 
-    fn description(&self) -> &RockDescription {
+    fn description(&self) -> &description::Spec {
         &self.description
     }
 
-    fn supported_platforms(&self) -> &PlatformSupport {
+    fn supported_platforms(&self) -> &platform::Support {
         &self.supported_platforms
     }
 
@@ -341,51 +341,51 @@ impl Rockspec for Local {
         &self.lua
     }
 
-    fn dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>> {
+    fn dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>> {
         &self.dependencies
     }
 
-    fn build_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>> {
+    fn build_dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>> {
         &self.build_dependencies
     }
 
-    fn external_dependencies(&self) -> &PerPlatform<HashMap<String, ExternalDependencySpec>> {
+    fn external_dependencies(&self) -> &PerPlatform<HashMap<String, external_dependency::Spec>> {
         &self.external_dependencies
     }
 
-    fn test_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>> {
+    fn test_dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>> {
         &self.test_dependencies
     }
 
-    fn build(&self) -> &PerPlatform<BuildSpec> {
+    fn build(&self) -> &PerPlatform<build::Spec> {
         &self.build
     }
 
-    fn test(&self) -> &PerPlatform<TestSpec> {
+    fn test(&self) -> &PerPlatform<test::Spec> {
         &self.test
     }
 
-    fn source(&self) -> &PerPlatform<RemoteRockSource> {
+    fn source(&self) -> &PerPlatform<source::Remote> {
         &self.source
     }
 
-    fn deploy(&self) -> &PerPlatform<DeploySpec> {
+    fn deploy(&self) -> &PerPlatform<deploy::Spec> {
         &self.deploy
     }
 
-    fn build_mut(&mut self) -> &mut PerPlatform<BuildSpec> {
+    fn build_mut(&mut self) -> &mut PerPlatform<build::Spec> {
         &mut self.build
     }
 
-    fn test_mut(&mut self) -> &mut PerPlatform<TestSpec> {
+    fn test_mut(&mut self) -> &mut PerPlatform<test::Spec> {
         &mut self.test
     }
 
-    fn source_mut(&mut self) -> &mut PerPlatform<RemoteRockSource> {
+    fn source_mut(&mut self) -> &mut PerPlatform<source::Remote> {
         &mut self.source
     }
 
-    fn deploy_mut(&mut self) -> &mut PerPlatform<DeploySpec> {
+    fn deploy_mut(&mut self) -> &mut PerPlatform<deploy::Spec> {
         &mut self.deploy
     }
 
@@ -409,7 +409,7 @@ impl HasIntegrity for Local {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Remote {
     local: Local,
-    source: PerPlatform<RemoteRockSource>,
+    source: PerPlatform<source::Remote>,
 }
 
 impl Remote {
@@ -430,7 +430,7 @@ impl Remote {
 
                 let globals = ctx.globals();
 
-                let source: PerPlatform<RemoteRockSource> =
+                let source: PerPlatform<source::Remote> =
                     globals.get_rockspec_key(ctx, "source")?;
 
                 Ok(Ok(source))
@@ -450,34 +450,37 @@ impl Remote {
     /// Otherwise, it uses the `builtin` build backend with the given modules.
     pub(crate) fn from_source_spec(
         package_spec: package::Spec,
-        source_spec: RockSourceSpec,
-        dependencies: Vec<LuaDependencySpec>,
-        modules: HashMap<Module, ModuleSpec>,
+        source_spec: source::Spec,
+        dependencies: Vec<lua_dependency::Spec>,
+        modules: HashMap<build::backend::Module, build::backend::ModuleSpec>,
     ) -> Self {
         let version = package_spec.version().clone();
         let rockspec_format = Format::default();
-        let (build_backend, build_lua) = if modules.is_empty() {
-            (BuildBackendSpec::Source, r#"type = "source""#.to_string())
+        let (backend, build_lua) = if modules.is_empty() {
+            (
+                build::backend::Spec::Source,
+                r#"type = "source""#.to_string(),
+            )
         } else {
             let modules_lua = modules_lua(&modules);
             (
-                BuildBackendSpec::Builtin(BuiltinBuildSpec { modules }),
+                build::backend::Spec::Builtin(build::backend::Builtin { modules }),
                 format!("type = \"builtin\",\n  modules = {{\n{modules_lua}\n  }}"),
             )
         };
-        let build_spec = BuildSpec {
-            build_backend: Some(build_backend),
+        let build_spec = build::Spec {
+            backend: Some(backend),
             ..Default::default()
         };
         let raw_content = rockspec_content(&package_spec, &source_spec, &build_lua);
-        let source: RemoteRockSource = source_spec.into();
+        let source: source::Remote = source_spec.into();
 
         let local = Local {
             format: Some(rockspec_format),
             package: package_spec.name().clone(),
             version,
-            description: RockDescription::default(),
-            supported_platforms: PlatformSupport::default(),
+            description: description::Spec::default(),
+            supported_platforms: platform::Support::default(),
             lua: package::VersionReq::Any,
             dependencies: PerPlatform::new(dependencies),
             build_dependencies: PerPlatform::default(),
@@ -498,7 +501,7 @@ impl Remote {
 
 fn rockspec_content(
     package_spec: &package::Spec,
-    source_spec: &RockSourceSpec,
+    source_spec: &source::Spec,
     build_lua: &str,
 ) -> String {
     format!(
@@ -518,13 +521,13 @@ build = {{
     )
 }
 
-fn modules_lua(modules: &HashMap<Module, ModuleSpec>) -> String {
+fn modules_lua(modules: &HashMap<build::backend::Module, build::backend::ModuleSpec>) -> String {
     let mut entries: Vec<_> = modules.iter().collect();
     entries.sort_by_key(|(module, _)| module.as_str());
-    DisplayLuaValue::Table(
+    display::LuaValue::Table(
         entries
             .into_iter()
-            .map(|(module, spec)| DisplayLuaKV {
+            .map(|(module, spec)| display::LuaKV {
                 key: module.to_string(),
                 value: spec.display_lua_value(),
             })
@@ -542,11 +545,11 @@ impl Rockspec for Remote {
         self.local.version()
     }
 
-    fn description(&self) -> &RockDescription {
+    fn description(&self) -> &description::Spec {
         self.local.description()
     }
 
-    fn supported_platforms(&self) -> &PlatformSupport {
+    fn supported_platforms(&self) -> &platform::Support {
         self.local.supported_platforms()
     }
 
@@ -554,11 +557,11 @@ impl Rockspec for Remote {
         self.local.lua()
     }
 
-    fn dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>> {
+    fn dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>> {
         self.local.dependencies()
     }
 
-    fn build_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>> {
+    fn build_dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>> {
         match self.format() {
             // Rockspec formats < 3.0 don't support `build_dependencies`,
             // so we have to return regular dependencies if the build backend might need to use them.
@@ -566,7 +569,7 @@ impl Rockspec for Remote {
                 if self
                     .build()
                     .current_platform()
-                    .build_backend
+                    .backend
                     .as_ref()
                     .is_some_and(|build_backend| build_backend.can_use_build_dependencies()) =>
             {
@@ -576,43 +579,43 @@ impl Rockspec for Remote {
         }
     }
 
-    fn external_dependencies(&self) -> &PerPlatform<HashMap<String, ExternalDependencySpec>> {
+    fn external_dependencies(&self) -> &PerPlatform<HashMap<String, external_dependency::Spec>> {
         self.local.external_dependencies()
     }
 
-    fn test_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>> {
+    fn test_dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>> {
         self.local.test_dependencies()
     }
 
-    fn build(&self) -> &PerPlatform<BuildSpec> {
+    fn build(&self) -> &PerPlatform<build::Spec> {
         self.local.build()
     }
 
-    fn test(&self) -> &PerPlatform<TestSpec> {
+    fn test(&self) -> &PerPlatform<test::Spec> {
         self.local.test()
     }
 
-    fn source(&self) -> &PerPlatform<RemoteRockSource> {
+    fn source(&self) -> &PerPlatform<source::Remote> {
         &self.source
     }
 
-    fn deploy(&self) -> &PerPlatform<DeploySpec> {
+    fn deploy(&self) -> &PerPlatform<deploy::Spec> {
         self.local.deploy()
     }
 
-    fn build_mut(&mut self) -> &mut PerPlatform<BuildSpec> {
+    fn build_mut(&mut self) -> &mut PerPlatform<build::Spec> {
         self.local.build_mut()
     }
 
-    fn test_mut(&mut self) -> &mut PerPlatform<TestSpec> {
+    fn test_mut(&mut self) -> &mut PerPlatform<test::Spec> {
         self.local.test_mut()
     }
 
-    fn source_mut(&mut self) -> &mut PerPlatform<RemoteRockSource> {
+    fn source_mut(&mut self) -> &mut PerPlatform<source::Remote> {
         &mut self.source
     }
 
-    fn deploy_mut(&mut self) -> &mut PerPlatform<DeploySpec> {
+    fn deploy_mut(&mut self) -> &mut PerPlatform<deploy::Spec> {
         self.local.deploy_mut()
     }
 
@@ -696,10 +699,6 @@ mod tests {
     use std::str::FromStr;
 
     use crate::git::{GitRef, GitSource};
-    use crate::rockspec::{
-        build::{CMakeBuildSpec, CommandBuildSpec, MakeBuildSpec, ModulePaths},
-        PlatformIdentifier,
-    };
     use url::Url;
 
     use super::*;
@@ -719,7 +718,7 @@ mod tests {
         assert_eq!(rockspec.local.format, Some(Format::_1_0));
         assert_eq!(rockspec.local.package, "foo".into());
         assert_eq!(rockspec.local.version, "1.0.0-1".parse().unwrap());
-        assert_eq!(rockspec.local.description, RockDescription::default());
+        assert_eq!(rockspec.local.description, description::Spec::default());
 
         let rockspec_content = "
         package = 'bar'\n
@@ -734,7 +733,7 @@ mod tests {
         assert_eq!(rockspec.local.format, None);
         assert_eq!(rockspec.local.package, "bar".into());
         assert_eq!(rockspec.local.version, "2.0.0-1".parse().unwrap());
-        assert_eq!(rockspec.local.description, RockDescription::default());
+        assert_eq!(rockspec.local.description, description::Spec::default());
 
         let rockspec_content = "
         package = 'rocks.nvim'\n
@@ -756,7 +755,7 @@ mod tests {
         assert_eq!(rockspec.local.format, None);
         assert_eq!(rockspec.local.package, "rocks.nvim".into());
         assert_eq!(rockspec.local.version, "3.0.0-1".parse().unwrap());
-        let expected_description = RockDescription {
+        let expected_description = description::Spec {
             summary: Some("some summary".into()),
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
@@ -789,7 +788,7 @@ mod tests {
         assert_eq!(rockspec.local.format, None);
         assert_eq!(rockspec.local.package, "rocks.nvim".into());
         assert_eq!(rockspec.local.version, "3.0.0-1".parse().unwrap());
-        let expected_description = RockDescription {
+        let expected_description = description::Spec {
             summary: Some("some summary".into()),
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
@@ -806,7 +805,7 @@ mod tests {
                 .default
                 .get("FOO")
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 library: Some("foo".into()),
                 header: None
             }
@@ -839,7 +838,7 @@ mod tests {
         assert_eq!(rockspec.local.format, None);
         assert_eq!(rockspec.local.package, "rocks.nvim".into());
         assert_eq!(rockspec.local.version, "3.0.0-1".parse().unwrap());
-        let expected_description = RockDescription {
+        let expected_description = description::Spec {
             summary: Some("some summary".into()),
             detailed: Some("some detailed description".into()),
             license: Some("MIT".into()),
@@ -852,11 +851,11 @@ mod tests {
         assert!(rockspec
             .local
             .supported_platforms
-            .is_supported(&PlatformIdentifier::Unix));
+            .is_supported(&platform::Identifier::Unix));
         assert!(!rockspec
             .local
             .supported_platforms
-            .is_supported(&PlatformIdentifier::Windows));
+            .is_supported(&platform::Identifier::Windows));
         let neorg = package::Spec::parse("neorg".into(), "6.0.0".into()).unwrap();
         assert!(rockspec
             .local
@@ -879,7 +878,7 @@ mod tests {
                 .default
                 .get("FOO")
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 header: Some("foo.h".into()),
                 library: None
             }
@@ -904,7 +903,7 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
             rockspec.local.source.default.source_spec,
-            RockSourceSpec::Git(GitSource {
+            source::Spec::Git(GitSource {
                 url: "https://hub.com/owner/example-project/".parse().unwrap(),
                 git_ref: Some(GitRef::Branch("bar".into()))
             })
@@ -923,7 +922,7 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
             rockspec.local.source.default.source_spec,
-            RockSourceSpec::Git(GitSource {
+            source::Spec::Git(GitSource {
                 url: "https://hub.com/owner/example-project/".parse().unwrap(),
                 git_ref: Some(GitRef::Tag("bar".into()))
             })
@@ -990,16 +989,16 @@ mod tests {
         .to_string();
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert!(matches!(
-            rockspec.local.build.default.build_backend,
-            Some(BuildBackendSpec::Builtin { .. })
+            rockspec.local.build.default.backend,
+            Some(build::backend::Spec::Builtin { .. })
         ));
         let install_lua_spec = rockspec.local.build.default.install.lua;
         let foo_bar_path = install_lua_spec
-            .get(&Module::from_str("foo.bar").unwrap())
+            .get(&build::backend::Module::from_str("foo.bar").unwrap())
             .unwrap();
         assert_eq!(*foo_bar_path, PathBuf::from("src/bar.lua"));
         let foo_path = install_lua_spec
-            .get(&Module::from_str("foo").unwrap())
+            .get(&build::backend::Module::from_str("foo").unwrap())
             .unwrap();
         assert_eq!(*foo_path, PathBuf::from("foo.lua"));
         let foo_bar_path = rockspec
@@ -1079,8 +1078,8 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(rockspec.local.source.default.unpack_dir, Some("baz".into()));
         assert_eq!(
-            rockspec.local.build.default.build_backend,
-            Some(BuildBackendSpec::Make(MakeBuildSpec::default()))
+            rockspec.local.build.default.backend,
+            Some(build::backend::Spec::Make(build::backend::Make::default()))
         );
         let foo_bar_path = rockspec
             .local
@@ -1112,8 +1111,8 @@ mod tests {
         .to_string();
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
-            rockspec.local.build.default.build_backend,
-            Some(BuildBackendSpec::CMake(CMakeBuildSpec::default()))
+            rockspec.local.build.default.backend,
+            Some(build::backend::Spec::CMake(build::backend::CMake::default()))
         );
         let rockspec_content = "
         rockspec_format = '1.0'\n
@@ -1131,8 +1130,10 @@ mod tests {
         .to_string();
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert!(matches!(
-            rockspec.local.build.default.build_backend,
-            Some(BuildBackendSpec::Command(CommandBuildSpec { .. }))
+            rockspec.local.build.default.backend,
+            Some(build::backend::Spec::Command(
+                build::backend::Command { .. }
+            ))
         ));
         let rockspec_content = "
         rockspec_format = '1.0'\n
@@ -1196,7 +1197,7 @@ mod tests {
         let per_platform = &rockspec.local.dependencies.per_platform;
         assert_eq!(
             per_platform
-                .get(&PlatformIdentifier::Windows)
+                .get(&platform::Identifier::Windows)
                 .unwrap()
                 .iter()
                 .filter(|dep| dep.matches(&neorg_override)
@@ -1207,7 +1208,7 @@ mod tests {
         );
         assert_eq!(
             per_platform
-                .get(&PlatformIdentifier::Unix)
+                .get(&platform::Identifier::Unix)
                 .unwrap()
                 .iter()
                 .filter(|dep| dep.matches(&neorg_override)
@@ -1218,7 +1219,7 @@ mod tests {
         );
         assert_eq!(
             per_platform
-                .get(&PlatformIdentifier::Linux)
+                .get(&platform::Identifier::Linux)
                 .unwrap()
                 .iter()
                 .filter(|dep| dep.matches(&neorg_override)
@@ -1257,7 +1258,7 @@ mod tests {
                 .default
                 .get("FOO")
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 library: Some("foo".into()),
                 header: None
             }
@@ -1265,50 +1266,50 @@ mod tests {
         let per_platform = rockspec.local.external_dependencies.per_platform;
         assert_eq!(
             *per_platform
-                .get(&PlatformIdentifier::Windows)
+                .get(&platform::Identifier::Windows)
                 .and_then(|it| it.get("FOO"))
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 library: Some("foo.dll".into()),
                 header: None
             }
         );
         assert_eq!(
             *per_platform
-                .get(&PlatformIdentifier::Unix)
+                .get(&platform::Identifier::Unix)
                 .and_then(|it| it.get("FOO"))
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 library: Some("foo".into()),
                 header: None
             }
         );
         assert_eq!(
             *per_platform
-                .get(&PlatformIdentifier::Unix)
+                .get(&platform::Identifier::Unix)
                 .and_then(|it| it.get("BAR"))
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 header: Some("bar.h".into()),
                 library: None
             }
         );
         assert_eq!(
             *per_platform
-                .get(&PlatformIdentifier::Linux)
+                .get(&platform::Identifier::Linux)
                 .and_then(|it| it.get("BAR"))
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 header: Some("bar.h".into()),
                 library: None
             }
         );
         assert_eq!(
             *per_platform
-                .get(&PlatformIdentifier::Linux)
+                .get(&platform::Identifier::Linux)
                 .and_then(|it| it.get("FOO"))
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 library: Some("foo.so".into()),
                 header: None
             }
@@ -1335,7 +1336,7 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
             rockspec.local.source.default.source_spec,
-            RockSourceSpec::Git(GitSource {
+            source::Spec::Git(GitSource {
                 url: "https://hub.com/example-project/.git".parse().unwrap(),
                 git_ref: Some(GitRef::Branch("bar".into()))
             })
@@ -1344,10 +1345,10 @@ mod tests {
             rockspec
                 .source
                 .per_platform
-                .get(&PlatformIdentifier::MacOSX)
+                .get(&platform::Identifier::MacOSX)
                 .map(|it| it.source_spec.clone())
                 .unwrap(),
-            RockSourceSpec::Git(GitSource {
+            source::Spec::Git(GitSource {
                 url: "https://hub.com/example-project/.git".parse().unwrap(),
                 git_ref: Some(GitRef::Branch("mac".into()))
             })
@@ -1356,10 +1357,10 @@ mod tests {
             rockspec
                 .source
                 .per_platform
-                .get(&PlatformIdentifier::Windows)
+                .get(&platform::Identifier::Windows)
                 .map(|it| it.source_spec.clone())
                 .unwrap(),
-            RockSourceSpec::Git(GitSource {
+            source::Spec::Git(GitSource {
                 url: "https://winhub.com/example-project/.git".parse().unwrap(),
                 git_ref: Some(GitRef::Branch("win".into()))
             })
@@ -1388,12 +1389,12 @@ mod tests {
         .to_string();
         let rockspec = Remote::new(&rockspec_content).unwrap();
         let per_platform = rockspec.local.build.per_platform;
-        let unix = per_platform.get(&PlatformIdentifier::Unix).unwrap();
+        let unix = per_platform.get(&platform::Identifier::Unix).unwrap();
         assert_eq!(
             unix.copy_directories,
             vec![PathBuf::from("plugin"), PathBuf::from("ftplugin")]
         );
-        let linux = per_platform.get(&PlatformIdentifier::Linux).unwrap();
+        let linux = per_platform.get(&platform::Identifier::Linux).unwrap();
         assert_eq!(
             linux.copy_directories,
             vec![
@@ -1422,13 +1423,13 @@ mod tests {
         "
         .to_string();
         let rockspec = Remote::new(&rockspec_content).unwrap();
-        let win32 = rockspec.local.build.get(&PlatformIdentifier::Windows);
+        let win32 = rockspec.local.build.get(&platform::Identifier::Windows);
         assert_eq!(
-            win32.build_backend,
-            Some(BuildBackendSpec::Builtin(BuiltinBuildSpec {
+            win32.backend,
+            Some(build::backend::Spec::Builtin(build::backend::Builtin {
                 modules: vec![(
-                    Module::from_str("cjson").unwrap(),
-                    ModuleSpec::ModulePaths(ModulePaths {
+                    build::backend::Module::from_str("cjson").unwrap(),
+                    build::backend::ModuleSpec::ModulePaths(build::backend::ModulePaths {
                         sources: vec!["lua_cjson.c".into(), "strbuf.c".into(), "fpconv.c".into()],
                         libraries: Vec::default(),
                         defines: vec![
@@ -1485,57 +1486,61 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         let build_spec = rockspec.local.build.current_platform();
         assert!(matches!(
-            build_spec.build_backend,
-            Some(BuildBackendSpec::Builtin { .. })
+            build_spec.backend,
+            Some(build::backend::Spec::Builtin { .. })
         ));
-        if let Some(BuildBackendSpec::Builtin(BuiltinBuildSpec { modules })) =
-            &build_spec.build_backend
+        if let Some(build::backend::Spec::Builtin(build::backend::Builtin { modules })) =
+            &build_spec.backend
         {
             assert_eq!(
-                modules.get(&Module::from_str("system.init").unwrap()),
-                Some(&ModuleSpec::SourcePath("system/init.lua".into()))
+                modules.get(&build::backend::Module::from_str("system.init").unwrap()),
+                Some(&build::backend::ModuleSpec::SourcePath(
+                    "system/init.lua".into()
+                ))
             );
             assert_eq!(
-                modules.get(&Module::from_str("system.core").unwrap()),
-                Some(&ModuleSpec::ModulePaths(ModulePaths {
-                    sources: vec![
-                        "src/core.c".into(),
-                        "src/compat.c".into(),
-                        "src/time.c".into(),
-                        "src/environment.c".into(),
-                        "src/random.c".into(),
-                        "src/term.c".into(),
-                        "src/bitflags.c".into(),
-                        "src/wcwidth.c".into(),
-                    ],
-                    defines: luasystem_expected_defines(),
-                    libraries: luasystem_expected_libraries(),
-                    incdirs: luasystem_expected_incdirs(),
-                    libdirs: luasystem_expected_libdirs(),
-                }))
+                modules.get(&build::backend::Module::from_str("system.core").unwrap()),
+                Some(&build::backend::ModuleSpec::ModulePaths(
+                    build::backend::ModulePaths {
+                        sources: vec![
+                            "src/core.c".into(),
+                            "src/compat.c".into(),
+                            "src/time.c".into(),
+                            "src/environment.c".into(),
+                            "src/random.c".into(),
+                            "src/term.c".into(),
+                            "src/bitflags.c".into(),
+                            "src/wcwidth.c".into(),
+                        ],
+                        defines: luasystem_expected_defines(),
+                        libraries: luasystem_expected_libraries(),
+                        incdirs: luasystem_expected_incdirs(),
+                        libdirs: luasystem_expected_libdirs(),
+                    }
+                ))
             );
         }
-        if let Some(BuildBackendSpec::Builtin(BuiltinBuildSpec { modules })) = &rockspec
+        if let Some(build::backend::Spec::Builtin(build::backend::Builtin { modules })) = &rockspec
             .local
             .build
-            .get(&PlatformIdentifier::Windows)
-            .build_backend
+            .get(&platform::Identifier::Windows)
+            .backend
         {
-            if let ModuleSpec::ModulePaths(paths) = modules
-                .get(&Module::from_str("system.core").unwrap())
+            if let build::backend::ModuleSpec::ModulePaths(paths) = modules
+                .get(&build::backend::Module::from_str("system.core").unwrap())
                 .unwrap()
             {
                 assert_eq!(paths.libraries, luasystem_expected_windows_libraries());
             };
         }
-        if let Some(BuildBackendSpec::Builtin(BuiltinBuildSpec { modules })) = &rockspec
+        if let Some(build::backend::Spec::Builtin(build::backend::Builtin { modules })) = &rockspec
             .local
             .build
-            .get(&PlatformIdentifier::Win32)
-            .build_backend
+            .get(&platform::Identifier::Win32)
+            .backend
         {
-            if let ModuleSpec::ModulePaths(paths) = modules
-                .get(&Module::from_str("system.core").unwrap())
+            if let build::backend::ModuleSpec::ModulePaths(paths) = modules
+                .get(&build::backend::Module::from_str("system.core").unwrap())
                 .unwrap()
             {
                 assert_eq!(paths.libraries, luasystem_expected_windows_libraries());
@@ -1600,7 +1605,7 @@ mod tests {
             ";
         let rockspec = Remote::new(rockspec_content).unwrap();
         let build_spec = rockspec.local.build.current_platform();
-        if let Some(BuildBackendSpec::RustMlua(build_spec)) = build_spec.build_backend.to_owned() {
+        if let Some(build::backend::Spec::RustMlua(build_spec)) = build_spec.backend.to_owned() {
             assert_eq!(
                 build_spec.modules.get("foo").unwrap(),
                 &PathBuf::from(format!("libfoo.{}", std::env::consts::DLL_EXTENSION))
@@ -1641,8 +1646,7 @@ mod tests {
             ";
         let rockspec = Remote::new(rockspec_content).unwrap();
         let build_spec = rockspec.local.build.current_platform();
-        if let Some(BuildBackendSpec::RustBinary(build_spec)) = build_spec.build_backend.to_owned()
-        {
+        if let Some(build::backend::Spec::RustBinary(build_spec)) = build_spec.backend.to_owned() {
             assert_eq!(build_spec.package, Some("foo".to_string()));
             assert_eq!(build_spec.features, vec!["extra", "features"]);
         } else {
@@ -1713,7 +1717,7 @@ mod tests {
                     .current_platform()
                     .get("OPENSSL")
                     .unwrap(),
-                &ExternalDependencySpec {
+                &external_dependency::Spec {
                     library: Some("ssl".into()),
                     header: Some("openssl/ssl.h".into()),
                 }
@@ -1722,10 +1726,10 @@ mod tests {
         let per_platform = rockspec.local.external_dependencies.per_platform;
         assert_eq!(
             *per_platform
-                .get(&PlatformIdentifier::Windows)
+                .get(&platform::Identifier::Windows)
                 .and_then(|it| it.get("OPENSSL"))
                 .unwrap(),
-            ExternalDependencySpec {
+            external_dependency::Spec {
                 library: Some("libeay32".into()),
                 header: Some("openssl/ssl.h".into()),
             }
@@ -1739,7 +1743,7 @@ mod tests {
             url: "https://hub.com/owner/example-project.git".parse().unwrap(),
             git_ref: Some(GitRef::Tag("1.0.5".into())),
         };
-        let source_spec = RockSourceSpec::Git(source);
+        let source_spec = source::Spec::Git(source);
         let rockspec =
             Remote::from_source_spec(package_req, source_spec.clone(), Vec::new(), HashMap::new());
         let generated_rockspec_str = rockspec.local.raw_content;
@@ -1797,7 +1801,7 @@ mod tests {
 
     #[test]
     pub fn rock_description_roundtrip() {
-        let desc = RockDescription {
+        let desc = description::Spec {
             summary: Some("A great package".into()),
             detailed: Some("Detailed description here".into()),
             license: Some("MIT".into()),
@@ -1807,13 +1811,13 @@ mod tests {
             labels: vec!["neovim".into(), "lua".into()],
         };
         let lua = desc.display_lua().to_string();
-        let restored: RockDescription = eval_lua_global(&lua, "description");
+        let restored: description::Spec = eval_lua_global(&lua, "description");
         assert_eq!(desc, restored);
     }
 
     #[test]
     pub fn rock_description_empty_roundtrip() {
-        let desc = RockDescription::default();
+        let desc = description::Spec::default();
         let lua = desc.display_lua().to_string();
         // An empty description produces an empty assignment; restore from empty table.
         let lua = if lua.trim().is_empty() {
@@ -1821,7 +1825,7 @@ mod tests {
         } else {
             lua
         };
-        let restored: RockDescription = eval_lua_global(&lua, "description");
+        let restored: description::Spec = eval_lua_global(&lua, "description");
         assert_eq!(desc, restored);
     }
 
@@ -1853,11 +1857,11 @@ external_dependencies = {
         let rockspec = Remote::new(rockspec_content).unwrap();
         let linux_external_deps = rockspec
             .external_dependencies()
-            .get(&PlatformIdentifier::Linux);
+            .get(&platform::Identifier::Linux);
         assert!(linux_external_deps.get("OPENSSL").is_some());
         let windows_external_deps = rockspec
             .external_dependencies()
-            .get(&PlatformIdentifier::Windows);
+            .get(&platform::Identifier::Windows);
         assert!(windows_external_deps.get("OPENSSL").is_some());
     }
 

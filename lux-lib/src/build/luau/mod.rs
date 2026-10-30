@@ -22,7 +22,7 @@ pub enum Error {
 /// and prepending any Luau standard library shims it requires.
 pub(crate) async fn transpile_luau_to_lua_module(
     source: &Path,
-    target_module: &rockspec::build::Module,
+    target_module: &rockspec::build::backend::Module,
     target_dir: &Path,
 ) -> Result<(), Error> {
     let luau_content = fs::tokio::read_to_string(source).await?;
@@ -50,7 +50,7 @@ mod tests {
         )
         .unwrap();
         let target = temp.path().join("out");
-        let module: rockspec::build::Module = "greeting".parse().unwrap();
+        let module: rockspec::build::backend::Module = "greeting".parse().unwrap();
         transpile_luau_to_lua_module(&source, &module, &target)
             .await
             .unwrap();

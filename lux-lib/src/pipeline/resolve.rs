@@ -55,8 +55,8 @@ pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<pa
 
 /// The name of the luarocks build backend rock required to build this rockspec (if any).
 pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<package::Name> {
-    match &rockspec.build().current_platform().build_backend {
-        Some(rockspec::build::BuildBackendSpec::LuaRock(backend)) => {
+    match &rockspec.build().current_platform().backend {
+        Some(rockspec::build::backend::Spec::LuaRock(backend)) => {
             Some(package::Name::new(format!("luarocks-build-{backend}")))
         }
         _ => None,

@@ -13,7 +13,7 @@ use lux_lib::{
     lua,
     operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
     package_db::PackageDB,
-    rockspec::DependencyType,
+    rockspec::dependency,
     tree::{RockMatches, Tree},
 };
 use mlua::prelude::*;
@@ -21,7 +21,7 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use path_slash::PathBufExt;
 
 use crate::lua_impls::{
-    self, AddDependenciesLua, ConfigLua, DependencyTypeLua, DownloadedRockspecLua,
+    self, AddDependenciesLua, ConfigLua, DependencyKindLua, DownloadedRockspecLua,
     LockedPackageIdLua, LockedPackageLua, PackageInstallSpecLua, PackageNameLua, PinnedStateLua,
     ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
 };
@@ -207,7 +207,7 @@ impl TypedUserData for OperationsModule {
             |_,
              (mut workspace, deps, config): (
                 WorkspaceLua,
-                DependencyTypeLua<PackageNameLua>,
+                DependencyKindLua<PackageNameLua>,
                 ConfigLua,
             )| async move {
                 let _runtime = lua::runtime().enter();
@@ -348,7 +348,7 @@ impl TypedUserData for OperationsModule {
     }
 
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
-        docs.add("Module for Lux operations");
+        docs.add("build::backend::Module for Lux operations");
     }
 }
 
@@ -396,10 +396,10 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
         .collect())
 }
 
-fn deps_to_ids(deps: &DependencyType<package::Name>, tree: &Tree) -> Vec<LockedPackageId> {
+fn deps_to_ids(deps: &dependency::Kind<package::Name>, tree: &Tree) -> Vec<LockedPackageId> {
     let names = match deps {
-        DependencyType::Regular(d) | DependencyType::Build(d) | DependencyType::Test(d) => d,
-        DependencyType::External(_) => &Vec::default(),
+        dependency::Kind::Regular(d) | dependency::Kind::Build(d) | dependency::Kind::Test(d) => d,
+        dependency::Kind::External(_) => &Vec::default(),
     };
 
     names

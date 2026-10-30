@@ -1,22 +1,8 @@
-mod builtin;
-mod cmake;
-mod make;
-mod rust_binary;
-mod rust_mlua;
-mod tree_sitter;
+pub mod backend;
+pub(crate) mod internal;
 
 use crate::package;
-pub use builtin::{BuiltinBuildSpec, Module, ModulePaths, ModuleSpec, ParseLuaModuleError};
-pub use cmake::*;
-pub use make::*;
 use path_slash::PathBufExt;
-pub use rust_binary::*;
-pub use rust_mlua::*;
-pub use tree_sitter::*;
-
-pub(crate) use builtin::ModuleSpecInternal;
-
-use builtin::{ModulePathsMissingSources, ModuleSpecAmbiguousPlatformOverride};
 
 use itertools::Itertools;
 
@@ -28,22 +14,20 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::{rockspec::per_platform_from_intermediate, rockspec::LuaDependencySpec};
+use crate::rockspec::platform::per_platform_from_intermediate;
 
-use super::{
-    DisplayAsLuaKV, DisplayAsLuaValue, DisplayLuaKV, DisplayLuaValue, LuaTableKey, LuaValueSeed,
-    PartialOverride, PerPlatform, PlatformOverridable,
-};
+use super::display::{AsLuaKV, AsLuaValue};
+use super::{display, lua_dependency, serde_util, PerPlatform};
 
 /// The build specification for a given rock, serialized from `build = { ... }`.
 #[derive(Clone, Debug, PartialEq)]
-pub struct BuildSpec {
+pub struct Spec {
     /// Determines the build backend to use.
-    pub build_backend: Option<BuildBackendSpec>,
+    pub backend: Option<backend::Spec>,
     /// A set of instructions on how/where to copy files from the project.
     // TODO(vhyrro): While we may want to support this, we also may want to supercede this in our
     // new Lua project rewrite.
-    pub install: InstallSpec,
+    pub install: Install,
     /// A list of directories that should be copied as-is into the resulting rock.
     pub copy_directories: Vec<PathBuf>,
     /// A list of patches to apply to the project before packaging it.
@@ -52,63 +36,51 @@ pub struct BuildSpec {
     pub patches: HashMap<PathBuf, String>,
 }
 
-impl Default for BuildSpec {
+impl Default for Spec {
     fn default() -> Self {
         Self {
-            build_backend: Some(BuildBackendSpec::default()),
-            install: InstallSpec::default(),
+            backend: Some(backend::Spec::default()),
+            install: Install::default(),
             copy_directories: Vec::default(),
             patches: HashMap::default(),
         }
     }
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum BuildSpecInternalError {
-    #[error("'builtin' modules should not have list elements")]
-    ModulesHaveListElements,
-    #[error("no 'modules' specified for the 'rust-mlua' build backend")]
-    NoModulesSpecified,
-    #[error("no 'lang' specified for 'treesitter-parser' build backend")]
-    NoTreesitterParserLanguageSpecified,
-    #[error("invalid 'rust-mlua' modules format")]
-    InvalidRustMLuaFormat,
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    ModulePathsMissingSources(#[from] ModulePathsMissingSources),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    ParseLuaModuleError(#[from] ParseLuaModuleError),
-}
-
-impl BuildSpec {
-    pub(crate) fn from_internal_spec(
-        internal: BuildSpecInternal,
-    ) -> Result<Self, BuildSpecInternalError> {
-        let build_backend = match internal.build_type.unwrap_or_default() {
-            BuildType::Builtin => Some(BuildBackendSpec::Builtin(BuiltinBuildSpec {
-                modules: internal
-                    .builtin_spec
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(key, module_spec_internal)| {
-                        let key_str = match key {
-                            LuaTableKey::IntKey(_) => {
-                                Err(BuildSpecInternalError::ModulesHaveListElements)
-                            }
-                            LuaTableKey::StringKey(str) => Ok(Module::from_str(str.as_str())?),
-                        }?;
-                        match ModuleSpec::from_internal(module_spec_internal) {
-                            Ok(module_spec) => Ok((key_str, module_spec)),
-                            Err(err) => Err(err.into()),
-                        }
-                    })
-                    .collect::<Result<HashMap<Module, ModuleSpec>, BuildSpecInternalError>>()?,
-            })),
-            BuildType::Make => {
-                let default = MakeBuildSpec::default();
-                Some(BuildBackendSpec::Make(MakeBuildSpec {
+impl Spec {
+    pub(crate) fn from_internal_spec(internal: internal::Spec) -> Result<Self, internal::Error> {
+        let backend = match internal.build_type.unwrap_or_default() {
+            internal::Type::Builtin => {
+                Some(backend::Spec::Builtin(
+                    backend::Builtin {
+                        modules: internal
+                            .builtin_spec
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|(key, module_spec_internal)| {
+                                let key_str = match key {
+                                    serde_util::LuaTableKey::IntKey(_) => {
+                                        Err(internal::Error::ModulesHaveListElements)
+                                    }
+                                    serde_util::LuaTableKey::StringKey(str) => {
+                                        Ok(backend::Module::from_str(str.as_str())?)
+                                    }
+                                }?;
+                                match backend::ModuleSpec::from_internal(module_spec_internal) {
+                                    Ok(module_spec) => Ok((key_str, module_spec)),
+                                    Err(err) => Err(err.into()),
+                                }
+                            })
+                            .collect::<Result<
+                                HashMap<backend::Module, backend::ModuleSpec>,
+                                internal::Error,
+                            >>()?,
+                    },
+                ))
+            }
+            internal::Type::Make => {
+                let default = backend::Make::default();
+                Some(backend::Spec::Make(backend::Make {
                     makefile: internal.makefile.unwrap_or(default.makefile),
                     build_target: internal.make_build_target,
                     build_pass: internal.build_pass.unwrap_or(default.build_pass),
@@ -121,43 +93,46 @@ impl BuildSpec {
                     variables: internal.variables.unwrap_or_default(),
                 }))
             }
-            BuildType::CMake => {
-                let default = CMakeBuildSpec::default();
-                Some(BuildBackendSpec::CMake(CMakeBuildSpec {
+            internal::Type::CMake => {
+                let default = backend::CMake::default();
+                Some(backend::Spec::CMake(backend::CMake {
                     cmake_lists_content: internal.cmake_lists_content,
                     build_pass: internal.build_pass.unwrap_or(default.build_pass),
                     install_pass: internal.install_pass.unwrap_or(default.install_pass),
                     variables: internal.variables.unwrap_or_default(),
                 }))
             }
-            BuildType::Command => Some(BuildBackendSpec::Command(CommandBuildSpec {
+            internal::Type::Command => Some(backend::Spec::Command(backend::Command {
                 build_command: internal.build_command,
                 install_command: internal.install_command,
             })),
-            BuildType::None => None,
-            BuildType::LuaRock(s) => Some(BuildBackendSpec::LuaRock(s)),
-            BuildType::RustMlua => Some(BuildBackendSpec::RustMlua(RustMluaBuildSpec {
+            internal::Type::None => None,
+            internal::Type::LuaRock(s) => Some(backend::Spec::LuaRock(s)),
+            internal::Type::RustMlua => Some(backend::Spec::RustMlua(backend::RustMlua {
                 modules: internal
                     .builtin_spec
-                    .ok_or(BuildSpecInternalError::NoModulesSpecified)?
+                    .ok_or(internal::Error::NoModulesSpecified)?
                     .into_iter()
                     .map(|(key, value)| match (key, value) {
-                        (LuaTableKey::IntKey(_), ModuleSpecInternal::SourcePath(module)) => {
+                        (
+                            serde_util::LuaTableKey::IntKey(_),
+                            backend::builtin::internal::ModuleSpec::SourcePath(module),
+                        ) => {
                             let mut rust_lib: PathBuf =
                                 format!("{DLL_PREFIX}{}", module.display()).into();
                             rust_lib.set_extension(DLL_EXTENSION);
                             Ok((module.to_string_lossy().to_string(), rust_lib))
                         }
                         (
-                            LuaTableKey::StringKey(module_name),
-                            ModuleSpecInternal::SourcePath(module),
+                            serde_util::LuaTableKey::StringKey(module_name),
+                            backend::builtin::internal::ModuleSpec::SourcePath(module),
                         ) => {
                             let mut rust_lib: PathBuf =
                                 format!("{DLL_PREFIX}{}", module.display()).into();
                             rust_lib.set_extension(DLL_EXTENSION);
                             Ok((module_name, rust_lib))
                         }
-                        _ => Err(BuildSpecInternalError::InvalidRustMLuaFormat),
+                        _ => Err(internal::Error::InvalidRustMLuaFormat),
                     })
                     .try_collect()?,
                 target_path: internal.target_path.unwrap_or("target".into()),
@@ -169,30 +144,30 @@ impl BuildSpec {
                     .unwrap_or_default()
                     .into_iter()
                     .map(|(key, dest)| match key {
-                        LuaTableKey::IntKey(_) => (dest.clone(), dest),
-                        LuaTableKey::StringKey(src) => (src.into(), dest),
+                        serde_util::LuaTableKey::IntKey(_) => (dest.clone(), dest),
+                        serde_util::LuaTableKey::StringKey(src) => (src.into(), dest),
                     })
                     .collect(),
             })),
-            BuildType::RustBinary => Some(BuildBackendSpec::RustBinary(RustBinaryBuildSpec {
+            internal::Type::RustBinary => Some(backend::Spec::RustBinary(backend::RustBinary {
                 package: internal.package,
                 features: internal.features.unwrap_or_default(),
             })),
-            BuildType::TreesitterParser => Some(BuildBackendSpec::TreesitterParser(
-                TreesitterParserBuildSpec {
+            internal::Type::TreesitterParser => {
+                Some(backend::Spec::TreesitterParser(backend::Treesitter {
                     lang: internal
                         .lang
-                        .ok_or(BuildSpecInternalError::NoTreesitterParserLanguageSpecified)?,
+                        .ok_or(internal::Error::NoTreesitterParserLanguageSpecified)?,
                     parser: internal.parser.unwrap_or(true),
                     generate: internal.generate.unwrap_or(false),
                     location: internal.location,
                     queries: internal.queries.unwrap_or_default(),
-                },
-            )),
-            BuildType::Source => Some(BuildBackendSpec::Source),
+                }))
+            }
+            internal::Type::Source => Some(backend::Spec::Source),
         };
         Ok(Self {
-            build_backend,
+            backend,
             install: internal.install.unwrap_or_default(),
             copy_directories: internal.copy_directories.unwrap_or_default(),
             patches: internal.patches.unwrap_or_default(),
@@ -200,21 +175,21 @@ impl BuildSpec {
     }
 }
 
-impl TryFrom<BuildSpecInternal> for BuildSpec {
-    type Error = BuildSpecInternalError;
+impl TryFrom<internal::Spec> for Spec {
+    type Error = internal::Error;
 
-    fn try_from(internal: BuildSpecInternal) -> Result<Self, Self::Error> {
-        BuildSpec::from_internal_spec(internal)
+    fn try_from(internal: internal::Spec) -> Result<Self, Self::Error> {
+        Spec::from_internal_spec(internal)
     }
 }
 
-impl<'de> Deserialize<'de> for BuildSpec {
+impl<'de> Deserialize<'de> for Spec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let internal = BuildSpecInternal::deserialize(deserializer)?;
-        BuildSpec::from_internal_spec(internal).map_err(de::Error::custom)
+        let internal = internal::Spec::deserialize(deserializer)?;
+        Spec::from_internal_spec(internal).map_err(de::Error::custom)
     }
 }
 
@@ -222,67 +197,17 @@ impl<'de> Deserialize<'de> for BuildSpec {
 // This is a hacky implementation that would work normally with just the above deserialization
 // strategy however since there is no PlatformOevrridable implemented for this struct this is
 // necessary.
-impl<'de> Deserialize<'de> for PerPlatform<BuildSpec> {
+impl<'de> Deserialize<'de> for PerPlatform<Spec> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        per_platform_from_intermediate::<_, BuildSpecInternal, _>(deserializer)
+        per_platform_from_intermediate::<_, internal::Spec, _>(deserializer)
     }
-}
-
-impl Default for BuildBackendSpec {
-    fn default() -> Self {
-        Self::Builtin(BuiltinBuildSpec::default())
-    }
-}
-
-/// Encodes extra information about each backend.
-/// When selecting a backend, one may provide extra parameters
-/// to `build = { ... }` in order to further customize the behaviour of the build step.
-///
-/// Luarocks provides several default build types, these are also reflected in `lux`
-/// for compatibility.
-#[derive(Debug, PartialEq, Clone)]
-pub enum BuildBackendSpec {
-    Builtin(BuiltinBuildSpec),
-    Make(MakeBuildSpec),
-    CMake(CMakeBuildSpec),
-    Command(CommandBuildSpec),
-    LuaRock(String),
-    RustMlua(RustMluaBuildSpec),
-    RustBinary(RustBinaryBuildSpec),
-    TreesitterParser(TreesitterParserBuildSpec),
-    /// Build from the source rockspec, if present.
-    /// Otherwise, fall back to the builtin build and copy all directories.
-    /// This is currently unimplemented by luarocks, but we don't ever publish rockspecs
-    /// that implement this.
-    /// It could be implemented as a custom build backend.
-    Source,
-}
-
-impl BuildBackendSpec {
-    pub(crate) fn can_use_build_dependencies(&self) -> bool {
-        match self {
-            Self::Make(_) | Self::CMake(_) | Self::Command(_) | Self::LuaRock(_) => true,
-            Self::Builtin(_)
-            | Self::RustMlua(_)
-            | Self::RustBinary(_)
-            | Self::TreesitterParser(_)
-            | Self::Source => false,
-        }
-    }
-}
-
-/// Specification for building a rock with the `command` build backend
-#[derive(Debug, PartialEq, Clone)]
-pub struct CommandBuildSpec {
-    pub build_command: Option<String>,
-    pub install_command: Option<String>,
 }
 
 #[derive(Clone, Debug)]
-struct LuaPathBufTable(HashMap<LuaTableKey, PathBuf>);
+struct LuaPathBufTable(HashMap<serde_util::LuaTableKey, PathBuf>);
 
 impl<'de> Deserialize<'de> for LuaPathBufTable {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -301,13 +226,13 @@ impl LuaPathBufTable {
             .into_iter()
             .map(|(key, value)| {
                 let key = match key {
-                    LuaTableKey::IntKey(_) => value
+                    serde_util::LuaTableKey::IntKey(_) => value
                         .with_extension("")
                         .file_name()
                         .unwrap_or_default()
                         .to_string_lossy()
                         .to_string(),
-                    LuaTableKey::StringKey(key) => key,
+                    serde_util::LuaTableKey::StringKey(key) => key,
                 };
                 Ok((S::from_str(&key)?, value))
             })
@@ -316,7 +241,7 @@ impl LuaPathBufTable {
 }
 
 #[derive(Clone, Debug)]
-struct LibPathBufTable(HashMap<LuaTableKey, PathBuf>);
+struct LibPathBufTable(HashMap<serde_util::LuaTableKey, PathBuf>);
 
 impl<'de> Deserialize<'de> for LibPathBufTable {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -335,12 +260,12 @@ impl LibPathBufTable {
             .into_iter()
             .map(|(key, value)| {
                 let key = match key {
-                    LuaTableKey::IntKey(_) => value
+                    serde_util::LuaTableKey::IntKey(_) => value
                         .file_name()
                         .unwrap_or_default()
                         .to_string_lossy()
                         .to_string(),
-                    LuaTableKey::StringKey(key) => key,
+                    serde_util::LuaTableKey::StringKey(key) => key,
                 };
                 Ok((S::from_str(&key)?, value))
             })
@@ -356,17 +281,17 @@ impl LibPathBufTable {
 /// to indicate which subdirectory the file should be copied to.
 /// For example, lua = {["foo.bar"] = "src/bar.lua"} will copy src/bar.lua
 /// to the foo directory under the rock's Lua files directory.
-#[derive(Debug, PartialEq, Default, Deserialize, Clone, lux_macros::DisplayAsLuaKV)]
+#[derive(Debug, PartialEq, Default, Deserialize, Clone, lux_macros::AsLuaKV)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "install")]
-pub struct InstallSpec {
+pub struct Install {
     /// Lua modules written in Lua.
     #[serde(default, deserialize_with = "deserialize_module_path_map")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "std::collections::BTreeMap<String, String>")
     )]
-    pub lua: HashMap<Module, PathBuf>,
+    pub lua: HashMap<backend::Module, PathBuf>,
     /// Dynamic libraries implemented compiled Lua modules.
     #[serde(default, deserialize_with = "deserialize_file_name_path_map")]
     #[cfg_attr(
@@ -390,7 +315,7 @@ pub struct InstallSpec {
 
 fn deserialize_module_path_map<'de, D>(
     deserializer: D,
-) -> Result<HashMap<Module, PathBuf>, D::Error>
+) -> Result<HashMap<backend::Module, PathBuf>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -435,19 +360,21 @@ where
 /// Deserializes a map that may be represented as a sequence (integer-indexed Lua array).
 fn deserialize_map_or_seq<'de, D, V>(
     deserializer: D,
-) -> Result<Option<HashMap<LuaTableKey, V>>, D::Error>
+) -> Result<Option<HashMap<serde_util::LuaTableKey, V>>, D::Error>
 where
     D: Deserializer<'de>,
     V: de::DeserializeOwned,
 {
-    match de::DeserializeSeed::deserialize(LuaValueSeed, deserializer).map_err(de::Error::custom)? {
+    match de::DeserializeSeed::deserialize(serde_util::LuaValueSeed, deserializer)
+        .map_err(de::Error::custom)?
+    {
         serde_value::Value::Map(map) => map
             .into_iter()
             .map(|(k, v)| {
                 let key = match k {
-                    serde_value::Value::I64(i) => LuaTableKey::IntKey(i as u64),
-                    serde_value::Value::U64(u) => LuaTableKey::IntKey(u),
-                    serde_value::Value::String(s) => LuaTableKey::StringKey(s),
+                    serde_value::Value::I64(i) => serde_util::LuaTableKey::IntKey(i as u64),
+                    serde_value::Value::U64(u) => serde_util::LuaTableKey::IntKey(u),
+                    serde_value::Value::String(s) => serde_util::LuaTableKey::StringKey(s),
                     other => {
                         return Err(de::Error::custom(format!("unexpected map key: {other:?}")))
                     }
@@ -462,7 +389,7 @@ where
             .enumerate()
             .map(|(i, v)| {
                 let val = v.deserialize_into::<V>().map_err(de::Error::custom)?;
-                Ok((LuaTableKey::IntKey(i as u64 + 1), val))
+                Ok((serde_util::LuaTableKey::IntKey(i as u64 + 1), val))
             })
             .try_collect()
             .map(Some),
@@ -473,13 +400,15 @@ where
     }
 }
 
-fn display_builtin_spec(spec: &HashMap<LuaTableKey, ModuleSpecInternal>) -> DisplayLuaValue {
-    DisplayLuaValue::Table(
+fn display_builtin_spec(
+    spec: &HashMap<serde_util::LuaTableKey, backend::builtin::internal::ModuleSpec>,
+) -> display::LuaValue {
+    display::LuaValue::Table(
         spec.iter()
-            .map(|(key, value)| DisplayLuaKV {
+            .map(|(key, value)| display::LuaKV {
                 key: match key {
-                    LuaTableKey::StringKey(s) => s.clone(),
-                    LuaTableKey::IntKey(_) => unreachable!("integer key in modules"),
+                    serde_util::LuaTableKey::StringKey(s) => s.clone(),
+                    serde_util::LuaTableKey::IntKey(_) => unreachable!("integer key in modules"),
                 },
                 value: value.display_lua_value(),
             })
@@ -487,530 +416,34 @@ fn display_builtin_spec(spec: &HashMap<LuaTableKey, ModuleSpecInternal>) -> Disp
     )
 }
 
-fn display_path_string_map(map: &HashMap<PathBuf, String>) -> DisplayLuaValue {
-    DisplayLuaValue::Table(
+fn display_path_string_map(map: &HashMap<PathBuf, String>) -> display::LuaValue {
+    display::LuaValue::Table(
         map.iter()
-            .map(|(k, v)| DisplayLuaKV {
+            .map(|(k, v)| display::LuaKV {
                 key: k.to_slash_lossy().into_owned(),
-                value: DisplayLuaValue::String(v.clone()),
+                value: display::LuaValue::String(v.clone()),
             })
             .collect(),
     )
 }
 
-fn display_include(include: &HashMap<LuaTableKey, PathBuf>) -> DisplayLuaValue {
-    DisplayLuaValue::Table(
+fn display_include(include: &HashMap<serde_util::LuaTableKey, PathBuf>) -> display::LuaValue {
+    display::LuaValue::Table(
         include
             .iter()
-            .map(|(key, value)| DisplayLuaKV {
+            .map(|(key, value)| display::LuaKV {
                 key: match key {
-                    LuaTableKey::StringKey(s) => s.clone(),
-                    LuaTableKey::IntKey(_) => unreachable!("integer key in include"),
+                    serde_util::LuaTableKey::StringKey(s) => s.clone(),
+                    serde_util::LuaTableKey::IntKey(_) => unreachable!("integer key in include"),
                 },
-                value: DisplayLuaValue::String(value.to_slash_lossy().into_owned()),
+                value: display::LuaValue::String(value.to_slash_lossy().into_owned()),
             })
             .collect(),
     )
 }
 
-#[derive(Debug, PartialEq, Deserialize, Default, Clone, lux_macros::DisplayAsLuaKV)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[display_lua(key = "build")]
-pub(crate) struct BuildSpecInternal {
-    /// The build backend to use: "builtin", "make", "cmake",
-    /// "command", "none", "rust-mlua", "rust-binary", or "treesitter-parser".
-    /// Any other value is treated as a custom LuaRocks build backend.
-    /// Default: "builtin".
-    ///
-    /// `make` requires Make, `cmake` requires CMake, and `rust-mlua`/`rust-binary`
-    /// require a Rust toolchain. Set `type = "none"` to copy source files
-    /// without building.
-    ///
-    /// For Luau projects, `builtin` auto-detects `.luau` modules. Native
-    /// dependencies are not supported. Luau modules are transpiled to Lua when
-    /// the project targets a Lua runtime.
-    #[serde(rename = "type", default)]
-    #[display_lua(rename = "type")]
-    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-type = "builtin"
-"#))
-    )]
-    pub(crate) build_type: Option<BuildType>,
-    /// Modules to build, mapping module names (as used by `require`) to a source
-    /// path, a list of C sources, or a table with `sources`, `libraries`,
-    /// `defines`, `incdirs`, and `libdirs`.
-    #[serde(
-        rename = "modules",
-        default,
-        deserialize_with = "deserialize_map_or_seq"
-    )]
-    #[display_lua(rename = "modules", convert_with = "display_builtin_spec")]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(with = "Option<std::collections::BTreeMap<String, crate::schema::ModuleSpec>>")
-    )]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build.modules]
-"foo.main" = "lua/foo.lua"
-"foo.bla" = ["src/bla.c"]
-
-[build.modules."foo.core"]
-sources = ["src/core.c", "src/extra.c"]
-libraries = ["ssl"]
-defines = ["FOO=bar", "USE_BLA"]
-incdirs = []
-libdirs = []
-"#))
-    )]
-    pub(crate) builtin_spec: Option<HashMap<LuaTableKey, ModuleSpecInternal>>,
-    /// Makefile to use. Default: "Makefile" ("Makefile.win" on Windows).
-    #[serde(default)]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-type = "make"
-makefile = "Makefile"
-build_target = ""
-build_pass = true
-install_target = "install"
-install_pass = true
-build_variables = {}
-install_variables = {}
-variables = {}
-"#))
-    )]
-    pub(crate) makefile: Option<PathBuf>,
-    /// Target passed to `make` during the build pass. Default: empty.
-    #[serde(rename = "build_target", default)]
-    #[display_lua(rename = "build_target")]
-    pub(crate) make_build_target: Option<String>,
-    /// Whether to perform a build pass. Default: `true`.
-    #[serde(default)]
-    pub(crate) build_pass: Option<bool>,
-    /// Target passed to `make` during the install pass. Default: "install".
-    #[serde(rename = "install_target", default)]
-    #[display_lua(rename = "install_target")]
-    pub(crate) make_install_target: Option<String>,
-    /// Whether to perform an install pass. Default: `true`.
-    #[serde(default)]
-    pub(crate) install_pass: Option<bool>,
-    /// Make variable assignments for the build pass.
-    #[serde(rename = "build_variables", default)]
-    #[display_lua(rename = "build_variables")]
-    pub(crate) make_build_variables: Option<HashMap<String, String>>,
-    /// Make variable assignments for the install pass.
-    #[serde(rename = "install_variables", default)]
-    #[display_lua(rename = "install_variables")]
-    pub(crate) make_install_variables: Option<HashMap<String, String>>,
-    /// Make or CMake variable assignments applied to both passes.
-    #[serde(default)]
-    pub(crate) variables: Option<HashMap<String, String>>,
-    /// Contents of the generated "CMakeLists.txt". If unset, the project's own
-    /// file is used.
-    ///
-    /// Environment variables: `CMAKE_MODULE_PATH`, `CMAKE_INCLUDE_PATH`,
-    /// `CMAKE_LIBRARY_PATH`.
-    #[serde(rename = "cmake", default)]
-    #[display_lua(rename = "cmake")]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-type = "cmake"
-cmake = """
-<content>
-"""
-"#))
-    )]
-    pub(crate) cmake_lists_content: Option<String>,
-    /// Command to run to build the package.
-    #[serde(default)]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-type = "command"
-build_command = "make"
-install_command = "make install"
-"#))
-    )]
-    pub(crate) build_command: Option<String>,
-    /// Command to run to install the package.
-    #[serde(default)]
-    pub(crate) install_command: Option<String>,
-    /// Files to install, by category ("lua", "lib", "conf", "bin").
-    #[serde(default)]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build.install.lua]
-"foo.bar" = "src/bar.lua"
-
-[build.install.lib]
-"foo.bar" = "lib/bar.so"
-
-[build.install.conf]
-
-[build.install.bin]
-"#))
-    )]
-    pub(crate) install: Option<InstallSpec>,
-    /// Directories in the source tree to copy as-is into the rock's "etc" tree.
-    /// Do not use "lua", "lib", "rock_manifest", or the rockspec file name.
-    #[serde(default, deserialize_with = "deserialize_copy_directories")]
-    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-copy_directories = ["plugin", "ftplugin"]
-"#))
-    )]
-    pub(crate) copy_directories: Option<Vec<PathBuf>>,
-    /// Patches to apply before building, mapping file names to patch contents.
-    /// Lux accepts any format supported by the [`diffy`](https://docs.rs/diffy/latest/diffy/) crate.
-    /// LuaRocks only supports unified diff.
-    #[serde(default)]
-    #[display_lua(convert_with = "display_path_string_map")]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(with = "Option<std::collections::BTreeMap<String, String>>")
-    )]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build.patches]
-"lua51-support.diff" = """
---- old/mymodule.c....
-"""
-"#))
-    )]
-    pub(crate) patches: Option<HashMap<PathBuf, String>>,
-    /// The cargo target directory, if it is not `<source>/target`.
-    #[serde(default)]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-type = "rust-mlua"
-target_path = "target"
-default_features = false
-features = []
-cargo_extra_args = []
-
-[build.modules]
-"foo.main" = "alt_name"
-
-[build.include]
-"relative/path/to/file.lua" = "target-file.lua"
-"#))
-    )]
-    pub(crate) target_path: Option<PathBuf>,
-    /// Whether to build a cargo package with default features. Default: `true`.
-    #[serde(default)]
-    pub(crate) default_features: Option<bool>,
-    /// Cargo features to enable.
-    #[serde(default)]
-    pub(crate) features: Option<Vec<String>>,
-    /// Additional arguments to pass to cargo.
-    pub(crate) cargo_extra_args: Option<Vec<String>>,
-    /// The cargo package to build.
-    /// Required for "rust-binary" in multi-package workspaces.
-    #[serde(default)]
-    pub(crate) package: Option<String>,
-    /// Additional files to copy into the rock's "lua" directory, mapping source
-    /// paths to destinations.
-    #[serde(default, deserialize_with = "deserialize_map_or_seq")]
-    #[display_lua(convert_with = "display_include")]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(with = "Option<std::collections::BTreeMap<String, String>>")
-    )]
-    pub(crate) include: Option<HashMap<LuaTableKey, PathBuf>>,
-    /// The parser language, e.g. "haskell". Required for "treesitter-parser".
-    #[serde(default)]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"
-[build]
-type = "treesitter-parser"
-lang = "haskell"
-parser = true
-generate = true
-location = "libs/tree-sitter-haskell"
-
-[build.queries."highlights.scm"] = """
-(signature
-  name: (variable) @function)
-"""
-"#))
-    )]
-    pub(crate) lang: Option<String>,
-    /// Whether to build the tree-sitter parser. Set to `false` for query-only packages.
-    /// Default: `false`.
-    #[serde(default)]
-    pub(crate) parser: Option<bool>,
-    /// Whether to generate the tree-sitter parser sources before building.
-    /// Default: `false`.
-    #[serde(default)]
-    pub(crate) generate: Option<bool>,
-    /// Location of the tree-sitter grammar, relative to the source root.
-    #[serde(default)]
-    pub(crate) location: Option<PathBuf>,
-    /// Embedded queries to install into "etc/queries", mapping file names to
-    /// contents.
-    #[serde(default)]
-    #[display_lua(convert_with = "display_path_string_map")]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(with = "Option<std::collections::BTreeMap<String, String>>")
-    )]
-    pub(crate) queries: Option<HashMap<PathBuf, String>>,
-}
-
-impl PartialOverride for BuildSpecInternal {
-    type Err = ModuleSpecAmbiguousPlatformOverride;
-
-    fn apply_overrides(&self, override_spec: &Self) -> Result<Self, Self::Err> {
-        override_build_spec_internal(self, override_spec)
-    }
-}
-
-impl PlatformOverridable for BuildSpecInternal {
-    type Err = Infallible;
-
-    fn on_nil<T>() -> Result<PerPlatform<T>, <Self as PlatformOverridable>::Err>
-    where
-        T: PlatformOverridable,
-        T: Default,
-    {
-        Ok(PerPlatform::default())
-    }
-}
-
-fn override_build_spec_internal(
-    base: &BuildSpecInternal,
-    override_spec: &BuildSpecInternal,
-) -> Result<BuildSpecInternal, ModuleSpecAmbiguousPlatformOverride> {
-    Ok(BuildSpecInternal {
-        build_type: override_opt(&override_spec.build_type, &base.build_type),
-        builtin_spec: match (
-            override_spec.builtin_spec.clone(),
-            base.builtin_spec.clone(),
-        ) {
-            (Some(override_val), Some(base_spec_map)) => {
-                Some(base_spec_map.into_iter().chain(override_val).try_fold(
-                    HashMap::default(),
-                    |mut acc: HashMap<LuaTableKey, ModuleSpecInternal>,
-                     (k, module_spec_override)|
-                     -> Result<
-                        HashMap<LuaTableKey, ModuleSpecInternal>,
-                        ModuleSpecAmbiguousPlatformOverride,
-                    > {
-                        let overridden = match acc.get(&k) {
-                            None => module_spec_override,
-                            Some(base_module_spec) => {
-                                base_module_spec.apply_overrides(&module_spec_override)?
-                            }
-                        };
-                        acc.insert(k, overridden);
-                        Ok(acc)
-                    },
-                )?)
-            }
-            (override_val @ Some(_), _) => override_val,
-            (_, base_val @ Some(_)) => base_val,
-            _ => None,
-        },
-        makefile: override_opt(&override_spec.makefile, &base.makefile),
-        make_build_target: override_opt(&override_spec.make_build_target, &base.make_build_target),
-        build_pass: override_opt(&override_spec.build_pass, &base.build_pass),
-        make_install_target: override_opt(
-            &override_spec.make_install_target,
-            &base.make_install_target,
-        ),
-        install_pass: override_opt(&override_spec.install_pass, &base.install_pass),
-        make_build_variables: merge_map_opts(
-            &override_spec.make_build_variables,
-            &base.make_build_variables,
-        ),
-        make_install_variables: merge_map_opts(
-            &override_spec.make_install_variables,
-            &base.make_build_variables,
-        ),
-        variables: merge_map_opts(&override_spec.variables, &base.variables),
-        cmake_lists_content: override_opt(
-            &override_spec.cmake_lists_content,
-            &base.cmake_lists_content,
-        ),
-        build_command: override_opt(&override_spec.build_command, &base.build_command),
-        install_command: override_opt(&override_spec.install_command, &base.install_command),
-        install: override_opt(&override_spec.install, &base.install),
-        copy_directories: match (
-            override_spec.copy_directories.clone(),
-            base.copy_directories.clone(),
-        ) {
-            (Some(override_vec), Some(base_vec)) => {
-                let merged: Vec<PathBuf> =
-                    base_vec.into_iter().chain(override_vec).unique().collect();
-                Some(merged)
-            }
-            (None, base_vec @ Some(_)) => base_vec,
-            (override_vec @ Some(_), None) => override_vec,
-            _ => None,
-        },
-        patches: override_opt(&override_spec.patches, &base.patches),
-        target_path: override_opt(&override_spec.target_path, &base.target_path),
-        default_features: override_opt(&override_spec.default_features, &base.default_features),
-        features: override_opt(&override_spec.features, &base.features),
-        cargo_extra_args: override_opt(&override_spec.cargo_extra_args, &base.cargo_extra_args),
-        package: override_opt(&override_spec.package, &base.package),
-        include: merge_map_opts(&override_spec.include, &base.include),
-        lang: override_opt(&override_spec.lang, &base.lang),
-        parser: override_opt(&override_spec.parser, &base.parser),
-        generate: override_opt(&override_spec.generate, &base.generate),
-        location: override_opt(&override_spec.location, &base.location),
-        queries: merge_map_opts(&override_spec.queries, &base.queries),
-    })
-}
-
-fn override_opt<T: Clone>(override_opt: &Option<T>, base: &Option<T>) -> Option<T> {
-    match override_opt.clone() {
-        override_val @ Some(_) => override_val,
-        None => base.clone(),
-    }
-}
-
-fn merge_map_opts<K, V>(
-    override_map: &Option<HashMap<K, V>>,
-    base_map: &Option<HashMap<K, V>>,
-) -> Option<HashMap<K, V>>
-where
-    K: Clone,
-    K: Eq,
-    K: std::hash::Hash,
-    V: Clone,
-{
-    match (override_map.clone(), base_map.clone()) {
-        (Some(override_map), Some(base_map)) => {
-            Some(base_map.into_iter().chain(override_map).collect())
-        }
-        (_, base_map @ Some(_)) => base_map,
-        (override_map @ Some(_), _) => override_map,
-        _ => None,
-    }
-}
-
-/// Maps `build.type` to an enum.
-#[derive(Debug, PartialEq, Deserialize, Clone)]
-#[serde(rename_all = "lowercase", remote = "BuildType")]
-#[derive(Default)]
-pub(crate) enum BuildType {
-    /// "builtin" or "module"
-    #[default]
-    Builtin,
-    /// "make"
-    Make,
-    /// "cmake"
-    CMake,
-    /// "command"
-    Command,
-    /// "none"
-    None,
-    /// external Lua rock
-    LuaRock(String),
-    #[serde(rename = "rust-mlua")]
-    RustMlua,
-    #[serde(rename = "rust-binary")]
-    RustBinary,
-    #[serde(rename = "treesitter-parser")]
-    TreesitterParser,
-    Source,
-}
-
-impl BuildType {
-    pub(crate) fn luarocks_build_backend(&self) -> Option<LuaDependencySpec> {
-        match self {
-            &BuildType::Builtin
-            | &BuildType::Make
-            | &BuildType::CMake
-            | &BuildType::Command
-            | &BuildType::None
-            | &BuildType::Source => None,
-            BuildType::LuaRock(s) => Some(package::Name::new(format!("luarocks-build-{s}")).into()),
-            &BuildType::RustMlua => unsafe {
-                Some(
-                    package::Req::parse("luarocks-build-rust-mlua >= 0.2.6")
-                        .unwrap_unchecked()
-                        .into(),
-                )
-            },
-            &BuildType::RustBinary => unsafe {
-                Some(
-                    package::Req::parse("luarocks-build-rust-binary >= 4.0.0")
-                        .unwrap_unchecked()
-                        .into(),
-                )
-            },
-            &BuildType::TreesitterParser => {
-                Some(package::Name::new("luarocks-build-treesitter-parser >= 6.1.0".into()).into())
-            } // IMPORTANT: If adding another luarocks build backend,
-              // make sure to also add it to the filters in `operations::resolve::do_get_all_dependencies`.
-        }
-    }
-}
-
-// Special Deserialize case for BuildType:
-// Both "module" and "builtin" map to `Builtin`
-impl<'de> Deserialize<'de> for BuildType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        if s == "builtin" || s == "module" {
-            Ok(Self::Builtin)
-        } else {
-            match Self::deserialize(s.clone().into_deserializer()) {
-                Err(_) => Ok(Self::LuaRock(s)),
-                ok => ok,
-            }
-        }
-    }
-}
-
-impl Display for BuildType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BuildType::Builtin => write!(f, "builtin"),
-            BuildType::Make => write!(f, "make"),
-            BuildType::CMake => write!(f, "cmake"),
-            BuildType::Command => write!(f, "command"),
-            BuildType::None => write!(f, "none"),
-            BuildType::LuaRock(s) => write!(f, "{s}"),
-            BuildType::RustMlua => write!(f, "rust-mlua"),
-            BuildType::RustBinary => write!(f, "rust-binary"),
-            BuildType::TreesitterParser => write!(f, "treesitter-parser"),
-            BuildType::Source => write!(f, "source"),
-        }
-    }
-}
-
-impl DisplayAsLuaValue for BuildType {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::String(self.to_string())
-    }
-}
-
-impl DisplayAsLuaValue for InstallSpec {
-    fn display_lua_value(&self) -> DisplayLuaValue {
+impl display::AsLuaValue for Install {
+    fn display_lua_value(&self) -> display::LuaValue {
         self.display_lua().value
     }
 }
@@ -1035,57 +468,63 @@ mod tests {
 
     #[tokio::test]
     pub async fn deserialize_build_type() {
-        let build_type: BuildType = serde_json::from_str("\"builtin\"").unwrap();
-        assert_eq!(build_type, BuildType::Builtin);
-        let build_type: BuildType = serde_json::from_str("\"module\"").unwrap();
-        assert_eq!(build_type, BuildType::Builtin);
-        let build_type: BuildType = serde_json::from_str("\"make\"").unwrap();
-        assert_eq!(build_type, BuildType::Make);
-        let build_type: BuildType = serde_json::from_str("\"custom_build_backend\"").unwrap();
+        let build_type: internal::Type = serde_json::from_str("\"builtin\"").unwrap();
+        assert_eq!(build_type, internal::Type::Builtin);
+        let build_type: internal::Type = serde_json::from_str("\"module\"").unwrap();
+        assert_eq!(build_type, internal::Type::Builtin);
+        let build_type: internal::Type = serde_json::from_str("\"make\"").unwrap();
+        assert_eq!(build_type, internal::Type::Make);
+        let build_type: internal::Type = serde_json::from_str("\"custom_build_backend\"").unwrap();
         assert_eq!(
             build_type,
-            BuildType::LuaRock("custom_build_backend".into())
+            internal::Type::LuaRock("custom_build_backend".into())
         );
-        let build_type: BuildType = serde_json::from_str("\"rust-mlua\"").unwrap();
-        assert_eq!(build_type, BuildType::RustMlua);
+        let build_type: internal::Type = serde_json::from_str("\"rust-mlua\"").unwrap();
+        assert_eq!(build_type, internal::Type::RustMlua);
     }
 
     #[test]
     pub fn install_spec_roundtrip() {
-        let spec = InstallSpec {
-            lua: HashMap::from([("mymod".parse::<Module>().unwrap(), "src/mymod.lua".into())]),
+        let spec = Install {
+            lua: HashMap::from([(
+                "mymod".parse::<backend::Module>().unwrap(),
+                "src/mymod.lua".into(),
+            )]),
             lib: HashMap::from([("mylib".into(), "lib/mylib.so".into())]),
             conf: HashMap::from([("myconf".into(), "conf/myconf.cfg".into())]),
             bin: HashMap::from([("mybinary".into(), "bin/mybinary".into())]),
         };
         let lua = spec.display_lua().to_string();
-        let restored: InstallSpec = eval_lua_global(&lua, "install");
+        let restored: Install = eval_lua_global(&lua, "install");
         assert_eq!(spec, restored);
     }
 
     #[test]
     pub fn install_spec_empty_roundtrip() {
-        let spec = InstallSpec::default();
+        let spec = Install::default();
         let lua = spec.display_lua().to_string();
         let lua = if lua.trim().is_empty() {
             "install = {}".to_string()
         } else {
             lua
         };
-        let restored: InstallSpec = eval_lua_global(&lua, "install");
+        let restored: Install = eval_lua_global(&lua, "install");
         assert_eq!(spec, restored);
     }
 
     #[test]
     pub fn build_spec_internal_builtin_roundtrip() {
-        let spec = BuildSpecInternal {
-            build_type: Some(BuildType::Builtin),
+        let spec = internal::Spec {
+            build_type: Some(internal::Type::Builtin),
             builtin_spec: Some(HashMap::from([(
-                LuaTableKey::StringKey("mymod".into()),
-                ModuleSpecInternal::SourcePath("src/mymod.lua".into()),
+                serde_util::LuaTableKey::StringKey("mymod".into()),
+                backend::builtin::internal::ModuleSpec::SourcePath("src/mymod.lua".into()),
             )])),
-            install: Some(InstallSpec {
-                lua: HashMap::from([("extra".parse::<Module>().unwrap(), "src/extra.lua".into())]),
+            install: Some(Install {
+                lua: HashMap::from([(
+                    "extra".parse::<backend::Module>().unwrap(),
+                    "src/extra.lua".into(),
+                )]),
                 bin: HashMap::from([("mytool".into(), "bin/mytool".into())]),
                 ..Default::default()
             }),
@@ -1093,14 +532,14 @@ mod tests {
             ..Default::default()
         };
         let lua = spec.display_lua().to_string();
-        let restored: BuildSpecInternal = eval_lua_global(&lua, "build");
+        let restored: internal::Spec = eval_lua_global(&lua, "build");
         assert_eq!(spec, restored);
     }
 
     #[test]
     pub fn build_spec_internal_make_roundtrip() {
-        let spec = BuildSpecInternal {
-            build_type: Some(BuildType::Make),
+        let spec = internal::Spec {
+            build_type: Some(internal::Type::Make),
             makefile: Some("GNUmakefile".into()),
             make_build_target: Some("all".into()),
             make_install_target: Some("install".into()),
@@ -1110,7 +549,7 @@ mod tests {
             ..Default::default()
         };
         let lua = spec.display_lua().to_string();
-        let restored: BuildSpecInternal = eval_lua_global(&lua, "build");
+        let restored: internal::Spec = eval_lua_global(&lua, "build");
         assert_eq!(spec, restored);
     }
 }

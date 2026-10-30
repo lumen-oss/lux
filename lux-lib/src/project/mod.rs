@@ -18,7 +18,7 @@ use crate::{
     git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, utils::SemVerTagOrSha},
     lua,
     package_db::PackageDB,
-    rockspec::{self, DependencyType, LuaDependencyType, LuaVersionCompatibility},
+    rockspec::{self, dependency, lua_dependency, LuaVersionCompatibility},
 };
 
 /// The file name of a project manifest.
@@ -81,7 +81,7 @@ pub enum Error {
     Toml(#[from] TomlDeError),
     #[error("error when parsing 'extra.rockspec'")]
     #[diagnostic(forward(0))]
-    Rockspec(#[from] rockspec::lua::PartialRockspecError),
+    Rockspec(#[from] rockspec::lua::partial::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -262,7 +262,7 @@ impl Project {
 
     pub fn extra_rockspec(
         &self,
-    ) -> Result<Option<rockspec::lua::Partial>, rockspec::lua::PartialRockspecError> {
+    ) -> Result<Option<rockspec::lua::Partial>, rockspec::lua::partial::Error> {
         if self.extra_rockspec_path().exists() {
             Ok(Some(rockspec::lua::Partial::new(
                 &fs::sync::read_to_string(self.extra_rockspec_path()).map_err(io::Error::other)?,
@@ -289,7 +289,7 @@ impl Project {
 
     pub async fn add(
         &mut self,
-        dependencies: DependencyType<&package::Req>,
+        dependencies: dependency::Kind<&package::Req>,
         package_db: &PackageDB,
     ) -> Result<(), EditError> {
         let mut project_toml =
@@ -297,16 +297,16 @@ impl Project {
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
-            DependencyType::Regular(_) => &mut project_toml["dependencies"],
-            DependencyType::Build(_) => &mut project_toml["build_dependencies"],
-            DependencyType::Test(_) => &mut project_toml["test_dependencies"],
-            DependencyType::External(_) => &mut project_toml["external_dependencies"],
+            dependency::Kind::Regular(_) => &mut project_toml["dependencies"],
+            dependency::Kind::Build(_) => &mut project_toml["build_dependencies"],
+            dependency::Kind::Test(_) => &mut project_toml["test_dependencies"],
+            dependency::Kind::External(_) => &mut project_toml["external_dependencies"],
         };
 
         match dependencies {
-            DependencyType::Regular(ref deps)
-            | DependencyType::Build(ref deps)
-            | DependencyType::Test(ref deps) => {
+            dependency::Kind::Regular(ref deps)
+            | dependency::Kind::Build(ref deps)
+            | dependency::Kind::Test(ref deps) => {
                 for dep in deps {
                     let dep_version_str = if dep.version_req().is_any() {
                         let latest_version = package_db
@@ -322,7 +322,7 @@ impl Project {
                     table[dep.name().to_string()] = toml_edit::value(dep_version_str);
                 }
             }
-            DependencyType::External(ref deps) => {
+            dependency::Kind::External(ref deps) => {
                 for (name, dep) in deps {
                     if let Some(path) = &dep.header {
                         table[name]["header"] = toml_edit::value(path.to_slash_lossy().to_string());
@@ -341,7 +341,7 @@ impl Project {
 
     pub async fn add_git(
         &mut self,
-        dependencies: LuaDependencyType<&RemoteGitUrlShorthand>,
+        dependencies: lua_dependency::Kind<&RemoteGitUrlShorthand>,
         config: &Config,
     ) -> Result<(), EditError> {
         let mut project_toml =
@@ -349,15 +349,15 @@ impl Project {
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
-            LuaDependencyType::Regular(_) => &mut project_toml["dependencies"],
-            LuaDependencyType::Build(_) => &mut project_toml["build_dependencies"],
-            LuaDependencyType::Test(_) => &mut project_toml["test_dependencies"],
+            lua_dependency::Kind::Regular(_) => &mut project_toml["dependencies"],
+            lua_dependency::Kind::Build(_) => &mut project_toml["build_dependencies"],
+            lua_dependency::Kind::Test(_) => &mut project_toml["test_dependencies"],
         };
 
         match dependencies {
-            LuaDependencyType::Regular(urls)
-            | LuaDependencyType::Build(urls)
-            | LuaDependencyType::Test(urls) => {
+            lua_dependency::Kind::Regular(urls)
+            | lua_dependency::Kind::Build(urls)
+            | lua_dependency::Kind::Test(urls) => {
                 for url in urls {
                     let git_url: RemoteGitUrl = url.clone().into();
                     let mut dep_entry = toml_edit::table();
@@ -387,28 +387,28 @@ impl Project {
 
     pub async fn remove(
         &mut self,
-        dependencies: DependencyType<&package::Name>,
+        dependencies: dependency::Kind<&package::Name>,
     ) -> Result<(), EditError> {
         let mut project_toml =
             toml_edit::DocumentMut::from_str(&fs::tokio::read_to_string(self.toml_path()).await?)?;
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
-            DependencyType::Regular(_) => &mut project_toml["dependencies"],
-            DependencyType::Build(_) => &mut project_toml["build_dependencies"],
-            DependencyType::Test(_) => &mut project_toml["test_dependencies"],
-            DependencyType::External(_) => &mut project_toml["external_dependencies"],
+            dependency::Kind::Regular(_) => &mut project_toml["dependencies"],
+            dependency::Kind::Build(_) => &mut project_toml["build_dependencies"],
+            dependency::Kind::Test(_) => &mut project_toml["test_dependencies"],
+            dependency::Kind::External(_) => &mut project_toml["external_dependencies"],
         };
 
         match dependencies {
-            DependencyType::Regular(ref deps)
-            | DependencyType::Build(ref deps)
-            | DependencyType::Test(ref deps) => {
+            dependency::Kind::Regular(ref deps)
+            | dependency::Kind::Build(ref deps)
+            | dependency::Kind::Test(ref deps) => {
                 for dep in deps {
                     table[dep.to_string()] = Item::None;
                 }
             }
-            DependencyType::External(ref deps) => {
+            dependency::Kind::External(ref deps) => {
                 for (name, dep) in deps {
                     if dep.header.is_some() {
                         table[name]["header"] = Item::None;
@@ -427,7 +427,7 @@ impl Project {
 
     pub async fn upgrade(
         &mut self,
-        dependencies: LuaDependencyType<&package::Name>,
+        dependencies: lua_dependency::Kind<&package::Name>,
         package_db: &PackageDB,
         config: &Config,
     ) -> Result<(), EditError> {
@@ -436,15 +436,15 @@ impl Project {
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
-            LuaDependencyType::Regular(_) => &mut project_toml["dependencies"],
-            LuaDependencyType::Build(_) => &mut project_toml["build_dependencies"],
-            LuaDependencyType::Test(_) => &mut project_toml["test_dependencies"],
+            lua_dependency::Kind::Regular(_) => &mut project_toml["dependencies"],
+            lua_dependency::Kind::Build(_) => &mut project_toml["build_dependencies"],
+            lua_dependency::Kind::Test(_) => &mut project_toml["test_dependencies"],
         };
 
         match dependencies {
-            LuaDependencyType::Regular(deps)
-            | LuaDependencyType::Build(deps)
-            | LuaDependencyType::Test(deps) => {
+            lua_dependency::Kind::Regular(deps)
+            | lua_dependency::Kind::Build(deps)
+            | lua_dependency::Kind::Test(deps) => {
                 for dep in deps {
                     upgrade_dependency(table, dep, package_db, config).await?;
                 }
@@ -468,7 +468,7 @@ impl Project {
                 .cloned()
                 .collect_vec();
             self.upgrade(
-                LuaDependencyType::Regular(packages.iter().collect()),
+                lua_dependency::Kind::Regular(packages.iter().collect()),
                 package_db,
                 config,
             )
@@ -481,7 +481,7 @@ impl Project {
                 .cloned()
                 .collect_vec();
             self.upgrade(
-                LuaDependencyType::Build(packages.iter().collect()),
+                lua_dependency::Kind::Build(packages.iter().collect()),
                 package_db,
                 config,
             )
@@ -494,7 +494,7 @@ impl Project {
                 .cloned()
                 .collect_vec();
             self.upgrade(
-                LuaDependencyType::Test(packages.iter().collect()),
+                lua_dependency::Kind::Test(packages.iter().collect()),
                 package_db,
                 config,
             )
@@ -505,7 +505,7 @@ impl Project {
 
     async fn set_dependency_flag(
         &mut self,
-        dependencies: LuaDependencyType<&package::Name>,
+        dependencies: lua_dependency::Kind<&package::Name>,
         key: &str,
         enabled: bool,
     ) -> Result<(), PinError> {
@@ -518,15 +518,15 @@ impl Project {
 
         prepare_dependency_tables(&mut project_toml);
         let table = match dependencies {
-            LuaDependencyType::Regular(_) => &mut project_toml["dependencies"],
-            LuaDependencyType::Build(_) => &mut project_toml["build_dependencies"],
-            LuaDependencyType::Test(_) => &mut project_toml["test_dependencies"],
+            lua_dependency::Kind::Regular(_) => &mut project_toml["dependencies"],
+            lua_dependency::Kind::Build(_) => &mut project_toml["build_dependencies"],
+            lua_dependency::Kind::Test(_) => &mut project_toml["test_dependencies"],
         };
 
         match dependencies {
-            LuaDependencyType::Regular(ref deps)
-            | LuaDependencyType::Build(ref deps)
-            | LuaDependencyType::Test(ref deps) => {
+            lua_dependency::Kind::Regular(ref deps)
+            | lua_dependency::Kind::Build(ref deps)
+            | lua_dependency::Kind::Test(ref deps) => {
                 for dep in deps {
                     let mut dep_item = table[dep.to_string()].clone();
                     match dep_item {
@@ -563,7 +563,7 @@ impl Project {
 
     pub async fn set_pinned_state(
         &mut self,
-        dependencies: LuaDependencyType<&package::Name>,
+        dependencies: lua_dependency::Kind<&package::Name>,
         pin: PinnedState,
     ) -> Result<(), PinError> {
         self.set_dependency_flag(dependencies, "pin", pin.as_bool())
@@ -572,7 +572,7 @@ impl Project {
 
     pub async fn set_opt_state(
         &mut self,
-        dependencies: LuaDependencyType<&package::Name>,
+        dependencies: lua_dependency::Kind<&package::Name>,
         opt: OptState,
     ) -> Result<(), PinError> {
         self.set_dependency_flag(dependencies, "opt", opt.as_bool())
@@ -778,7 +778,7 @@ mod tests {
 
         project
             .add(
-                DependencyType::Regular(add_dependencies.iter().collect_vec()),
+                dependency::Kind::Regular(add_dependencies.iter().collect_vec()),
                 &package_db,
             )
             .await
@@ -786,14 +786,14 @@ mod tests {
 
         project
             .add(
-                DependencyType::Build(add_dependencies.iter().collect_vec()),
+                dependency::Kind::Build(add_dependencies.iter().collect_vec()),
                 &package_db,
             )
             .await
             .unwrap();
         project
             .add(
-                DependencyType::Test(add_dependencies.iter().collect_vec()),
+                dependency::Kind::Test(add_dependencies.iter().collect_vec()),
                 &package_db,
             )
             .await
@@ -801,9 +801,9 @@ mod tests {
 
         project
             .add(
-                DependencyType::External(HashMap::from([(
+                dependency::Kind::External(HashMap::from([(
                     "lib".into(),
-                    rockspec::ExternalDependencySpec {
+                    rockspec::external_dependency::Spec {
                         library: Some("path.so".into()),
                         header: None,
                     },
@@ -836,7 +836,7 @@ mod tests {
                 .current_platform()
                 .get("lib")
                 .unwrap(),
-            &rockspec::ExternalDependencySpec {
+            &rockspec::external_dependency::Spec {
                 library: Some("path.so".into()),
                 header: None
             }
@@ -871,7 +871,7 @@ mod tests {
             [package::Req::from_str("not-a-package-in-any-manifest").unwrap()];
         let err = project
             .add(
-                DependencyType::Regular(unknown_dependencies.iter().collect_vec()),
+                dependency::Kind::Regular(unknown_dependencies.iter().collect_vec()),
                 &package_db,
             )
             .await
@@ -928,7 +928,7 @@ type = "builtin"
             let packages = [package::Name::from("30log")];
             project
                 .upgrade(
-                    LuaDependencyType::Regular(packages.iter().collect()),
+                    lua_dependency::Kind::Regular(packages.iter().collect()),
                     &package_db,
                     &config,
                 )
@@ -951,7 +951,7 @@ type = "builtin"
         let plenary_nvim = "plenary.nvim".into();
         let remove_dependencies = vec![&lua_cjson, &plenary_nvim];
         project
-            .remove(DependencyType::Regular(remove_dependencies.clone()))
+            .remove(dependency::Kind::Regular(remove_dependencies.clone()))
             .await
             .unwrap();
         let check = |project: &Project| {
@@ -1010,7 +1010,7 @@ type = "builtin"
         let plenary_nvim = "plenary.nvim".into();
         let pin_dependencies = vec![&lua_cjson, &plenary_nvim];
         project
-            .set_pinned_state(LuaDependencyType::Regular(pin_dependencies.clone()), pin)
+            .set_pinned_state(lua_dependency::Kind::Regular(pin_dependencies.clone()), pin)
             .await
             .unwrap();
         let check = |project: &Project| {
@@ -1043,7 +1043,7 @@ type = "builtin"
 
         project
             .set_opt_state(
-                LuaDependencyType::Regular(vec![&lua_cjson]),
+                lua_dependency::Kind::Regular(vec![&lua_cjson]),
                 OptState::Optional,
             )
             .await
@@ -1064,7 +1064,7 @@ type = "builtin"
 
         project
             .set_opt_state(
-                LuaDependencyType::Regular(vec![&lua_cjson]),
+                lua_dependency::Kind::Regular(vec![&lua_cjson]),
                 OptState::Required,
             )
             .await

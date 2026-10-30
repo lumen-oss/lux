@@ -5,7 +5,7 @@ use crate::package;
 use crate::rockspec;
 
 use super::{Error, Local, Partial, Remote};
-use crate::rockspec::LuaDependencySpec;
+use crate::rockspec::lua_dependency;
 
 impl Partial {
     /// Convert the `Partial` struct into a `Local` struct, making
@@ -22,7 +22,7 @@ impl Partial {
             return Err(Error::DependenciesContainLua);
         }
 
-        let get_duplicates = |dependencies: &Option<Vec<LuaDependencySpec>>| {
+        let get_duplicates = |dependencies: &Option<Vec<lua_dependency::Spec>>| {
             dependencies
                 .iter()
                 .flat_map(|deps| {
@@ -63,7 +63,7 @@ impl Partial {
             lua: project_toml.lua.ok_or(Error::NoLuaVersion)?,
             description: project_toml.description.unwrap_or_default(),
             run: project_toml.run.map(rockspec::PerPlatform::new),
-            supported_platforms: rockspec::PlatformSupport::parse(
+            supported_platforms: rockspec::platform::Support::parse(
                 &project_toml
                     .supported_platforms
                     .unwrap_or_default()
@@ -106,18 +106,18 @@ impl Partial {
             external_dependencies: rockspec::PerPlatform::new(
                 project_toml.external_dependencies.unwrap_or_default(),
             ),
-            test: rockspec::PerPlatform::new(rockspec::TestSpec::try_from(
+            test: rockspec::PerPlatform::new(rockspec::test::Spec::try_from(
                 project_toml.test.clone().unwrap_or_default(),
             )?),
-            build: rockspec::PerPlatform::new(rockspec::build::BuildSpec::from_internal_spec(
+            build: rockspec::PerPlatform::new(rockspec::build::Spec::from_internal_spec(
                 project_toml.build.clone(),
             )?),
             deploy: rockspec::PerPlatform::new(project_toml.deploy.clone().unwrap_or_default()),
             rockspec_format: project_toml.rockspec_format.clone(),
 
-            source: rockspec::PerPlatform::new(rockspec::RemoteRockSource::new(
-                rockspec::LocalRockSource::default(),
-                rockspec::RockSourceSpec::File(self.project.root.to_path_buf()),
+            source: rockspec::PerPlatform::new(rockspec::source::Remote::new(
+                rockspec::source::Local::default(),
+                rockspec::source::Spec::File(self.project.root.to_path_buf()),
             )),
         };
 
@@ -170,7 +170,7 @@ impl Partial {
             self.source_template
                 .try_generate(&self.lux_toml_dir, &self.package, &version)?;
         let source = rockspec::PerPlatform::new(
-            rockspec::RemoteRockSource::try_from(source).map_err(Error::RockSource)?,
+            rockspec::source::Remote::try_from(source).map_err(Error::RockSource)?,
         );
         let mut local = self.into_local()?;
         local.version = version;

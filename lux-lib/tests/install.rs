@@ -23,7 +23,7 @@ use serial_test::serial;
 async fn install_git_package() {
     let install_spec =
         PackageInstallSpec::new("rustaceanvim@6.0.3".parse().unwrap(), EntryType::Entrypoint)
-            .source(rockspec::RockSourceSpec::Git(GitSource {
+            .source(rockspec::source::Spec::Git(GitSource {
                 url: "https://github.com/mrcjkb/rustaceanvim.git"
                     .parse()
                     .unwrap(),

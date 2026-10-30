@@ -66,7 +66,7 @@ impl HasVariables for CMakeVariables {
     }
 }
 
-impl BuildBackend for rockspec::build::CMakeBuildSpec {
+impl BuildBackend for rockspec::build::backend::CMake {
     type Err = Error;
 
     #[tracing::instrument(name = "cmake::run", skip_all, level = "debug")]

@@ -29,7 +29,7 @@ fn lua_dynamic_dependency_spec() {
     assert_eq!(*spec.0.pin(), PinnedState::Pinned);
     assert!(matches!(
         spec.0.source(),
-        Some(rockspec::RockSourceSpec::Git(_))
+        Some(rockspec::source::Spec::Git(_))
     ));
 }
 

@@ -70,14 +70,12 @@ where
             Some(source_url) => match source_url {
                 RemotePackageSourceUrl::Git {
                     url, checkout_ref, ..
-                } => rockspec::RockSourceSpec::Git(GitSource {
+                } => rockspec::source::Spec::Git(GitSource {
                     url: url.parse()?,
                     git_ref: Some(GitRef::Tag(checkout_ref.clone())),
                 }),
-                RemotePackageSourceUrl::Url { url } => rockspec::RockSourceSpec::Url(url.clone()),
-                RemotePackageSourceUrl::File { path } => {
-                    rockspec::RockSourceSpec::File(path.clone())
-                }
+                RemotePackageSourceUrl::Url { url } => rockspec::source::Spec::Url(url.clone()),
+                RemotePackageSourceUrl::File { path } => rockspec::source::Spec::File(path.clone()),
             },
             None => rock_source.source_spec.clone(),
         };
@@ -91,7 +89,7 @@ where
                 Err(err)
             }
             Err(err) => match &fetch.rockspec.source().current_platform().source_spec {
-                rockspec::RockSourceSpec::Git(_) | rockspec::RockSourceSpec::Url(_) => {
+                rockspec::source::Spec::Git(_) | rockspec::source::Spec::Url(_) => {
                     let package = package::Spec::new(
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
@@ -107,7 +105,7 @@ where
                         }
                     }
                 }
-                rockspec::RockSourceSpec::File(_) | rockspec::RockSourceSpec::Wally(_) => Err(err),
+                rockspec::source::Spec::File(_) | rockspec::source::Spec::Wally(_) => Err(err),
             },
             Ok(metadata) => Ok(metadata),
         }
@@ -246,9 +244,9 @@ fn init_submodules(
     fields(location = source_spec.to_string()),
 )]
 async fn fetch_src_impl<R: Rockspec>(
-    mut source_spec: rockspec::RockSourceSpec,
+    mut source_spec: rockspec::source::Spec,
     rockspec: &R,
-    rock_source: &rockspec::RemoteRockSource,
+    rock_source: &rockspec::source::Remote,
     dest_dir: &Path,
     config: &Config,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
@@ -256,16 +254,16 @@ async fn fetch_src_impl<R: Rockspec>(
         source_spec = match source_spec {
             // could be a project directory (not vendored) or a local source
             // or a vendored dependency that we have already resolved
-            rockspec::RockSourceSpec::File(_) => source_spec,
+            rockspec::source::Spec::File(_) => source_spec,
             _ => {
                 let pkg_vendor_dir =
                     vendor_dir.join(format!("{}@{}", rockspec.package(), rockspec.version()));
-                rockspec::RockSourceSpec::File(pkg_vendor_dir)
+                rockspec::source::Spec::File(pkg_vendor_dir)
             }
         }
     }
     let metadata = match &source_spec {
-        rockspec::RockSourceSpec::Git(git) => {
+        rockspec::source::Spec::Git(git) => {
             let url = git.url.to_string();
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
@@ -344,7 +342,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 },
             }
         }
-        rockspec::RockSourceSpec::Url(url) => {
+        rockspec::source::Spec::Url(url) => {
             tracing::debug!(message = format!("Downloading {url}").as_str());
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
@@ -381,10 +379,10 @@ async fn fetch_src_impl<R: Rockspec>(
                 source_url: RemotePackageSourceUrl::Url { url: url.clone() },
             }
         }
-        rockspec::RockSourceSpec::Wally(_) => {
+        rockspec::source::Spec::Wally(_) => {
             return Err(FetchSrcError::WallySource(rockspec.package().to_string()))
         }
-        rockspec::RockSourceSpec::File(path) => {
+        rockspec::source::Spec::File(path) => {
             tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {

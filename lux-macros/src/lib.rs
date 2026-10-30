@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Type};
 
-/// Derive macro that generates a default implementation of `DisplayAsLuaKV` for structs.
+/// Derive macro that generates a default implementation of `AsLuaKV` for structs.
 ///
 /// # Required struct-level attribute
 /// ```ignore
@@ -16,7 +16,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Type};
 /// # Special Type Treatment
 /// If the type is an `Option`, `Vec` or `HashMap`, no entry will be generated if the value is
 /// `None` or empty.
-#[proc_macro_derive(DisplayAsLuaKV, attributes(display_lua))]
+#[proc_macro_derive(AsLuaKV, attributes(display_lua))]
 pub fn derive_display_as_lua_kv(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match impl_display_as_lua_kv(&input) {
@@ -37,14 +37,14 @@ fn impl_display_as_lua_kv(input: &DeriveInput) -> syn::Result<TokenStream2> {
             _ => {
                 return Err(syn::Error::new_spanned(
                     input,
-                    "DisplayAsLuaKV only supports structs with named fields",
+                    "AsLuaKV only supports structs with named fields",
                 ))
             }
         },
         _ => {
             return Err(syn::Error::new_spanned(
                 input,
-                "DisplayAsLuaKV can only be derived for structs",
+                "AsLuaKV can only be derived for structs",
             ))
         }
     };
@@ -55,13 +55,13 @@ fn impl_display_as_lua_kv(input: &DeriveInput) -> syn::Result<TokenStream2> {
         .collect::<syn::Result<Vec<_>>>()?;
 
     Ok(quote! {
-        impl #impl_generics crate::rockspec::DisplayAsLuaKV for #struct_name #ty_generics #where_clause {
-            fn display_lua(&self) -> crate::rockspec::DisplayLuaKV {
-                let mut __fields: Vec<crate::rockspec::DisplayLuaKV> = Vec::new();
+        impl #impl_generics crate::rockspec::display::AsLuaKV for #struct_name #ty_generics #where_clause {
+            fn display_lua(&self) -> crate::rockspec::display::LuaKV {
+                let mut __fields: Vec<crate::rockspec::display::LuaKV> = Vec::new();
                 #(#field_stmts)*
-                crate::rockspec::DisplayLuaKV {
+                crate::rockspec::display::LuaKV {
                     key: #outer_key.to_string(),
-                    value: crate::rockspec::DisplayLuaValue::Table(__fields),
+                    value: crate::rockspec::display::LuaValue::Table(__fields),
                 }
             }
         }
@@ -95,7 +95,7 @@ fn parse_struct_key_attr(input: &DeriveInput) -> syn::Result<String> {
     }
     Err(syn::Error::new_spanned(
         input,
-        "DisplayAsLuaKV requires `#[display_lua(key = \"...\")]` on the struct",
+        "AsLuaKV requires `#[display_lua(key = \"...\")]` on the struct",
     ))
 }
 
@@ -181,12 +181,12 @@ fn generate_field_stmt(field: &syn::Field) -> syn::Result<TokenStream2> {
                 quote! { #func(__inner) }
             } else {
                 quote! {
-                    crate::rockspec::DisplayAsLuaValue::display_lua_value(__inner)
+                    crate::rockspec::display::AsLuaValue::display_lua_value(__inner)
                 }
             };
             quote! {
                 if let Some(__inner) = &self.#ident {
-                    __fields.push(crate::rockspec::DisplayLuaKV {
+                    __fields.push(crate::rockspec::display::LuaKV {
                         key: #lua_key.to_string(),
                         value: #value_expr,
                     });
@@ -198,12 +198,12 @@ fn generate_field_stmt(field: &syn::Field) -> syn::Result<TokenStream2> {
                 quote! { #func(&self.#ident) }
             } else {
                 quote! {
-                    crate::rockspec::DisplayAsLuaValue::display_lua_value(&self.#ident)
+                    crate::rockspec::display::AsLuaValue::display_lua_value(&self.#ident)
                 }
             };
             quote! {
                 if !self.#ident.is_empty() {
-                    __fields.push(crate::rockspec::DisplayLuaKV {
+                    __fields.push(crate::rockspec::display::LuaKV {
                         key: #lua_key.to_string(),
                         value: #value_expr,
                     });
@@ -215,11 +215,11 @@ fn generate_field_stmt(field: &syn::Field) -> syn::Result<TokenStream2> {
                 quote! { #func(&self.#ident) }
             } else {
                 quote! {
-                    crate::rockspec::DisplayAsLuaValue::display_lua_value(&self.#ident)
+                    crate::rockspec::display::AsLuaValue::display_lua_value(&self.#ident)
                 }
             };
             quote! {
-                __fields.push(crate::rockspec::DisplayLuaKV {
+                __fields.push(crate::rockspec::display::LuaKV {
                     key: #lua_key.to_string(),
                     value: #value_expr,
                 });

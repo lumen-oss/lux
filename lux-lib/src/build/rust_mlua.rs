@@ -37,7 +37,7 @@ pub enum Error {
     LuauUnsupported,
 }
 
-impl BuildBackend for rockspec::build::RustMluaBuildSpec {
+impl BuildBackend for rockspec::build::backend::RustMlua {
     type Err = Error;
 
     #[tracing::instrument(name = "rust_mlua::run", skip_all, level = "debug")]

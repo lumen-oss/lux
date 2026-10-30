@@ -3,7 +3,7 @@ use itertools::Itertools;
 use lux_lib::package;
 
 use lux_lib::package_db::PackageDB;
-use lux_lib::rockspec::LuaDependencyType;
+use lux_lib::rockspec::lua_dependency;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config::Config, operations};
 use miette::{miette, Context, Result};
@@ -45,7 +45,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
                 let project = workspace.select_member_mut(package)?;
                 project
                     .upgrade(
-                        LuaDependencyType::Regular(packages.iter().collect()),
+                        lua_dependency::Kind::Regular(packages.iter().collect()),
                         &db,
                         &config,
                     )
@@ -54,7 +54,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
                 for project in workspace.members_mut().iter_mut() {
                     project
                         .upgrade(
-                            LuaDependencyType::Regular(packages.iter().collect()),
+                            lua_dependency::Kind::Regular(packages.iter().collect()),
                             &db,
                             &config,
                         )
@@ -69,7 +69,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
                 let project = workspace.select_member_mut(package)?;
                 project
                     .upgrade(
-                        LuaDependencyType::Build(packages.iter().collect()),
+                        lua_dependency::Kind::Build(packages.iter().collect()),
                         &db,
                         &config,
                     )
@@ -78,7 +78,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
                 for project in workspace.members_mut().iter_mut() {
                     project
                         .upgrade(
-                            LuaDependencyType::Build(packages.iter().collect()),
+                            lua_dependency::Kind::Build(packages.iter().collect()),
                             &db,
                             &config,
                         )
@@ -93,7 +93,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
                 let project = workspace.select_member_mut(package)?;
                 project
                     .upgrade(
-                        LuaDependencyType::Test(packages.iter().collect()),
+                        lua_dependency::Kind::Test(packages.iter().collect()),
                         &db,
                         &config,
                     )
@@ -102,7 +102,7 @@ pub async fn update(args: Update, config: Config) -> Result<()> {
                 for project in workspace.members_mut().iter_mut() {
                     project
                         .upgrade(
-                            LuaDependencyType::Test(packages.iter().collect()),
+                            lua_dependency::Kind::Test(packages.iter().collect()),
                             &db,
                             &config,
                         )

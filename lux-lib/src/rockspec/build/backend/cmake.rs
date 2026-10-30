@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 /// Specification for building a rock with the `cmake` build backend
 #[derive(Debug, PartialEq, Clone)]
-pub struct CMakeBuildSpec {
+pub struct CMake {
     pub cmake_lists_content: Option<String>,
     /// Whether to perform a build pass.
     /// Default is true.
@@ -13,7 +13,7 @@ pub struct CMakeBuildSpec {
     pub variables: HashMap<String, String>,
 }
 
-impl Default for CMakeBuildSpec {
+impl Default for CMake {
     fn default() -> Self {
         Self {
             cmake_lists_content: Default::default(),

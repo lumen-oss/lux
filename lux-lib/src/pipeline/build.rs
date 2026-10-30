@@ -82,8 +82,8 @@ where
 
         let needs_luarocks = args.packages.iter().any(|package| {
             matches!(
-                package.rockspec.build().current_platform().build_backend,
-                Some(rockspec::build::BuildBackendSpec::LuaRock(_))
+                package.rockspec.build().current_platform().backend,
+                Some(rockspec::build::backend::Spec::LuaRock(_))
             )
         });
         if needs_luarocks {

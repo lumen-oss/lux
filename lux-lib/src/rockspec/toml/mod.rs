@@ -11,8 +11,8 @@ use crate::operations::RunCommand;
 use crate::package;
 use crate::project::TomlDeError;
 use crate::rockspec;
-use crate::rockspec::DisplayAsLuaKV;
-use crate::rockspec::LuaDependencySpec;
+use crate::rockspec::display::AsLuaKV;
+use crate::rockspec::lua_dependency;
 use crate::ROCKSPEC_FUEL_LIMIT;
 use std::io;
 use std::path::Path;
@@ -37,10 +37,9 @@ use thiserror::Error;
 mod gen;
 mod validate;
 
-use self::gen::GenerateSourceError;
-use self::gen::GenerateVersionError;
 use self::gen::PackageVersionTemplate;
 use self::gen::RockSourceTemplate;
+pub use self::gen::{GenerateSourceError, GenerateVersionError};
 use crate::project::TOML_FILE_NAME;
 
 #[derive(Deserialize)]
@@ -71,7 +70,7 @@ struct DependencyTableEntry {
 
 fn parse_map_to_dependency_vec_opt<'de, D>(
     deserializer: D,
-) -> Result<Option<Vec<LuaDependencySpec>>, D::Error>
+) -> Result<Option<Vec<lua_dependency::Spec>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -107,7 +106,7 @@ where
                             }
                             (
                                 package::VersionReq::SemVer(wally.version_req().clone()),
-                                Some(rockspec::RockSourceSpec::Wally(wally)),
+                                Some(rockspec::source::Spec::Wally(wally)),
                             )
                         } else {
                             let version = version.ok_or_else(|| {
@@ -122,12 +121,12 @@ where
                                     name
                                 ))),
                                 (Some(git), Some(rev), None) => {
-                                    Ok(Some(rockspec::RockSourceSpec::Git(GitSource {
+                                    Ok(Some(rockspec::source::Spec::Git(GitSource {
                                         url: git.into(),
                                         git_ref: Some(GitRef::Tag(rev)),
                                     })))
                                 }
-                                (Some(git), None, None) => Ok(Some(rockspec::RockSourceSpec::Git(GitSource {
+                                (Some(git), None, None) => Ok(Some(rockspec::source::Spec::Git(GitSource {
                                     url: git.into(),
                                     git_ref: Some(GitRef::Tag(
                                         version
@@ -137,7 +136,7 @@ where
                                             .to_string(),
                                     )),
                                 }))),
-                                (None, None, Some(path)) => Ok(Some(rockspec::RockSourceSpec::File(path))),
+                                (None, None, Some(path)) => Ok(Some(rockspec::source::Spec::File(path))),
                                 (_, _, Some(_)) => Err(de::Error::custom(format!(
                                     "dependency '{}' specifies a 'path', which cannot be combined with 'git' or 'rev'",
                                     name
@@ -146,7 +145,7 @@ where
                             (version, source)
                         };
 
-                        Ok(LuaDependencySpec {
+                        Ok(lua_dependency::Spec {
                             package_req: package::Req { name, version_req },
                             opt: OptState::from(opt.unwrap_or(false)),
                             pin: PinnedState::from(pin.unwrap_or(false)),
@@ -189,18 +188,18 @@ pub enum Error {
     NoLuaVersion,
     #[error("could not decode the test spec")]
     #[diagnostic(forward(0))]
-    TestSpecError(#[from] rockspec::TestSpecDecodeError),
+    Decode(#[from] rockspec::test::DecodeError),
     #[error("could not decode the build spec")]
     #[diagnostic(forward(0))]
-    BuildSpecInternal(#[from] rockspec::build::BuildSpecInternalError),
+    Build(#[from] rockspec::build::internal::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PlatformValidation(#[from] rockspec::PlatformValidationError),
+    PlatformValidation(#[from] rockspec::platform::Error),
     #[error("{}copy_directories cannot contain a rockspec name", ._0.as_ref().map(|p| format!("{p}: ")).unwrap_or_default())]
     CopyDirectoriesContainRockspecName(Option<String>),
     #[error("could not decode the source spec")]
     #[diagnostic(forward(0))]
-    RockSource(#[from] rockspec::RockSourceError),
+    RockSource(#[from] rockspec::source::Error),
     #[error("duplicate dependencies: {0}")]
     #[diagnostic(help("remove the duplicate entries from the [dependencies] table."))]
     DuplicateDependencies(package::List),
@@ -257,7 +256,7 @@ pub struct Partial {
     ///
     /// Rocks with C sources require a C compiler. Lux does not bundle one.
     #[serde(default)]
-    pub(crate) build: rockspec::build::BuildSpecInternal,
+    pub(crate) build: rockspec::build::internal::Spec,
     /// The LuaRocks rockspec format version to write to the generated rockspec ("1.0", "2.0", or "3.0").
     /// Default: "3.0".
     #[cfg_attr(
@@ -302,7 +301,7 @@ maintainer = "neorocks org"
 labels = ["neovim", "tls", "https"]
 "#))
     )]
-    pub(crate) description: Option<rockspec::RockDescription>,
+    pub(crate) description: Option<rockspec::description::Spec>,
     /// Platforms this rock supports, mapping platform identifiers to `true` or
     /// `false` (e.g. `linux = true`).
     #[serde(default)]
@@ -318,7 +317,7 @@ linux = true
 windows = false
 "#))
     )]
-    pub(crate) supported_platforms: Option<HashMap<rockspec::PlatformIdentifier, bool>>,
+    pub(crate) supported_platforms: Option<HashMap<rockspec::platform::Identifier, bool>>,
     /// Runtime Lua dependencies, mapping package names to a version requirement
     /// (e.g. `foo = "1.0"`) or to a detailed table with `version`, `opt`, `pin`,
     /// `git`, `rev`, and `path` keys.
@@ -366,7 +365,7 @@ path = "../bar"
 version = "1.0.0"
 "#))
     )]
-    pub(crate) dependencies: Option<Vec<LuaDependencySpec>>,
+    pub(crate) dependencies: Option<Vec<lua_dependency::Spec>>,
     /// Dependencies needed at build time. Same syntax as `dependencies`.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
@@ -375,7 +374,7 @@ version = "1.0.0"
             with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
         )
     )]
-    pub(crate) build_dependencies: Option<Vec<LuaDependencySpec>>,
+    pub(crate) build_dependencies: Option<Vec<lua_dependency::Spec>>,
     /// System (C/FFI) dependencies, discovered via pkg-config. Each entry may
     /// set `header` and/or `library`.
     #[serde(default)]
@@ -387,7 +386,7 @@ header = "openssl/ssl.h"
 library = "ssl"
 "#))
     )]
-    pub(crate) external_dependencies: Option<HashMap<String, rockspec::ExternalDependencySpec>>,
+    pub(crate) external_dependencies: Option<HashMap<String, rockspec::external_dependency::Spec>>,
     /// Dependencies needed when running `lx test`. Same syntax as `dependencies`.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
@@ -404,7 +403,7 @@ busted = ">=2.0.0"
 nlua = "~>0.3"
 "#))
     )]
-    pub(crate) test_dependencies: Option<Vec<LuaDependencySpec>>,
+    pub(crate) test_dependencies: Option<Vec<lua_dependency::Spec>>,
     /// Templates for generating the source URL of a release.
     ///
     /// Variable substitutions:
@@ -437,7 +436,7 @@ type = "busted"
 flags = []
 "#))
     )]
-    pub(crate) test: Option<rockspec::TestSpecInternal>,
+    pub(crate) test: Option<rockspec::test::internal::Spec>,
     /// Additional install and deployment options.
     #[serde(default)]
     #[cfg_attr(
@@ -447,7 +446,7 @@ flags = []
 wrap_bin_scripts = false
 "#))
     )]
-    pub(crate) deploy: Option<rockspec::DeploySpec>,
+    pub(crate) deploy: Option<rockspec::deploy::Spec>,
     /// Lux-specific project settings, ignored when generating a rockspec.
     #[serde(default)]
     #[cfg_attr(
@@ -552,11 +551,11 @@ impl Partial {
         }
     }
 
-    fn resolve_lua_dependency_spec(&self, dep: LuaDependencySpec) -> LuaDependencySpec {
+    fn resolve_lua_dependency_spec(&self, dep: lua_dependency::Spec) -> lua_dependency::Spec {
         match &dep.source {
-            Some(rockspec::RockSourceSpec::File(path)) if path.is_dir() => dep,
-            Some(rockspec::RockSourceSpec::File(path)) => LuaDependencySpec {
-                source: Some(rockspec::RockSourceSpec::File(self.lux_toml_dir.join(path))),
+            Some(rockspec::source::Spec::File(path)) if path.is_dir() => dep,
+            Some(rockspec::source::Spec::File(path)) => lua_dependency::Spec {
+                source: Some(rockspec::source::Spec::File(self.lux_toml_dir.join(path))),
                 ..dep
             },
             _ => dep,
@@ -684,21 +683,22 @@ pub struct Local {
     lua: package::VersionReq,
     rockspec_format: Option<rockspec::Format>,
     run: Option<rockspec::PerPlatform<RunSpec>>,
-    description: rockspec::RockDescription,
-    supported_platforms: rockspec::PlatformSupport,
-    dependencies: rockspec::PerPlatform<Vec<LuaDependencySpec>>,
-    build_dependencies: rockspec::PerPlatform<Vec<LuaDependencySpec>>,
-    external_dependencies: rockspec::PerPlatform<HashMap<String, rockspec::ExternalDependencySpec>>,
-    test_dependencies: rockspec::PerPlatform<Vec<LuaDependencySpec>>,
-    test: rockspec::PerPlatform<rockspec::TestSpec>,
-    build: rockspec::PerPlatform<rockspec::build::BuildSpec>,
-    deploy: rockspec::PerPlatform<rockspec::DeploySpec>,
+    description: rockspec::description::Spec,
+    supported_platforms: rockspec::platform::Support,
+    dependencies: rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>>,
+    build_dependencies: rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>>,
+    external_dependencies:
+        rockspec::PerPlatform<HashMap<String, rockspec::external_dependency::Spec>>,
+    test_dependencies: rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>>,
+    test: rockspec::PerPlatform<rockspec::test::Spec>,
+    build: rockspec::PerPlatform<rockspec::build::Spec>,
+    deploy: rockspec::PerPlatform<rockspec::deploy::Spec>,
 
     // Used for simpler serialization
     internal: Partial,
 
     /// A source pointing to the current project's root.
-    source: rockspec::PerPlatform<rockspec::RemoteRockSource>,
+    source: rockspec::PerPlatform<rockspec::source::Remote>,
 }
 
 impl Local {
@@ -765,7 +765,7 @@ impl Local {
     fn render_rockspec(
         &self,
         version: &package::Version,
-        source: Option<rockspec::DisplayLuaKV>,
+        source: Option<rockspec::display::LuaKV>,
     ) -> Result<String, Error> {
         let starter = format!(
             r#"
@@ -781,11 +781,11 @@ version = "{}""#,
 
         let mut template = Vec::new();
 
-        if self.description != rockspec::RockDescription::default() {
+        if self.description != rockspec::description::Spec::default() {
             template.push(self.description.display_lua());
         }
 
-        if self.supported_platforms != rockspec::PlatformSupport::default() {
+        if self.supported_platforms != rockspec::platform::Support::default() {
             template.push(self.supported_platforms.display_lua());
         }
 
@@ -828,7 +828,10 @@ version = "{}""#,
 
         match self.internal.external_dependencies {
             Some(ref external_dependencies) if !external_dependencies.is_empty() => {
-                template.push(rockspec::ExternalDependencies(external_dependencies).display_lua());
+                template.push(
+                    rockspec::external_dependency::Dependencies(external_dependencies)
+                        .display_lua(),
+                );
             }
             _ => {}
         }
@@ -868,11 +871,11 @@ impl Rockspec for Local {
         &self.version
     }
 
-    fn description(&self) -> &rockspec::RockDescription {
+    fn description(&self) -> &rockspec::description::Spec {
         &self.description
     }
 
-    fn supported_platforms(&self) -> &rockspec::PlatformSupport {
+    fn supported_platforms(&self) -> &rockspec::platform::Support {
         &self.supported_platforms
     }
 
@@ -880,37 +883,37 @@ impl Rockspec for Local {
         &self.lua
     }
 
-    fn dependencies(&self) -> &rockspec::PerPlatform<Vec<LuaDependencySpec>> {
+    fn dependencies(&self) -> &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>> {
         &self.dependencies
     }
 
-    fn build_dependencies(&self) -> &rockspec::PerPlatform<Vec<LuaDependencySpec>> {
+    fn build_dependencies(&self) -> &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>> {
         &self.build_dependencies
     }
 
     fn external_dependencies(
         &self,
-    ) -> &rockspec::PerPlatform<HashMap<String, rockspec::ExternalDependencySpec>> {
+    ) -> &rockspec::PerPlatform<HashMap<String, rockspec::external_dependency::Spec>> {
         &self.external_dependencies
     }
 
-    fn test_dependencies(&self) -> &rockspec::PerPlatform<Vec<LuaDependencySpec>> {
+    fn test_dependencies(&self) -> &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>> {
         &self.test_dependencies
     }
 
-    fn build(&self) -> &rockspec::PerPlatform<rockspec::build::BuildSpec> {
+    fn build(&self) -> &rockspec::PerPlatform<rockspec::build::Spec> {
         &self.build
     }
 
-    fn test(&self) -> &rockspec::PerPlatform<rockspec::TestSpec> {
+    fn test(&self) -> &rockspec::PerPlatform<rockspec::test::Spec> {
         &self.test
     }
 
-    fn build_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::build::BuildSpec> {
+    fn build_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::build::Spec> {
         &mut self.build
     }
 
-    fn test_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::TestSpec> {
+    fn test_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::test::Spec> {
         &mut self.test
     }
 
@@ -918,19 +921,19 @@ impl Rockspec for Local {
         &self.rockspec_format
     }
 
-    fn source(&self) -> &rockspec::PerPlatform<rockspec::RemoteRockSource> {
+    fn source(&self) -> &rockspec::PerPlatform<rockspec::source::Remote> {
         &self.source
     }
 
-    fn source_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::RemoteRockSource> {
+    fn source_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::source::Remote> {
         &mut self.source
     }
 
-    fn deploy(&self) -> &rockspec::PerPlatform<rockspec::DeploySpec> {
+    fn deploy(&self) -> &rockspec::PerPlatform<rockspec::deploy::Spec> {
         &self.deploy
     }
 
-    fn deploy_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::DeploySpec> {
+    fn deploy_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::deploy::Spec> {
         &mut self.deploy
     }
 
@@ -950,16 +953,16 @@ impl Rockspec for Local {
     }
 }
 
-/// Creates a [`BuildSpecInternal`] with auto-detected modules (e.g. *.luau sources)
+/// Creates a [`build::internal::Spec`] with auto-detected modules (e.g. *.luau sources)
 /// that LuaRocks does not auto-detect, so that LuaRocks can install them.
 fn build_spec_with_autodetected_modules(
-    spec: &rockspec::build::BuildSpecInternal,
+    spec: &rockspec::build::internal::Spec,
     project_root: &Path,
-) -> rockspec::build::BuildSpecInternal {
+) -> rockspec::build::internal::Spec {
     let builtin_capable = spec.build_type.as_ref().is_none_or(|build_type| {
         matches!(
             build_type,
-            rockspec::build::BuildType::Builtin | rockspec::build::BuildType::None
+            rockspec::build::internal::Type::Builtin | rockspec::build::internal::Type::None
         )
     });
     if !builtin_capable {
@@ -969,7 +972,7 @@ fn build_spec_with_autodetected_modules(
         Ok(modules) => modules
             .into_iter()
             .filter_map(|(module, spec)| match spec {
-                rockspec::build::ModuleSpec::SourcePath(path)
+                rockspec::build::backend::ModuleSpec::SourcePath(path)
                     if path.extension().is_some_and(|ext| ext == "luau") =>
                 {
                     Some((module, path))
@@ -986,8 +989,12 @@ fn build_spec_with_autodetected_modules(
         let modules = new_spec.builtin_spec.get_or_insert_with(Default::default);
         for (module, path) in detected {
             modules
-                .entry(rockspec::LuaTableKey::StringKey(module.to_string()))
-                .or_insert(rockspec::build::ModuleSpecInternal::SourcePath(path));
+                .entry(rockspec::serde_util::LuaTableKey::StringKey(
+                    module.to_string(),
+                ))
+                .or_insert(
+                    rockspec::build::backend::builtin::internal::ModuleSpec::SourcePath(path),
+                );
         }
         new_spec
     }
@@ -1006,17 +1013,6 @@ fn validate_generated_lua(lua_str: &str) -> Result<(), Error> {
     .map_err(|err| Error::GeneratedInvalidLua(err.to_string()))?
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-#[error(transparent)]
-pub enum IntegrityError {
-    LuaRockspec(#[from] rockspec::lua::Error),
-    IoError(#[from] io::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Fs(#[from] fs::Error),
-}
-
 impl HasIntegrity for Local {
     async fn hash(&self) -> io::Result<Integrity> {
         match self.to_lua_rockspec() {
@@ -1030,7 +1026,7 @@ impl HasIntegrity for Local {
 #[derive(Debug)]
 pub struct Remote {
     local: Local,
-    source: rockspec::PerPlatform<rockspec::RemoteRockSource>,
+    source: rockspec::PerPlatform<rockspec::source::Remote>,
 }
 
 impl Remote {
@@ -1050,11 +1046,11 @@ impl Rockspec for Remote {
         self.local.version()
     }
 
-    fn description(&self) -> &rockspec::RockDescription {
+    fn description(&self) -> &rockspec::description::Spec {
         self.local.description()
     }
 
-    fn supported_platforms(&self) -> &rockspec::PlatformSupport {
+    fn supported_platforms(&self) -> &rockspec::platform::Support {
         self.local.supported_platforms()
     }
 
@@ -1062,37 +1058,37 @@ impl Rockspec for Remote {
         self.local.lua()
     }
 
-    fn dependencies(&self) -> &rockspec::PerPlatform<Vec<LuaDependencySpec>> {
+    fn dependencies(&self) -> &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>> {
         self.local.dependencies()
     }
 
-    fn build_dependencies(&self) -> &rockspec::PerPlatform<Vec<LuaDependencySpec>> {
+    fn build_dependencies(&self) -> &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>> {
         self.local.build_dependencies()
     }
 
     fn external_dependencies(
         &self,
-    ) -> &rockspec::PerPlatform<HashMap<String, rockspec::ExternalDependencySpec>> {
+    ) -> &rockspec::PerPlatform<HashMap<String, rockspec::external_dependency::Spec>> {
         self.local.external_dependencies()
     }
 
-    fn test_dependencies(&self) -> &rockspec::PerPlatform<Vec<LuaDependencySpec>> {
+    fn test_dependencies(&self) -> &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>> {
         self.local.test_dependencies()
     }
 
-    fn build(&self) -> &rockspec::PerPlatform<rockspec::build::BuildSpec> {
+    fn build(&self) -> &rockspec::PerPlatform<rockspec::build::Spec> {
         self.local.build()
     }
 
-    fn test(&self) -> &rockspec::PerPlatform<rockspec::TestSpec> {
+    fn test(&self) -> &rockspec::PerPlatform<rockspec::test::Spec> {
         self.local.test()
     }
 
-    fn build_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::build::BuildSpec> {
+    fn build_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::build::Spec> {
         self.local.build_mut()
     }
 
-    fn test_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::TestSpec> {
+    fn test_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::test::Spec> {
         self.local.test_mut()
     }
 
@@ -1100,19 +1096,19 @@ impl Rockspec for Remote {
         self.local.format()
     }
 
-    fn source(&self) -> &rockspec::PerPlatform<rockspec::RemoteRockSource> {
+    fn source(&self) -> &rockspec::PerPlatform<rockspec::source::Remote> {
         &self.source
     }
 
-    fn source_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::RemoteRockSource> {
+    fn source_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::source::Remote> {
         &mut self.source
     }
 
-    fn deploy(&self) -> &rockspec::PerPlatform<rockspec::DeploySpec> {
+    fn deploy(&self) -> &rockspec::PerPlatform<rockspec::deploy::Spec> {
         self.local.deploy()
     }
 
-    fn deploy_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::DeploySpec> {
+    fn deploy_mut(&mut self) -> &mut rockspec::PerPlatform<rockspec::deploy::Spec> {
         self.local.deploy_mut()
     }
 
@@ -1133,11 +1129,11 @@ version = "{}""#,
 
         let mut template = Vec::new();
 
-        if self.local.description != rockspec::RockDescription::default() {
+        if self.local.description != rockspec::description::Spec::default() {
             template.push(self.local.description.display_lua());
         }
 
-        if self.local.supported_platforms != rockspec::PlatformSupport::default() {
+        if self.local.supported_platforms != rockspec::platform::Support::default() {
             template.push(self.local.supported_platforms.display_lua());
         }
 
@@ -1182,7 +1178,10 @@ version = "{}""#,
 
         match self.local.internal.external_dependencies {
             Some(ref external_dependencies) if !external_dependencies.is_empty() => {
-                template.push(rockspec::ExternalDependencies(external_dependencies).display_lua());
+                template.push(
+                    rockspec::external_dependency::Dependencies(external_dependencies)
+                        .display_lua(),
+                );
             }
             _ => {}
         }
@@ -1248,7 +1247,7 @@ mod tests {
     use crate::{
         git::{url::RemoteGitUrl, GitRef, GitSource},
         project::{Project, TOML_FILE_NAME},
-        rockspec::{LuaDependencySpec, Rockspec},
+        rockspec::Rockspec,
     };
 
     use super::Partial;
@@ -1492,11 +1491,12 @@ mod tests {
             .to_lua_rockspec()
             .unwrap();
 
-        let sorted_package_reqs = |v: &rockspec::PerPlatform<Vec<LuaDependencySpec>>| {
-            let mut v = v.current_platform().clone();
-            v.sort_by(|a, b| a.name().cmp(b.name()));
-            v
-        };
+        let sorted_package_reqs =
+            |v: &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>>| {
+                let mut v = v.current_platform().clone();
+                v.sort_by(|a, b| a.name().cmp(b.name()));
+                v
+            };
 
         assert_eq!(rockspec.package(), expected_rockspec.package());
         assert_eq!(rockspec.version(), expected_rockspec.version());
@@ -1644,11 +1644,12 @@ mod tests {
             .into_remote(None)
             .unwrap();
 
-        let sorted_package_reqs = |v: &rockspec::PerPlatform<Vec<LuaDependencySpec>>| {
-            let mut v = v.current_platform().clone();
-            v.sort_by(|a, b| a.name().cmp(b.name()));
-            v
-        };
+        let sorted_package_reqs =
+            |v: &rockspec::PerPlatform<Vec<rockspec::lua_dependency::Spec>>| {
+                let mut v = v.current_platform().clone();
+                v.sort_by(|a, b| a.name().cmp(b.name()));
+                v
+            };
 
         assert_eq!(merged.package(), expected_rockspec.package());
         assert_eq!(merged.version(), expected_rockspec.version());
@@ -1696,7 +1697,7 @@ mod tests {
         assert_eq!(deps[0].name().to_string(), "roact");
         assert!(matches!(
             deps[0].source(),
-            Some(rockspec::RockSourceSpec::Wally(req)) if req.name().to_string() == "jsdotperf/roact"
+            Some(rockspec::source::Spec::Wally(req)) if req.name().to_string() == "jsdotperf/roact"
         ));
     }
 
@@ -1784,8 +1785,7 @@ mod tests {
         let project =
             Partial::new(TOML_FILE_NAME, project_toml, lux_toml_dir.to_path_buf()).unwrap();
         let local = project.into_local().unwrap();
-        let rockspec::RockSourceSpec::File(root_dir) =
-            &local.source().current_platform().source_spec
+        let rockspec::source::Spec::File(root_dir) = &local.source().current_platform().source_spec
         else {
             panic!("expected a file source");
         };
@@ -1902,8 +1902,8 @@ mod tests {
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
-        assert!(matches!(source_spec, &rockspec::RockSourceSpec::Git { .. }));
-        if let rockspec::RockSourceSpec::Git(GitSource { url, git_ref }) = source_spec {
+        assert!(matches!(source_spec, &rockspec::source::Spec::Git { .. }));
+        if let rockspec::source::Spec::Git(GitSource { url, git_ref }) = source_spec {
             let expected_url: RemoteGitUrl =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
@@ -1922,8 +1922,8 @@ mod tests {
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
-        assert!(matches!(source_spec, &rockspec::RockSourceSpec::Git { .. }));
-        if let rockspec::RockSourceSpec::Git(GitSource { url, git_ref }) = source_spec {
+        assert!(matches!(source_spec, &rockspec::source::Spec::Git { .. }));
+        if let rockspec::source::Spec::Git(GitSource { url, git_ref }) = source_spec {
             let expected_url: RemoteGitUrl =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
@@ -1943,8 +1943,8 @@ mod tests {
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
-        assert!(matches!(source_spec, &rockspec::RockSourceSpec::Url { .. }));
-        if let rockspec::RockSourceSpec::Url(url) = source_spec {
+        assert!(matches!(source_spec, &rockspec::source::Spec::Url { .. }));
+        if let rockspec::source::Spec::Url(url) = source_spec {
             let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/v1.0.0.zip"
                 .parse()
                 .unwrap();
@@ -1964,8 +1964,8 @@ mod tests {
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
-        assert!(matches!(source_spec, &rockspec::RockSourceSpec::Url { .. }));
-        if let rockspec::RockSourceSpec::Url(url) = source_spec {
+        assert!(matches!(source_spec, &rockspec::source::Spec::Url { .. }));
+        if let rockspec::source::Spec::Url(url) = source_spec {
             let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
                 .parse()
                 .unwrap();
@@ -1990,8 +1990,8 @@ mod tests {
         let remote_project_toml = project.toml().into_remote(None).unwrap();
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
-        assert!(matches!(source_spec, &rockspec::RockSourceSpec::Url { .. }));
-        if let rockspec::RockSourceSpec::Url(url) = source_spec {
+        assert!(matches!(source_spec, &rockspec::source::Spec::Url { .. }));
+        if let rockspec::source::Spec::Url(url) = source_spec {
             let expected_url: Url = "https://github.com/lumen-oss/lux/archive/refs/tags/1.0.0.zip"
                 .parse()
                 .unwrap();
@@ -2012,7 +2012,7 @@ mod tests {
 
         let project = Project::from_exact(&project_dir).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
-        let rockspec::RockSourceSpec::Git(GitSource { git_ref, .. }) =
+        let rockspec::source::Spec::Git(GitSource { git_ref, .. }) =
             &remote_project_toml.source.current_platform().source_spec
         else {
             panic!("expected a git source");

@@ -10,45 +10,34 @@ use miette::Diagnostic;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub mod build;
-mod deploy;
-mod description;
-mod display;
-mod external_dependency;
+pub mod dependency;
+pub mod deploy;
+pub mod description;
+pub(crate) mod display;
+pub mod external_dependency;
 mod format;
 pub mod lua;
-mod lua_dependency;
-mod platform;
-mod rock_source;
-mod serde_util;
-mod test_spec;
+pub mod lua_dependency;
+pub mod platform;
+pub(crate) mod serde_util;
+pub mod source;
+pub mod test;
 pub mod toml;
 
-pub use deploy::*;
-pub use description::*;
-pub use external_dependency::*;
 pub use format::*;
-pub use lua_dependency::*;
-pub use platform::*;
-pub use rock_source::*;
-pub use test_spec::*;
-
-pub(crate) use display::*;
-pub(crate) use lux_macros::DisplayAsLuaKV;
-pub(crate) use serde_util::*;
+pub use platform::PerPlatform;
 
 use crate::config::Config;
-
-use self::build::BuildSpec;
 
 #[derive(Debug, Error, Diagnostic)]
 #[non_exhaustive]
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lua(Box<lua::Error>),
+    LuaRockspec(Box<lua::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ProjectToml(Box<toml::Error>),
+    Toml(Box<toml::Error>),
     #[error(
         r#"
 The lua version {0} is not supported by {1} version {2}.
@@ -66,36 +55,36 @@ HINT: If Lux has auto-detected an incompatible Lua installation,
 
 impl From<lua::Error> for Error {
     fn from(err: lua::Error) -> Self {
-        Self::Lua(Box::new(err))
+        Self::LuaRockspec(Box::new(err))
     }
 }
 
 impl From<toml::Error> for Error {
     fn from(err: toml::Error) -> Self {
-        Self::ProjectToml(Box::new(err))
+        Self::Toml(Box::new(err))
     }
 }
 
 pub trait Rockspec {
     fn package(&self) -> &package::Name;
     fn version(&self) -> &package::Version;
-    fn description(&self) -> &RockDescription;
-    fn supported_platforms(&self) -> &PlatformSupport;
+    fn description(&self) -> &description::Spec;
+    fn supported_platforms(&self) -> &platform::Support;
     fn lua(&self) -> &package::VersionReq;
-    fn dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>>;
-    fn build_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>>;
-    fn external_dependencies(&self) -> &PerPlatform<HashMap<String, ExternalDependencySpec>>;
-    fn test_dependencies(&self) -> &PerPlatform<Vec<LuaDependencySpec>>;
+    fn dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>>;
+    fn build_dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>>;
+    fn external_dependencies(&self) -> &PerPlatform<HashMap<String, external_dependency::Spec>>;
+    fn test_dependencies(&self) -> &PerPlatform<Vec<lua_dependency::Spec>>;
 
-    fn build(&self) -> &PerPlatform<BuildSpec>;
-    fn test(&self) -> &PerPlatform<TestSpec>;
-    fn source(&self) -> &PerPlatform<RemoteRockSource>;
-    fn deploy(&self) -> &PerPlatform<DeploySpec>;
+    fn build(&self) -> &PerPlatform<build::Spec>;
+    fn test(&self) -> &PerPlatform<test::Spec>;
+    fn source(&self) -> &PerPlatform<source::Remote>;
+    fn deploy(&self) -> &PerPlatform<deploy::Spec>;
 
-    fn build_mut(&mut self) -> &mut PerPlatform<BuildSpec>;
-    fn test_mut(&mut self) -> &mut PerPlatform<TestSpec>;
-    fn source_mut(&mut self) -> &mut PerPlatform<RemoteRockSource>;
-    fn deploy_mut(&mut self) -> &mut PerPlatform<DeploySpec>;
+    fn build_mut(&mut self) -> &mut PerPlatform<build::Spec>;
+    fn test_mut(&mut self) -> &mut PerPlatform<test::Spec>;
+    fn source_mut(&mut self) -> &mut PerPlatform<source::Remote>;
+    fn deploy_mut(&mut self) -> &mut PerPlatform<deploy::Spec>;
 
     fn format(&self) -> &Option<Format>;
 

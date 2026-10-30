@@ -11,7 +11,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum SpecParseError {
+pub enum ParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Req(#[from] package::ReqParseError),
@@ -19,19 +19,19 @@ pub enum SpecParseError {
 
 /// Specification for a Lua dependency in a Lux project
 #[derive(Debug, Clone, PartialEq)]
-pub struct LuaDependencySpec {
+pub struct Spec {
     pub(crate) package_req: package::Req,
     pub(crate) pin: PinnedState,
     pub(crate) opt: OptState,
-    pub(crate) source: Option<rockspec::RockSourceSpec>,
+    pub(crate) source: Option<rockspec::source::Spec>,
 }
 
-impl LuaDependencySpec {
+impl Spec {
     pub fn new(
         package_req: package::Req,
         pin: PinnedState,
         opt: OptState,
-        source: Option<rockspec::RockSourceSpec>,
+        source: Option<rockspec::source::Spec>,
     ) -> Self {
         Self {
             package_req,
@@ -50,7 +50,7 @@ impl LuaDependencySpec {
     pub fn opt(&self) -> &OptState {
         &self.opt
     }
-    pub fn source(&self) -> &Option<rockspec::RockSourceSpec> {
+    pub fn source(&self) -> &Option<rockspec::source::Spec> {
         &self.source
     }
     pub fn into_package_req(self) -> package::Req {
@@ -67,7 +67,7 @@ impl LuaDependencySpec {
     }
 }
 
-impl From<package::Name> for LuaDependencySpec {
+impl From<package::Name> for Spec {
     fn from(name: package::Name) -> Self {
         Self {
             package_req: package::Req::from(name),
@@ -78,7 +78,7 @@ impl From<package::Name> for LuaDependencySpec {
     }
 }
 
-impl From<package::Req> for LuaDependencySpec {
+impl From<package::Req> for Spec {
     fn from(package_req: package::Req) -> Self {
         Self {
             package_req,
@@ -89,10 +89,10 @@ impl From<package::Req> for LuaDependencySpec {
     }
 }
 
-impl FromStr for LuaDependencySpec {
-    type Err = SpecParseError;
+impl FromStr for Spec {
+    type Err = ParseError;
 
-    fn from_str(str: &str) -> Result<Self, SpecParseError> {
+    fn from_str(str: &str) -> Result<Self, ParseError> {
         let package_req = package::Req::from_str(str)?;
         Ok(Self {
             package_req,
@@ -103,7 +103,7 @@ impl FromStr for LuaDependencySpec {
     }
 }
 
-impl Display for LuaDependencySpec {
+impl Display for Spec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.version_req().is_any() {
             self.name().fmt(f)
@@ -116,11 +116,11 @@ impl Display for LuaDependencySpec {
 /// Override `base_deps` with `override_deps`
 /// - Adds missing dependencies
 /// - Replaces dependencies with the same name
-impl rockspec::PartialOverride for Vec<LuaDependencySpec> {
+impl rockspec::platform::PartialOverride for Vec<Spec> {
     type Err = Infallible;
 
     fn apply_overrides(&self, override_vec: &Self) -> Result<Self, Self::Err> {
-        let mut result_map: HashMap<String, LuaDependencySpec> = self
+        let mut result_map: HashMap<String, Spec> = self
             .iter()
             .map(|dep| (dep.name().clone().to_string(), dep.clone()))
             .collect();
@@ -134,19 +134,19 @@ impl rockspec::PartialOverride for Vec<LuaDependencySpec> {
     }
 }
 
-impl rockspec::PlatformOverridable for Vec<LuaDependencySpec> {
+impl rockspec::platform::Overridable for Vec<Spec> {
     type Err = Infallible;
 
-    fn on_nil<T>() -> Result<super::PerPlatform<T>, <Self as rockspec::PlatformOverridable>::Err>
+    fn on_nil<T>() -> Result<super::PerPlatform<T>, <Self as rockspec::platform::Overridable>::Err>
     where
-        T: rockspec::PlatformOverridable,
+        T: rockspec::platform::Overridable,
         T: Default,
     {
         Ok(rockspec::PerPlatform::default())
     }
 }
 
-impl<'de> Deserialize<'de> for LuaDependencySpec {
+impl<'de> Deserialize<'de> for Spec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -163,27 +163,7 @@ impl<'de> Deserialize<'de> for LuaDependencySpec {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum DependencyType<T> {
-    Regular(Vec<T>),
-    Build(Vec<T>),
-    Test(Vec<T>),
-    External(HashMap<String, rockspec::ExternalDependencySpec>),
-}
-
-impl<T> DependencyType<T> {
-    pub fn as_ref(&self) -> DependencyType<&T> {
-        match *self {
-            Self::Regular(ref x) => DependencyType::Regular(x.iter().collect()),
-            Self::Build(ref x) => DependencyType::Build(x.iter().collect()),
-            Self::Test(ref x) => DependencyType::Test(x.iter().collect()),
-            Self::External(ref x) => DependencyType::External(x.clone()),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LuaDependencyType<T> {
+pub enum Kind<T> {
     Regular(Vec<T>),
     Build(Vec<T>),
     Test(Vec<T>),
@@ -191,11 +171,10 @@ pub enum LuaDependencyType<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::rockspec::PartialOverride;
+    use crate::rockspec::platform::PartialOverride;
 
     use ottavino::{Closure, Executor, Fuel, Lua, Value};
     use ottavino_util::serde::from_value;
-    use path_slash::PathBufExt;
 
     use super::*;
 
@@ -210,10 +189,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_override_lua_dependency_spec() {
-        let neorg_a: LuaDependencySpec = "neorg 1.0.0".parse().unwrap();
-        let neorg_b: LuaDependencySpec = "neorg 2.0.0".parse().unwrap();
-        let foo: LuaDependencySpec = "foo 1.0.0".parse().unwrap();
-        let bar: LuaDependencySpec = "bar 1.0.0".parse().unwrap();
+        let neorg_a: Spec = "neorg 1.0.0".parse().unwrap();
+        let neorg_b: Spec = "neorg 2.0.0".parse().unwrap();
+        let foo: Spec = "foo 1.0.0".parse().unwrap();
+        let bar: Spec = "bar 1.0.0".parse().unwrap();
         let base_vec = vec![neorg_a, foo.clone()];
         let override_vec = vec![neorg_b.clone(), bar.clone()];
         let result = base_vec.apply_overrides(&override_vec).unwrap();
@@ -228,20 +207,16 @@ mod tests {
     }
 
     #[test]
-    fn test_dependency_type_from_lua() {
-        let regular_deps: DependencyType<LuaDependencySpec> =
+    fn lua_dependency_kind_from_lua() {
+        let regular_deps: Kind<Spec> =
             eval_lua(r#"return { regular = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-        let build_deps: DependencyType<LuaDependencySpec> =
+        let build_deps: Kind<Spec> =
             eval_lua(r#"return { build = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-        let test_deps: DependencyType<LuaDependencySpec> =
+        let test_deps: Kind<Spec> =
             eval_lua(r#"return { test = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-        let external_deps: DependencyType<rockspec::ExternalDependencySpec> = eval_lua(
-            r#"return { external = { foo = { header = "foo.h", library = "libfoo.so" }, bar = { header = "bar.h" } } }"#,
-        )
-        .unwrap();
 
         match regular_deps {
-            DependencyType::Regular(deps) => {
+            Kind::Regular(deps) => {
                 assert_eq!(deps.len(), 2);
                 assert_eq!(deps[0].to_string(), "neorg==1.0.0");
                 assert_eq!(deps[1].to_string(), "foo==1.0.0");
@@ -250,7 +225,7 @@ mod tests {
         }
 
         match build_deps {
-            DependencyType::Build(deps) => {
+            Kind::Build(deps) => {
                 assert_eq!(deps.len(), 2);
                 assert_eq!(deps[0].to_string(), "neorg==1.0.0");
                 assert_eq!(deps[1].to_string(), "foo==1.0.0");
@@ -259,7 +234,7 @@ mod tests {
         }
 
         match test_deps {
-            DependencyType::Test(deps) => {
+            Kind::Test(deps) => {
                 assert_eq!(deps.len(), 2);
                 assert_eq!(deps[0].to_string(), "neorg==1.0.0");
                 assert_eq!(deps[1].to_string(), "foo==1.0.0");
@@ -267,67 +242,6 @@ mod tests {
             _ => panic!("Expected test dependencies"),
         }
 
-        match external_deps {
-            DependencyType::External(deps) => {
-                assert_eq!(deps.len(), 2);
-                assert_eq!(
-                    deps["foo"].header.as_ref().unwrap().to_slash_lossy(),
-                    "foo.h"
-                );
-                assert_eq!(
-                    deps["foo"].library.as_ref().unwrap().to_slash_lossy(),
-                    "libfoo.so"
-                );
-
-                assert_eq!(
-                    deps["bar"].header.as_ref().unwrap().to_slash_lossy(),
-                    "bar.h"
-                );
-                assert!(deps["bar"].library.is_none());
-            }
-            _ => panic!("Expected external dependencies"),
-        }
-
-        let _err: ottavino::ExternError =
-            eval_lua::<DependencyType<rockspec::ExternalDependencySpec>>("return {}").unwrap_err();
-    }
-
-    #[test]
-    fn test_lua_dependency_type_from_lua() {
-        let regular_deps: LuaDependencyType<LuaDependencySpec> =
-            eval_lua(r#"return { regular = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-        let build_deps: LuaDependencyType<LuaDependencySpec> =
-            eval_lua(r#"return { build = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-        let test_deps: LuaDependencyType<LuaDependencySpec> =
-            eval_lua(r#"return { test = {"neorg 1.0.0", "foo 1.0.0"} }"#).unwrap();
-
-        match regular_deps {
-            LuaDependencyType::Regular(deps) => {
-                assert_eq!(deps.len(), 2);
-                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
-                assert_eq!(deps[1].to_string(), "foo==1.0.0");
-            }
-            _ => panic!("Expected regular dependencies"),
-        }
-
-        match build_deps {
-            LuaDependencyType::Build(deps) => {
-                assert_eq!(deps.len(), 2);
-                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
-                assert_eq!(deps[1].to_string(), "foo==1.0.0");
-            }
-            _ => panic!("Expected build dependencies"),
-        }
-
-        match test_deps {
-            LuaDependencyType::Test(deps) => {
-                assert_eq!(deps.len(), 2);
-                assert_eq!(deps[0].to_string(), "neorg==1.0.0");
-                assert_eq!(deps[1].to_string(), "foo==1.0.0");
-            }
-            _ => panic!("Expected test dependencies"),
-        }
-
-        eval_lua::<LuaDependencyType<LuaDependencySpec>>("return {}").unwrap_err();
+        eval_lua::<Kind<Spec>>("return {}").unwrap_err();
     }
 }

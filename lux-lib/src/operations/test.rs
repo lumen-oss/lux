@@ -115,7 +115,7 @@ pub enum RunTestsError {
     ProjectTomlValidation(#[from] rockspec::toml::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    TestSpec(#[from] rockspec::TestSpecError),
+    Test(#[from] rockspec::test::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaVersion(#[from] rockspec::Error),
@@ -171,11 +171,11 @@ async fn run_project_tests(
     let rocks = project.toml().into_local()?;
     let test_spec = match rocks.test().current_platform().to_validated(project) {
         Ok(test_spec) => test_spec,
-        Err(rockspec::TestSpecError::NoTestSpecDetected)
+        Err(rockspec::test::Error::NoTestSpecDetected)
             if project.lua_version(config)? == lua::Version::Luau =>
         {
             // tiniest is the default test framework for Luau projects
-            rockspec::ValidatedTestSpec::Tiniest
+            rockspec::test::internal::Validated::Tiniest
         }
         Err(err) => return Err(err.into()),
     };
@@ -197,7 +197,7 @@ async fn run_project_tests(
     paths.prepend(&test_tree_paths);
 
     let collector_path = match &test_spec {
-        rockspec::ValidatedTestSpec::Tiniest => {
+        rockspec::test::internal::Validated::Tiniest => {
             let spec_files = tiniest::discover_spec_files(project.root());
             if spec_files.is_empty() {
                 tracing::warn!("no *.spec.luau or *.spec.lua files found in test/ or tests/");
@@ -213,10 +213,11 @@ async fn run_project_tests(
     }
 
     let test_executable = match &test_spec {
-        rockspec::ValidatedTestSpec::Busted { .. } => BUSTED_EXE.to_string(),
-        rockspec::ValidatedTestSpec::BustedNlua { .. } => BUSTED_EXE.to_string(),
-        rockspec::ValidatedTestSpec::Command(spec) => spec.command.to_string(),
-        rockspec::ValidatedTestSpec::Tiniest | rockspec::ValidatedTestSpec::LuaScript(_) => {
+        rockspec::test::internal::Validated::Busted { .. } => BUSTED_EXE.to_string(),
+        rockspec::test::internal::Validated::BustedNlua { .. } => BUSTED_EXE.to_string(),
+        rockspec::test::internal::Validated::Command(spec) => spec.command.to_string(),
+        rockspec::test::internal::Validated::Tiniest
+        | rockspec::test::internal::Validated::LuaScript(_) => {
             let runtime =
                 super::run_lua::resolve_lua_runtime(&lua_version.clone(), &test_config).await?;
             runtime.to_string_lossy().to_string()
@@ -232,7 +233,8 @@ async fn run_project_tests(
         .env("LUA_CPATH", paths.package_cpath().joined());
     if matches!(
         &test_spec,
-        rockspec::ValidatedTestSpec::Busted { .. } | rockspec::ValidatedTestSpec::BustedNlua { .. }
+        rockspec::test::internal::Validated::Busted { .. }
+            | rockspec::test::internal::Validated::BustedNlua { .. }
     ) && !test_spec
         .args()
         .iter()

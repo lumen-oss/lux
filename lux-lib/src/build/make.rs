@@ -52,7 +52,7 @@ pub enum Error {
     MakefileNotFound(PathBuf),
 }
 
-impl BuildBackend for rockspec::build::MakeBuildSpec {
+impl BuildBackend for rockspec::build::backend::Make {
     type Err = Error;
 
     #[tracing::instrument(name = "make::run", skip_all, level = "debug")]

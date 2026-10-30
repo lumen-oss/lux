@@ -11,14 +11,14 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use thiserror::Error;
 
-use super::{normalize_lua_value, DisplayAsLuaKV, DisplayLuaKV, DisplayLuaValue, LuaValueSeed};
+use super::{display, serde_util};
 
 /// Identifier by a platform.
 /// The `PartialOrd` instance views more specific platforms as `Greater`
 #[derive(Deserialize_enum_str, Serialize_enum_str, PartialEq, Eq, Hash, Debug, Clone, EnumIter)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
-pub enum PlatformIdentifier {
+pub enum Identifier {
     // TODO: Add undocumented platform identifiers from luarocks codebase?
     Unix,
     Windows,
@@ -31,26 +31,26 @@ pub enum PlatformIdentifier {
     Unknown(String),
 }
 
-impl Default for PlatformIdentifier {
+impl Default for Identifier {
     fn default() -> Self {
         target_identifier()
     }
 }
 
 // Order by specificity -> less specific = `Less`
-impl PartialOrd for PlatformIdentifier {
+impl PartialOrd for Identifier {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (PlatformIdentifier::Unix, PlatformIdentifier::Cygwin) => Some(Ordering::Less),
-            (PlatformIdentifier::Unix, PlatformIdentifier::MacOSX) => Some(Ordering::Less),
-            (PlatformIdentifier::Unix, PlatformIdentifier::Linux) => Some(Ordering::Less),
-            (PlatformIdentifier::Unix, PlatformIdentifier::FreeBSD) => Some(Ordering::Less),
-            (PlatformIdentifier::Windows, PlatformIdentifier::Win32) => Some(Ordering::Greater),
-            (PlatformIdentifier::Win32, PlatformIdentifier::Windows) => Some(Ordering::Less),
-            (PlatformIdentifier::Cygwin, PlatformIdentifier::Unix) => Some(Ordering::Greater),
-            (PlatformIdentifier::MacOSX, PlatformIdentifier::Unix) => Some(Ordering::Greater),
-            (PlatformIdentifier::Linux, PlatformIdentifier::Unix) => Some(Ordering::Greater),
-            (PlatformIdentifier::FreeBSD, PlatformIdentifier::Unix) => Some(Ordering::Greater),
+            (Identifier::Unix, Identifier::Cygwin) => Some(Ordering::Less),
+            (Identifier::Unix, Identifier::MacOSX) => Some(Ordering::Less),
+            (Identifier::Unix, Identifier::Linux) => Some(Ordering::Less),
+            (Identifier::Unix, Identifier::FreeBSD) => Some(Ordering::Less),
+            (Identifier::Windows, Identifier::Win32) => Some(Ordering::Greater),
+            (Identifier::Win32, Identifier::Windows) => Some(Ordering::Less),
+            (Identifier::Cygwin, Identifier::Unix) => Some(Ordering::Greater),
+            (Identifier::MacOSX, Identifier::Unix) => Some(Ordering::Greater),
+            (Identifier::Linux, Identifier::Unix) => Some(Ordering::Greater),
+            (Identifier::FreeBSD, Identifier::Unix) => Some(Ordering::Greater),
             _ if self == other => Some(Ordering::Equal),
             _ => None,
         }
@@ -63,27 +63,27 @@ impl PartialOrd for PlatformIdentifier {
 /// As we don't support cross-compiling luarocks packages, we currently expect
 /// users to use a version of lux that was built with the same platform
 /// as the one they are targeting
-fn target_identifier() -> PlatformIdentifier {
+fn target_identifier() -> Identifier {
     if cfg!(target_env = "msvc") {
-        PlatformIdentifier::Windows
+        Identifier::Windows
     } else if cfg!(target_os = "linux") {
-        PlatformIdentifier::Linux
+        Identifier::Linux
     } else if cfg!(target_os = "macos") || cfg!(target_vendor = "apple") {
-        PlatformIdentifier::MacOSX
+        Identifier::MacOSX
     } else if cfg!(target_os = "freebsd") {
-        PlatformIdentifier::FreeBSD
+        Identifier::FreeBSD
     } else if which::which("cygpath").is_ok() {
-        PlatformIdentifier::Cygwin
+        Identifier::Cygwin
     } else {
-        PlatformIdentifier::Unix
+        Identifier::Unix
     }
 }
 
-impl PlatformIdentifier {
+impl Identifier {
     /// Get identifiers that are a subset of this identifier.
     /// For example, Unix is a subset of Linux
     pub fn get_subsets(&self) -> Vec<Self> {
-        PlatformIdentifier::iter()
+        Identifier::iter()
             .filter(|identifier| identifier.is_subset_of(self))
             .collect()
     }
@@ -91,41 +91,41 @@ impl PlatformIdentifier {
     /// Get identifiers that are an extension of this identifier.
     /// For example, Linux is an extension of Unix
     pub fn get_extended_platforms(&self) -> Vec<Self> {
-        PlatformIdentifier::iter()
+        Identifier::iter()
             .filter(|identifier| identifier.is_extension_of(self))
             .collect()
     }
 
     /// e.g. Unix is a subset of Linux
-    fn is_subset_of(&self, other: &PlatformIdentifier) -> bool {
+    fn is_subset_of(&self, other: &Identifier) -> bool {
         self.partial_cmp(other) == Some(Ordering::Less)
     }
 
     /// e.g. Linux is an extension of Unix
-    fn is_extension_of(&self, other: &PlatformIdentifier) -> bool {
+    fn is_extension_of(&self, other: &Identifier) -> bool {
         self.partial_cmp(other) == Some(Ordering::Greater)
     }
 }
 
 /// Used to specify which platforms a rock can be built for
 #[derive(Clone, Debug, PartialEq)]
-pub struct PlatformSupport {
+pub struct Support {
     /// Do not match this platform
-    platform_map: HashMap<PlatformIdentifier, bool>,
+    platform_map: HashMap<Identifier, bool>,
 }
 
-impl Default for PlatformSupport {
+impl Default for Support {
     fn default() -> Self {
         Self {
-            platform_map: PlatformIdentifier::iter()
-                .filter(|identifier| !matches!(identifier, PlatformIdentifier::Unknown(_)))
+            platform_map: Identifier::iter()
+                .filter(|identifier| !matches!(identifier, Identifier::Unknown(_)))
                 .map(|identifier| (identifier, true))
                 .collect(),
         }
     }
 }
 
-impl<'de> Deserialize<'de> for PlatformSupport {
+impl<'de> Deserialize<'de> for Support {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -135,15 +135,15 @@ impl<'de> Deserialize<'de> for PlatformSupport {
     }
 }
 
-impl DisplayAsLuaKV for PlatformSupport {
-    fn display_lua(&self) -> DisplayLuaKV {
-        DisplayLuaKV {
+impl display::AsLuaKV for Support {
+    fn display_lua(&self) -> display::LuaKV {
+        display::LuaKV {
             key: "supported_platforms".to_string(),
-            value: DisplayLuaValue::List(
+            value: display::LuaValue::List(
                 self.platforms()
                     .iter()
                     .map(|(platform, supported)| {
-                        DisplayLuaValue::String(format!(
+                        display::LuaValue::String(format!(
                             "{}{}",
                             if *supported { "" } else { "!" },
                             platform,
@@ -157,7 +157,7 @@ impl DisplayAsLuaKV for PlatformSupport {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum PlatformValidationError {
+pub enum Error {
     #[error("error when parsing platform identifier: {0}")]
     ParseError(String),
 
@@ -165,10 +165,8 @@ pub enum PlatformValidationError {
     ConflictingEntries,
 }
 
-impl PlatformSupport {
-    fn validate_platforms(
-        platforms: &[String],
-    ) -> Result<HashMap<PlatformIdentifier, bool>, PlatformValidationError> {
+impl Support {
+    fn validate_platforms(platforms: &[String]) -> Result<HashMap<Identifier, bool>, Error> {
         platforms
             .iter()
             .try_fold(HashMap::new(), |mut platforms, platform| {
@@ -181,8 +179,8 @@ impl PlatformSupport {
                     .unwrap_or((true, platform));
 
                 let platform_identifier = platform
-                    .parse::<PlatformIdentifier>()
-                    .map_err(|err| PlatformValidationError::ParseError(err.to_string()))?;
+                    .parse::<Identifier>()
+                    .map_err(|err| Error::ParseError(err.to_string()))?;
 
                 // If a platform with the same name exists already and is contradictory
                 // then throw an error. An example of such a contradiction is e.g.:
@@ -192,7 +190,7 @@ impl PlatformSupport {
                     .unwrap_or(&is_positive_assertion)
                     != &is_positive_assertion
                 {
-                    return Err(PlatformValidationError::ConflictingEntries);
+                    return Err(Error::ConflictingEntries);
                 }
 
                 platforms.insert(platform_identifier.clone(), is_positive_assertion);
@@ -210,7 +208,7 @@ impl PlatformSupport {
                         != &is_positive_assertion
                     {
                         // TODO(vhyrro): More detailed errors
-                        return Err(PlatformValidationError::ConflictingEntries);
+                        return Err(Error::ConflictingEntries);
                     }
 
                     platforms.insert(sub_platform, is_positive_assertion);
@@ -220,7 +218,7 @@ impl PlatformSupport {
             })
     }
 
-    pub fn parse(platforms: &[String]) -> Result<Self, PlatformValidationError> {
+    pub fn parse(platforms: &[String]) -> Result<Self, Error> {
         // Platforms are matched in one of two ways: exclusively or inclusively.
         // If only positive matches are present, then the platforms are matched inclusively (as you only support the matches that you specified).
         // If any negative matches are present, then the platforms are matched exclusively (as you want to support any operating system *other* than the ones you negated).
@@ -231,8 +229,8 @@ impl PlatformSupport {
 
                 // Loop through all identifiers and set them to true if they are not present in
                 // the map (exclusive matching).
-                for identifier in PlatformIdentifier::iter() {
-                    if !matches!(identifier, PlatformIdentifier::Unknown(_)) {
+                for identifier in Identifier::iter() {
+                    if !matches!(identifier, Identifier::Unknown(_)) {
                         platform_map.entry(identifier).or_insert(true);
                     }
                 }
@@ -246,11 +244,11 @@ impl PlatformSupport {
         }
     }
 
-    pub fn is_supported(&self, platform: &PlatformIdentifier) -> bool {
+    pub fn is_supported(&self, platform: &Identifier) -> bool {
         self.platform_map.get(platform).cloned().unwrap_or(false)
     }
 
-    pub(crate) fn platforms(&self) -> &HashMap<PlatformIdentifier, bool> {
+    pub(crate) fn platforms(&self) -> &HashMap<Identifier, bool> {
         &self.platform_map
     }
 }
@@ -261,12 +259,12 @@ pub trait PartialOverride: Sized {
     fn apply_overrides(&self, override_val: &Self) -> Result<Self, Self::Err>;
 }
 
-pub trait PlatformOverridable: PartialOverride {
+pub trait Overridable: PartialOverride {
     type Err: std::error::Error;
 
-    fn on_nil<T>() -> Result<PerPlatform<T>, <Self as PlatformOverridable>::Err>
+    fn on_nil<T>() -> Result<PerPlatform<T>, <Self as Overridable>::Err>
     where
-        T: PlatformOverridable,
+        T: Overridable,
         T: Default;
 }
 
@@ -276,7 +274,7 @@ pub struct PerPlatform<T> {
     /// The base data, applicable if no platform is specified
     pub(crate) default: T,
     /// The per-platform override, if present.
-    pub(crate) per_platform: HashMap<PlatformIdentifier, T>,
+    pub(crate) per_platform: HashMap<Identifier, T>,
 }
 
 impl<T> PerPlatform<T> {
@@ -293,11 +291,11 @@ impl<T> PerPlatform<T> {
         self.for_platform_identifier(&target_identifier())
     }
 
-    fn for_platform_identifier(&self, identifier: &PlatformIdentifier) -> &T {
+    fn for_platform_identifier(&self, identifier: &Identifier) -> &T {
         self.get(identifier)
     }
 
-    pub fn get(&self, platform: &PlatformIdentifier) -> &T {
+    pub fn get(&self, platform: &Identifier) -> &T {
         self.per_platform.get(platform).unwrap_or(
             platform
                 .get_subsets()
@@ -357,7 +355,7 @@ struct PerPlatformVisitor<T>(std::marker::PhantomData<T>);
 impl<'de, T> Visitor<'de> for PerPlatformVisitor<T>
 where
     T: DeserializeOwned,
-    T: PlatformOverridable,
+    T: Overridable,
     T: Default,
     T: Clone,
 {
@@ -376,18 +374,18 @@ where
         let mut platforms_val: Option<Value> = None;
         let mut other_entries: Vec<(Value, Value)> = Vec::new();
 
-        while let Some(key) = map.next_key_seed(LuaValueSeed)? {
+        while let Some(key) = map.next_key_seed(serde_util::LuaValueSeed)? {
             if key == Value::String("platforms".to_string()) {
-                platforms_val = Some(map.next_value_seed(LuaValueSeed)?);
+                platforms_val = Some(map.next_value_seed(serde_util::LuaValueSeed)?);
             } else {
-                other_entries.push((key, map.next_value_seed(LuaValueSeed)?));
+                other_entries.push((key, map.next_value_seed(serde_util::LuaValueSeed)?));
             }
         }
 
         let mut per_platform = match platforms_val {
             Some(val) => match val {
                 Value::Map(_) => val
-                    .deserialize_into::<HashMap<PlatformIdentifier, T>>()
+                    .deserialize_into::<HashMap<Identifier, T>>()
                     .map_err(de::Error::custom)?,
                 Value::Unit => HashMap::default(),
                 val => {
@@ -403,9 +401,10 @@ where
             T::default()
         } else {
             // Build a Map from remaining entries, then normalise: if all keys are
-            // integers (a Lua sequence), normalize_lua_value converts it to a
+            // integers (a Lua sequence), serde_util::normalize_lua_value converts it to a
             // Value::Seq so downstream struct deserializers work correctly.
-            let obj = normalize_lua_value(Value::Map(other_entries.into_iter().collect()));
+            let obj =
+                serde_util::normalize_lua_value(Value::Map(other_entries.into_iter().collect()));
             T::deserialize(obj.into_deserializer()).map_err(de::Error::custom)?
         };
         apply_per_platform_overrides(&mut per_platform, &default)
@@ -461,7 +460,7 @@ where
 impl<'de, T> Deserialize<'de> for PerPlatform<T>
 where
     T: DeserializeOwned,
-    T: PlatformOverridable,
+    T: Overridable,
     T: Default,
     T: Clone,
 {
@@ -478,7 +477,7 @@ pub(crate) fn per_platform_from_intermediate<'de, D, I, T>(
 ) -> Result<PerPlatform<T>, D::Error>
 where
     D: Deserializer<'de>,
-    I: PlatformOverridable<Err: ToString>,
+    I: Overridable<Err: ToString>,
     I: DeserializeOwned,
     I: Default,
     I: Clone,
@@ -492,7 +491,7 @@ where
 }
 
 fn apply_per_platform_overrides<T>(
-    per_platform: &mut HashMap<PlatformIdentifier, T>,
+    per_platform: &mut HashMap<Identifier, T>,
     base: &T,
 ) -> Result<(), T::Err>
 where
@@ -525,54 +524,43 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    fn platform_identifier_strategy() -> impl Strategy<Value = PlatformIdentifier> {
+    fn platform_identifier_strategy() -> impl Strategy<Value = Identifier> {
         prop_oneof![
-            Just(PlatformIdentifier::Unix),
-            Just(PlatformIdentifier::Windows),
-            Just(PlatformIdentifier::Win32),
-            Just(PlatformIdentifier::Cygwin),
-            Just(PlatformIdentifier::MacOSX),
-            Just(PlatformIdentifier::Linux),
-            Just(PlatformIdentifier::FreeBSD),
+            Just(Identifier::Unix),
+            Just(Identifier::Windows),
+            Just(Identifier::Win32),
+            Just(Identifier::Cygwin),
+            Just(Identifier::MacOSX),
+            Just(Identifier::Linux),
+            Just(Identifier::FreeBSD),
         ]
     }
 
     #[tokio::test]
     async fn sort_platform_identifier_more_specific_last() {
-        let mut platforms = vec![
-            PlatformIdentifier::Cygwin,
-            PlatformIdentifier::Linux,
-            PlatformIdentifier::Unix,
-        ];
+        let mut platforms = vec![Identifier::Cygwin, Identifier::Linux, Identifier::Unix];
         platforms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
         assert_eq!(
             platforms,
-            vec![
-                PlatformIdentifier::Unix,
-                PlatformIdentifier::Cygwin,
-                PlatformIdentifier::Linux
-            ]
+            vec![Identifier::Unix, Identifier::Cygwin, Identifier::Linux]
         );
-        let mut platforms = vec![PlatformIdentifier::Windows, PlatformIdentifier::Win32];
+        let mut platforms = vec![Identifier::Windows, Identifier::Win32];
         platforms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-        assert_eq!(
-            platforms,
-            vec![PlatformIdentifier::Win32, PlatformIdentifier::Windows]
-        )
+        assert_eq!(platforms, vec![Identifier::Win32, Identifier::Windows])
     }
 
     #[tokio::test]
     async fn test_is_subset_of() {
-        assert!(PlatformIdentifier::Unix.is_subset_of(&PlatformIdentifier::Linux));
-        assert!(PlatformIdentifier::Unix.is_subset_of(&PlatformIdentifier::MacOSX));
-        assert!(!PlatformIdentifier::Linux.is_subset_of(&PlatformIdentifier::Unix));
+        assert!(Identifier::Unix.is_subset_of(&Identifier::Linux));
+        assert!(Identifier::Unix.is_subset_of(&Identifier::MacOSX));
+        assert!(!Identifier::Linux.is_subset_of(&Identifier::Unix));
     }
 
     #[tokio::test]
     async fn test_is_extension_of() {
-        assert!(PlatformIdentifier::Linux.is_extension_of(&PlatformIdentifier::Unix));
-        assert!(PlatformIdentifier::MacOSX.is_extension_of(&PlatformIdentifier::Unix));
-        assert!(!PlatformIdentifier::Unix.is_extension_of(&PlatformIdentifier::Linux));
+        assert!(Identifier::Linux.is_extension_of(&Identifier::Unix));
+        assert!(Identifier::MacOSX.is_extension_of(&Identifier::Unix));
+        assert!(!Identifier::Unix.is_extension_of(&Identifier::Linux));
     }
 
     #[tokio::test]
@@ -580,46 +568,46 @@ mod tests {
         let foo = PerPlatform {
             default: "default",
             per_platform: vec![
-                (PlatformIdentifier::Unix, "unix"),
-                (PlatformIdentifier::FreeBSD, "freebsd"),
-                (PlatformIdentifier::Cygwin, "cygwin"),
-                (PlatformIdentifier::Linux, "linux"),
+                (Identifier::Unix, "unix"),
+                (Identifier::FreeBSD, "freebsd"),
+                (Identifier::Cygwin, "cygwin"),
+                (Identifier::Linux, "linux"),
             ]
             .into_iter()
             .collect(),
         };
-        assert_eq!(*foo.get(&PlatformIdentifier::MacOSX), "unix");
-        assert_eq!(*foo.get(&PlatformIdentifier::Linux), "linux");
-        assert_eq!(*foo.get(&PlatformIdentifier::FreeBSD), "freebsd");
-        assert_eq!(*foo.get(&PlatformIdentifier::Cygwin), "cygwin");
-        assert_eq!(*foo.get(&PlatformIdentifier::Windows), "default");
+        assert_eq!(*foo.get(&Identifier::MacOSX), "unix");
+        assert_eq!(*foo.get(&Identifier::Linux), "linux");
+        assert_eq!(*foo.get(&Identifier::FreeBSD), "freebsd");
+        assert_eq!(*foo.get(&Identifier::Cygwin), "cygwin");
+        assert_eq!(*foo.get(&Identifier::Windows), "default");
     }
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn test_target_identifier() {
-        run_test_target_identifier(PlatformIdentifier::Linux)
+        run_test_target_identifier(Identifier::Linux)
     }
 
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn test_target_identifier() {
-        run_test_target_identifier(PlatformIdentifier::MacOSX)
+        run_test_target_identifier(Identifier::MacOSX)
     }
 
     #[cfg(target_env = "msvc")]
     #[tokio::test]
     async fn test_target_identifier() {
-        run_test_target_identifier(PlatformIdentifier::Windows)
+        run_test_target_identifier(Identifier::Windows)
     }
 
     #[cfg(target_os = "android")]
     #[tokio::test]
     async fn test_target_identifier() {
-        run_test_target_identifier(PlatformIdentifier::Unix)
+        run_test_target_identifier(Identifier::Unix)
     }
 
-    fn run_test_target_identifier(expected: PlatformIdentifier) {
+    fn run_test_target_identifier(expected: Identifier) {
         assert_eq!(expected, target_identifier());
     }
 
@@ -628,7 +616,7 @@ mod tests {
         fn supported_platforms(identifier in platform_identifier_strategy()) {
             let identifier_str = identifier.to_string();
             let platforms = vec![identifier_str];
-            let platform_support = PlatformSupport::parse(&platforms).unwrap();
+            let platform_support = Support::parse(&platforms).unwrap();
             prop_assert!(platform_support.is_supported(&identifier))
         }
 
@@ -640,7 +628,7 @@ mod tests {
             }
             let identifier_str = format!("!{unsupported}");
             let platforms = vec![identifier_str];
-            let platform_support = PlatformSupport::parse(&platforms).unwrap();
+            let platform_support = Support::parse(&platforms).unwrap();
             prop_assert!(!platform_support.is_supported(&unsupported));
             prop_assert!(platform_support.is_supported(&supported))
         }
@@ -654,7 +642,7 @@ mod tests {
             let supported_str = unspecified.to_string();
             let unsupported_str = format!("!{unsupported}");
             let platforms = vec![supported_str, unsupported_str];
-            let platform_support = PlatformSupport::parse(&platforms).unwrap();
+            let platform_support = Support::parse(&platforms).unwrap();
             prop_assert!(platform_support.is_supported(&unspecified));
             prop_assert!(!platform_support.is_supported(&unsupported));
         }
@@ -662,7 +650,7 @@ mod tests {
         #[test]
         fn all_platforms_supported_if_none_are_specified(identifier in platform_identifier_strategy()) {
             let platforms = vec![];
-            let platform_support = PlatformSupport::parse(&platforms).unwrap();
+            let platform_support = Support::parse(&platforms).unwrap();
             prop_assert!(platform_support.is_supported(&identifier))
         }
 
@@ -671,14 +659,14 @@ mod tests {
             let identifier_str = identifier.to_string();
             let identifier_str_negated = format!("!{identifier}");
             let platforms = vec![identifier_str, identifier_str_negated];
-            let _ = PlatformSupport::parse(&platforms).unwrap_err();
+            let _ = Support::parse(&platforms).unwrap_err();
         }
 
         #[test]
         fn extended_platforms_supported_if_supported(identifier in platform_identifier_strategy()) {
             let identifier_str = identifier.to_string();
             let platforms = vec![identifier_str];
-            let platform_support = PlatformSupport::parse(&platforms).unwrap();
+            let platform_support = Support::parse(&platforms).unwrap();
             for identifier in identifier.get_extended_platforms() {
                 prop_assert!(platform_support.is_supported(&identifier))
             }
@@ -688,7 +676,7 @@ mod tests {
         fn sub_platforms_unsupported_if_unsupported(identifier in platform_identifier_strategy()) {
             let identifier_str = format!("!{identifier}");
             let platforms = vec![identifier_str];
-            let platform_support = PlatformSupport::parse(&platforms).unwrap();
+            let platform_support = Support::parse(&platforms).unwrap();
             for identifier in identifier.get_subsets() {
                 prop_assert!(!platform_support.is_supported(&identifier))
             }
@@ -703,7 +691,7 @@ mod tests {
             let supported_str = identifier.to_string();
             let mut platforms: Vec<String> = extended_platforms.into_iter().map(|ident| format!("!{ident}")).collect();
             platforms.push(supported_str);
-            let _ = PlatformSupport::parse(&platforms).unwrap_err();
+            let _ = Support::parse(&platforms).unwrap_err();
         }
     }
 }

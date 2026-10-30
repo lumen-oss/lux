@@ -58,7 +58,7 @@ fn validate_output(output: &Output) -> Result<(), Error> {
 fn mk_def_file(
     dir: &Path,
     output_file_name: &str,
-    target_module: &rockspec::build::Module,
+    target_module: &rockspec::build::backend::Module,
 ) -> Result<PathBuf, fs::Error> {
     let mut def_file: PathBuf = dir.join(output_file_name);
     def_file.set_extension(".def");
@@ -84,7 +84,7 @@ pub(crate) async fn artifacts(
     target_file_name: &str,
     libdir_args: Vec<String>,
     library_args: Vec<String>,
-    target_module: &rockspec::build::Module,
+    target_module: &rockspec::build::backend::Module,
     target_parent_dir: &Path,
     objects: Vec<PathBuf>,
     config: &Config,
