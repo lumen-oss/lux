@@ -72,7 +72,7 @@ where
     let layout = tree.layout_for(package);
     let build_dir = args.build_dir;
 
-    let mut build_spec = rockspec::build::BuildSpec::default();
+    let mut build_spec = rockspec::build::Spec::default();
     let mut copy_directories = None;
     for path in fs::sync::read_dir(build_dir)?
         .filter_map(Result::ok)
@@ -94,44 +94,44 @@ where
             break;
         }
     }
-    let build_info = match build_spec.build_backend {
-        Some(rockspec::build::BuildBackendSpec::Builtin(build_spec)) => {
+    let build_info = match build_spec.backend {
+        Some(rockspec::build::backend::Spec::Builtin(build_spec)) => {
             build_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::Make(make_spec)) => {
+        Some(rockspec::build::backend::Spec::Make(make_spec)) => {
             make_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::CMake(cmake_spec)) => {
+        Some(rockspec::build::backend::Spec::CMake(cmake_spec)) => {
             cmake_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::Command(command_spec)) => {
+        Some(rockspec::build::backend::Spec::Command(command_spec)) => {
             command_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
+        Some(rockspec::build::backend::Spec::RustMlua(rust_mlua_spec)) => {
             rust_mlua_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+        Some(rockspec::build::backend::Spec::RustBinary(rust_binary_spec)) => {
             rust_binary_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
+        Some(rockspec::build::backend::Spec::TreesitterParser(treesitter_parser_spec)) => {
             treesitter_parser_spec
                 .run(args)
                 .await?
         }
-        Some(rockspec::build::BuildBackendSpec::LuaRock(build_backend)) => return Err(Error::UnsupportedLuarocksBuildBackend(build_backend)),
-        Some(rockspec::build::BuildBackendSpec::Source) | // This should not be possible. Let's ignore it.
+        Some(rockspec::build::backend::Spec::LuaRock(build_backend)) => return Err(Error::UnsupportedLuarocksBuildBackend(build_backend)),
+        Some(rockspec::build::backend::Spec::Source) | // This should not be possible. Let's ignore it.
         None => BuildInfo::default(),
     };
     match copy_directories {

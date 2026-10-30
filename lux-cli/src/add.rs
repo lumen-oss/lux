@@ -3,7 +3,7 @@ use lux_lib::package;
 use lux_lib::{
     config::Config,
     package_db::PackageDB,
-    rockspec::{DependencyType, LuaDependencyType},
+    rockspec::{dependency, lua_dependency},
     workspace::Workspace,
 };
 
@@ -56,11 +56,14 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
 
     if !data.package_req.is_empty() {
         project
-            .add(DependencyType::Regular(dependencies.iter().collect()), &db)
+            .add(
+                dependency::Kind::Regular(dependencies.iter().collect()),
+                &db,
+            )
             .await?;
         project
             .add_git(
-                LuaDependencyType::Regular(git_dependencies.iter().collect()),
+                lua_dependency::Kind::Regular(git_dependencies.iter().collect()),
                 &config,
             )
             .await?;
@@ -74,11 +77,11 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
                 PackageReqOrGitShorthand::GitShorthand(url) => Either::Right(url.clone()),
             });
         project
-            .add(DependencyType::Build(dependencies.iter().collect()), &db)
+            .add(dependency::Kind::Build(dependencies.iter().collect()), &db)
             .await?;
         project
             .add_git(
-                LuaDependencyType::Build(git_dependencies.iter().collect()),
+                lua_dependency::Kind::Build(git_dependencies.iter().collect()),
                 &config,
             )
             .await?;
@@ -92,11 +95,11 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
                 PackageReqOrGitShorthand::GitShorthand(url) => Either::Right(url.clone()),
             });
         project
-            .add(DependencyType::Test(dependencies.iter().collect()), &db)
+            .add(dependency::Kind::Test(dependencies.iter().collect()), &db)
             .await?;
         project
             .add_git(
-                LuaDependencyType::Test(git_dependencies.iter().collect()),
+                lua_dependency::Kind::Test(git_dependencies.iter().collect()),
                 &config,
             )
             .await?;

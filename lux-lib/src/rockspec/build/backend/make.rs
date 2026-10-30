@@ -9,7 +9,7 @@ const MAKEFILE: &str = "Makefile.win";
 
 /// Specification for building a rock with the `make` build backend
 #[derive(Debug, PartialEq, Clone, Serialize)]
-pub struct MakeBuildSpec {
+pub struct Make {
     /// Makefile to be used.
     /// Default is "Makefile" on Unix variants and "Makefile.win" under Win32.
     pub makefile: PathBuf,
@@ -30,7 +30,7 @@ pub struct MakeBuildSpec {
     pub variables: HashMap<String, String>,
 }
 
-impl Default for MakeBuildSpec {
+impl Default for Make {
     fn default() -> Self {
         Self {
             makefile: default_makefile_name(),

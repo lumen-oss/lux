@@ -2,10 +2,10 @@ use serde::Deserialize;
 use url::Url;
 
 /// A rock's metadata, to be displayed on the remote package server
-#[derive(Clone, Deserialize, Debug, PartialEq, Default, lux_macros::DisplayAsLuaKV)]
+#[derive(Clone, Deserialize, Debug, PartialEq, Default, lux_macros::AsLuaKV)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[display_lua(key = "description")]
-pub struct RockDescription {
+pub struct Spec {
     /// A one-line description of the package.
     pub summary: Option<String>,
     /// A longer description of the package.

@@ -264,11 +264,11 @@ pub(crate) struct PlaceInfo {
     pub(crate) server_packages: Option<String>,
 }
 
-impl rockspec::DisplayAsLuaKV for Req {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for Req {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "wally".to_string(),
-            value: rockspec::DisplayLuaValue::String(self.to_string()),
+            value: rockspec::display::LuaValue::String(self.to_string()),
         }
     }
 }

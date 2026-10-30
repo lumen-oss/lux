@@ -47,7 +47,7 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 )]
 pub(crate) async fn compile(
     files: &Vec<PathBuf>,
-    target_module: &rockspec::build::Module,
+    target_module: &rockspec::build::backend::Module,
     target_dir: &Path,
     lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,

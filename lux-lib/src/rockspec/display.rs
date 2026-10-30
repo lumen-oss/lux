@@ -105,30 +105,30 @@ impl From<&str> for StringAnalysis {
         }
     }
 }
-pub(crate) enum DisplayLuaValue {
+pub(crate) enum LuaValue {
     // NOTE(vhyrro): these are not used in the current implementation
     // Nil,
     // Number(f64),
     Boolean(bool),
     String(String),
     List(Vec<Self>),
-    Table(Vec<DisplayLuaKV>),
+    Table(Vec<LuaKV>),
 }
 
-pub(crate) struct DisplayLuaKV {
+pub(crate) struct LuaKV {
     pub(crate) key: String,
-    pub(crate) value: DisplayLuaValue,
+    pub(crate) value: LuaValue,
 }
 
-impl Display for DisplayLuaValue {
+impl Display for LuaValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use std::fmt::Write;
         let mut buf = String::new();
         match self {
-            //DisplayLuaValue::Nil => write!(f, "nil"),
-            //DisplayLuaValue::Number(n) => write!(f, "{n}"),
-            DisplayLuaValue::Boolean(b) => write!(buf, "{b}")?,
-            DisplayLuaValue::String(s) => {
+            //LuaValue::Nil => write!(f, "nil"),
+            //LuaValue::Number(n) => write!(f, "{n}"),
+            LuaValue::Boolean(b) => write!(buf, "{b}")?,
+            LuaValue::String(s) => {
                 let analysis = StringAnalysis::from(s.as_str());
                 if analysis.has_newline && !analysis.has_nonprintable {
                     // A long-delimiter string will look better for strings that
@@ -169,14 +169,14 @@ impl Display for DisplayLuaValue {
                     buf.push('"');
                 }
             }
-            DisplayLuaValue::List(l) => {
+            LuaValue::List(l) => {
                 writeln!(buf, "{{")?;
                 for item in l {
                     writeln!(buf, "{item},")?;
                 }
                 write!(buf, "}}")?;
             }
-            DisplayLuaValue::Table(t) => {
+            LuaValue::Table(t) => {
                 writeln!(buf, "{{")?;
 
                 for item in t {
@@ -199,7 +199,7 @@ impl Display for DisplayLuaValue {
     }
 }
 
-impl Display for DisplayLuaKV {
+impl Display for LuaKV {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if !self
             .key
@@ -214,77 +214,77 @@ impl Display for DisplayLuaKV {
 }
 
 /// Trait for serializing a Lua structure from a rockspec into a `key = value` pair.
-pub(crate) trait DisplayAsLuaKV {
-    fn display_lua(&self) -> DisplayLuaKV;
+pub(crate) trait AsLuaKV {
+    fn display_lua(&self) -> LuaKV;
 }
 
-pub(crate) trait DisplayAsLuaValue {
-    fn display_lua_value(&self) -> DisplayLuaValue;
+pub(crate) trait AsLuaValue {
+    fn display_lua_value(&self) -> LuaValue;
 }
 
-impl DisplayAsLuaValue for String {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::String(self.clone())
+impl AsLuaValue for String {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::String(self.clone())
     }
 }
 
-impl DisplayAsLuaValue for bool {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::Boolean(*self)
+impl AsLuaValue for bool {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::Boolean(*self)
     }
 }
 
-impl DisplayAsLuaValue for PathBuf {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::String(self.to_slash_lossy().into_owned())
+impl AsLuaValue for PathBuf {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::String(self.to_slash_lossy().into_owned())
     }
 }
 
-impl DisplayAsLuaValue for Vec<String> {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::List(self.iter().cloned().map(DisplayLuaValue::String).collect())
+impl AsLuaValue for Vec<String> {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::List(self.iter().cloned().map(LuaValue::String).collect())
     }
 }
 
-impl DisplayAsLuaValue for Vec<PathBuf> {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::List(
+impl AsLuaValue for Vec<PathBuf> {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::List(
             self.iter()
-                .map(|p| DisplayLuaValue::String(p.to_slash_lossy().into_owned()))
+                .map(|p| LuaValue::String(p.to_slash_lossy().into_owned()))
                 .collect(),
         )
     }
 }
 
-impl DisplayAsLuaValue for HashMap<String, String> {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::Table(
+impl AsLuaValue for HashMap<String, String> {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::Table(
             self.iter()
-                .map(|(k, v)| DisplayLuaKV {
+                .map(|(k, v)| LuaKV {
                     key: k.clone(),
-                    value: DisplayLuaValue::String(v.clone()),
+                    value: LuaValue::String(v.clone()),
                 })
                 .collect_vec(),
         )
     }
 }
 
-impl DisplayAsLuaValue for HashMap<String, PathBuf> {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::Table(
+impl AsLuaValue for HashMap<String, PathBuf> {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::Table(
             self.iter()
-                .map(|(k, v)| DisplayLuaKV {
+                .map(|(k, v)| LuaKV {
                     key: k.clone(),
-                    value: DisplayLuaValue::String(v.to_slash_lossy().into_owned()),
+                    value: LuaValue::String(v.to_slash_lossy().into_owned()),
                 })
                 .collect_vec(),
         )
     }
 }
 
-impl DisplayAsLuaValue for Url {
-    fn display_lua_value(&self) -> DisplayLuaValue {
-        DisplayLuaValue::String(self.to_string())
+impl AsLuaValue for Url {
+    fn display_lua_value(&self) -> LuaValue {
+        LuaValue::String(self.to_string())
     }
 }
 
@@ -294,95 +294,95 @@ mod tests {
 
     #[test]
     fn display_lua_value() {
-        let value = DisplayLuaValue::String("hello".to_string());
+        let value = LuaValue::String("hello".to_string());
         assert_eq!(format!("{value}"), r#""hello""#);
 
-        let value = DisplayLuaValue::String("he\"llo".to_string());
+        let value = LuaValue::String("he\"llo".to_string());
         assert_eq!(format!("{value}"), r#""he\"llo""#);
 
-        let value = DisplayLuaValue::String("q\"a'".to_string());
+        let value = LuaValue::String("q\"a'".to_string());
         assert_eq!(format!("{value}"), r#""q\"a'""#);
 
-        let value = DisplayLuaValue::String(
+        let value = LuaValue::String(
             "1\"2\x073\x084\x0B5\x0C6\n7\r8\t9'a\\b\u{FFFFF}c\0d\u{1}e".to_string(),
         );
         assert_eq!(
             format!("{value}"),
             r#""1\"2\a3\b4\v5\f6\n7\r8\t9'a\\b\243\191\191\191c\000d\001e""#
         );
-        let value = DisplayLuaValue::String("\n".to_string());
+        let value = LuaValue::String("\n".to_string());
         assert_eq!(format!("{value}"), "[[\n\n]]");
-        let value = DisplayLuaValue::String("\n]".to_string());
+        let value = LuaValue::String("\n]".to_string());
         assert_eq!(format!("{value}"), "[=[\n\n]]=]");
-        let value = DisplayLuaValue::String("first line\nsecond line".to_string());
+        let value = LuaValue::String("first line\nsecond line".to_string());
         assert_eq!(format!("{value}"), "[[\nfirst line\nsecond line]]");
 
-        let value = DisplayLuaValue::String("first line\nsecond line]".to_string());
+        let value = LuaValue::String("first line\nsecond line]".to_string());
         assert_eq!(format!("{value}"), "[=[\nfirst line\nsecond line]]=]");
 
-        let value = DisplayLuaValue::String("first line\nsecond line]=]".to_string());
+        let value = LuaValue::String("first line\nsecond line]=]".to_string());
         assert_eq!(format!("{value}"), "[==[\nfirst line\nsecond line]=]]==]");
 
-        let value = DisplayLuaValue::String("first line\nsecond line]\nthird line".to_string());
+        let value = LuaValue::String("first line\nsecond line]\nthird line".to_string());
         assert_eq!(
             format!("{value}"),
             "[[\nfirst line\nsecond line]\nthird line]]"
         );
 
-        let value = DisplayLuaValue::String("first line\nsecond line]]\nthird line".to_string());
+        let value = LuaValue::String("first line\nsecond line]]\nthird line".to_string());
         assert_eq!(
             format!("{value}"),
             "[=[\nfirst line\nsecond line]]\nthird line]=]"
         );
 
-        let value = DisplayLuaValue::String("first line\nsecond line]=]\nthird line".to_string());
+        let value = LuaValue::String("first line\nsecond line]=]\nthird line".to_string());
         assert_eq!(
             format!("{value}"),
             "[[\nfirst line\nsecond line]=]\nthird line]]"
         );
 
-        let value = DisplayLuaValue::String("first line\nsecond line]=]]\nthird line".to_string());
+        let value = LuaValue::String("first line\nsecond line]=]]\nthird line".to_string());
         assert_eq!(
             format!("{value}"),
             "[==[\nfirst line\nsecond line]=]]\nthird line]==]"
         );
 
-        let value = DisplayLuaValue::String("first line\nsecond line]]=]\nthird line".to_string());
+        let value = LuaValue::String("first line\nsecond line]]=]\nthird line".to_string());
         assert_eq!(
             format!("{value}"),
             "[==[\nfirst line\nsecond line]]=]\nthird line]==]"
         );
 
-        let value = DisplayLuaValue::String("\tfirst line\n\tsecond line".to_string());
+        let value = LuaValue::String("\tfirst line\n\tsecond line".to_string());
         assert_eq!(format!("{value}"), "[[\n\tfirst line\n\tsecond line]]");
 
-        let value = DisplayLuaValue::String("\tfirst line\r\n\tsecond line".to_string());
+        let value = LuaValue::String("\tfirst line\r\n\tsecond line".to_string());
         assert_eq!(format!("{value}"), "[[\n\tfirst line\r\n\tsecond line]]");
 
-        let value = DisplayLuaValue::String("\tfirst line\r\tsecond line".to_string());
+        let value = LuaValue::String("\tfirst line\r\tsecond line".to_string());
         assert_eq!(format!("{value}"), r#""\tfirst line\r\tsecond line""#);
 
-        let value = DisplayLuaValue::Boolean(true);
+        let value = LuaValue::Boolean(true);
         assert_eq!(format!("{value}"), "true");
 
-        let value = DisplayLuaValue::List(vec![
-            DisplayLuaValue::String("hello".to_string()),
-            DisplayLuaValue::Boolean(true),
+        let value = LuaValue::List(vec![
+            LuaValue::String("hello".to_string()),
+            LuaValue::Boolean(true),
         ]);
         assert_eq!(format!("{value}"), "{\n\"hello\",\ntrue,\n}");
 
-        let value = DisplayLuaValue::Table(vec![
-            DisplayLuaKV {
+        let value = LuaValue::Table(vec![
+            LuaKV {
                 key: "key".to_string(),
-                value: DisplayLuaValue::String("value".to_string()),
+                value: LuaValue::String("value".to_string()),
             },
-            DisplayLuaKV {
+            LuaKV {
                 key: "key2".to_string(),
-                value: DisplayLuaValue::Boolean(true),
+                value: LuaValue::Boolean(true),
             },
-            DisplayLuaKV {
+            LuaKV {
                 key: "key3.key4".to_string(),
-                value: DisplayLuaValue::Boolean(true),
+                value: LuaValue::Boolean(true),
             },
         ]);
         assert_eq!(

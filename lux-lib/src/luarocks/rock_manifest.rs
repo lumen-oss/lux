@@ -1,4 +1,4 @@
-use crate::rockspec::{DisplayAsLuaKV, DisplayAsLuaValue};
+use crate::rockspec::display::{AsLuaKV, AsLuaValue};
 use crate::{rockspec, ROCKSPEC_FUEL_LIMIT};
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -104,11 +104,11 @@ impl<'de> Deserialize<'de> for RockManifest {
     }
 }
 
-impl rockspec::DisplayAsLuaKV for RockManifest {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for RockManifest {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "rock_manifest".to_string(),
-            value: rockspec::DisplayLuaValue::Table(
+            value: rockspec::display::LuaValue::Table(
                 vec![
                     self.lua.display_lua(),
                     self.lib.display_lua(),
@@ -121,7 +121,7 @@ impl rockspec::DisplayAsLuaKV for RockManifest {
                     self.root
                         .entries
                         .iter()
-                        .map(|(key, entry)| rockspec::DisplayLuaKV {
+                        .map(|(key, entry)| rockspec::display::LuaKV {
                             key: key.to_slash_lossy().to_string(),
                             value: entry.display_lua_value(),
                         }),
@@ -132,18 +132,18 @@ impl rockspec::DisplayAsLuaKV for RockManifest {
     }
 }
 
-impl rockspec::DisplayAsLuaKV for (&PathBuf, &String) {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for (&PathBuf, &String) {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: format!("{}", self.0.display()),
-            value: rockspec::DisplayLuaValue::String(self.1.clone()),
+            value: rockspec::display::LuaValue::String(self.1.clone()),
         }
     }
 }
 
-impl rockspec::DisplayAsLuaValue for HashMap<PathBuf, String> {
-    fn display_lua_value(&self) -> rockspec::DisplayLuaValue {
-        rockspec::DisplayLuaValue::Table(self.iter().map(|it| it.display_lua()).collect_vec())
+impl rockspec::display::AsLuaValue for HashMap<PathBuf, String> {
+    fn display_lua_value(&self) -> rockspec::display::LuaValue {
+        rockspec::display::LuaValue::Table(self.iter().map(|it| it.display_lua()).collect_vec())
     }
 }
 
@@ -173,25 +173,25 @@ impl<'de> Deserialize<'de> for DirOrFileEntry {
     }
 }
 
-impl rockspec::DisplayAsLuaValue for DirOrFileEntry {
-    fn display_lua_value(&self) -> rockspec::DisplayLuaValue {
+impl rockspec::display::AsLuaValue for DirOrFileEntry {
+    fn display_lua_value(&self) -> rockspec::display::LuaValue {
         match self {
-            Self::DirEntry(dir_map) => rockspec::DisplayLuaValue::Table(to_lua_kv_vec(dir_map)),
-            Self::FileEntry(md5sum) => rockspec::DisplayLuaValue::String(md5sum.clone()),
+            Self::DirEntry(dir_map) => rockspec::display::LuaValue::Table(to_lua_kv_vec(dir_map)),
+            Self::FileEntry(md5sum) => rockspec::display::LuaValue::String(md5sum.clone()),
         }
     }
 }
 
-impl rockspec::DisplayAsLuaValue for HashMap<PathBuf, DirOrFileEntry> {
-    fn display_lua_value(&self) -> rockspec::DisplayLuaValue {
-        rockspec::DisplayLuaValue::Table(to_lua_kv_vec(self))
+impl rockspec::display::AsLuaValue for HashMap<PathBuf, DirOrFileEntry> {
+    fn display_lua_value(&self) -> rockspec::display::LuaValue {
+        rockspec::display::LuaValue::Table(to_lua_kv_vec(self))
     }
 }
 
-fn to_lua_kv_vec(dir_map: &HashMap<PathBuf, DirOrFileEntry>) -> Vec<rockspec::DisplayLuaKV> {
+fn to_lua_kv_vec(dir_map: &HashMap<PathBuf, DirOrFileEntry>) -> Vec<rockspec::display::LuaKV> {
     dir_map
         .iter()
-        .map(|(k, v)| rockspec::DisplayLuaKV {
+        .map(|(k, v)| rockspec::display::LuaKV {
             key: k.to_slash_lossy().to_string(),
             value: v.display_lua_value(),
         })
@@ -209,9 +209,9 @@ pub(crate) struct RockManifestLua {
     pub entries: HashMap<PathBuf, DirOrFileEntry>,
 }
 
-impl rockspec::DisplayAsLuaKV for RockManifestLua {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for RockManifestLua {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "lua".to_string(),
             value: self.entries.display_lua_value(),
         }
@@ -223,9 +223,9 @@ pub(crate) struct RockManifestLib {
     pub entries: HashMap<PathBuf, DirOrFileEntry>,
 }
 
-impl rockspec::DisplayAsLuaKV for RockManifestLib {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for RockManifestLib {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "lib".to_string(),
             value: self.entries.display_lua_value(),
         }
@@ -237,9 +237,9 @@ pub(crate) struct RockManifestBin {
     pub entries: HashMap<PathBuf, String>,
 }
 
-impl rockspec::DisplayAsLuaKV for RockManifestBin {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for RockManifestBin {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "bin".to_string(),
             value: self.entries.display_lua_value(),
         }
@@ -251,9 +251,9 @@ pub(crate) struct RockManifestDoc {
     pub entries: HashMap<PathBuf, DirOrFileEntry>,
 }
 
-impl rockspec::DisplayAsLuaKV for RockManifestDoc {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for RockManifestDoc {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "doc".to_string(),
             value: self.entries.display_lua_value(),
         }
@@ -265,9 +265,9 @@ pub(crate) struct RockManifestConf {
     pub entries: HashMap<PathBuf, DirOrFileEntry>,
 }
 
-impl rockspec::DisplayAsLuaKV for RockManifestConf {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for RockManifestConf {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "conf".to_string(),
             value: self.entries.display_lua_value(),
         }

@@ -66,7 +66,7 @@ pub enum Error {
     },
 }
 
-impl BuildBackend for rockspec::build::BuiltinBuildSpec {
+impl BuildBackend for rockspec::build::backend::Builtin {
     type Err = Error;
 
     #[tracing::instrument(name = "builtin::run", skip_all, level = "debug")]
@@ -90,11 +90,11 @@ impl BuildBackend for rockspec::build::BuiltinBuildSpec {
 
         if lua.version.is_luau() {
             let has_native_modules = modules.values().any(|spec| match spec {
-                rockspec::build::ModuleSpec::SourcePath(source) => {
+                rockspec::build::backend::ModuleSpec::SourcePath(source) => {
                     source.extension().is_some_and(|ext| ext == "c")
                 }
-                rockspec::build::ModuleSpec::SourcePaths(_)
-                | rockspec::build::ModuleSpec::ModulePaths(_) => true,
+                rockspec::build::backend::ModuleSpec::SourcePaths(_)
+                | rockspec::build::backend::ModuleSpec::ModulePaths(_) => true,
             });
             if has_native_modules {
                 return Err(Error::LuauNativeDepsUnsupported);
@@ -103,7 +103,7 @@ impl BuildBackend for rockspec::build::BuiltinBuildSpec {
 
         for (destination_path, module_type) in modules.iter() {
             match module_type {
-                rockspec::build::ModuleSpec::SourcePath(source) => {
+                rockspec::build::backend::ModuleSpec::SourcePath(source) => {
                     if source.extension().map(|ext| ext == "c").unwrap_or(false) {
                         let absolute_source_paths = vec![build_dir.join(source)];
                         c_files::compile(
@@ -138,7 +138,7 @@ impl BuildBackend for rockspec::build::BuiltinBuildSpec {
                         install::lua_module(&absolute_source_path, destination_path, &layout.src)?;
                     }
                 }
-                rockspec::build::ModuleSpec::SourcePaths(files) => {
+                rockspec::build::backend::ModuleSpec::SourcePaths(files) => {
                     let absolute_source_paths =
                         files.iter().map(|file| build_dir.join(file)).collect();
                     c_files::compile(
@@ -151,7 +151,7 @@ impl BuildBackend for rockspec::build::BuiltinBuildSpec {
                     )
                     .await?
                 }
-                rockspec::build::ModuleSpec::ModulePaths(data) => {
+                rockspec::build::backend::ModuleSpec::ModulePaths(data) => {
                     c_modules::compile(
                         data,
                         build_dir,
@@ -189,14 +189,14 @@ impl BuildBackend for rockspec::build::BuiltinBuildSpec {
 
 fn source_paths(
     build_dir: &Path,
-    modules: &HashMap<rockspec::build::Module, rockspec::build::ModuleSpec>,
+    modules: &HashMap<rockspec::build::backend::Module, rockspec::build::backend::ModuleSpec>,
 ) -> HashSet<PathBuf> {
     modules
         .values()
         .flat_map(|spec| match spec {
-            rockspec::build::ModuleSpec::SourcePath(path_buf) => vec![path_buf],
-            rockspec::build::ModuleSpec::SourcePaths(vec) => vec.iter().collect_vec(),
-            rockspec::build::ModuleSpec::ModulePaths(module_paths) => {
+            rockspec::build::backend::ModuleSpec::SourcePath(path_buf) => vec![path_buf],
+            rockspec::build::backend::ModuleSpec::SourcePaths(vec) => vec.iter().collect_vec(),
+            rockspec::build::backend::ModuleSpec::ModulePaths(module_paths) => {
                 module_paths.sources.iter().collect_vec()
             }
         })
@@ -209,14 +209,17 @@ fn source_paths(
 pub enum AutoDetectModulesError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ParseLuaModule(#[from] rockspec::build::ParseLuaModuleError),
+    ParseLuaModule(#[from] rockspec::build::backend::ParseLuaModuleError),
 }
 
 #[tracing::instrument(level = "trace")]
 pub(crate) fn autodetect_modules(
     build_dir: &Path,
     exclude: HashSet<PathBuf>,
-) -> Result<HashMap<rockspec::build::Module, rockspec::build::ModuleSpec>, AutoDetectModulesError> {
+) -> Result<
+    HashMap<rockspec::build::backend::Module, rockspec::build::backend::ModuleSpec>,
+    AutoDetectModulesError,
+> {
     WalkDir::new(build_dir.join("src"))
         .into_iter()
         .chain(WalkDir::new(build_dir.join("lua")))
@@ -251,23 +254,29 @@ pub(crate) fn autodetect_modules(
                 .is_none_or(|parent| parent.as_os_str().is_empty())
             {
                 pathbuf.set_extension("");
-                Ok(rockspec::build::Module::from_pathbuf(pathbuf)?)
+                Ok(rockspec::build::backend::Module::from_pathbuf(pathbuf)?)
             } else {
-                let mut lua_module = rockspec::build::Module::from_pathbuf(pathbuf)?;
-                // NOTE(mrcjkb): `Module` does not parse as "<module>.init" from files named "init.lua"
+                let mut lua_module = rockspec::build::backend::Module::from_pathbuf(pathbuf)?;
+                // NOTE(mrcjkb): `build::backend::Module` does not parse as "<module>.init" from files named "init.lua"
                 // To make sure we don't change the file structure when installing, we append it here.
                 if matches!(
                     file.file_name().to_string_lossy().as_bytes(),
                     b"init.lua" | b"init.luau"
                 ) {
                     unsafe {
-                        lua_module = lua_module
-                            .join(&rockspec::build::Module::from_str("init").unwrap_unchecked())
+                        lua_module = lua_module.join(
+                            &rockspec::build::backend::Module::from_str("init").unwrap_unchecked(),
+                        )
                     }
                 }
                 Ok(lua_module)
             };
-            lua_module.map(|lua_module| (lua_module, rockspec::build::ModuleSpec::SourcePath(diff)))
+            lua_module.map(|lua_module| {
+                (
+                    lua_module,
+                    rockspec::build::backend::ModuleSpec::SourcePath(diff),
+                )
+            })
         })
         .try_collect()
 }
@@ -300,7 +309,7 @@ mod tests {
 
         let foo_spec = &modules[&"foo".parse().unwrap()];
         match foo_spec {
-            rockspec::build::ModuleSpec::SourcePath(path) => {
+            rockspec::build::backend::ModuleSpec::SourcePath(path) => {
                 assert_eq!(path.extension().unwrap(), "luau");
             }
             _ => panic!("expected SourcePath for foo.luau"),

@@ -119,7 +119,7 @@ where
 }
 
 fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, Error> {
-    let Some(rockspec::RockSourceSpec::File(path)) = &spec.source else {
+    let Some(rockspec::source::Spec::File(path)) = &spec.source else {
         return Ok(None);
     };
     Ok(match Project::from_exact(path)? {
@@ -135,27 +135,27 @@ fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, E
 
 async fn discover_source_spec(
     spec: &PackageInstallSpec,
-    source: &rockspec::RockSourceSpec,
+    source: &rockspec::source::Spec,
     _config: &Config,
 ) -> Result<FoundPackage, Error> {
     match source {
-        rockspec::RockSourceSpec::Git(_)
-        | rockspec::RockSourceSpec::File(_)
-        | rockspec::RockSourceSpec::Url(_) => discover_fetchable_source(spec, source.clone()),
+        rockspec::source::Spec::Git(_)
+        | rockspec::source::Spec::File(_)
+        | rockspec::source::Spec::Url(_) => discover_fetchable_source(spec, source.clone()),
         #[cfg(feature = "wally")]
-        rockspec::RockSourceSpec::Wally(wally_req) => {
+        rockspec::source::Spec::Wally(wally_req) => {
             wally::discover(&spec.package, wally_req, _config)
                 .await
                 .map_err(Error::Wally)
         }
         #[cfg(not(feature = "wally"))]
-        rockspec::RockSourceSpec::Wally(_) => Err(Error::WallyDisabled),
+        rockspec::source::Spec::Wally(_) => Err(Error::WallyDisabled),
     }
 }
 
 fn discover_fetchable_source(
     spec: &PackageInstallSpec,
-    source: rockspec::RockSourceSpec,
+    source: rockspec::source::Spec,
 ) -> Result<FoundPackage, Error> {
     let download =
         RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source)
@@ -286,7 +286,7 @@ mod tests {
             EntryType::DependencyOnly,
         )
         .build_behaviour(BuildBehaviour::Ignore)
-        .maybe_source(Some(rockspec::RockSourceSpec::File(bar_dir)))
+        .maybe_source(Some(rockspec::source::Spec::File(bar_dir)))
         .build();
 
         let found = Discover::new(PackageDB::from_local(Vec::new()), &config)

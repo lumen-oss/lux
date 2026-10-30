@@ -20,7 +20,7 @@ pub struct PackageInstallSpec {
     pub(crate) pin: PinnedState,
     #[builder(default)]
     pub(crate) opt: OptState,
-    pub(crate) source: Option<rockspec::RockSourceSpec>,
+    pub(crate) source: Option<rockspec::source::Spec>,
     /// Optional constraint, carried over from a previous install,
     /// e.g. defined in a lockfile.
     pub(crate) constraint: Option<LockConstraint>,

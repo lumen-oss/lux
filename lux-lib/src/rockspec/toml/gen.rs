@@ -62,7 +62,7 @@ pub enum GenerateSourceError {
     VariableSubstitution(#[from] VariableSubstitutionError),
     #[error("error parsing source URL from template")]
     #[diagnostic(forward(0))]
-    SourceUrl(#[from] rockspec::SourceUrlError),
+    SourceUrl(#[from] rockspec::source::UrlError),
     #[error("error generating git source URL")]
     Git(#[from] git2::Error),
     #[error("refusing to generate nondeterministic rockspec with git source.\nSupply a `source.tag` parameter.")]
@@ -106,7 +106,7 @@ impl RockSourceTemplate {
         project_root: &Path,
         package: &package::Name,
         version: &package::Version,
-    ) -> Result<rockspec::RockSourceInternal, GenerateSourceError> {
+    ) -> Result<rockspec::source::internal::Spec, GenerateSourceError> {
         let package_spec = package::Spec::new(package.clone(), version.clone());
         let url_template_str = match version {
             package::Version::SemVer(ver) => self
@@ -159,9 +159,10 @@ impl RockSourceTemplate {
             )?),
             None => None,
         };
-        match rockspec::SourceUrl::from_str(&url_str)? {
-            rockspec::SourceUrl::File(_) | rockspec::SourceUrl::Url(_) => {
-                Ok(rockspec::RockSourceInternal {
+        match rockspec::source::internal::SourceUrl::from_str(&url_str)? {
+            rockspec::source::internal::SourceUrl::File(_)
+            | rockspec::source::internal::SourceUrl::Url(_) => {
+                Ok(rockspec::source::internal::Spec {
                     url: Some(url_str.to_string()),
                     file,
                     dir,
@@ -169,10 +170,12 @@ impl RockSourceTemplate {
                     tag,
                 })
             }
-            rockspec::SourceUrl::Git(_) if self.tag.is_none() && self.branch.is_none() => {
+            rockspec::source::internal::SourceUrl::Git(_)
+                if self.tag.is_none() && self.branch.is_none() =>
+            {
                 if let Ok(repo) = find_git_repo(project_root) {
                     let tag_or_rev = current_tag_or_revision(&repo)?;
-                    Ok(rockspec::RockSourceInternal {
+                    Ok(rockspec::source::internal::Spec {
                         url: Some(url_str.to_string()),
                         tag: Some(tag_or_rev),
                         file,
@@ -183,7 +186,7 @@ impl RockSourceTemplate {
                     Err(GenerateSourceError::NonDeterministicGitSource)
                 }
             }
-            rockspec::SourceUrl::Git(_) => Ok(rockspec::RockSourceInternal {
+            rockspec::source::internal::SourceUrl::Git(_) => Ok(rockspec::source::internal::Spec {
                 url: Some(url_str.to_string()),
                 file,
                 dir,

@@ -233,7 +233,7 @@ fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
 /// | `foo/` and the rockspec  | `<unpacked>/foo`     |
 /// | source files at the root | `<unpacked>`         |
 fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> PathBuf {
-    if let rockspec::RockSourceSpec::Git(git) = &rockspec.source().current_platform().source_spec {
+    if let rockspec::source::Spec::Git(git) = &rockspec.source().current_platform().source_spec {
         let repo_dir = unpacked_root.join(git.url.repo());
         if let Ok(Some(entry)) = single_non_rockspec_entry(unpacked_root) {
             if entry == repo_dir && entry.is_dir() {

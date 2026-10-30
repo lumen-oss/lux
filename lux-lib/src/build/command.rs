@@ -75,7 +75,7 @@ pub(crate) fn trace_output(output: &Output) {
     }
 }
 
-impl BuildBackend for rockspec::build::CommandBuildSpec {
+impl BuildBackend for rockspec::build::backend::Command {
     type Err = Error;
 
     #[tracing::instrument(name = "command::run", skip_all, level = "debug")]

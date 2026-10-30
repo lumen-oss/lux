@@ -46,7 +46,7 @@ pub enum Error {
     Fs(#[from] fs::Error),
 }
 
-impl BuildBackend for rockspec::build::RustBinaryBuildSpec {
+impl BuildBackend for rockspec::build::backend::RustBinary {
     type Err = Error;
 
     #[tracing::instrument(name = "rust_binary::run", skip_all, level = "debug")]

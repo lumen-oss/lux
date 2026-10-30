@@ -18,7 +18,7 @@ use crate::rockspec;
 use crate::{
     lockfile::RemotePackageSourceUrl,
     remote_package_source::RemotePackageSource,
-    rockspec::LuaDependencySpec,
+    rockspec::lua_dependency,
     variables::{GetVariableError, HasVariables},
 };
 #[derive(Clone, Debug)]
@@ -127,31 +127,31 @@ impl From<Name> for Req {
 }
 
 /// Wrapper structs for proper serialization of various dependency types.
-pub(crate) struct Dependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
-pub(crate) struct BuildDependencies<'a>(pub(crate) &'a Vec<LuaDependencySpec>);
+pub(crate) struct Dependencies<'a>(pub(crate) &'a Vec<lua_dependency::Spec>);
+pub(crate) struct BuildDependencies<'a>(pub(crate) &'a Vec<lua_dependency::Spec>);
 
-impl rockspec::DisplayAsLuaKV for Dependencies<'_> {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for Dependencies<'_> {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "dependencies".to_string(),
-            value: rockspec::DisplayLuaValue::List(
+            value: rockspec::display::LuaValue::List(
                 self.0
                     .iter()
-                    .map(|req| rockspec::DisplayLuaValue::String(req.to_string()))
+                    .map(|req| rockspec::display::LuaValue::String(req.to_string()))
                     .collect(),
             ),
         }
     }
 }
 
-impl rockspec::DisplayAsLuaKV for BuildDependencies<'_> {
-    fn display_lua(&self) -> rockspec::DisplayLuaKV {
-        rockspec::DisplayLuaKV {
+impl rockspec::display::AsLuaKV for BuildDependencies<'_> {
+    fn display_lua(&self) -> rockspec::display::LuaKV {
+        rockspec::display::LuaKV {
             key: "build_dependencies".to_string(),
-            value: rockspec::DisplayLuaValue::List(
+            value: rockspec::display::LuaValue::List(
                 self.0
                     .iter()
-                    .map(|req| rockspec::DisplayLuaValue::String(req.to_string()))
+                    .map(|req| rockspec::display::LuaValue::String(req.to_string()))
                     .collect(),
             ),
         }

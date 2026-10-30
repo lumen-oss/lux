@@ -105,7 +105,7 @@ where
 #[derive(Debug)]
 struct InstalledFiles {
     /// Lua source files (.lua) to embed.
-    src: Vec<(rockspec::build::Module, PathBuf)>,
+    src: Vec<(rockspec::build::backend::Module, PathBuf)>,
     /// Native Lua modules (.so/.dll/.dylib) to link.
     lib: Vec<PathBuf>,
 }
@@ -185,7 +185,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
                     .strip_prefix(&src_canonical)
                     .unwrap_or(&path)
                     .with_extension("");
-                if let Ok(module) = rockspec::build::Module::from_pathbuf(rel) {
+                if let Ok(module) = rockspec::build::backend::Module::from_pathbuf(rel) {
                     lua_sources.push((module, path));
                 }
             }

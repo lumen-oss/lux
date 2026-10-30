@@ -34,7 +34,7 @@ pub enum Error {
     Fs(#[from] fs::Error),
 }
 
-impl BuildBackend for rockspec::build::TreesitterParserBuildSpec {
+impl BuildBackend for rockspec::build::backend::Treesitter {
     type Err = Error;
 
     #[tracing::instrument(name = "treesitter_parser::run", skip_all, level = "debug")]

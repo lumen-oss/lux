@@ -183,45 +183,45 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
         && rockspec
             .build()
             .current_platform()
-            .build_backend
+            .backend
             .as_ref()
             .is_some_and(|backend| {
                 !matches!(
                     backend,
-                    rockspec::build::BuildBackendSpec::Builtin(_)
-                        | rockspec::build::BuildBackendSpec::Source
+                    rockspec::build::backend::Spec::Builtin(_)
+                        | rockspec::build::backend::Spec::Source
                 )
             })
     {
         Err(Error::LuauUnsupportedBuildBackend)
     } else {
         Ok(
-            match rockspec.build().current_platform().build_backend.to_owned() {
-                Some(rockspec::build::BuildBackendSpec::Builtin(build_spec)) => {
+            match rockspec.build().current_platform().backend.to_owned() {
+                Some(rockspec::build::backend::Spec::Builtin(build_spec)) => {
                     build_spec.run(args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::Make(make_spec)) => {
+                Some(rockspec::build::backend::Spec::Make(make_spec)) => {
                     make_spec.run(args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::CMake(cmake_spec)) => {
+                Some(rockspec::build::backend::Spec::CMake(cmake_spec)) => {
                     cmake_spec.run(args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::Command(command_spec)) => {
+                Some(rockspec::build::backend::Spec::Command(command_spec)) => {
                     command_spec.run(args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
+                Some(rockspec::build::backend::Spec::RustMlua(rust_mlua_spec)) => {
                     rust_mlua_spec.run(args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+                Some(rockspec::build::backend::Spec::RustBinary(rust_binary_spec)) => {
                     rust_binary_spec.run(args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::TreesitterParser(
-                    treesitter_parser_spec,
-                )) => treesitter_parser_spec.run(args).await?,
-                Some(rockspec::build::BuildBackendSpec::LuaRock(build_backend_name)) => {
+                Some(rockspec::build::backend::Spec::TreesitterParser(treesitter_parser_spec)) => {
+                    treesitter_parser_spec.run(args).await?
+                }
+                Some(rockspec::build::backend::Spec::LuaRock(build_backend_name)) => {
                     luarocks::build(&build_backend_name, rockspec, args).await?
                 }
-                Some(rockspec::build::BuildBackendSpec::Source) => source::build(args).await?,
+                Some(rockspec::build::backend::Spec::Source) => source::build(args).await?,
                 None => BuildInfo::default(),
             },
         )

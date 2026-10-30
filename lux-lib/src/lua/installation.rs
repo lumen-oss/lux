@@ -158,7 +158,7 @@ impl Installation {
             .map(|pkg_name| {
                 ExternalDependencyInfo::probe(
                     pkg_name,
-                    &rockspec::ExternalDependencySpec::default(),
+                    &rockspec::external_dependency::Spec::default(),
                     search_config,
                 )
             })

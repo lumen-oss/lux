@@ -19,7 +19,7 @@ use crate::{
     package_db::{self, PackageDB},
     pipeline::resolve::luarocks_build_backend_name,
     project,
-    rockspec::{self, LuaDependencySpec, Rockspec},
+    rockspec::{self, lua_dependency, Rockspec},
     tree::{self, InstallTree},
     workspace::{self, TreeError, Workspace},
 };
@@ -291,7 +291,7 @@ impl<'a, 'b> SyncPackages<'a, 'b> {
         Self { args, lock_type }
     }
 
-    fn gather(self) -> Result<Vec<LuaDependencySpec>, SyncError> {
+    fn gather(self) -> Result<Vec<lua_dependency::Spec>, SyncError> {
         let mut packages = Vec::new();
         for project in self.args.workspace.members() {
             let toml = project.toml().into_local()?;

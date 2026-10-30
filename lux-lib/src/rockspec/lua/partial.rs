@@ -1,16 +1,14 @@
+use super::super::platform;
 use crate::package;
 use std::collections::HashMap;
 
-use crate::{rockspec::Format, rockspec::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT};
+use crate::{rockspec::lua_dependency, rockspec::Format, ROCKSPEC_FUEL_LIMIT};
 use miette::Diagnostic;
 use ottavino::{Closure, Executor, Fuel};
 use ottavino_util::serde::from_value;
 use thiserror::Error;
 
-use super::super::{
-    build::BuildSpecInternal, DeploySpec, ExternalDependencySpec, PlatformSupport, RockDescription,
-    TestSpecInternal,
-};
+use super::super::{build, deploy, description, external_dependency, test};
 use super::parse_lua_tbl_or_default;
 
 /// Deserialized from a Lua `.rockspec`, not yet validated
@@ -18,19 +16,19 @@ use super::parse_lua_tbl_or_default;
 pub struct Partial {
     pub(crate) format: Option<Format>,
     pub(crate) package: Option<package::Name>,
-    pub(crate) build: Option<BuildSpecInternal>,
-    pub(crate) deploy: Option<DeploySpec>,
-    pub(crate) description: Option<RockDescription>,
-    pub(crate) supported_platforms: Option<PlatformSupport>,
-    pub(crate) dependencies: Option<Vec<LuaDependencySpec>>,
-    pub(crate) build_dependencies: Option<Vec<LuaDependencySpec>>,
-    pub(crate) external_dependencies: Option<HashMap<String, ExternalDependencySpec>>,
-    pub(crate) test_dependencies: Option<Vec<LuaDependencySpec>>,
-    pub(crate) test: Option<TestSpecInternal>,
+    pub(crate) build: Option<build::internal::Spec>,
+    pub(crate) deploy: Option<deploy::Spec>,
+    pub(crate) description: Option<description::Spec>,
+    pub(crate) supported_platforms: Option<platform::Support>,
+    pub(crate) dependencies: Option<Vec<lua_dependency::Spec>>,
+    pub(crate) build_dependencies: Option<Vec<lua_dependency::Spec>>,
+    pub(crate) external_dependencies: Option<HashMap<String, external_dependency::Spec>>,
+    pub(crate) test_dependencies: Option<Vec<lua_dependency::Spec>>,
+    pub(crate) test: Option<test::internal::Spec>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum PartialRockspecError {
+pub enum Error {
     #[error("rockspec execution exceeded fuel limit of {ROCKSPEC_FUEL_LIMIT} steps")]
     #[diagnostic(help(
         r#"the rockspec may be too complex or contain too many dependencies.
@@ -46,7 +44,7 @@ pub enum PartialRockspecError {
 }
 
 impl Partial {
-    pub fn new(rockspec_content: &str) -> Result<Self, PartialRockspecError> {
+    pub fn new(rockspec_content: &str) -> Result<Self, Error> {
         let mut lua = ottavino::Lua::core();
 
         let rockspec = lua.try_enter(|ctx| {
@@ -57,20 +55,16 @@ impl Partial {
             let output = executor.step(ctx, &mut Fuel::with(ROCKSPEC_FUEL_LIMIT))?;
 
             if !output {
-                return Ok(Err(PartialRockspecError::FuelLimitExceeded));
+                return Ok(Err(Error::FuelLimitExceeded));
             }
 
             let globals = ctx.globals();
 
             if !matches!(globals.get_value(ctx, "version"), ottavino::Value::Nil) {
-                return Ok(Err(PartialRockspecError::ExtraneousField(
-                    "version".to_string(),
-                )));
+                return Ok(Err(Error::ExtraneousField("version".to_string())));
             }
             if !matches!(globals.get_value(ctx, "source"), ottavino::Value::Nil) {
-                return Ok(Err(PartialRockspecError::ExtraneousField(
-                    "source".to_string(),
-                )));
+                return Ok(Err(Error::ExtraneousField("source".to_string())));
             }
 
             let rockspec = Partial {

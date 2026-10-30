@@ -16,7 +16,7 @@ use thiserror::Error;
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Which<'a> {
     #[builder(start_fn)]
-    module: rockspec::build::Module,
+    module: rockspec::build::backend::Module,
     #[builder(start_fn)]
     config: &'a Config,
     #[builder(field)]
@@ -58,7 +58,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     LuaVersion(#[from] lua::version::Error),
     #[error("lua module {0} not found.")]
-    ModuleNotFound(rockspec::build::Module),
+    ModuleNotFound(rockspec::build::backend::Module),
 }
 
 fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
@@ -134,7 +134,7 @@ mod tests {
             .unwrap();
 
         let result = Which::new(
-            rockspec::build::Module::from_str("foo.bar").unwrap(),
+            rockspec::build::backend::Module::from_str("foo.bar").unwrap(),
             &config,
         )
         .search()
@@ -150,7 +150,7 @@ mod tests {
             "foo"
         );
         let result = Which::new(
-            rockspec::build::Module::from_str("bat.baz").unwrap(),
+            rockspec::build::backend::Module::from_str("bat.baz").unwrap(),
             &config,
         )
         .search()
@@ -165,23 +165,29 @@ mod tests {
                 .to_string_lossy(),
             "bat"
         );
-        let result = Which::new(rockspec::build::Module::from_str("hello").unwrap(), &config)
-            .search()
-            .unwrap();
+        let result = Which::new(
+            rockspec::build::backend::Module::from_str("hello").unwrap(),
+            &config,
+        )
+        .search()
+        .unwrap();
         assert_eq!(result.file_name().unwrap().to_string_lossy(), "hello.luau");
-        let result = Which::new(rockspec::build::Module::from_str("extra").unwrap(), &config)
-            .search()
-            .unwrap();
+        let result = Which::new(
+            rockspec::build::backend::Module::from_str("extra").unwrap(),
+            &config,
+        )
+        .search()
+        .unwrap();
         assert_eq!(result.file_name().unwrap().to_string_lossy(), "init.luau");
         let result = Which::new(
-            rockspec::build::Module::from_str("foo.bar").unwrap(),
+            rockspec::build::backend::Module::from_str("foo.bar").unwrap(),
             &config,
         )
         .package("lua-cjson".parse().unwrap())
         .search();
         assert!(matches!(result, Err(Error::ModuleNotFound(_))));
         let result = Which::new(
-            rockspec::build::Module::from_str("foo.bar").unwrap(),
+            rockspec::build::backend::Module::from_str("foo.bar").unwrap(),
             &config,
         )
         .package("neorg@8.1.1-1".parse().unwrap())

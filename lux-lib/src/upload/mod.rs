@@ -571,7 +571,7 @@ mod helpers {
     use crate::upload::{ToolCheckError, UserCheckError};
     use itertools::Itertools;
     use reqwest::Client;
-    use rockspec::toml::Remote;
+    use rockspec::toml;
     use ssri::Integrity;
     use url::Url;
 
@@ -668,7 +668,7 @@ mod helpers {
         api_key: &ApiKey,
         config: &Config,
         package_db: &PackageDB,
-    ) -> Result<(Remote, String), Error> {
+    ) -> Result<(toml::Remote, String), Error> {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;
 

@@ -24,7 +24,7 @@ use url::Url;
 use crate::fs;
 use crate::package::RemotePackageTypeFilterSpec;
 use crate::remote_package_source::RemotePackageSource;
-use crate::rockspec::LuaDependencySpec;
+use crate::rockspec::lua_dependency;
 use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
 
@@ -763,7 +763,7 @@ impl PackageLock {
             .cloned()
     }
 
-    fn has_rock_with_equal_constraint(&self, req: &LuaDependencySpec) -> Option<LockedPackage> {
+    fn has_rock_with_equal_constraint(&self, req: &lua_dependency::Spec) -> Option<LockedPackage> {
         self.list()
             .get(req.name())
             .map(|packages| {
@@ -783,7 +783,7 @@ impl PackageLock {
     /// here is because packages need to be installed in order to be added.
     pub(crate) fn package_sync_spec(
         &self,
-        packages: &[LuaDependencySpec],
+        packages: &[lua_dependency::Spec],
         strategy: &SyncStrategy<'_>,
     ) -> PackageSyncSpec {
         let pkg_dir_exists = |pkg: &LockedPackage| match strategy {
@@ -985,7 +985,7 @@ pub struct FlushLockfileError {
 /// A specification for syncing a list of packages with a lockfile
 #[derive(Debug, Default)]
 pub(crate) struct PackageSyncSpec {
-    pub to_add: Vec<LuaDependencySpec>,
+    pub to_add: Vec<lua_dependency::Spec>,
     pub to_remove: Vec<LockedPackage>,
 }
 
@@ -1189,7 +1189,7 @@ impl<P: LockfilePermissions> WorkspaceLockfile<P> {
 
     pub(crate) fn package_sync_spec(
         &self,
-        packages: &[LuaDependencySpec],
+        packages: &[lua_dependency::Spec],
         deps: &LockedPackageLockType,
         strategy: &SyncStrategy<'_>,
     ) -> PackageSyncSpec {
@@ -2013,7 +2013,7 @@ mod tests {
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
         let lockfile = tree.lockfile().unwrap();
 
-        let packages: Vec<LuaDependencySpec> = vec![
+        let packages: Vec<lua_dependency::Spec> = vec![
             package::Req::parse("neorg@8.8.1-1").unwrap().into(),
             // This package isn't installed in the tree
             package::Req::parse("lua-cjson@2.1.0").unwrap().into(),
