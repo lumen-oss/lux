@@ -3,7 +3,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 #[derive(Error, Debug, Clone, Diagnostic)]
 #[non_exhaustive]
-pub enum VariableSubstitutionError {
+pub enum Error {
     #[error("unable to substitute variables: {}", .0.join(", "))]
     #[diagnostic(help(
         r#"check that all $(VAR) references refer to defined variables
@@ -89,15 +89,10 @@ fn parser<'a>(
 /// Substitute variables of the format `$(VAR)`, where `VAR` is the variable name
 /// passed to `get_var`.
 #[tracing::instrument(level = "trace", skip(variables))]
-pub(crate) fn substitute(
-    variables: &[&dyn HasVariables],
-    input: &str,
-) -> Result<String, VariableSubstitutionError> {
+pub(crate) fn substitute(variables: &[&dyn HasVariables], input: &str) -> Result<String, Error> {
     let p = |input: &str| {
         parser(variables).parse(input).into_result().map_err(|err| {
-            VariableSubstitutionError::SubstitutionError(
-                err.into_iter().map(|e| e.to_string()).collect(),
-            )
+            Error::SubstitutionError(err.into_iter().map(|e| e.to_string()).collect())
         })
     };
 
@@ -108,7 +103,7 @@ pub(crate) fn substitute(
 
     while next != output {
         if count > 100 {
-            return Err(VariableSubstitutionError::RecursionLimit);
+            return Err(Error::RecursionLimit);
         }
 
         count += 1;
@@ -169,10 +164,7 @@ mod tests {
         let input = "$(INFINITELY_RECURSIVE_1)";
         let result = substitute(&[&TestVariables], input);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            VariableSubstitutionError::RecursionLimit
-        ));
+        assert!(matches!(result.unwrap_err(), Error::RecursionLimit));
     }
 
     #[test]

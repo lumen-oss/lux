@@ -698,7 +698,7 @@ mod tests {
     use std::path::PathBuf;
     use std::str::FromStr;
 
-    use crate::git::{GitRef, GitSource};
+    use crate::git;
     use url::Url;
 
     use super::*;
@@ -903,9 +903,9 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
             rockspec.local.source.default.source_spec,
-            source::Spec::Git(GitSource {
+            source::Spec::Git(git::Source {
                 url: "https://hub.com/owner/example-project/".parse().unwrap(),
-                git_ref: Some(GitRef::Branch("bar".into()))
+                git_ref: Some(git::Ref::Branch("bar".into()))
             })
         );
         assert_eq!(rockspec.local.test, PerPlatform::default());
@@ -922,9 +922,9 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
             rockspec.local.source.default.source_spec,
-            source::Spec::Git(GitSource {
+            source::Spec::Git(git::Source {
                 url: "https://hub.com/owner/example-project/".parse().unwrap(),
-                git_ref: Some(GitRef::Tag("bar".into()))
+                git_ref: Some(git::Ref::Tag("bar".into()))
             })
         );
         let rockspec_content = "
@@ -1336,9 +1336,9 @@ mod tests {
         let rockspec = Remote::new(&rockspec_content).unwrap();
         assert_eq!(
             rockspec.local.source.default.source_spec,
-            source::Spec::Git(GitSource {
+            source::Spec::Git(git::Source {
                 url: "https://hub.com/example-project/.git".parse().unwrap(),
-                git_ref: Some(GitRef::Branch("bar".into()))
+                git_ref: Some(git::Ref::Branch("bar".into()))
             })
         );
         assert_eq!(
@@ -1348,9 +1348,9 @@ mod tests {
                 .get(&platform::Identifier::MacOSX)
                 .map(|it| it.source_spec.clone())
                 .unwrap(),
-            source::Spec::Git(GitSource {
+            source::Spec::Git(git::Source {
                 url: "https://hub.com/example-project/.git".parse().unwrap(),
-                git_ref: Some(GitRef::Branch("mac".into()))
+                git_ref: Some(git::Ref::Branch("mac".into()))
             })
         );
         assert_eq!(
@@ -1360,9 +1360,9 @@ mod tests {
                 .get(&platform::Identifier::Windows)
                 .map(|it| it.source_spec.clone())
                 .unwrap(),
-            source::Spec::Git(GitSource {
+            source::Spec::Git(git::Source {
                 url: "https://winhub.com/example-project/.git".parse().unwrap(),
-                git_ref: Some(GitRef::Branch("win".into()))
+                git_ref: Some(git::Ref::Branch("win".into()))
             })
         );
         let rockspec_content = "
@@ -1739,9 +1739,9 @@ mod tests {
     #[test]
     pub fn remote_lua_rockspec_from_package_and_source_spec() {
         let package_req = "foo@1.0.5".parse().unwrap();
-        let source = GitSource {
+        let source = git::Source {
             url: "https://hub.com/owner/example-project.git".parse().unwrap(),
-            git_ref: Some(GitRef::Tag("1.0.5".into())),
+            git_ref: Some(git::Ref::Tag("1.0.5".into())),
         };
         let source_spec = source::Spec::Git(source);
         let rockspec =

@@ -15,8 +15,7 @@ use url::{ParseError, Url};
 
 use crate::{
     config::Config,
-    fs,
-    git::{GitRef, GitSource},
+    fs, git,
     lockfile::RemotePackageSourceUrl,
     luarocks,
     package::db::{search, PackageDB},
@@ -178,10 +177,10 @@ impl RemoteRockDownload {
     ) -> Result<Self, SearchAndDownloadError> {
         let package_spec: package::Spec = package_req.try_into()?;
         let source_url = Some(match &source_spec {
-            rockspec::source::Spec::Git(GitSource { url, git_ref }) => {
+            rockspec::source::Spec::Git(git::Source { url, git_ref }) => {
                 let checkout_ref = match git_ref {
-                    Some(GitRef::Tag(tag)) => tag.clone(),
-                    Some(GitRef::Branch(branch)) => branch.clone(),
+                    Some(git::Ref::Tag(tag)) => tag.clone(),
+                    Some(git::Ref::Branch(branch)) => branch.clone(),
                     None => {
                         return Err(SearchAndDownloadError::MissingCheckoutRef(url.to_string()))
                     }

@@ -14,7 +14,7 @@ pub struct RemoteGitUrl {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum RemoteGitUrlParseError {
+pub enum Error {
     #[error("error parsing git URL")]
     GitUrlParse(#[from] url::ParseError),
     #[error("unsupported git remote scheme {scheme} in URL {url}")]
@@ -47,7 +47,7 @@ impl RemoteGitUrl {
 }
 
 impl FromStr for RemoteGitUrl {
-    type Err = RemoteGitUrlParseError;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let url: Url = match normalize_git_url(s) {
@@ -56,13 +56,13 @@ impl FromStr for RemoteGitUrl {
         };
         let scheme = url.scheme();
         if !matches!(scheme, "ssh" | "git" | "http" | "https" | "ftp" | "ftps") {
-            return Err(RemoteGitUrlParseError::UnsupportedRemoteScheme {
+            return Err(Error::UnsupportedRemoteScheme {
                 scheme: scheme.into(),
                 url,
             });
         }
         let Some(host_str) = url.host_str() else {
-            return Err(RemoteGitUrlParseError::MissingHostName(url));
+            return Err(Error::MissingHostName(url));
         };
         Ok(RemoteGitUrl {
             host_str: String::from(host_str),

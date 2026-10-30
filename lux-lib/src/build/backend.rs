@@ -12,7 +12,7 @@ use crate::{
     lockfile::LockedPackageSpec,
     lua, rockspec,
     tree::{InstallTree, RockLayout},
-    variables::{self, Environment, VariableSubstitutionError},
+    variables::{self, Environment},
 };
 
 #[derive(Builder)]
@@ -48,7 +48,7 @@ pub(crate) fn substitute_variables(
     lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
     config: &Config,
-) -> Result<String, VariableSubstitutionError> {
+) -> Result<String, variables::Error> {
     variables::substitute(
         &[
             output_paths,

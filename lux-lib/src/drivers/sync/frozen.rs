@@ -66,7 +66,7 @@ impl<State> SyncBuilder<'_, State>
 where
     State: sync_builder::State + sync_builder::IsComplete,
 {
-    pub async fn sync(self) -> Result<SyncReport, SyncError> {
+    pub async fn sync(self) -> Result<SyncReport, Error> {
         let mut args = self._build();
         let test_report = if args.test.unwrap_or(false) {
             Some(do_sync(&args, &LockedPackageLockType::Test).await?)
@@ -125,7 +125,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum SyncError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     FlushLockfile(#[from] FlushLockfileError),
@@ -170,23 +170,20 @@ pub enum SyncError {
     PackageDB(Box<package::db::Error>),
 }
 
-impl From<InstallPackagesError> for SyncError {
+impl From<InstallPackagesError> for Error {
     fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<package::db::Error> for SyncError {
+impl From<package::db::Error> for Error {
     fn from(source: package::db::Error) -> Self {
         Self::PackageDB(Box::new(source))
     }
 }
 
 #[tracing::instrument(name = "Syncing dependencies", skip_all)]
-async fn do_sync(
-    args: &Sync<'_>,
-    lock_type: &LockedPackageLockType,
-) -> Result<SyncReport, SyncError> {
+async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<SyncReport, Error> {
     // NOTE(vhyrro): tools like cc and pkg-config leak cargo:rerun-if-env-changed
     // stdout calls, therefore gag all standard output during sync.
     let _stdout_gag = gag::Gag::stdout();
@@ -291,7 +288,7 @@ impl<'a, 'b> SyncPackages<'a, 'b> {
         Self { args, lock_type }
     }
 
-    fn gather(self) -> Result<Vec<lua_dependency::Spec>, SyncError> {
+    fn gather(self) -> Result<Vec<lua_dependency::Spec>, Error> {
         let mut packages = Vec::new();
         for project in self.args.workspace.members() {
             let toml = project.toml().into_local()?;
@@ -377,14 +374,14 @@ fn validate_integrity(
     args: &Sync<'_>,
     to_add: &[(tree::EntryType, LockedPackage)],
     install_tree_lockfile: &Lockfile<ReadOnly>,
-) -> Result<(), SyncError> {
+) -> Result<(), Error> {
     if !args.validate_integrity.unwrap_or(true) {
         return Ok(());
     }
     for (_, package) in to_add {
         install_tree_lockfile
             .validate_integrity(package)
-            .map_err(|source| SyncError::Integrity {
+            .map_err(|source| Error::Integrity {
                 package: package.name().clone(),
                 source,
             })?;
@@ -401,7 +398,7 @@ async fn install_missing_packages<T>(
     lock_type: &LockedPackageLockType,
     package_sync_spec: &PackageSyncSpec,
     report: &mut SyncReport,
-) -> Result<(), SyncError>
+) -> Result<(), Error>
 where
     T: InstallTree + Clone + Send + std::marker::Sync + 'static,
 {

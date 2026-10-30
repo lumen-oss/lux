@@ -1,6 +1,5 @@
 use crate::config::Config;
-use crate::git::url::RemoteGitUrlParseError;
-use crate::git::{GitRef, GitSource};
+use crate::git;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::package;
@@ -70,9 +69,9 @@ where
             Some(source_url) => match source_url {
                 RemotePackageSourceUrl::Git {
                     url, checkout_ref, ..
-                } => rockspec::source::Spec::Git(GitSource {
+                } => rockspec::source::Spec::Git(git::Source {
                     url: url.parse()?,
-                    git_ref: Some(GitRef::Tag(checkout_ref.clone())),
+                    git_ref: Some(git::Ref::Tag(checkout_ref.clone())),
                 }),
                 RemotePackageSourceUrl::Url { url } => rockspec::source::Spec::Url(url.clone()),
                 RemotePackageSourceUrl::File { path } => rockspec::source::Spec::File(path.clone()),
@@ -123,7 +122,7 @@ pub enum FetchSrcError {
     GitJoin(#[from] tokio::task::JoinError),
     #[error("failed to parse git URL")]
     #[diagnostic(forward(0))]
-    GitUrlParse(#[from] RemoteGitUrlParseError),
+    GitUrlParse(#[from] git::url::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Request(#[from] RequestError),
@@ -295,8 +294,8 @@ async fn fetch_src_impl<R: Rockspec>(
                 fetch_options.update_fetchhead(false);
                 fetch_options.remote_callbacks(callbacks);
                 let checkout_ref = match &git_ref {
-                    Some(GitRef::Tag(tag)) => Some(tag.as_str()),
-                    Some(GitRef::Branch(branch)) => Some(branch.as_str()),
+                    Some(git::Ref::Tag(tag)) => Some(tag.as_str()),
+                    Some(git::Ref::Branch(branch)) => Some(branch.as_str()),
                     None => None,
                 };
                 if checkout_ref.is_none() {
@@ -308,7 +307,7 @@ async fn fetch_src_impl<R: Rockspec>(
 
                 let checkout_ref = match checkout_ref {
                     Some(checkout_ref) => {
-                        let ref_name = if let Some(GitRef::Branch(branch)) = &git_ref {
+                        let ref_name = if let Some(git::Ref::Branch(branch)) = &git_ref {
                             format!("origin/{branch}")
                         } else {
                             checkout_ref.to_string()

@@ -18,7 +18,7 @@ use crate::{
     path::{self, Paths},
     rockspec,
     tree::{self, InstallTree},
-    variables::{self, GetVariableError, HasVariables, VariableSubstitutionError},
+    variables::{self, GetVariableError, HasVariables},
 };
 
 const CMAKE_BUILD_FILE: &str = "build.lux";
@@ -45,7 +45,7 @@ pub enum Error {
     CommandNotFound(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitution(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] variables::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),

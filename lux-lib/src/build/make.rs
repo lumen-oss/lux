@@ -18,7 +18,7 @@ use crate::{
     path::{self, Paths},
     rockspec,
     tree::{self, InstallTree},
-    variables::VariableSubstitutionError,
+    variables,
 };
 
 #[derive(Error, Debug, Diagnostic)]
@@ -44,7 +44,7 @@ pub enum Error {
     CommandNotFound(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitution(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] variables::Error),
     #[error("{0} not found")]
     #[diagnostic(help(
         "ensure the Makefile exists in the build directory or check the rockspec source layout."

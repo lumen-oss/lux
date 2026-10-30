@@ -20,7 +20,7 @@ use url::Url;
 use lux_lib::{
     build::BuildBehaviour,
     config::{self, Config},
-    git::{shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, GitRef, GitSource},
+    git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl},
     lockfile::{
         LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile,
         LockfileGuard, OptState, PinnedState, ReadOnly, ReadWrite,
@@ -1521,9 +1521,9 @@ fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<lua_dependency
             .parse::<RemoteGitUrlShorthand>()
             .map_err(|err| LuaError::DeserializeError(err.to_string()))?;
         let url: RemoteGitUrl = shorthand.into();
-        Some(rockspec::source::Spec::Git(GitSource {
+        Some(rockspec::source::Spec::Git(git::Source {
             url,
-            git_ref: rev.map(GitRef::Tag),
+            git_ref: rev.map(git::Ref::Tag),
         }))
     } else {
         path.map(|path| rockspec::source::Spec::File(PathBuf::from(path)))
@@ -1719,11 +1719,11 @@ impl mlua::UserData for RockDescriptionLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct GitSourceLua(pub GitSource);
+pub struct GitSourceLua(pub git::Source);
 
 impl Typed for GitSourceLua {
     fn ty() -> Type {
-        Type::named("GitSource")
+        Type::named("git.Source")
     }
 }
 
@@ -1732,13 +1732,13 @@ impl TypedUserData for GitSourceLua {
         methods.add_method("url", |_, this, ()| Ok(this.0.url.to_string()));
         methods.add_method("tag", |_, this, ()| {
             Ok(match &this.0.git_ref {
-                Some(GitRef::Tag(tag)) => Some(tag.clone()),
+                Some(git::Ref::Tag(tag)) => Some(tag.clone()),
                 _ => None,
             })
         });
         methods.add_method("branch", |_, this, ()| {
             Ok(match &this.0.git_ref {
-                Some(GitRef::Branch(branch)) => Some(branch.clone()),
+                Some(git::Ref::Branch(branch)) => Some(branch.clone()),
                 _ => None,
             })
         });
@@ -3425,7 +3425,7 @@ mod definitions_registry {
         "rockspec.lua_dependency.Spec" => LuaDependencySpecLua,
         "rockspec.platform.Support" => PlatformSupportLua,
         "rockspec.description.Spec" => RockDescriptionLua,
-        "GitSource" => GitSourceLua,
+        "git.Source" => GitSourceLua,
         "rockspec.source.Remote" => RemoteRockSourceLua,
         "rockspec.test.Busted" => BustedTestSpecLua,
         "rockspec.test.Command" => CommandTestSpecLua,

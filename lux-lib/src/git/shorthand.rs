@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use crate::git::url::{RemoteGitUrl, RemoteGitUrlParseError};
+use crate::git::url::{self, RemoteGitUrl};
 use chumsky::{prelude::*, Parser};
 use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer};
@@ -13,30 +13,30 @@ const CODEBERG: &str = "codeberg";
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("error parsing git source: {0:#?}")]
-pub struct ParseError(Vec<String>);
+pub struct Error(Vec<String>);
 
 /// Helper for parsing Git URLs from shorthands, e.g. "gitlab:owner/repo"
 #[derive(Debug, Clone)]
 pub struct RemoteGitUrlShorthand(RemoteGitUrl);
 
 impl RemoteGitUrlShorthand {
-    pub fn parse_with_prefix(s: &str) -> Result<Self, ParseError> {
+    pub fn parse_with_prefix(s: &str) -> Result<Self, Error> {
         prefix_parser()
             .parse(s)
             .into_result()
-            .map_err(|err| ParseError(err.into_iter().map(|e| e.to_string()).collect()))
+            .map_err(|err| Error(err.into_iter().map(|e| e.to_string()).collect()))
     }
     pub fn repo_name() {}
 }
 
 impl FromStr for RemoteGitUrlShorthand {
-    type Err = ParseError;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match parser()
             .parse(s)
             .into_result()
-            .map_err(|err| ParseError(err.into_iter().map(|e| e.to_string()).collect()))
+            .map_err(|err| Error(err.into_iter().map(|e| e.to_string()).collect()))
         {
             Ok(url) => Ok(url),
             Err(err) => match s.parse() {
@@ -84,7 +84,7 @@ fn url_from_git_host(
     host: GitHost,
     owner: String,
     repo: String,
-) -> Result<RemoteGitUrlShorthand, RemoteGitUrlParseError> {
+) -> Result<RemoteGitUrlShorthand, url::Error> {
     let url_str = match host {
         GitHost::Github => format!("https://github.com/{owner}/{repo}.git"),
         GitHost::Gitlab => format!("https://gitlab.com/{owner}/{repo}.git"),

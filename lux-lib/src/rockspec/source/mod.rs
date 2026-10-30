@@ -1,14 +1,10 @@
 use super::platform;
 use crate::{
-    git::{
-        url::{RemoteGitUrl, RemoteGitUrlParseError},
-        GitSource,
-    },
+    git::{self, url::RemoteGitUrl},
     rockspec::platform::per_platform_from_intermediate,
     wally,
 };
 
-pub use crate::git::GitRef;
 use miette::Diagnostic;
 use reqwest::Url;
 use serde::{de, Deserialize, Deserializer};
@@ -122,13 +118,13 @@ impl TryFrom<internal::Spec> for Remote {
 
         let source_spec = match (url, internal.tag, internal.branch) {
             (source, None, None) => Ok(Spec::default_from_source_url(source)),
-            (internal::SourceUrl::Git(url), Some(tag), None) => Ok(Spec::Git(GitSource {
+            (internal::SourceUrl::Git(url), Some(tag), None) => Ok(Spec::Git(git::Source {
                 url,
-                git_ref: Some(GitRef::Tag(tag)),
+                git_ref: Some(git::Ref::Tag(tag)),
             })),
-            (internal::SourceUrl::Git(url), None, Some(branch)) => Ok(Spec::Git(GitSource {
+            (internal::SourceUrl::Git(url), None, Some(branch)) => Ok(Spec::Git(git::Source {
                 url,
-                git_ref: Some(GitRef::Branch(branch)),
+                git_ref: Some(git::Ref::Branch(branch)),
             })),
             _ => Err(Error::InvalidCombination),
         }?;
@@ -149,7 +145,7 @@ impl<'de> Deserialize<'de> for PerPlatform<Remote> {
 /// Specifies a rock's source
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Spec {
-    Git(GitSource),
+    Git(git::Source),
     File(PathBuf),
     Url(Url),
     Wally(wally::package::Req),
@@ -160,7 +156,7 @@ impl Spec {
         match url {
             internal::SourceUrl::File(path) => Self::File(path),
             internal::SourceUrl::Url(url) => Self::Url(url),
-            internal::SourceUrl::Git(url) => Self::Git(GitSource { url, git_ref: None }),
+            internal::SourceUrl::Git(url) => Self::Git(git::Source { url, git_ref: None }),
         }
     }
 }
@@ -245,7 +241,7 @@ const LUAROCKS_BUILD_RULES_URL: &str =
 #[error("failed to parse source url")]
 pub enum UrlError {
     Io(#[from] io::Error),
-    Git(#[from] RemoteGitUrlParseError),
+    Git(#[from] git::url::Error),
     Url(#[source] <Url as FromStr>::Err),
     #[error("lux does not support rockspecs with CVS sources.")]
     #[diagnostic(
