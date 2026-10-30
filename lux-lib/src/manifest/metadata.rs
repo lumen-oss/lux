@@ -1,5 +1,5 @@
 use crate::package;
-use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
+use crate::remote;
 use crate::ROCKSPEC_FUEL_LIMIT;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -10,7 +10,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ManifestMetadata {
-    pub repository: HashMap<package::Name, HashMap<package::Version, Vec<RemotePackageType>>>,
+    pub repository: HashMap<package::Name, HashMap<package::Version, Vec<remote::package::Kind>>>,
 }
 
 impl<'de> serde::Deserialize<'de> for ManifestMetadata {
@@ -70,8 +70,8 @@ impl ManifestMetadata {
     pub fn latest_match(
         &self,
         lua_package_req: &package::Req,
-        filter: &RemotePackageTypeFilterSpec,
-    ) -> Option<(package::Spec, RemotePackageType)> {
+        filter: &remote::package::kind::FilterSpec,
+    ) -> Option<(package::Spec, remote::package::Kind)> {
         if !self.has_rock(lua_package_req.name()) {
             return None;
         }
@@ -82,9 +82,9 @@ impl ManifestMetadata {
             .flat_map(|(version, rock_types)| {
                 rock_types.iter().filter_map(move |rock_type| {
                     let include = match rock_type {
-                        RemotePackageType::Rockspec => filter.rockspec,
-                        RemotePackageType::Src => filter.src,
-                        RemotePackageType::Binary => filter.binary,
+                        remote::package::Kind::Rockspec => filter.rockspec,
+                        remote::package::Kind::Src => filter.src,
+                        remote::package::Kind::Binary => filter.binary,
                     };
                     if include {
                         Some((version, rock_type))
@@ -121,7 +121,7 @@ impl ManifestMetadata {
                             let version = package::Version::parse(version_str.as_str()).ok()?;
                             let entries = entries
                                 .into_iter()
-                                .filter_map(|entry| RemotePackageType::try_from(entry).ok())
+                                .filter_map(|entry| remote::package::Kind::try_from(entry).ok())
                                 .collect_vec();
                             Some((version, entries))
                         })
@@ -141,17 +141,17 @@ struct ManifestRockEntry {
     pub arch: String,
 }
 
-impl TryFrom<ManifestRockEntry> for RemotePackageType {
+impl TryFrom<ManifestRockEntry> for remote::package::Kind {
     type Error = UnsupportedArchitectureError;
     fn try_from(
         ManifestRockEntry { arch }: ManifestRockEntry,
     ) -> Result<Self, UnsupportedArchitectureError> {
         match arch.as_str() {
-            "rockspec" => Ok(RemotePackageType::Rockspec),
-            "src" => Ok(RemotePackageType::Src),
-            "all" => Ok(RemotePackageType::Binary),
+            "rockspec" => Ok(remote::package::Kind::Rockspec),
+            "src" => Ok(remote::package::Kind::Src),
+            "all" => Ok(remote::package::Kind::Binary),
             arch if arch == crate::luarocks::current_platform_luarocks_identifier() => {
-                Ok(RemotePackageType::Binary)
+                Ok(remote::package::Kind::Binary)
             }
             _ => Err(UnsupportedArchitectureError),
         }
@@ -214,7 +214,7 @@ mod tests {
         assert!(metadata
             .latest_match(&package_req, &Default::default())
             .is_some());
-        let filter = RemotePackageTypeFilterSpec {
+        let filter = remote::package::kind::FilterSpec {
             rockspec: false,
             src: true,
             binary: true,
@@ -242,22 +242,22 @@ mod tests {
         let (_, rock_type) = metadata
             .latest_match(&package_req, &Default::default())
             .unwrap();
-        assert_eq!(rock_type, RemotePackageType::Binary);
+        assert_eq!(rock_type, remote::package::Kind::Binary);
 
-        let no_binary = RemotePackageTypeFilterSpec {
+        let no_binary = remote::package::kind::FilterSpec {
             rockspec: true,
             src: true,
             binary: false,
         };
         let (_, rock_type) = metadata.latest_match(&package_req, &no_binary).unwrap();
-        assert_eq!(rock_type, RemotePackageType::Rockspec);
+        assert_eq!(rock_type, remote::package::Kind::Rockspec);
 
-        let src_only = RemotePackageTypeFilterSpec {
+        let src_only = remote::package::kind::FilterSpec {
             rockspec: false,
             src: true,
             binary: false,
         };
         let (_, rock_type) = metadata.latest_match(&package_req, &src_only).unwrap();
-        assert_eq!(rock_type, RemotePackageType::Src);
+        assert_eq!(rock_type, remote::package::Kind::Src);
     }
 }

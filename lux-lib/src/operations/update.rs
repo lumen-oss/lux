@@ -1,4 +1,5 @@
 use crate::package;
+use crate::remote;
 use std::io;
 
 use crate::{
@@ -11,7 +12,6 @@ use crate::{
     lua,
     package::RockConstraintUnsatisfied,
     package_db::{self, PackageDB},
-    remote_package_source::RemotePackageSource,
     tree::{self, InstallTree, Tree},
     workspace::{self, TreeError, Workspace},
 };
@@ -22,8 +22,8 @@ use thiserror::Error;
 
 use super::{PackageInstallSpec, RemoveError, Uninstall};
 
-use crate::drivers::install_packages::{self, InstallPackages};
 use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
+use crate::drivers::{InstallPackages, InstallPackagesError};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum UpdateError {
@@ -32,7 +32,7 @@ pub enum UpdateError {
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
     #[error("failed to update rock")]
     #[diagnostic(forward(0))]
-    Install(#[from] Box<install_packages::Error>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
     Remove(#[from] RemoveError),
@@ -58,8 +58,8 @@ pub enum UpdateError {
     Sync(#[from] Box<sync::Error>),
 }
 
-impl From<install_packages::Error> for UpdateError {
-    fn from(source: install_packages::Error) -> Self {
+impl From<InstallPackagesError> for UpdateError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
@@ -308,15 +308,15 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, pack
         .filter(|package| {
             package.pinned() == PinnedState::Unpinned
                 && match package.source() {
-                    RemotePackageSource::LuarocksRockspec(_) => true,
-                    RemotePackageSource::LuarocksSrcRock(_) => true,
-                    RemotePackageSource::LuarocksBinaryRock(_) => true,
-                    RemotePackageSource::Wally(_) => true,
+                    remote::package::Source::LuarocksRockspec(_) => true,
+                    remote::package::Source::LuarocksSrcRock(_) => true,
+                    remote::package::Source::LuarocksBinaryRock(_) => true,
+                    remote::package::Source::Wally(_) => true,
                     // We don't support updating git sources or local packages
-                    RemotePackageSource::RockspecContent(_) => false,
-                    RemotePackageSource::Local => false,
+                    remote::package::Source::RockspecContent(_) => false,
+                    remote::package::Source::Local => false,
                     #[cfg(test)]
-                    RemotePackageSource::Test => false,
+                    remote::package::Source::Test => false,
                 }
         })
         .map(|package| (package.clone(), package.spec().as_package_req()))

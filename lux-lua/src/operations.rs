@@ -7,8 +7,8 @@ use std::{collections::HashMap, path::PathBuf};
 use itertools::Itertools;
 use lux_lib::tree::InstallTree;
 use lux_lib::{
-    drivers::install_packages::InstallPackages,
     drivers::sync::{Sync, SyncMode, TargetSet},
+    drivers::InstallPackages,
     lockfile::LockedPackageId,
     lua,
     operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},

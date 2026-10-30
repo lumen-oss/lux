@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::Path, str::FromStr};
 
 use walkdir::WalkDir;
 
-use crate::{manifest::ManifestMetadata, package::RemotePackageType};
+use crate::{manifest::ManifestMetadata, remote};
 
 /// Construct manifest metadata from a vendor directory.
 #[tracing::instrument(level = "trace")]
@@ -16,9 +16,9 @@ pub(crate) fn manifest_from_vendor_dir(vendor_dir: &Path) -> ManifestMetadata {
             let file = file.path();
             let is_binary = file.extension().is_some_and(|ext| ext == "rock");
             let package_type = if is_binary {
-                RemotePackageType::Binary
+                remote::package::Kind::Binary
             } else {
-                RemotePackageType::Rockspec
+                remote::package::Kind::Rockspec
             };
             let file_name = if file.is_file() && is_binary {
                 file.with_extension("")
@@ -61,13 +61,13 @@ mod tests {
             .or_insert_with(HashMap::default);
         foo_pkgs.insert(
             "0.1.0-1".parse().unwrap(),
-            vec![RemotePackageType::Rockspec],
+            vec![remote::package::Kind::Rockspec],
         );
         let foo_dir = vendor_dir.child("foo@1.0.0-1");
         foo_dir.create_dir_all().unwrap();
         foo_pkgs.insert(
             "1.0.0-1".parse().unwrap(),
-            vec![RemotePackageType::Rockspec],
+            vec![remote::package::Kind::Rockspec],
         );
         let bar_dir = vendor_dir.child("bar@2.0.0-2");
         bar_dir.create_dir_all().unwrap();
@@ -76,14 +76,17 @@ mod tests {
             .or_insert_with(HashMap::default);
         bar_pkgs.insert(
             "2.0.0-2".parse().unwrap(),
-            vec![RemotePackageType::Rockspec],
+            vec![remote::package::Kind::Rockspec],
         );
         let baz_rock = vendor_dir.child("baz@1.0.0-1.rock");
         baz_rock.touch().unwrap();
         let baz_pkgs = expected
             .entry("baz".into())
             .or_insert_with(HashMap::default);
-        baz_pkgs.insert("1.0.0-1".parse().unwrap(), vec![RemotePackageType::Binary]);
+        baz_pkgs.insert(
+            "1.0.0-1".parse().unwrap(),
+            vec![remote::package::Kind::Binary],
+        );
         let metadata = manifest_from_vendor_dir(vendor_dir.path());
         assert_eq!(
             metadata,

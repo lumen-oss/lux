@@ -1,5 +1,6 @@
 use std::io::{self, Cursor};
 
+use crate::remote;
 use crate::{
     build::{
         external_dependency::{self, ExternalDependencyInfo},
@@ -8,7 +9,6 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{self, LockedPackage, LockedPackageHashes, LockedPackageSpec},
-    remote_package_source::RemotePackageSource,
     rockspec,
     rockspec::Rockspec,
     tree::{self, InstallTree},
@@ -54,7 +54,7 @@ where
     rockspec: &'a rockspec::lua::Remote,
     spec: LockedPackageSpec,
     rock_bytes: Bytes,
-    source: RemotePackageSource,
+    source: remote::package::Source,
     entry_type: tree::EntryType,
     behaviour: BuildBehaviour,
     config: &'a Config,
@@ -69,7 +69,7 @@ where
         rockspec: &'a rockspec::lua::Remote,
         spec: LockedPackageSpec,
         rock_bytes: Bytes,
-        source: RemotePackageSource,
+        source: remote::package::Source,
         entry_type: tree::EntryType,
         config: &'a Config,
         tree: &'a T,
@@ -104,7 +104,7 @@ where
             source: self.rock_bytes.hash().await?,
         };
         let source_url = match &self.source {
-            RemotePackageSource::LuarocksBinaryRock(url) => {
+            remote::package::Source::LuarocksBinaryRock(url) => {
                 Some(RemotePackageSourceUrl::Url { url: url.clone() })
             }
             _ => None,
@@ -224,7 +224,7 @@ mod tests {
             &rockspec,
             rockspec.to_locked_package_spec(),
             rock.bytes,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -295,7 +295,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             &rockspec,
             rockspec.to_locked_package_spec(),
             rock.bytes,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -345,7 +345,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             &rockspec,
             spec,
             rock.bytes,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -405,7 +405,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             &rockspec,
             rockspec.to_locked_package_spec(),
             rock.bytes,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,
@@ -465,7 +465,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             &rockspec,
             rockspec.to_locked_package_spec(),
             rock.bytes,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
             &tree,

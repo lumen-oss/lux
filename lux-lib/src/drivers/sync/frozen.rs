@@ -5,7 +5,7 @@ use crate::operations::{PackageInstallSpec, RemoveError, Uninstall};
 
 use super::reconcile::{reconcile_locks, SyncReport};
 
-use crate::drivers::install_packages::{self, InstallPackages};
+use crate::drivers::{InstallPackages, InstallPackagesError};
 use crate::{
     build::BuildBehaviour,
     config::Config,
@@ -137,7 +137,7 @@ pub enum SyncError {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] Box<install_packages::Error>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Remove(#[from] RemoveError),
@@ -170,8 +170,8 @@ pub enum SyncError {
     PackageDB(Box<package_db::Error>),
 }
 
-impl From<install_packages::Error> for SyncError {
-    fn from(source: install_packages::Error) -> Self {
+impl From<InstallPackagesError> for SyncError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }

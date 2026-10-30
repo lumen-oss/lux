@@ -204,6 +204,7 @@ fn try_create_symlink(target: &Path, link: &Path) -> fs::Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::package;
+    use crate::remote;
     use assert_fs::prelude::PathCopy;
     use std::path::PathBuf;
 
@@ -211,7 +212,6 @@ mod tests {
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         lua,
-        remote_package_source::RemotePackageSource,
         tree::{EntryType, InstallTree, NvimLayout, RojoLayout},
     };
 
@@ -246,7 +246,7 @@ mod tests {
         LockedPackage::from(
             &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
             LockConstraint::Unconstrained,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             mock_hashes(),
         )

@@ -12,7 +12,7 @@ const PLUS: &str = "+";
 
 /// The source of a remote package.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-pub(crate) enum RemotePackageSource {
+pub(crate) enum Source {
     LuarocksRockspec(Url),
     LuarocksSrcRock(Url),
     LuarocksBinaryRock(Url),
@@ -23,7 +23,7 @@ pub(crate) enum RemotePackageSource {
     Test,
 }
 
-impl RemotePackageSource {
+impl Source {
     pub(crate) fn url(self) -> Option<Url> {
         match self {
             Self::LuarocksRockspec(url)
@@ -37,30 +37,22 @@ impl RemotePackageSource {
     }
 }
 
-impl Display for RemotePackageSource {
+impl Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            RemotePackageSource::LuarocksRockspec(url) => {
-                format!("luarocks_rockspec{PLUS}{url}").fmt(f)
-            }
-            RemotePackageSource::LuarocksSrcRock(url) => {
-                format!("luarocks_src_rock{PLUS}{url}").fmt(f)
-            }
-            RemotePackageSource::LuarocksBinaryRock(url) => {
-                format!("luarocks_rock{PLUS}{url}").fmt(f)
-            }
-            RemotePackageSource::Wally(url) => format!("wally{PLUS}{url}").fmt(f),
-            RemotePackageSource::RockspecContent(content) => {
-                format!("rockspec{PLUS}{content}").fmt(f)
-            }
-            RemotePackageSource::Local => "local".fmt(f),
+            Source::LuarocksRockspec(url) => format!("luarocks_rockspec{PLUS}{url}").fmt(f),
+            Source::LuarocksSrcRock(url) => format!("luarocks_src_rock{PLUS}{url}").fmt(f),
+            Source::LuarocksBinaryRock(url) => format!("luarocks_rock{PLUS}{url}").fmt(f),
+            Source::Wally(url) => format!("wally{PLUS}{url}").fmt(f),
+            Source::RockspecContent(content) => format!("rockspec{PLUS}{content}").fmt(f),
+            Source::Local => "local".fmt(f),
             #[cfg(test)]
-            RemotePackageSource::Test => "test+foo_bar".fmt(f),
+            Source::Test => "test+foo_bar".fmt(f),
         }
     }
 }
 
-impl Serialize for RemotePackageSource {
+impl Serialize for Source {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -71,7 +63,7 @@ impl Serialize for RemotePackageSource {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum RemotePackageSourceError {
+pub enum Error {
     #[error("error parsing remote source URL {0}. Missing URL.")]
     MissingUrl(String),
     #[error("error parsing remote source URL {0}. Expected <source_type>+<url>.")]
@@ -82,8 +74,8 @@ pub enum RemotePackageSourceError {
     Url(#[from] url::ParseError),
 }
 
-impl TryFrom<String> for RemotePackageSource {
-    type Error = RemotePackageSourceError;
+impl TryFrom<String> for Source {
+    type Error = Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if let Some(pos) = value.find(PLUS) {
@@ -97,22 +89,20 @@ impl TryFrom<String> for RemotePackageSource {
                     "rockspec" => Ok(Self::RockspecContent(str.into())),
                     #[cfg(test)]
                     "test" => Ok(Self::Test),
-                    _ => Err(RemotePackageSourceError::UnknownRemoteSourceType(
-                        remote_source_type.into(),
-                    )),
+                    _ => Err(Error::UnknownRemoteSourceType(remote_source_type.into())),
                 }
             } else {
-                Err(RemotePackageSourceError::MissingUrl(value))
+                Err(Error::MissingUrl(value))
             }
         } else if value == "local" {
             Ok(Self::Local)
         } else {
-            Err(RemotePackageSourceError::MissingSeparator(value))
+            Err(Error::MissingSeparator(value))
         }
     }
 }
 
-impl<'de> Deserialize<'de> for RemotePackageSource {
+impl<'de> Deserialize<'de> for Source {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -139,29 +129,29 @@ source = {
     #[test]
     fn luarocks_source_roundtrip() {
         let url = Url::parse("https://luarocks.org/").unwrap();
-        let source = RemotePackageSource::LuarocksRockspec(url.clone());
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = Source::LuarocksRockspec(url.clone());
+        let roundtripped = Source::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped);
-        let source = RemotePackageSource::LuarocksSrcRock(url.clone());
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = Source::LuarocksSrcRock(url.clone());
+        let roundtripped = Source::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped);
-        let source = RemotePackageSource::LuarocksBinaryRock(url);
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = Source::LuarocksBinaryRock(url);
+        let roundtripped = Source::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped)
     }
 
     #[test]
     fn wally_source_roundtrip() {
         let url = Url::parse("https://github.com/UpliftGames/wally-index").unwrap();
-        let source = RemotePackageSource::Wally(url);
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = Source::Wally(url);
+        let roundtripped = Source::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped);
     }
 
     #[test]
     fn rockspec_source_roundtrip() {
-        let source = RemotePackageSource::RockspecContent(LUAROCKS_ROCKSPEC.into());
-        let roundtripped = RemotePackageSource::try_from(format!("{source}")).unwrap();
+        let source = Source::RockspecContent(LUAROCKS_ROCKSPEC.into());
+        let roundtripped = Source::try_from(format!("{source}")).unwrap();
         assert_eq!(source, roundtripped)
     }
 }

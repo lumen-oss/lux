@@ -1,4 +1,5 @@
 use crate::package;
+use crate::remote;
 use crate::rockspec;
 use std::path::{Path, PathBuf};
 
@@ -7,7 +8,6 @@ use crate::{
     lockfile::RemotePackageSourceUrl,
     operations::{DownloadedRockspec, RemoteRockDownload},
     package_db::{PackageDB, SearchError},
-    remote_package_source::RemotePackageSource,
 };
 use bon::Builder;
 use miette::Diagnostic;
@@ -79,7 +79,7 @@ async fn do_fetch_vendored_rock(
         VendoredPackage::Source(path) => Ok(RemoteRockDownload::RockspecOnly {
             rockspec_download: DownloadedRockspec {
                 rockspec,
-                source: RemotePackageSource::Local,
+                source: remote::package::Source::Local,
                 source_url: Some(RemotePackageSourceUrl::File { path }),
             },
         }),
@@ -93,7 +93,7 @@ async fn do_fetch_vendored_rock(
             Ok(RemoteRockDownload::BinaryRock {
                 rockspec_download: DownloadedRockspec {
                     rockspec,
-                    source: RemotePackageSource::Local,
+                    source: remote::package::Source::Local,
                     source_url: None,
                 },
                 packed_rock,

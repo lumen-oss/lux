@@ -10,7 +10,7 @@ use clap::Args;
 use lux_lib::{
     build::BuildBehaviour,
     config::{Config, ConfigBuilder},
-    drivers::install_packages::InstallPackages,
+    drivers::InstallPackages,
     lockfile::LockedPackage,
     lua,
     operations::{InstallProject, PackageInstallSpec},

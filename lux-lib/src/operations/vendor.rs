@@ -510,10 +510,10 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::remote;
     use crate::{
         build::BuildBehaviour,
         lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
-        remote_package_source::RemotePackageSource,
     };
     #[cfg(feature = "impure_tests")]
     use {crate::config::ConfigBuilder, assert_fs::prelude::PathCopy, std::path::PathBuf};
@@ -529,7 +529,7 @@ mod tests {
 
     fn make_downloaded_package(
         rockspec: rockspec::lua::Remote,
-        source: RemotePackageSource,
+        source: remote::package::Source,
         artifact: PackageSource,
         temp_dir: Option<TempDir>,
     ) -> MaterialisedPackage {
@@ -580,7 +580,7 @@ mod tests {
         let artifact = PackageSource::SourceDir(src_dir.path().to_path_buf());
         let package = make_downloaded_package(
             rockspec,
-            RemotePackageSource::RockspecContent(String::new()),
+            remote::package::Source::RockspecContent(String::new()),
             artifact,
             Some(src_dir),
         );
@@ -623,7 +623,7 @@ mod tests {
         let artifact = PackageSource::SourceDir(src_dir.path().to_path_buf());
         let package = make_downloaded_package(
             rockspec,
-            RemotePackageSource::RockspecContent(String::new()),
+            remote::package::Source::RockspecContent(String::new()),
             artifact,
             Some(src_dir),
         );

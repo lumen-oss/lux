@@ -11,7 +11,7 @@ pub(crate) mod reconcile;
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::install_packages::{self, InstallPackages},
+    drivers::{InstallPackages, InstallPackagesError},
     lockfile::LockedPackageLockType,
     operations::{
         GenLuaRc, GenLuaRcError, GenLuauRc, GenLuauRcError, InstallProject, InstallProjectError,
@@ -61,7 +61,7 @@ impl TargetSet {
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallPackages(#[from] Box<install_packages::Error>),
+    InstallPackages(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallProject(Box<InstallProjectError>),
@@ -91,8 +91,8 @@ pub enum Error {
     Frozen(Box<frozen::SyncError>),
 }
 
-impl From<install_packages::Error> for Error {
-    fn from(source: install_packages::Error) -> Self {
+impl From<InstallPackagesError> for Error {
+    fn from(source: InstallPackagesError) -> Self {
         Self::InstallPackages(Box::new(source))
     }
 }

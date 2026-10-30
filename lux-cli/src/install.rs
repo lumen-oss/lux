@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use lux_lib::{
     config::Config,
-    drivers::install_packages::InstallPackages,
+    drivers::InstallPackages,
     lockfile::PinnedState,
     lua, operations,
     package_db::PackageDB,

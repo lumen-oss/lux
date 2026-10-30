@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     build::{self, BuildBehaviour},
     config::Config,
-    drivers::install_packages::{self, InstallPackages},
+    drivers::{InstallPackages, InstallPackagesError},
     hash::HasIntegrity,
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
@@ -34,7 +34,7 @@ pub enum InstallProjectError {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Install(#[from] Box<install_packages::Error>),
+    Install(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Build(#[from] Box<build::Error>),
@@ -47,8 +47,8 @@ pub enum InstallProjectError {
     Workspace(#[from] workspace::Error),
 }
 
-impl From<install_packages::Error> for InstallProjectError {
-    fn from(source: install_packages::Error) -> Self {
+impl From<InstallPackagesError> for InstallProjectError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }

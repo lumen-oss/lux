@@ -1,4 +1,5 @@
 use crate::package;
+use crate::remote;
 use crate::rockspec;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -18,7 +19,6 @@ use crate::{
     },
     operations::PackageInstallSpec,
     package_db::PackageDB,
-    remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
 };
@@ -66,7 +66,7 @@ pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<p
 pub(crate) struct ResolvedPackage {
     pub(crate) spec: LockedPackageSpec,
     pub(crate) rockspec: rockspec::lua::Remote,
-    pub(crate) source: RemotePackageSource,
+    pub(crate) source: remote::package::Source,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     pub(crate) entry_type: EntryType,
     pub(crate) build_behaviour: crate::build::BuildBehaviour,
@@ -277,7 +277,7 @@ impl Resolver {
         let section = key.section;
         let is_binary = matches!(
             found.remote.source,
-            RemotePackageSource::LuarocksBinaryRock(_)
+            remote::package::Source::LuarocksBinaryRock(_)
         );
         let constraint = spec
             .constraint
@@ -554,7 +554,7 @@ mod tests {
     use super::*;
     use crate::config::ConfigBuilder;
     use crate::lockfile::{LockConstraint, LockedPackageHashes};
-    use crate::package::RemotePackage;
+    use crate::remote;
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
         let dependencies = if dependencies.is_empty() {
@@ -582,12 +582,12 @@ mod tests {
                         Err(err) => unreachable!("invalid test rockspec: {err}"),
                     };
                     FoundPackage {
-                        remote: RemotePackage::new(
+                        remote: remote::Package::new(
                             package::Spec::new(
                                 rockspec.package().clone(),
                                 rockspec.version().clone(),
                             ),
-                            RemotePackageSource::RockspecContent(content.clone()),
+                            remote::package::Source::RockspecContent(content.clone()),
                             None,
                         ),
                         rockspec,
@@ -613,7 +613,7 @@ mod tests {
         LockedPackage::from(
             &spec,
             LockConstraint::Unconstrained,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             LockedPackageHashes {
                 rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"

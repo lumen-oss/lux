@@ -8,9 +8,8 @@ use crate::{
     manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
     operations::PackageInstallSpec,
-    package::{RemotePackage, RemotePackageType, RemotePackageTypeFilterSpec},
     pipeline::discover::{self, FoundPackage},
-    remote_package_source::RemotePackageSource,
+    remote,
     workspace::{self, Workspace},
 };
 use itertools::Itertools;
@@ -113,8 +112,8 @@ impl PackageProvider {
     async fn find(
         &self,
         package_req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Result<Option<RemotePackage>, SearchError> {
+        filter: Option<remote::package::kind::FilterSpec>,
+    ) -> Result<Option<remote::Package>, SearchError> {
         match self {
             Self::Local(packages) => Ok(packages
                 .iter()
@@ -124,7 +123,7 @@ impl PackageProvider {
                 .iter()
                 .filter_map(|lock| lock.has_rock(package_req, filter.clone()))
                 .map(|locked_package| {
-                    RemotePackage::new(
+                    remote::Package::new(
                         locked_package.to_package(),
                         locked_package.source().clone(),
                         locked_package.source_url().cloned(),
@@ -254,19 +253,23 @@ impl ClosureProvider {
         Some(closure)
     }
 
-    fn remote_package(&self, spec: &ClosureSpec, package_type: RemotePackageType) -> RemotePackage {
+    fn remote_package(
+        &self,
+        spec: &ClosureSpec,
+        package_type: remote::package::Kind,
+    ) -> remote::Package {
         let source = match package_type {
-            RemotePackageType::Rockspec => {
-                RemotePackageSource::LuarocksRockspec(self.rock_server.clone())
+            remote::package::Kind::Rockspec => {
+                remote::package::Source::LuarocksRockspec(self.rock_server.clone())
             }
-            RemotePackageType::Src => {
-                RemotePackageSource::LuarocksSrcRock(self.rock_server.clone())
+            remote::package::Kind::Src => {
+                remote::package::Source::LuarocksSrcRock(self.rock_server.clone())
             }
-            RemotePackageType::Binary => {
-                RemotePackageSource::LuarocksBinaryRock(self.rock_server.clone())
+            remote::package::Kind::Binary => {
+                remote::package::Source::LuarocksBinaryRock(self.rock_server.clone())
             }
         };
-        RemotePackage::new(
+        remote::Package::new(
             package::Spec::new(spec.package().clone(), spec.version().clone()),
             source,
             None,
@@ -276,8 +279,8 @@ impl ClosureProvider {
     async fn find(
         &self,
         req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<RemotePackage> {
+        filter: Option<remote::package::kind::FilterSpec>,
+    ) -> Option<remote::Package> {
         let closure = self.load_closure_for(req).await?;
         let (spec, package_type) = closure.spec(req, filter.as_ref())?;
         Some(self.remote_package(spec, package_type))
@@ -297,7 +300,7 @@ impl ClosureProvider {
         // Only rockspec-type packages can be resolved fully offline, as they have no source archive
         // to download and hash. For src/binary rocks we fall through to the generic download step,
         // which fetches the archive.
-        if package_type != RemotePackageType::Rockspec {
+        if package_type != remote::package::Kind::Rockspec {
             return Ok(None);
         }
         let rockspec = rockspec::lua::Remote::new(closure_spec.rockspec_raw()).map_err(|err| {
@@ -417,8 +420,8 @@ impl PackageDB {
     pub(crate) async fn find(
         &self,
         package_req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Result<RemotePackage, SearchError> {
+        filter: Option<remote::package::kind::FilterSpec>,
+    ) -> Result<remote::Package, SearchError> {
         for provider in &self.providers {
             if let Some(package) = provider.find(package_req, filter.clone()).await? {
                 return Ok(package);
@@ -476,7 +479,7 @@ impl PackageDB {
     pub async fn latest_match(
         &self,
         package_req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
+        filter: Option<remote::package::kind::FilterSpec>,
     ) -> Option<package::Spec> {
         match self.find(package_req, filter).await {
             Ok(result) => Some(result.spec),

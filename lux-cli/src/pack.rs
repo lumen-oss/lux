@@ -8,7 +8,7 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    drivers::install_packages::InstallPackages,
+    drivers::InstallPackages,
     lua,
     operations::{self, PackageInstallSpec},
     package_db::PackageDB,

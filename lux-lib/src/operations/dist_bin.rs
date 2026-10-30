@@ -540,6 +540,8 @@ mod tests {
     use super::*;
     #[cfg(target_os = "linux")]
     use crate::package;
+    #[cfg(target_os = "linux")]
+    use crate::remote;
 
     #[cfg(feature = "impure_tests")]
     use assert_fs::fixture::PathCopy;
@@ -554,7 +556,6 @@ mod tests {
     use crate::{
         fs,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
-        remote_package_source::RemotePackageSource,
     };
 
     #[cfg(target_os = "linux")]
@@ -570,7 +571,7 @@ mod tests {
         LockedPackage::from(
             &spec,
             LockConstraint::Unconstrained,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             hashes,
         )

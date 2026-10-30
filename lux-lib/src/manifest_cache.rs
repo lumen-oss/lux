@@ -11,11 +11,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use url::Url;
 
-use crate::{
-    config::Config,
-    lua, luarocks,
-    package::{RemotePackageType, RemotePackageTypeFilterSpec},
-};
+use crate::{config::Config, lua, luarocks, remote};
 
 // cache.luanox.org may change its format over time, so we track it.
 const CACHE_FORMAT: u32 = 1;
@@ -45,9 +41,9 @@ impl Closure {
     pub(crate) fn spec(
         &self,
         req: &package::Req,
-        filter: Option<&RemotePackageTypeFilterSpec>,
-    ) -> Option<(&ClosureSpec, RemotePackageType)> {
-        let default_filter = RemotePackageTypeFilterSpec::default();
+        filter: Option<&remote::package::kind::FilterSpec>,
+    ) -> Option<(&ClosureSpec, remote::package::Kind)> {
+        let default_filter = remote::package::kind::FilterSpec::default();
         let filter = filter.unwrap_or(&default_filter);
         self.specs
             .iter()
@@ -73,7 +69,7 @@ pub struct ClosureSpec {
     package: package::Name,
     version: package::Version,
     #[serde(deserialize_with = "deserialize_available_types")]
-    available_types: Vec<RemotePackageType>,
+    available_types: Vec<remote::package::Kind>,
     rockspec_raw: String,
 }
 
@@ -94,14 +90,14 @@ impl ClosureSpec {
     /// by `filter`.
     pub(crate) fn remote_package_type(
         &self,
-        filter: &RemotePackageTypeFilterSpec,
-    ) -> Option<RemotePackageType> {
+        filter: &remote::package::kind::FilterSpec,
+    ) -> Option<remote::package::Kind> {
         self.available_types
             .iter()
             .filter(|&package_type| match package_type {
-                RemotePackageType::Rockspec => filter.rockspec,
-                RemotePackageType::Src => filter.src,
-                RemotePackageType::Binary => filter.binary,
+                remote::package::Kind::Rockspec => filter.rockspec,
+                remote::package::Kind::Src => filter.src,
+                remote::package::Kind::Binary => filter.binary,
             })
             .cloned()
             .max()
@@ -210,22 +206,22 @@ impl ManifestCache {
     }
 }
 
-fn deserialize_available_types<'de, D>(deserializer: D) -> Result<Vec<RemotePackageType>, D::Error>
+fn deserialize_available_types<'de, D>(
+    deserializer: D,
+) -> Result<Vec<remote::package::Kind>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    use RemotePackageType::{Binary, Rockspec, Src};
-
     let arches = Vec::<String>::deserialize(deserializer)?;
 
     Ok(arches
         .into_iter()
         .filter_map(|arch| match arch.as_str() {
-            "rockspec" => Some(Rockspec),
-            "src" => Some(Src),
-            "all" => Some(Binary),
+            "rockspec" => Some(remote::package::Kind::Rockspec),
+            "src" => Some(remote::package::Kind::Src),
+            "all" => Some(remote::package::Kind::Binary),
             arch if arch == luarocks::current_platform_luarocks_identifier().as_str() => {
-                Some(Binary)
+                Some(remote::package::Kind::Binary)
             }
             _ => None,
         })
@@ -270,7 +266,7 @@ mod tests {
         );
         assert_eq!(
             rockspec_or_src.spec(&req, None).unwrap().1,
-            RemotePackageType::Rockspec
+            remote::package::Kind::Rockspec
         );
 
         let binary = closure_from_json(
@@ -278,7 +274,7 @@ mod tests {
         );
         assert_eq!(
             binary.spec(&req, None).unwrap().1,
-            RemotePackageType::Binary
+            remote::package::Kind::Binary
         );
     }
 
@@ -288,11 +284,11 @@ mod tests {
             r#"{"format":1,"specs":[{"package":"say","version":"1.0.0-1","available_types":["all","rockspec"],"rockspec_raw":""}]}"#,
         );
         let req = package::Req::from_str("say").unwrap();
-        let filter: RemotePackageTypeFilterSpec =
+        let filter: remote::package::kind::FilterSpec =
             serde_json::from_str(r#"{"rockspec":true,"src":false,"binary":false}"#).unwrap();
         assert_eq!(
             closure.spec(&req, Some(&filter)).unwrap().1,
-            RemotePackageType::Rockspec
+            remote::package::Kind::Rockspec
         );
     }
 
