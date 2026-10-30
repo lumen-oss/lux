@@ -1,8 +1,13 @@
 use itertools::Itertools;
 
+use crate::rockspec;
+use crate::{
+    rockspec::lua_dependency,
+    variables::{GetVariableError, HasVariables},
+};
 use miette::Diagnostic;
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::{cmp::Ordering, fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 use thiserror::Error;
 mod outdated;
 pub mod version;
@@ -13,83 +18,6 @@ pub use version::{Version, VersionReq};
 use version::{HasModRev, ParseError, ReqError, ReqToVersionError};
 
 pub(crate) use version::SpecRevIterator;
-
-use crate::rockspec;
-use crate::{
-    lockfile::RemotePackageSourceUrl,
-    remote_package_source::RemotePackageSource,
-    rockspec::lua_dependency,
-    variables::{GetVariableError, HasVariables},
-};
-#[derive(Clone, Debug)]
-pub(crate) struct RemotePackage {
-    pub spec: Spec,
-    pub source: RemotePackageSource,
-    /// `Some` if present in a lockfile
-    pub source_url: Option<RemotePackageSourceUrl>,
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub(crate) enum RemotePackageType {
-    Rockspec,
-    Src,
-    Binary,
-}
-
-impl Ord for RemotePackageType {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Priority: binary > rockspec > src
-        match (self, other) {
-            (Self::Binary, Self::Binary)
-            | (Self::Rockspec, Self::Rockspec)
-            | (Self::Src, Self::Src) => Ordering::Equal,
-
-            (Self::Binary, _) => Ordering::Greater,
-            (_, Self::Binary) => Ordering::Less,
-            (Self::Rockspec, Self::Src) => Ordering::Greater,
-            (Self::Src, Self::Rockspec) => Ordering::Less,
-        }
-    }
-}
-
-impl PartialOrd for RemotePackageType {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct RemotePackageTypeFilterSpec {
-    /// Include Rockspec
-    pub rockspec: bool,
-    /// Include Src
-    pub src: bool,
-    /// Include Binary
-    pub binary: bool,
-}
-
-impl Default for RemotePackageTypeFilterSpec {
-    fn default() -> Self {
-        Self {
-            rockspec: true,
-            src: true,
-            binary: true,
-        }
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-pub enum ParseRemotePackageError {
-    #[error("unable to parse package {0}. expected format: `name@version`")]
-    InvalidInput(String),
-    #[error("unable to parse package {package_str}:\n{error}")]
-    InvalidPackageVersion {
-        #[source]
-        error: ParseError,
-        package_str: String,
-    },
-}
 
 /// A lua package requirement with a name and an optional version requirement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -207,20 +135,6 @@ impl<'de> Deserialize<'de> for Req {
     {
         let s = String::deserialize(deserializer)?;
         Self::from_str(&s).map_err(de::Error::custom)
-    }
-}
-
-impl RemotePackage {
-    pub fn new(
-        spec: Spec,
-        source: RemotePackageSource,
-        source_url: Option<RemotePackageSourceUrl>,
-    ) -> Self {
-        Self {
-            spec,
-            source,
-            source_url,
-        }
     }
 }
 
@@ -388,26 +302,10 @@ impl HasVariables for Spec {
     }
 }
 
-impl FromStr for Spec {
-    type Err = ParseRemotePackageError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let (name, version) = s
-            .split_once('@')
-            .ok_or_else(|| ParseRemotePackageError::InvalidInput(s.to_string()))?;
-
-        Self::parse(name.to_string(), version.to_string()).map_err(|error| {
-            ParseRemotePackageError::InvalidPackageVersion {
-                error,
-                package_str: s.to_string(),
-            }
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::remote;
 
     use crate::package::version::Version;
 
@@ -539,16 +437,16 @@ mod tests {
     #[test]
     pub fn remote_package_type_priorities() {
         let rock_types = vec![
-            RemotePackageType::Binary,
-            RemotePackageType::Src,
-            RemotePackageType::Rockspec,
+            remote::package::Kind::Binary,
+            remote::package::Kind::Src,
+            remote::package::Kind::Rockspec,
         ];
         assert_eq!(
             rock_types.into_iter().sorted().collect_vec(),
             vec![
-                RemotePackageType::Src,
-                RemotePackageType::Rockspec,
-                RemotePackageType::Binary,
+                remote::package::Kind::Src,
+                remote::package::Kind::Rockspec,
+                remote::package::Kind::Binary,
             ]
         );
     }

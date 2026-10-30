@@ -34,15 +34,15 @@ const CONFIG_TOML: &str = "config.toml";
 /// This is used to ensure that the workspace root is a valid project directory.
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Default))]
-pub struct WorkspaceRoot(PathBuf);
+pub struct Root(PathBuf);
 
-impl AsRef<Path> for WorkspaceRoot {
+impl AsRef<Path> for Root {
     fn as_ref(&self) -> &Path {
         self.0.as_ref()
     }
 }
 
-impl Deref for WorkspaceRoot {
+impl Deref for Root {
     type Target = PathBuf;
 
     fn deref(&self) -> &Self::Target {
@@ -101,7 +101,7 @@ specify the package with '--package=[PACKAGE_NAME]'
     #[diagnostic(help(
         "make sure it is declared in your {WORKSPACE_TOML}'s '[workspace.members]'"
     ))]
-    PackageNotFound(package::Name, WorkspaceRoot),
+    PackageNotFound(package::Name, Root),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -118,7 +118,7 @@ pub enum TreeError {
 /// A workspace, which can contain one or many Lux projects
 #[derive(Clone, Debug)]
 pub struct Workspace {
-    root: WorkspaceRoot,
+    root: Root,
     members: NonEmpty<Project>,
 }
 
@@ -145,7 +145,7 @@ impl Workspace {
     }
 
     /// The path where the root `lux.toml` resides.
-    pub fn root(&self) -> &WorkspaceRoot {
+    pub fn root(&self) -> &Root {
         &self.root
     }
 
@@ -343,7 +343,7 @@ impl Workspace {
                 let project = Project::from_exact(root)?
                     .ok_or_else(|| Error::NoWorkspaceOrProject(root.to_path_buf()))?;
                 Ok(Some(Workspace {
-                    root: WorkspaceRoot(root.to_path_buf()),
+                    root: Root(root.to_path_buf()),
                     members: NonEmpty::new(project),
                 }))
             }
@@ -386,7 +386,7 @@ impl Workspace {
                                         Error::NoWorkspaceOrProject(root.to_path_buf())
                                     })?;
                                     Ok(Some(Workspace {
-                                        root: WorkspaceRoot(root.to_path_buf()),
+                                        root: Root(root.to_path_buf()),
                                         members: NonEmpty::new(project),
                                     }))
                                 }
@@ -437,7 +437,7 @@ impl Workspace {
         }
         match NonEmpty::from_vec(members) {
             Some(members) => Ok(Workspace {
-                root: WorkspaceRoot(root.to_path_buf()),
+                root: Root(root.to_path_buf()),
                 members,
             }),
             None => Err(Error::EmptyWorkspace(root.to_path_buf())),

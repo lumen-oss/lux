@@ -1,3 +1,4 @@
+use crate::remote;
 use std::collections::HashMap;
 use std::io;
 use std::io::Cursor;
@@ -23,7 +24,6 @@ use crate::{
     operations::{
         single_non_rockspec_entry, unpack_src_rock, FetchSrc, RemotePackageSourceMetadata,
     },
-    remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
     tree::EntryType,
 };
@@ -139,7 +139,7 @@ async fn materialise(
 
     let (package, artifact, temp_dir) = match artifact {
         Some(PackageSource::Archive(bytes)) => match &source {
-            RemotePackageSource::LuarocksBinaryRock(url) => {
+            remote::package::Source::LuarocksBinaryRock(url) => {
                 let binary_url = url.clone();
                 let rockspec_hash = rockspec
                     .hash()
@@ -248,7 +248,7 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     rockspec: &R,
     spec: LockedPackageSpec,
     source_spec: Option<RemotePackageSourceSpec>,
-    source: Option<RemotePackageSource>,
+    source: Option<remote::package::Source>,
     config: &Config,
 ) -> Result<(LockedPackage, TempDir, PathBuf), build::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
@@ -294,9 +294,9 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
             .unwrap_or_else(|| {
                 rockspec
                     .to_lua_remote_rockspec_string()
-                    .map(RemotePackageSource::RockspecContent)
+                    .map(remote::package::Source::RockspecContent)
             })
-            .unwrap_or(RemotePackageSource::Local),
+            .unwrap_or(remote::package::Source::Local),
         Some(source_metadata.source_url.clone()),
         hashes,
     );

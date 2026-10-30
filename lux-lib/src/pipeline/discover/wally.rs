@@ -1,4 +1,5 @@
 use crate::package;
+use crate::remote;
 use std::{
     collections::HashMap,
     io,
@@ -16,8 +17,6 @@ use url::Url;
 use crate::{
     config::Config,
     lockfile::{OptState, PinnedState, RemotePackageSourceUrl},
-    package::RemotePackage,
-    remote_package_source::RemotePackageSource,
     reqwest::RequestError,
     rockspec,
     rockspec::lua_dependency,
@@ -102,7 +101,7 @@ pub(crate) async fn discover(
 
 /// Discover a wally package that is pinned in a lockfile.
 pub(crate) async fn discover_locked(
-    remote: &RemotePackage,
+    remote: &remote::Package,
     index_url: &Url,
     config: &Config,
 ) -> Result<FoundPackage, WallyDiscoverError> {
@@ -118,7 +117,7 @@ pub(crate) async fn discover_locked(
 }
 
 fn wally_req_from_locked(
-    remote: &RemotePackage,
+    remote: &remote::Package,
 ) -> Result<wally::package::Req, WallyDiscoverError> {
     let content_url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote.source_url {
         url
@@ -197,9 +196,9 @@ fn found_package(
         dependencies(manifest),
         modules,
     );
-    let remote = RemotePackage::new(
+    let remote = remote::Package::new(
         package_spec,
-        RemotePackageSource::Wally(registry.clone()),
+        remote::package::Source::Wally(registry.clone()),
         Some(RemotePackageSourceUrl::Url { url: content_url }),
     );
     Ok(FoundPackage {
@@ -573,9 +572,9 @@ mod tests {
 
     #[test]
     fn derives_wally_requirement_from_locked_package() {
-        let remote = RemotePackage::new(
+        let remote = remote::Package::new(
             package::Spec::parse("promise".into(), "1.0.0".into()).unwrap(),
-            RemotePackageSource::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
+            remote::package::Source::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
             Some(RemotePackageSourceUrl::Url {
                 url: Url::parse("https://api.wally.run/v1/package-contents/evaera/promise/1.0.0")
                     .unwrap(),
@@ -592,9 +591,9 @@ mod tests {
 
     #[test]
     fn rejects_locked_package_without_content_url() {
-        let remote = RemotePackage::new(
+        let remote = remote::Package::new(
             package::Spec::parse("promise".into(), "1.0.0".into()).unwrap(),
-            RemotePackageSource::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
+            remote::package::Source::Wally(Url::parse("file:///tmp/wally-index").unwrap()),
             None,
         );
 
@@ -617,9 +616,9 @@ mod tests {
         );
 
         let content_url = Url::parse(&server.url(content_path).to_string()).unwrap();
-        let remote = RemotePackage::new(
+        let remote = remote::Package::new(
             package::Spec::parse("promise".into(), "1.0.0".into()).unwrap(),
-            RemotePackageSource::Wally(index_url.clone()),
+            remote::package::Source::Wally(index_url.clone()),
             Some(RemotePackageSourceUrl::Url { url: content_url }),
         );
         let cache = assert_fs::TempDir::new().unwrap();
@@ -632,7 +631,10 @@ mod tests {
         let found = discover_locked(&remote, &index_url, &config).await.unwrap();
         assert_eq!(found.remote.spec.name().to_string(), "promise");
         assert_eq!(found.remote.spec.version().to_version_string(), "1.0.0");
-        assert_eq!(found.remote.source, RemotePackageSource::Wally(index_url));
+        assert_eq!(
+            found.remote.source,
+            remote::package::Source::Wally(index_url)
+        );
         assert!(found.artifact.is_none());
     }
 
@@ -660,6 +662,9 @@ mod tests {
 
         let found = discover(&package_req, &wally_req, &config).await.unwrap();
         assert_eq!(found.remote.spec.name().to_string(), "promise");
-        assert_eq!(found.remote.source, RemotePackageSource::Wally(index_url));
+        assert_eq!(
+            found.remote.source,
+            remote::package::Source::Wally(index_url)
+        );
     }
 }

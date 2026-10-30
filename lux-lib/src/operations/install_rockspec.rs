@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     build::{self, BuildBehaviour},
     config::Config,
-    drivers::install_packages::{self, InstallPackages},
+    drivers::{InstallPackages, InstallPackagesError},
     lockfile::{LockedPackage, OptState, PinnedState},
     lua,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
@@ -31,7 +31,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
     #[diagnostic(transparent)]
-    Install(#[from] Box<install_packages::Error>),
+    Install(#[from] Box<InstallPackagesError>),
     #[diagnostic(transparent)]
     LuaRocks(#[from] LuaRocksError),
     #[diagnostic(transparent)]
@@ -42,8 +42,8 @@ pub enum InstallRockspecError {
     PackageNotInstalled(package::Name),
 }
 
-impl From<install_packages::Error> for InstallRockspecError {
-    fn from(source: install_packages::Error) -> Self {
+impl From<InstallPackagesError> for InstallRockspecError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }

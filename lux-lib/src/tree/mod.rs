@@ -408,6 +408,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::package;
+    use crate::remote;
 
     use insta::assert_yaml_snapshot;
 
@@ -415,7 +416,6 @@ mod tests {
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
         lua,
-        remote_package_source::RemotePackageSource,
         tree::{InstallTree, RockLayout},
         variables,
     };
@@ -448,7 +448,7 @@ mod tests {
         let package = LockedPackage::from(
             &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
             LockConstraint::Unconstrained,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             mock_hashes.clone(),
         );
@@ -533,7 +533,7 @@ mod tests {
         let package = LockedPackage::from(
             &package::Spec::parse("neorg".into(), "8.0.0-1-1".into()).unwrap(),
             LockConstraint::Unconstrained,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             mock_hashes.clone(),
         );

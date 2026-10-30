@@ -4,11 +4,11 @@ use path_slash::PathExt;
 use thiserror::Error;
 use url::Url;
 
+use crate::config::Config;
 pub use crate::manifest::metadata::*;
 use crate::manifest::metadata_from_server::*;
 use crate::manifest::metadata_from_vendor_dir::manifest_from_vendor_dir;
-use crate::package::{RemotePackageType, RemotePackageTypeFilterSpec};
-use crate::{config::Config, package::RemotePackage, remote_package_source::RemotePackageSource};
+use crate::remote;
 
 pub mod metadata;
 mod metadata_from_server;
@@ -34,14 +34,14 @@ pub enum Error {
 pub(crate) struct Manifest {
     server_url: Url,
     metadata: ManifestMetadata,
-    default_filter: RemotePackageTypeFilterSpec,
+    default_filter: remote::package::kind::FilterSpec,
 }
 
 impl Manifest {
     pub fn new(
         server_url: Url,
         metadata: ManifestMetadata,
-        default_filter: RemotePackageTypeFilterSpec,
+        default_filter: remote::package::kind::FilterSpec,
     ) -> Self {
         Self {
             server_url,
@@ -101,24 +101,24 @@ impl Manifest {
     pub fn find(
         &self,
         package_req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
-    ) -> Option<RemotePackage> {
+        filter: Option<remote::package::kind::FilterSpec>,
+    ) -> Option<remote::Package> {
         let filter = filter.as_ref().unwrap_or(&self.default_filter);
         match self.metadata().latest_match(package_req, filter) {
             None => None,
             Some((package, package_type)) => {
                 let remote_source = match package_type {
-                    RemotePackageType::Rockspec => {
-                        RemotePackageSource::LuarocksRockspec(self.server_url().clone())
+                    remote::package::Kind::Rockspec => {
+                        remote::package::Source::LuarocksRockspec(self.server_url().clone())
                     }
-                    RemotePackageType::Src => {
-                        RemotePackageSource::LuarocksSrcRock(self.server_url().clone())
+                    remote::package::Kind::Src => {
+                        remote::package::Source::LuarocksSrcRock(self.server_url().clone())
                     }
-                    RemotePackageType::Binary => {
-                        RemotePackageSource::LuarocksBinaryRock(self.server_url().clone())
+                    remote::package::Kind::Binary => {
+                        remote::package::Source::LuarocksBinaryRock(self.server_url().clone())
                     }
                 };
-                Some(RemotePackage::new(package, remote_source, None))
+                Some(remote::Package::new(package, remote_source, None))
             }
         }
     }

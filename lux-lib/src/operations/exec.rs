@@ -6,7 +6,7 @@ use tokio::process::Command;
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::install_packages::{self, InstallPackages},
+    drivers::{InstallPackages, InstallPackagesError},
     lua,
     operations::{BuildWorkspace, BuildWorkspaceError},
     package_db::{self, PackageDB},
@@ -119,15 +119,15 @@ impl From<InstallCommandError> for ExecError {
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum InstallCommandError {
-    Install(#[from] Box<install_packages::Error>),
+    Install(#[from] Box<InstallPackagesError>),
     PackageVersionReqError(#[from] package::version::ReqError),
     PackageDB(#[from] package_db::Error),
     Tree(#[from] tree::Error),
     LuaVersion(#[from] lua::version::Error),
 }
 
-impl From<install_packages::Error> for InstallCommandError {
-    fn from(source: install_packages::Error) -> Self {
+impl From<InstallPackagesError> for InstallCommandError {
+    fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }

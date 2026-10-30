@@ -15,8 +15,8 @@ use url::Url;
 use crate::config::access_tokens::AccessToken;
 use crate::fs;
 use crate::lua;
-use crate::package::RemotePackageTypeFilterSpec;
 use crate::project::TomlDeError;
+use crate::remote;
 use crate::tree::{self, CustomRockLayout, Tree};
 use crate::variables::GetVariableError;
 use crate::{target, variables::HasVariables};
@@ -74,7 +74,7 @@ pub struct Config {
     generate_luarc: bool,
     luarc_file_name: String,
     wrap_bin_scripts: bool,
-    package_types: RemotePackageTypeFilterSpec,
+    package_types: remote::package::kind::FilterSpec,
     no_tfa: bool,
 }
 
@@ -360,7 +360,7 @@ impl Config {
     }
 
     /// Filter specification for package types to include in searches.
-    pub fn package_types(&self) -> &RemotePackageTypeFilterSpec {
+    pub fn package_types(&self) -> &remote::package::kind::FilterSpec {
         &self.package_types
     }
     /// Whether to disable prompts for two-factor authentication (2FA) codes.
@@ -500,7 +500,7 @@ pub struct ConfigBuilder {
     /// configured Lua installation. Default: `true`.
     wrap_bin_scripts: Option<bool>,
     /// Which package types to include in searches.
-    package_types: Option<RemotePackageTypeFilterSpec>,
+    package_types: Option<remote::package::kind::FilterSpec>,
     /// Whether to disable prompts for two-factor authentication (2FA) codes.
     /// Default: `false`.
     no_tfa: Option<bool>,

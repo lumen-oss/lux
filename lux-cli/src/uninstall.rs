@@ -5,7 +5,7 @@ use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    drivers::install_packages::InstallPackages,
+    drivers::InstallPackages,
     lockfile::LockedPackageId,
     lua,
     operations::{self, PackageInstallSpec},

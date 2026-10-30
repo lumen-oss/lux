@@ -1,3 +1,4 @@
+use crate::remote;
 use bon::Builder;
 use tracing::Instrument;
 
@@ -7,7 +8,6 @@ use crate::{
     hash::HasIntegrity,
     lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
     lua,
-    remote_package_source::RemotePackageSource,
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{EntryType, InstallTree},
 };
@@ -38,7 +38,7 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
 
     // TODO(vhyrro): Remove this and enforce that this is provided at a type level.
     #[builder(setters(vis = "pub(crate)"))]
-    source: Option<RemotePackageSource>,
+    source: Option<remote::package::Source>,
 }
 
 impl<R: Rockspec + HasIntegrity, T: InstallTree + Sync, State> BuildBuilder<'_, R, T, State>

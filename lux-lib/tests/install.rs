@@ -5,7 +5,7 @@ use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::ConfigBuilder,
-    drivers::install_packages::InstallPackages,
+    drivers::InstallPackages,
     git::{GitRef, GitSource},
     lua,
     operations::{Exec, PackageInstallSpec},

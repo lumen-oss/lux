@@ -22,8 +22,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::fs;
-use crate::package::RemotePackageTypeFilterSpec;
-use crate::remote_package_source::RemotePackageSource;
+use crate::remote;
 use crate::rockspec::lua_dependency;
 use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
@@ -356,7 +355,7 @@ impl Display for RemotePackageSourceUrl {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LockedPackage {
     pub(crate) spec: LockedPackageSpec,
-    pub(crate) source: RemotePackageSource,
+    pub(crate) source: remote::package::Source,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     pub(crate) hashes: LockedPackageHashes,
 }
@@ -371,7 +370,7 @@ impl LockedPackage {
     pub(crate) fn from(
         package: &package::Spec,
         constraint: LockConstraint,
-        source: RemotePackageSource,
+        source: remote::package::Source,
         source_url: Option<RemotePackageSourceUrl>,
         hashes: LockedPackageHashes,
     ) -> Self {
@@ -393,7 +392,7 @@ impl LockedPackage {
 
     pub(crate) fn new(
         spec: LockedPackageSpec,
-        source: RemotePackageSource,
+        source: remote::package::Source,
         source_url: Option<RemotePackageSourceUrl>,
         hashes: LockedPackageHashes,
     ) -> Self {
@@ -449,7 +448,7 @@ impl LockedPackage {
         self.spec.constraint()
     }
 
-    pub(crate) fn source(&self) -> &RemotePackageSource {
+    pub(crate) fn source(&self) -> &remote::package::Source {
         &self.source
     }
 
@@ -484,7 +483,7 @@ struct LockedPackageIntermediate {
     build_dependencies: Vec<LockedPackageId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     constraint: Option<String>,
-    source: RemotePackageSource,
+    source: remote::package::Source,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     source_url: Option<RemotePackageSourceUrl>,
     hashes: LockedPackageHashes,
@@ -737,7 +736,7 @@ impl PackageLock {
     pub(crate) fn has_rock(
         &self,
         req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
+        filter: Option<remote::package::kind::FilterSpec>,
     ) -> Option<LockedPackage> {
         self.list()
             .get(req.name())
@@ -746,14 +745,14 @@ impl PackageLock {
                     .iter()
                     .filter(|package| match &filter {
                         Some(filter_spec) => match &package.source {
-                            RemotePackageSource::LuarocksRockspec(_) => filter_spec.rockspec,
-                            RemotePackageSource::LuarocksSrcRock(_) => filter_spec.src,
-                            RemotePackageSource::LuarocksBinaryRock(_) => filter_spec.binary,
-                            RemotePackageSource::Wally(_) => true,
-                            RemotePackageSource::RockspecContent(_) => true,
-                            RemotePackageSource::Local => true,
+                            remote::package::Source::LuarocksRockspec(_) => filter_spec.rockspec,
+                            remote::package::Source::LuarocksSrcRock(_) => filter_spec.src,
+                            remote::package::Source::LuarocksBinaryRock(_) => filter_spec.binary,
+                            remote::package::Source::Wally(_) => true,
+                            remote::package::Source::RockspecContent(_) => true,
+                            remote::package::Source::Local => true,
                             #[cfg(test)]
-                            RemotePackageSource::Test => unimplemented!(),
+                            remote::package::Source::Test => unimplemented!(),
                         },
                         None => true,
                     })
@@ -1071,7 +1070,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     pub(crate) fn has_rock(
         &self,
         req: &package::Req,
-        filter: Option<RemotePackageTypeFilterSpec>,
+        filter: Option<remote::package::kind::FilterSpec>,
     ) -> Option<LockedPackage> {
         self.lock.has_rock(req, filter)
     }
@@ -1820,7 +1819,7 @@ mod tests {
         let test_local_package = LockedPackage::from(
             &test_package,
             crate::lockfile::LockConstraint::Unconstrained,
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             mock_hashes.clone(),
         );
@@ -1831,7 +1830,7 @@ mod tests {
         let mut test_local_dep_package = LockedPackage::from(
             &test_dep_package,
             crate::lockfile::LockConstraint::Constrained(">= 1.0.0".parse().unwrap()),
-            RemotePackageSource::Test,
+            remote::package::Source::Test,
             None,
             mock_hashes.clone(),
         );

@@ -2,6 +2,7 @@
 pub(crate) mod wally;
 
 use crate::package;
+use crate::remote;
 use crate::rockspec;
 use std::path::PathBuf;
 
@@ -13,10 +14,8 @@ use crate::{
     config::Config,
     operations,
     operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
-    package::RemotePackage,
     package_db::{PackageDB, SearchError},
     project::Project,
-    remote_package_source::RemotePackageSource,
     rockspec::Rockspec,
 };
 
@@ -24,7 +23,7 @@ use super::materialise::PackageSource;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FoundPackage {
-    pub(crate) remote: RemotePackage,
+    pub(crate) remote: remote::Package,
     pub(crate) rockspec: rockspec::lua::Remote,
     pub(crate) artifact: Option<PackageSource>,
 }
@@ -35,9 +34,9 @@ impl FoundPackage {
     pub(crate) fn from_rockspec(rockspec: rockspec::lua::Remote) -> Self {
         let source = rockspec
             .to_lua_remote_rockspec_string()
-            .map(RemotePackageSource::RockspecContent)
-            .unwrap_or(RemotePackageSource::Local);
-        let remote = RemotePackage::new(
+            .map(remote::package::Source::RockspecContent)
+            .unwrap_or(remote::package::Source::Local);
+        let remote = remote::Package::new(
             package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
             source,
             None,
@@ -52,9 +51,9 @@ impl FoundPackage {
     /// Builds a discovered package from a project root rockspec, using the
     /// project's own directory as the source.
     pub(crate) fn from_project_root(rockspec: rockspec::lua::Remote, root_dir: PathBuf) -> Self {
-        let remote = RemotePackage::new(
+        let remote = remote::Package::new(
             package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
-            RemotePackageSource::Local,
+            remote::package::Source::Local,
             None,
         );
         Self {
@@ -161,7 +160,7 @@ fn discover_fetchable_source(
         RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source)
             .map_err(|err| Error::Download(spec.package.clone(), Box::new(err)))?;
     let rockspec = download.rockspec().clone();
-    let remote = RemotePackage::new(
+    let remote = remote::Package::new(
         spec.package.clone().try_into().map_err(|err| {
             Error::Download(
                 spec.package.clone(),
@@ -198,13 +197,13 @@ async fn download_remote(
     if package_db.has_remote_sources() {
         let mut remote = package_db.find(&spec.package, None).await?;
         #[cfg(feature = "wally")]
-        if let RemotePackageSource::Wally(index_url) = &remote.source {
+        if let remote::package::Source::Wally(index_url) = &remote.source {
             return wally::discover_locked(&remote, index_url, config)
                 .await
                 .map_err(Error::Wally);
         }
         #[cfg(not(feature = "wally"))]
-        if let RemotePackageSource::Wally(_) = &remote.source {
+        if let remote::package::Source::Wally(_) = &remote.source {
             return Err(Error::WallyDisabled);
         }
         let download = if let Some(vendor_dir) = config.vendor_dir() {
@@ -269,7 +268,7 @@ mod tests {
         assert_eq!(found.remote.spec.version().to_string(), "1.0.0-1");
         assert!(matches!(
             found.remote.source,
-            RemotePackageSource::RockspecContent(_)
+            remote::package::Source::RockspecContent(_)
         ));
         assert!(found.artifact.is_none());
     }

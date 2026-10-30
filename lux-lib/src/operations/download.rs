@@ -19,9 +19,8 @@ use crate::{
     git::{GitRef, GitSource},
     lockfile::RemotePackageSourceUrl,
     luarocks,
-    package::{RemotePackage, RemotePackageTypeFilterSpec},
     package_db::{self, PackageDB, SearchError},
-    remote_package_source::RemotePackageSource,
+    remote,
     reqwest::{RequestBuilderExt, RequestError},
     rockspec::Rockspec,
 };
@@ -124,7 +123,7 @@ pub struct DownloadedPackedRock {
 #[derive(Clone, Debug)]
 pub struct DownloadedRockspec {
     pub rockspec: rockspec::lua::Remote,
-    pub(crate) source: RemotePackageSource,
+    pub(crate) source: remote::package::Source,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
 }
 
@@ -213,7 +212,7 @@ impl RemoteRockDownload {
         let rockspec_download = DownloadedRockspec {
             rockspec,
             source_url,
-            source: RemotePackageSource::RockspecContent(rockspec_content),
+            source: remote::package::Source::RockspecContent(rockspec_content),
         };
         Ok(Self::RockspecOnly { rockspec_download })
     }
@@ -263,7 +262,7 @@ pub(crate) async fn download_exact_rockspec(
 ) -> Result<DownloadedRockspec, SearchAndDownloadError> {
     let package_req = package.clone().into();
     let remote = package_db.find(&package_req, None).await?;
-    let remote_package = RemotePackage {
+    let remote_package = remote::Package {
         spec: package.clone(),
         ..remote
     };
@@ -288,11 +287,11 @@ async fn download_remote_rock(
 }
 
 async fn download_found_rock(
-    remote_package: RemotePackage,
+    remote_package: remote::Package,
     config: &Config,
 ) -> Result<RemoteRockDownload, SearchAndDownloadError> {
     match &remote_package.source {
-        RemotePackageSource::LuarocksRockspec(url) => {
+        remote::package::Source::LuarocksRockspec(url) => {
             let package = &remote_package.spec;
             let rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
             let url = url
@@ -320,7 +319,7 @@ async fn download_found_rock(
                 rockspec_download: rockspec,
             })
         }
-        RemotePackageSource::RockspecContent(content) => {
+        remote::package::Source::RockspecContent(content) => {
             let rockspec = DownloadedRockspec {
                 rockspec: rockspec::lua::Remote::new(content)
                     .map_err(|err| SearchAndDownloadError::Rockspec(err.into()))?,
@@ -331,7 +330,7 @@ async fn download_found_rock(
                 rockspec_download: rockspec,
             })
         }
-        RemotePackageSource::LuarocksBinaryRock(url) => {
+        remote::package::Source::LuarocksBinaryRock(url) => {
             // prioritise lockfile source_url
             let url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote_package.source_url
             {
@@ -350,7 +349,7 @@ async fn download_found_rock(
                 packed_rock: rock.bytes,
             })
         }
-        RemotePackageSource::LuarocksSrcRock(url) => {
+        remote::package::Source::LuarocksSrcRock(url) => {
             // prioritise lockfile source_url
             let url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote_package.source_url
             {
@@ -370,12 +369,12 @@ async fn download_found_rock(
                 source_url: RemotePackageSourceUrl::Url { url },
             })
         }
-        RemotePackageSource::Wally(_) => Err(SearchAndDownloadError::WallySource(
+        remote::package::Source::Wally(_) => Err(SearchAndDownloadError::WallySource(
             remote_package.spec.name().to_string(),
         )),
-        RemotePackageSource::Local => Err(SearchAndDownloadError::LocalSource),
+        remote::package::Source::Local => Err(SearchAndDownloadError::LocalSource),
         #[cfg(test)]
-        RemotePackageSource::Test => unimplemented!(),
+        remote::package::Source::Test => unimplemented!(),
     }
 }
 
@@ -479,7 +478,7 @@ async fn search_and_download_src_rock(
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<DownloadedPackedRockBytes, SearchAndDownloadError> {
-    let filter = Some(RemotePackageTypeFilterSpec {
+    let filter = Some(remote::package::kind::FilterSpec {
         rockspec: false,
         binary: false,
         src: true,
