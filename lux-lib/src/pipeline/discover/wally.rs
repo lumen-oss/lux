@@ -29,17 +29,17 @@ const DEFAULT_INDEX_URL: &str = "https://github.com/UpliftGames/wally-index";
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum WallyDiscoverError {
+pub enum Error {
     #[error("failed to resolve wally package")]
     #[diagnostic(help(
         "check your network connection and that the wally registry URL is correct."
     ))]
-    Index(#[from] WallyIndexError),
+    Index(#[from] IndexError),
     #[error("failed to inspect wally package contents")]
     #[diagnostic(help(
         "the registry may have returned a corrupt package archive; try again, or report it to the package author."
     ))]
-    Modules(#[from] WallyModulesError),
+    Modules(#[from] ModulesError),
     #[error("failed to parse wally package version")]
     #[diagnostic(help(
         "the package manifest contains an invalid version; report it to the package author."
@@ -73,7 +73,7 @@ pub enum WallyDiscoverError {
     Request(#[from] RequestError),
 }
 
-impl From<reqwest::Error> for WallyDiscoverError {
+impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Self::Request(err.into())
     }
@@ -84,11 +84,11 @@ pub(crate) async fn discover(
     package_req: &package::Req,
     wally_req: &wally::package::Req,
     config: &Config,
-) -> Result<FoundPackage, WallyDiscoverError> {
+) -> Result<FoundPackage, Error> {
     let mut registries = config.extra_wally_registries().clone();
     registries.push(unsafe { Url::parse(DEFAULT_INDEX_URL).unwrap_unchecked() });
     for registry in &registries {
-        let index = WallyIndex::open(registry, config.cache_dir())?;
+        let index = Index::open(registry, config.cache_dir())?;
         let Some(manifest) = index.find(wally_req)? else {
             continue;
         };
@@ -96,7 +96,7 @@ pub(crate) async fn discover(
         let contents = fetch_contents(&content_url, config).await?;
         return found_package(package_req, manifest, content_url, &contents, registry);
     }
-    Err(WallyDiscoverError::NotFound(wally_req.clone()))
+    Err(Error::NotFound(wally_req.clone()))
 }
 
 /// Discover a wally package that is pinned in a lockfile.
@@ -104,50 +104,44 @@ pub(crate) async fn discover_locked(
     remote: &remote::Package,
     index_url: &Url,
     config: &Config,
-) -> Result<FoundPackage, WallyDiscoverError> {
+) -> Result<FoundPackage, Error> {
     let package_req = remote.spec.clone().into_package_req();
     let wally_req = wally_req_from_locked(remote)?;
-    let index = WallyIndex::open(index_url, config.cache_dir())?;
+    let index = Index::open(index_url, config.cache_dir())?;
     let manifest = index
         .find(&wally_req)?
-        .ok_or_else(|| WallyDiscoverError::NotFound(wally_req.clone()))?;
+        .ok_or_else(|| Error::NotFound(wally_req.clone()))?;
     let content_url = content_url(&index, &wally_req, &manifest)?;
     let contents = fetch_contents(&content_url, config).await?;
     found_package(&package_req, manifest, content_url, &contents, index_url)
 }
 
-fn wally_req_from_locked(
-    remote: &remote::Package,
-) -> Result<wally::package::Req, WallyDiscoverError> {
+fn wally_req_from_locked(remote: &remote::Package) -> Result<wally::package::Req, Error> {
     let content_url = if let Some(RemotePackageSourceUrl::Url { url }) = &remote.source_url {
         url
     } else {
-        return Err(WallyDiscoverError::MissingSourceUrl(
-            remote.spec.name().to_string(),
-        ));
+        return Err(Error::MissingSourceUrl(remote.spec.name().to_string()));
     };
     let mut segments = content_url.path_segments().into_iter().flatten().rev();
     let _version = segments.next();
     let name = segments.next();
     let scope = segments.next();
     let (Some(scope), Some(name)) = (scope, name) else {
-        return Err(WallyDiscoverError::InvalidSourceUrl(
-            content_url.to_string(),
-        ));
+        return Err(Error::InvalidSourceUrl(content_url.to_string()));
     };
     let name: wally::package::Name = format!("{scope}/{name}")
         .parse()
-        .map_err(|_| WallyDiscoverError::InvalidSourceUrl(content_url.to_string()))?;
+        .map_err(|_| Error::InvalidSourceUrl(content_url.to_string()))?;
     let version_req =
         semver::VersionReq::parse(&format!("={}", remote.spec.version().to_version_string()))?;
     Ok(wally::package::Req::new(name, version_req))
 }
 
 fn content_url(
-    index: &WallyIndex,
+    index: &Index,
     wally_req: &wally::package::Req,
     manifest: &wally::package::Manifest,
-) -> Result<Url, WallyDiscoverError> {
+) -> Result<Url, Error> {
     index
         .config()
         .api
@@ -157,7 +151,7 @@ fn content_url(
             wally_req.name().name(),
             manifest.package.version
         ))
-        .map_err(|source| WallyDiscoverError::Url {
+        .map_err(|source| Error::Url {
             url: index.config().api.to_string(),
             source,
         })
@@ -185,7 +179,7 @@ fn found_package(
     content_url: Url,
     contents: &[u8],
     registry: &Url,
-) -> Result<FoundPackage, WallyDiscoverError> {
+) -> Result<FoundPackage, Error> {
     let version = package::Version::parse(&manifest.package.version.to_string())?;
     let package_spec = package::Spec::new(package_req.name().clone(), version);
     let modules = modules_from_zip(contents)?;
@@ -208,7 +202,7 @@ fn found_package(
     })
 }
 
-async fn fetch_contents(url: &Url, config: &Config) -> Result<Bytes, WallyDiscoverError> {
+async fn fetch_contents(url: &Url, config: &Config) -> Result<Bytes, Error> {
     let request = crate::reqwest::http_client(config)?.get(url.clone());
     let request = wally::apply_content_headers(request, url);
     let response = request.send().await?.error_for_status()?.bytes().await?;
@@ -216,7 +210,7 @@ async fn fetch_contents(url: &Url, config: &Config) -> Result<Bytes, WallyDiscov
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct WallyIndexConfig {
+struct IndexConfig {
     api: Url,
 
     #[allow(dead_code)]
@@ -225,29 +219,29 @@ struct WallyIndexConfig {
 }
 
 #[derive(Debug, Clone)]
-struct WallyIndex {
+struct Index {
     path: PathBuf,
-    config: WallyIndexConfig,
+    config: IndexConfig,
 }
 
-impl WallyIndex {
-    fn new(path: PathBuf) -> Result<Self, WallyIndexError> {
+impl Index {
+    fn new(path: PathBuf) -> Result<Self, IndexError> {
         let config = serde_json::from_str(&std::fs::read_to_string(path.join("config.json"))?)?;
         Ok(Self { path, config })
     }
 
-    fn open(url: &Url, cache_dir: &Path) -> Result<Self, WallyIndexError> {
+    fn open(url: &Url, cache_dir: &Path) -> Result<Self, IndexError> {
         Self::new(checkout(url, cache_dir)?)
     }
 
-    fn config(&self) -> &WallyIndexConfig {
+    fn config(&self) -> &IndexConfig {
         &self.config
     }
 
     fn versions(
         &self,
         name: &wally::package::Name,
-    ) -> Result<Vec<wally::package::Manifest>, WallyIndexError> {
+    ) -> Result<Vec<wally::package::Manifest>, IndexError> {
         let path = self.path.join(name.scope()).join(name.name());
         let content = match std::fs::read_to_string(path) {
             Ok(content) => content,
@@ -257,7 +251,7 @@ impl WallyIndex {
         let mut versions: Vec<wally::package::Manifest> = content
             .lines()
             .filter(|line| !line.trim().is_empty())
-            .map(|line| serde_json::from_str(line).map_err(WallyIndexError::from))
+            .map(|line| serde_json::from_str(line).map_err(IndexError::from))
             .collect::<Result<_, _>>()?;
         versions.sort_by(|a, b| b.package.version.cmp(&a.package.version));
         Ok(versions)
@@ -266,7 +260,7 @@ impl WallyIndex {
     fn find(
         &self,
         req: &wally::package::Req,
-    ) -> Result<Option<wally::package::Manifest>, WallyIndexError> {
+    ) -> Result<Option<wally::package::Manifest>, IndexError> {
         Ok(self
             .versions(req.name())?
             .into_iter()
@@ -274,7 +268,7 @@ impl WallyIndex {
     }
 }
 
-fn checkout(url: &Url, cache_dir: &Path) -> Result<PathBuf, WallyIndexError> {
+fn checkout(url: &Url, cache_dir: &Path) -> Result<PathBuf, IndexError> {
     let path = cache_path(url, cache_dir);
     if path.join(".git").is_dir() {
         let repo = Repository::open(&path)?;
@@ -304,7 +298,7 @@ fn cache_path(url: &Url, cache_dir: &Path) -> PathBuf {
 }
 
 #[derive(Debug, Error)]
-pub enum WallyIndexError {
+pub enum IndexError {
     #[error("failed to read wally index")]
     Io(#[from] io::Error),
     #[error("failed to parse wally index")]
@@ -317,7 +311,7 @@ fn modules_from_zip(
     bytes: &[u8],
 ) -> Result<
     HashMap<rockspec::build::backend::Module, rockspec::build::backend::ModuleSpec>,
-    WallyModulesError,
+    ModulesError,
 > {
     let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes))?;
     let mut modules = HashMap::new();
@@ -385,7 +379,7 @@ fn lua_module_from_entry(
 }
 
 #[derive(Debug, Error)]
-pub enum WallyModulesError {
+pub enum ModulesError {
     #[error("failed to read package contents archive")]
     Zip(#[from] zip::result::ZipError),
     #[error("invalid module path in package contents")]
@@ -488,7 +482,7 @@ mod tests {
             .join("\n");
         std::fs::write(pkg_path, format!("{jsonl}\n")).unwrap();
 
-        let index = WallyIndex::new(dir.path().to_path_buf()).unwrap();
+        let index = Index::new(dir.path().to_path_buf()).unwrap();
         assert_eq!(
             index.config().api,
             Url::parse("https://api.wally.run").unwrap()
@@ -529,7 +523,7 @@ mod tests {
 
         let cache = assert_fs::TempDir::new().unwrap();
         let url = Url::from_directory_path(remote.path()).unwrap();
-        let index = WallyIndex::open(&url, cache.path()).unwrap();
+        let index = Index::open(&url, cache.path()).unwrap();
         let req: wally::package::Req = "evaera/promise@1".parse().unwrap();
         assert_eq!(
             index.find(&req).unwrap().unwrap().package.version,
@@ -599,7 +593,7 @@ mod tests {
 
         assert!(matches!(
             wally_req_from_locked(&remote),
-            Err(WallyDiscoverError::MissingSourceUrl(_))
+            Err(Error::MissingSourceUrl(_))
         ));
     }
 

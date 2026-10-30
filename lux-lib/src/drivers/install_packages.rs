@@ -15,7 +15,7 @@ use crate::{
         ReadWrite,
     },
     lua,
-    luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
+    luarocks::installation,
     package::db::PackageDB,
     tree::{self, InstallTree},
     workspace::TreeError,
@@ -293,12 +293,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] TreeError),
-    #[error("error instantiating LuaRocks compatibility layer")]
+    #[error("error preparing the LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
-    LuaRocks(#[from] LuaRocksError),
-    #[error("error installing LuaRocks compatibility layer")]
-    #[diagnostic(forward(0))]
-    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
+    LuaRocks(#[from] Box<installation::Error>),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     PackageDB(#[from] package::db::Error),
@@ -320,9 +317,9 @@ pub enum Error {
     Build(#[from] PipelineBuildError),
 }
 
-impl From<LuaRocksInstallError> for Error {
-    fn from(source: LuaRocksInstallError) -> Self {
-        Self::LuaRocksInstall(Box::new(source))
+impl From<installation::Error> for Error {
+    fn from(source: installation::Error) -> Self {
+        Self::LuaRocks(Box::new(source))
     }
 }
 

@@ -1,15 +1,11 @@
-use crate::package;
 use crate::rockspec;
 use std::io;
 use tokio::process::Command;
 
 use crate::{
-    build::BuildBehaviour,
     config::Config,
-    drivers::{InstallPackages, InstallPackagesError},
     lua,
     operations::{BuildWorkspace, BuildWorkspaceError},
-    package::db::PackageDB,
     path::{self, Paths},
     tree::{self, InstallTree},
     workspace::{TreeError, Workspace},
@@ -20,7 +16,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use which::which;
 
-use super::PackageInstallSpec;
+mod command;
 
 /// Rocks package runner, providing fine-grained control
 /// over how a package should be run.
@@ -96,7 +92,7 @@ pub enum ExecError {
     BuildWorkspace(#[from] Box<BuildWorkspaceError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallCommand(#[from] Box<InstallCommandError>),
+    Command(#[from] Box<command::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] TreeError),
@@ -110,25 +106,9 @@ impl From<BuildWorkspaceError> for ExecError {
     }
 }
 
-impl From<InstallCommandError> for ExecError {
-    fn from(source: InstallCommandError) -> Self {
-        Self::InstallCommand(Box::new(source))
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[error(transparent)]
-pub enum InstallCommandError {
-    Install(#[from] Box<InstallPackagesError>),
-    PackageVersionReqError(#[from] package::version::ReqError),
-    PackageDB(#[from] package::db::Error),
-    Tree(#[from] tree::Error),
-    LuaVersion(#[from] lua::version::Error),
-}
-
-impl From<InstallPackagesError> for InstallCommandError {
-    fn from(source: InstallPackagesError) -> Self {
-        Self::Install(Box::new(source))
+impl From<command::Error> for ExecError {
+    fn from(source: command::Error) -> Self {
+        Self::Command(Box::new(source))
     }
 }
 
@@ -146,7 +126,7 @@ async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
             .build()
             .await?;
     } else if which(run.command).is_err() {
-        install_command(run.command, run.config).await?
+        command::install(run.command, run.config).await?
     };
 
     let user_tree = run.config.user_tree(lua_version.clone())?;
@@ -217,27 +197,4 @@ To suppress this warning, set the `--no-loader` option."#
             exit_code: status.code(),
         })
     }
-}
-
-/// Ensure that a command is installed.
-/// This defaults to the local project tree if cwd is a project root.
-async fn install_command(command: &str, config: &Config) -> Result<(), InstallCommandError> {
-    let package = package::Req::new(command.into(), None)?;
-    let tree = config.user_tree(lua::Version::from(config)?.clone())?;
-
-    if tree
-        .match_rocks(&package)
-        .is_ok_and(|matches| matches.is_found())
-    {
-        return Ok(());
-    }
-    let install_spec = PackageInstallSpec::new(package, tree::EntryType::Entrypoint)
-        .build_behaviour(BuildBehaviour::Force)
-        .build();
-    InstallPackages::new(config, &tree)
-        .package(install_spec)
-        .package_db(PackageDB::from_config(config).await?)
-        .install()
-        .await?;
-    Ok(())
 }

@@ -73,7 +73,7 @@ mod tests {
 
     use crate::{
         config,
-        manifest::{Manifest, ManifestMetadata},
+        manifest::{metadata::Metadata, Manifest},
         package::db::PackageDB,
         package::Spec,
     };
@@ -83,7 +83,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
+        let metadata = Metadata::new(&content).unwrap();
         let config = config::Builder::new().unwrap().build().unwrap();
         let package_db = PackageDB::from_manifest(
             Manifest::new(

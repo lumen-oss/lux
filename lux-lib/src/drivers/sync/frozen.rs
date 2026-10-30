@@ -14,7 +14,7 @@ use crate::{
         FlushLockfileError, IntegrityError, LockedPackage, LockedPackageLockType, Lockfile,
         PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
     },
-    luarocks::luarocks_installation::LUAROCKS_VERSION,
+    luarocks::installation::LUAROCKS_VERSION,
     operations::{self, GenLuaRcError, GenLuauRcError},
     package::db::PackageDB,
     pipeline::resolve::luarocks_build_backend_name,

@@ -18,7 +18,7 @@ use bytes::Bytes;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{install_rock_manifest, InstallRockManifestError, RockManifestSources};
+use super::{install_rock_manifest, RockManifestSources};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -44,7 +44,7 @@ pub enum Error {
     Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallRockManifest(#[from] InstallRockManifestError),
+    InstallRockManifest(#[from] super::Error),
 }
 
 pub(crate) struct BinaryRockInstall<'a, T>
