@@ -6,8 +6,7 @@ use lux_lib::{
     build::BuildBehaviour,
     config,
     drivers::InstallPackages,
-    git::{GitRef, GitSource},
-    lua,
+    git, lua,
     operations::{Exec, PackageInstallSpec},
     package::db::PackageDB,
     rockspec,
@@ -23,11 +22,11 @@ use serial_test::serial;
 async fn install_git_package() {
     let install_spec =
         PackageInstallSpec::new("rustaceanvim@6.0.3".parse().unwrap(), EntryType::Entrypoint)
-            .source(rockspec::source::Spec::Git(GitSource {
+            .source(rockspec::source::Spec::Git(git::Source {
                 url: "https://github.com/mrcjkb/rustaceanvim.git"
                     .parse()
                     .unwrap(),
-                git_ref: Some(GitRef::Tag("v6.0.3".into())),
+                git_ref: Some(git::Ref::Tag("v6.0.3".into())),
             }))
             .build_behaviour(BuildBehaviour::Force)
             .build();

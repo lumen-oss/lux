@@ -11,7 +11,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ParseError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Req(#[from] package::ReqParseError),
@@ -90,9 +90,9 @@ impl From<package::Req> for Spec {
 }
 
 impl FromStr for Spec {
-    type Err = ParseError;
+    type Err = Error;
 
-    fn from_str(str: &str) -> Result<Self, ParseError> {
+    fn from_str(str: &str) -> Result<Self, Error> {
         let package_req = package::Req::from_str(str)?;
         Ok(Self {
             package_req,

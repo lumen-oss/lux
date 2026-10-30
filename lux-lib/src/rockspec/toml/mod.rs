@@ -1,8 +1,8 @@
 //! Structs and utilities for `lux.toml`
 
 use crate::fs;
+use crate::git;
 use crate::git::shorthand::RemoteGitUrlShorthand;
-use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
 use crate::lockfile::PinnedState;
@@ -121,14 +121,14 @@ where
                                     name
                                 ))),
                                 (Some(git), Some(rev), None) => {
-                                    Ok(Some(rockspec::source::Spec::Git(GitSource {
+                                    Ok(Some(rockspec::source::Spec::Git(git::Source {
                                         url: git.into(),
-                                        git_ref: Some(GitRef::Tag(rev)),
+                                        git_ref: Some(git::Ref::Tag(rev)),
                                     })))
                                 }
-                                (Some(git), None, None) => Ok(Some(rockspec::source::Spec::Git(GitSource {
+                                (Some(git), None, None) => Ok(Some(rockspec::source::Spec::Git(git::Source {
                                     url: git.into(),
-                                    git_ref: Some(GitRef::Tag(
+                                    git_ref: Some(git::Ref::Tag(
                                         version
                                             .clone()
                                             .to_string()
@@ -1245,7 +1245,7 @@ mod tests {
     use url::Url;
 
     use crate::{
-        git::{url::RemoteGitUrl, GitRef, GitSource},
+        git::{self, url::RemoteGitUrl},
         project::{Project, TOML_FILE_NAME},
         rockspec::Rockspec,
     };
@@ -1903,7 +1903,7 @@ mod tests {
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &rockspec::source::Spec::Git { .. }));
-        if let rockspec::source::Spec::Git(GitSource { url, git_ref }) = source_spec {
+        if let rockspec::source::Spec::Git(git::Source { url, git_ref }) = source_spec {
             let expected_url: RemoteGitUrl =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
@@ -1923,11 +1923,11 @@ mod tests {
         let source = remote_project_toml.source.current_platform();
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &rockspec::source::Spec::Git { .. }));
-        if let rockspec::source::Spec::Git(GitSource { url, git_ref }) = source_spec {
+        if let rockspec::source::Spec::Git(git::Source { url, git_ref }) = source_spec {
             let expected_url: RemoteGitUrl =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
-            assert_eq!(git_ref, &Some(GitRef::Tag(tag_name.to_string())));
+            assert_eq!(git_ref, &Some(git::Ref::Tag(tag_name.to_string())));
         }
         assert_eq!(source.unpack_dir, Some("lux-dev".into()));
     }
@@ -2012,7 +2012,7 @@ mod tests {
 
         let project = Project::from_exact(&project_dir).unwrap().unwrap();
         let remote_project_toml = project.toml().into_remote(None).unwrap();
-        let rockspec::source::Spec::Git(GitSource { git_ref, .. }) =
+        let rockspec::source::Spec::Git(git::Source { git_ref, .. }) =
             &remote_project_toml.source.current_platform().source_spec
         else {
             panic!("expected a git source");

@@ -24,7 +24,7 @@ pub enum Error {
     #[diagnostic(forward(source))]
     Server {
         url: String,
-        source: Box<ManifestFromServerError>,
+        source: Box<metadata_from_server::Error>,
     },
     #[error("error parsing URL from `vendor-dir`: {0}:")]
     Vendor(String),

@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     rockspec,
-    variables::{self, Environment, GetVariableError, HasVariables, VariableSubstitutionError},
+    variables::{self, Environment, GetVariableError, HasVariables},
 };
 use ::serde::Deserialize;
 use git2::Repository;
@@ -59,7 +59,7 @@ pub enum GenerateSourceError {
     MissingDevUrl(String),
     #[error("error substituting project source variables")]
     #[diagnostic(forward(0))]
-    VariableSubstitution(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] variables::Error),
     #[error("error parsing source URL from template")]
     #[diagnostic(forward(0))]
     SourceUrl(#[from] rockspec::source::UrlError),

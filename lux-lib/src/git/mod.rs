@@ -33,19 +33,19 @@ pub enum Error {
 }
 /// Specifies a git reference (tag or branch)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum GitRef {
+pub enum Ref {
     Tag(String),
     Branch(String),
 }
 
 /// Specifies a source to be fetched from a git forge
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct GitSource {
+pub struct Source {
     pub url: RemoteGitUrl,
-    pub git_ref: Option<GitRef>,
+    pub git_ref: Option<Ref>,
 }
 
-impl rockspec::display::AsLuaKV for GitSource {
+impl rockspec::display::AsLuaKV for Source {
     fn display_lua(&self) -> rockspec::display::LuaKV {
         let mut fields = vec![rockspec::display::LuaKV {
             key: "url".to_string(),
@@ -54,11 +54,11 @@ impl rockspec::display::AsLuaKV for GitSource {
 
         if let Some(git_ref) = &self.git_ref {
             match git_ref {
-                GitRef::Tag(tag) => fields.push(rockspec::display::LuaKV {
+                Ref::Tag(tag) => fields.push(rockspec::display::LuaKV {
                     key: "tag".to_string(),
                     value: rockspec::display::LuaValue::String(tag.clone()),
                 }),
-                GitRef::Branch(branch) => fields.push(rockspec::display::LuaKV {
+                Ref::Branch(branch) => fields.push(rockspec::display::LuaKV {
                     key: "branch".to_string(),
                     value: rockspec::display::LuaValue::String(branch.clone()),
                 }),
@@ -72,11 +72,11 @@ impl rockspec::display::AsLuaKV for GitSource {
     }
 }
 
-impl Display for GitSource {
+impl Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.git_ref {
-            Some(GitRef::Tag(tag)) => format!("{}@{}", self.url, tag).fmt(f),
-            Some(GitRef::Branch(branch)) => format!("{}@{}", self.url, branch).fmt(f),
+            Some(Ref::Tag(tag)) => format!("{}@{}", self.url, tag).fmt(f),
+            Some(Ref::Branch(branch)) => format!("{}@{}", self.url, branch).fmt(f),
             None => self.url.fmt(f),
         }
     }

@@ -15,7 +15,7 @@ use crate::{
     operations::UnpackError,
     path::{self, Paths},
     tree::InstallTree,
-    variables::{self, VariableSubstitutionError},
+    variables::{self},
 };
 
 #[cfg(target_family = "unix")]
@@ -99,7 +99,7 @@ pub enum ExecLuaRocksError {
         "could not substitute '$(LUA_LIBDIR)' and '$(LUA_INCDIR)' variables in the luarocks config template"
     )]
     #[diagnostic(forward(0))]
-    VariableSubstitutionInConfig(#[from] VariableSubstitutionError),
+    VariableSubstitutionInConfig(#[from] variables::Error),
     #[error("failed to run luarocks")]
     Io(#[from] io::Error),
     #[error(transparent)]

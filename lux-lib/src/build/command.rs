@@ -17,7 +17,7 @@ use crate::{
     path::{self, Paths},
     rockspec,
     tree::{self, InstallTree, RockLayout},
-    variables::VariableSubstitutionError,
+    variables,
 };
 
 use super::external_dependency::ExternalDependencyInfo;
@@ -60,7 +60,7 @@ pub enum Error {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitution(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] variables::Error),
 }
 pub(crate) fn trace_output(output: &Output) {
     if !output.stderr.is_empty() {

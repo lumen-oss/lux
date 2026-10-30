@@ -133,7 +133,7 @@ pub enum EditError {
     ExpectedString(Box<toml_edit::Value>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    GitUrlShorthandParse(#[from] git::shorthand::ParseError),
+    GitUrlShorthandParse(#[from] git::shorthand::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]

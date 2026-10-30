@@ -10,7 +10,7 @@ use crate::{
     build::external_dependency::ExternalDependencyInfo,
     config::Config,
     fs, lua, rockspec,
-    variables::{self, Environment, VariableSubstitutionError},
+    variables::{self, Environment},
 };
 
 use super::{c_link, CCExt};
@@ -40,7 +40,7 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
     Link(#[from] c_link::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    VariableSubstitution(#[from] VariableSubstitutionError),
+    VariableSubstitution(#[from] variables::Error),
 }
 
 /// Compiles a set of C files (with extra metadata) to a given destination.

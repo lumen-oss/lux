@@ -88,7 +88,7 @@ pub enum Error {
     GenLuauRc(#[from] GenLuauRcError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Frozen(Box<frozen::SyncError>),
+    Frozen(Box<frozen::Error>),
 }
 
 impl From<InstallPackagesError> for Error {
@@ -103,8 +103,8 @@ impl From<InstallProjectError> for Error {
     }
 }
 
-impl From<frozen::SyncError> for Error {
-    fn from(source: frozen::SyncError) -> Self {
+impl From<frozen::Error> for Error {
+    fn from(source: frozen::Error) -> Self {
         Self::Frozen(Box::new(source))
     }
 }

@@ -19,7 +19,7 @@ use crate::reqwest::{RequestBuilderExt, RequestError};
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ManifestFromServerError {
+pub enum Error {
     #[error("IO error occured while fetching the manifest")]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -51,7 +51,7 @@ if you are using a custom server, make sure it returns correctly formatted manif
     LuaVersion(#[from] lua::version::Error),
 }
 
-impl From<reqwest::Error> for ManifestFromServerError {
+impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Self::Request(err.into())
     }
@@ -64,7 +64,7 @@ pub(super) async fn get_manifest(
     target: &Path,
     client: &Client,
     config: &Config,
-) -> Result<String, ManifestFromServerError> {
+) -> Result<String, Error> {
     let response = client
         .get(url.clone())
         .apply_access_token(config, &url)
@@ -86,13 +86,13 @@ pub(super) async fn get_manifest(
     } else {
         let manifest_bytes = response.error_for_status()?.bytes().await?;
         let mut archive = ZipArchive::new(std::io::Cursor::new(manifest_bytes))
-            .map_err(|err| ManifestFromServerError::ZipRead(url.clone(), err))?;
+            .map_err(|err| Error::ZipRead(url.clone(), err))?;
 
         let temp = fs::tempfile::tempdir()?;
 
         archive
             .extract_unwrapped_root_dir(&temp, zip::read::root_dir_common_filter)
-            .map_err(|err| ManifestFromServerError::ZipExtract(url.clone(), err))?;
+            .map_err(|err| Error::ZipExtract(url.clone(), err))?;
 
         let extracted_manifest_path = temp.path().join(format!("manifest-{manifest_version}"));
         let mut extracted_manifest = fs::tokio::open(&extracted_manifest_path).await?;
@@ -129,7 +129,7 @@ pub(super) async fn get_manifest(
 pub(crate) async fn manifest_from_cache_or_server(
     server_url: &Url,
     config: &Config,
-) -> Result<String, ManifestFromServerError> {
+) -> Result<String, Error> {
     let manifest_version = lua::Version::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     manifest_from_cache_or_server_impl(&manifest_version, url, config).await
@@ -145,7 +145,7 @@ async fn manifest_from_cache_or_server_impl(
     manifest_version: &str,
     url: Url,
     config: &Config,
-) -> Result<String, ManifestFromServerError> {
+) -> Result<String, Error> {
     let cache = mk_manifest_cache(&url, config).await?;
 
     #[cfg(not(test))]
@@ -193,7 +193,7 @@ async fn manifest_from_cache_or_server_impl(
 pub(crate) async fn manifest_from_server_only(
     server_url: &Url,
     config: &Config,
-) -> Result<String, ManifestFromServerError> {
+) -> Result<String, Error> {
     let manifest_version = lua::Version::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
     manifest_from_server_only_impl(url, &manifest_version, config).await
@@ -209,7 +209,7 @@ async fn manifest_from_server_only_impl(
     url: Url,
     manifest_version: &str,
     config: &Config,
-) -> Result<String, ManifestFromServerError> {
+) -> Result<String, Error> {
     let cache = mk_manifest_cache(&url, config).await?;
     let client = crate::reqwest::https_client(config)?;
     get_manifest(url, manifest_version, &cache, client, config).await
@@ -219,7 +219,7 @@ fn mk_manifest_url(
     server_url: &Url,
     manifest_version: &str,
     config: &Config,
-) -> Result<Url, ManifestFromServerError> {
+) -> Result<Url, Error> {
     let manifest_filename = format!("manifest-{manifest_version}.zip");
     let url = match config.namespace() {
         Some(namespace) => server_url
