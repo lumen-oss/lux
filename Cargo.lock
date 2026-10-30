@@ -3847,7 +3847,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-sink",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "hashbrown 0.17.1",
  "indexmap 1.9.3",
  "indexmap 2.14.2",

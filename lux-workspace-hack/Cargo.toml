@@ -34,7 +34,7 @@ form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-sink = { version = "0.3" }
-getrandom = { version = "0.2", default-features = false, features = ["std"] }
+getrandom = { version = "0.4", default-features = false, features = ["std"] }
 hashbrown = { version = "0.17" }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["std"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2" }
@@ -87,7 +87,7 @@ form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-sink = { version = "0.3" }
-getrandom = { version = "0.2", default-features = false, features = ["std"] }
+getrandom = { version = "0.4", default-features = false, features = ["std"] }
 hashbrown = { version = "0.17" }
 indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["std"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2" }
