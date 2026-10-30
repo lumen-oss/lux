@@ -9,7 +9,7 @@ use crate::{
     drivers::{InstallPackages, InstallPackagesError},
     lua,
     operations::{BuildWorkspace, BuildWorkspaceError},
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     path::{self, Paths},
     tree::{self, InstallTree},
     workspace::{TreeError, Workspace},
@@ -121,7 +121,7 @@ impl From<InstallCommandError> for ExecError {
 pub enum InstallCommandError {
     Install(#[from] Box<InstallPackagesError>),
     PackageVersionReqError(#[from] package::version::ReqError),
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     Tree(#[from] tree::Error),
     LuaVersion(#[from] lua::version::Error),
 }

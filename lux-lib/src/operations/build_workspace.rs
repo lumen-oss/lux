@@ -78,7 +78,7 @@ impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete
 mod tests {
     use super::*;
 
-    use crate::{config::ConfigBuilder, lua};
+    use crate::{config, lua};
     #[cfg(feature = "impure_tests")]
     use crate::{fs, tree::InstallTree};
     use assert_fs::prelude::PathCopy;
@@ -107,7 +107,7 @@ mod tests {
             .await
             .unwrap();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .data_dir(Some(data_dir))
             .lua_version(lua_version)
@@ -143,7 +143,7 @@ mod tests {
             .await
             .unwrap();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .data_dir(Some(data_dir))
             .lua_version(lua_version)
@@ -172,7 +172,7 @@ mod tests {
         temp_dir.copy_from(&project_root, &["**"]).unwrap();
         let project_root = temp_dir.path();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .data_dir(Some(data_dir))
             .lua_version(lua_version)

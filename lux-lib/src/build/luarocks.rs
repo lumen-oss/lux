@@ -118,7 +118,7 @@ mod tests {
     use assert_fs::TempDir;
 
     use crate::{
-        config::ConfigBuilder,
+        config,
         lockfile::{LockConstraint, LockedPackageSpec, OptState, PinnedState},
         lua,
         rockspec::Rockspec,
@@ -148,7 +148,7 @@ build = { type = "test-custom" }
         )
         .unwrap();
         let tree_dir = TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .user_tree(Some(tree_dir.path().to_path_buf()))

@@ -18,7 +18,7 @@ use crate::{
         PinnedState, RemotePackageSourceUrl,
     },
     operations::PackageInstallSpec,
-    package_db::PackageDB,
+    package::db::PackageDB,
     rockspec::Rockspec,
     tree::EntryType,
 };
@@ -552,7 +552,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::config::ConfigBuilder;
+    use crate::config;
     use crate::lockfile::{LockConstraint, LockedPackageHashes};
     use crate::remote;
 
@@ -635,7 +635,7 @@ mod tests {
     }
 
     fn test_config() -> Arc<Config> {
-        let builder = match ConfigBuilder::new() {
+        let builder = match config::Builder::new() {
             Ok(builder) => builder,
             Err(err) => unreachable!("invalid test config: {err}"),
         };

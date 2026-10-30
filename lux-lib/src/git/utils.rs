@@ -108,12 +108,12 @@ fn latest_commit_sha(url: &RemoteGitUrl, config: &Config) -> Result<Option<Strin
 mod tests {
 
     use super::*;
-    use crate::config::ConfigBuilder;
+    use crate::config;
     #[cfg(feature = "impure_tests")]
     use flaky_test::flaky_test;
 
     fn test_config() -> Config {
-        ConfigBuilder::new().unwrap().build().unwrap()
+        config::Builder::new().unwrap().build().unwrap()
     }
 
     #[cfg(feature = "impure_tests")]

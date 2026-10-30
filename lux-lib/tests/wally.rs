@@ -5,8 +5,7 @@ use std::path::PathBuf;
 use assert_fs::{prelude::PathCopy, TempDir};
 use flaky_test::flaky_test;
 use lux_lib::{
-    config::ConfigBuilder,
-    lua,
+    config, lua,
     operations::{BuildWorkspace, Run},
     path::LuaEnvironment,
     workspace::Workspace,
@@ -19,7 +18,7 @@ async fn test_install_wally_dependency() {
     let project = TempDir::new().unwrap();
     project.copy_from(&project_root, &["**/*"]).unwrap();
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .cache_dir(Some(project.path().join(".cache")))
         .lua_version(Some(lua::Version::Luau))

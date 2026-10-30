@@ -528,10 +528,7 @@ mod tests {
     #[cfg(feature = "impure_tests")]
     #[flaky_test(tokio, times = 5)]
     async fn lua_installation_bin() {
-        let config = crate::config::ConfigBuilder::new()
-            .unwrap()
-            .build()
-            .unwrap();
+        let config = crate::config::Builder::new().unwrap().build().unwrap();
         let lua_version = config.lua_version().unwrap();
         let lua_installation = Installation::new(lua_version, &config).await.unwrap();
         // FIXME: This fails when run in the nix checkPhase

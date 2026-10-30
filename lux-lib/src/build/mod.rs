@@ -536,7 +536,7 @@ mod tests {
 
     use crate::pipeline::build_local::Build;
     use crate::{
-        config::ConfigBuilder,
+        config,
         lockfile::{LockConstraint, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
         lua,
         project::Project,
@@ -553,7 +553,7 @@ mod tests {
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample-projects/no-build-spec/");
         let tree_dir = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .user_tree(Some(tree_dir.to_path_buf()))
@@ -647,7 +647,7 @@ deploy = { wrap_bin_scripts = false }
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let tree_dir = assert_fs::TempDir::new().unwrap();
         let build_dir = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .user_tree(Some(tree_dir.to_path_buf()))
@@ -688,7 +688,7 @@ deploy = { wrap_bin_scripts = false }
     async fn git_src_rock_with_repo_directory_builds() {
         let dir = assert_fs::TempDir::new().unwrap();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(dir.to_path_buf()))
             .lua_version(lua_version)
@@ -777,7 +777,7 @@ build = {
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let tree_dir = assert_fs::TempDir::new().unwrap();
         let build_dir = assert_fs::TempDir::new().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(lua_version)
             .user_tree(Some(tree_dir.to_path_buf()))
@@ -836,7 +836,7 @@ build = {
 
     #[cfg(feature = "impure_tests")]
     fn luatest_config(dir: &assert_fs::TempDir) -> Config {
-        ConfigBuilder::new()
+        config::Builder::new()
             .unwrap()
             .user_tree(Some(dir.to_path_buf()))
             .lua_version(Some(lua::Version::Lua51))

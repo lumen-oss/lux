@@ -11,7 +11,7 @@ use crate::{
     lua,
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     operations::PackageInstallSpec,
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     pipeline::discover::FoundPackage,
     rockspec,
     rockspec::{LuaVersionCompatibility, Rockspec},
@@ -27,7 +27,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     LuaVersion(#[from] rockspec::Error),
     #[diagnostic(transparent)]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
     #[diagnostic(transparent)]

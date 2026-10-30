@@ -1767,7 +1767,7 @@ mod tests {
     use assert_fs::fixture::PathCopy;
     use insta::{assert_json_snapshot, sorted_redaction};
 
-    use crate::{config::ConfigBuilder, lua};
+    use crate::{config, lua};
 
     #[test]
     fn parse_lockfile() {
@@ -1778,7 +1778,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.to_path_buf()))
             .build()
@@ -1807,7 +1807,7 @@ mod tests {
                 .unwrap(),
         };
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.to_path_buf()))
             .build()
@@ -1850,7 +1850,7 @@ mod tests {
 
         remove_file(temp.join("5.1/lux.lock")).unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.to_path_buf()))
             .build()
@@ -2004,7 +2004,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.to_path_buf()))
             .build()

@@ -61,7 +61,7 @@ mod tests {
         TempDir,
     };
 
-    use lux_lib::{config::ConfigBuilder, lua};
+    use lux_lib::{config, lua};
     use serial_test::serial;
 
     #[serial]
@@ -129,7 +129,7 @@ mod tests {
         toml.write_str(toml_content).unwrap();
         let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
         let data_dir: PathBuf = assert_fs::TempDir::new().unwrap().path().into();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .vendor_dir(Some(vendor_dir.to_path_buf()))
             .lua_version(lua_version)

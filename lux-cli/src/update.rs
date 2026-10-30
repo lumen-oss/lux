@@ -2,7 +2,7 @@ use clap::Args;
 use itertools::Itertools;
 use lux_lib::package;
 
-use lux_lib::package_db::PackageDB;
+use lux_lib::package::db::PackageDB;
 use lux_lib::rockspec::lua_dependency;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config::Config, operations};

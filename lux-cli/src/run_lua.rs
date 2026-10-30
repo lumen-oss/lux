@@ -183,7 +183,7 @@ Build options (if running a repl for a project):
 mod tests {
     use std::path::PathBuf;
 
-    use lux_lib::config::ConfigBuilder;
+    use lux_lib::config;
     use serial_test::serial;
 
     use super::*;
@@ -200,7 +200,7 @@ mod tests {
         let cwd = &std::env::current_dir().unwrap();
         tokio::fs::create_dir_all(&temp).await.unwrap();
         std::env::set_current_dir(&temp).unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.clone()))
             .data_dir(Some(data_dir))

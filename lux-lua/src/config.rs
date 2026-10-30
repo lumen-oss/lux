@@ -1,4 +1,4 @@
-use lux_lib::{config::ConfigBuilder, tree::NvimLayout};
+use lux_lib::{config, tree::NvimLayout};
 use mlua::ExternalResult;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 
@@ -19,7 +19,7 @@ impl TypedUserData for ConfigModule {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.document("Create a config builder that builds the default `Config`");
         methods.add_function("default", |_, ()| {
-            ConfigBuilder::default()
+            config::Builder::default()
                 .user_agent(Some(DEFAULT_USER_AGENT.into()))
                 .build()
                 .map(ConfigLua)
@@ -28,7 +28,7 @@ impl TypedUserData for ConfigModule {
 
         methods.document("Create a new config builder, starting with a blank slate");
         methods.add_function("builder", |_, ()| {
-            Ok(ConfigBuilderLua(ConfigBuilder::default()))
+            Ok(ConfigBuilderLua(config::Builder::default()))
         });
 
         methods.document(
@@ -36,7 +36,7 @@ impl TypedUserData for ConfigModule {
 if present, or otherwise by instantiating the default config"#,
         );
         methods.add_function("new", |_, ()| {
-            ConfigBuilder::new().map(ConfigBuilderLua).into_lua_err()
+            config::Builder::new().map(ConfigBuilderLua).into_lua_err()
         });
 
         methods.document("Instantiate a custom layout for Neovim plugins");

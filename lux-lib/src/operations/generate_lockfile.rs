@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::{
     config::Config,
     drivers::sync::{self, gather_dependencies, DependencyKind},
-    package_db::{self, PackageDB},
+    package::db::{self, PackageDB},
     pipeline::{
         emit_lockfile::LockfileHandle,
         materialise::{Error as MaterialiseError, Materialise},
@@ -74,7 +74,7 @@ async fn generate_lockfile(args: GenerateLockfile<'_>) -> Result<(), GenerateLoc
 pub enum GenerateLockfileError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),

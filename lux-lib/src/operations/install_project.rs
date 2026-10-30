@@ -10,7 +10,7 @@ use crate::{
     hash::HasIntegrity,
     lockfile::LockedPackage,
     operations::PackageInstallSpec,
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     pipeline::discover::FoundPackage,
     project::{self, IntoLocalRockspecError, Project},
     rockspec::Rockspec,
@@ -28,7 +28,7 @@ pub enum InstallProjectError {
     LocalRockspec(#[from] IntoLocalRockspecError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),

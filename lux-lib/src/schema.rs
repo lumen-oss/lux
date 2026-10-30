@@ -1,12 +1,12 @@
 use schemars::{schema_for, JsonSchema};
 use serde_json::{Map, Value};
 
-use crate::config::ConfigBuilder;
+use crate::config;
 use crate::rockspec;
 
 /// The JSON Schema for the Lux `config.toml` file.
 pub fn config_schema() -> schemars::Schema {
-    let mut schema = schema_for!(ConfigBuilder);
+    let mut schema = schema_for!(config::Builder);
     schema.insert("title".to_string(), "config.toml".into());
     schema.insert(
         "description".to_string(),

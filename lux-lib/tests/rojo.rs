@@ -1,8 +1,6 @@
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
-use lux_lib::{
-    config::ConfigBuilder, lua, operations::BuildWorkspace, tree::RojoLayout, workspace::Workspace,
-};
+use lux_lib::{config, lua, operations::BuildWorkspace, tree::RojoLayout, workspace::Workspace};
 use std::path::PathBuf;
 
 #[flaky_test(tokio, times = 5)]
@@ -17,7 +15,7 @@ async fn test_rojo_package_layout() {
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(project_root, &["**/*"]).unwrap();
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(Some(lua::Version::Luau))
         .entrypoint_layout(RojoLayout)

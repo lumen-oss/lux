@@ -6,7 +6,7 @@ use assert_fs::TempDir;
 use flaky_test::flaky_test;
 #[cfg(unix)]
 use is_executable::IsExecutable;
-use lux_lib::{config::ConfigBuilder, lua, luarocks::luarocks_installation::LuaRocksInstallation};
+use lux_lib::{config, lua, luarocks::luarocks_installation::LuaRocksInstallation};
 use predicates::prelude::predicate;
 
 #[flaky_test(tokio, times = 5)]
@@ -15,7 +15,7 @@ async fn luarocks_make() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(dir.path().into()))
         .lua_version(lua_version.clone())

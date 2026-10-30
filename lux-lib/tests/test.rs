@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use assert_fs::prelude::PathCopy;
 use flaky_test::flaky_test;
-use lux_lib::{config::ConfigBuilder, lua, operations::Test, workspace::Workspace};
+use lux_lib::{config, lua, operations::Test, workspace::Workspace};
 use tokio::fs::remove_dir_all;
 
 #[flaky_test(tokio, times = 5)]
@@ -20,7 +20,7 @@ async fn run_busted_test() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(tree_root))
         .lua_version(lua_version)
@@ -43,7 +43,7 @@ async fn run_busted_test_no_lock() {
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(tree_root))
         .lua_version(lua_version)
@@ -66,7 +66,7 @@ async fn non_regression_lockfile_corruption() {
     let temp_dir = assert_fs::TempDir::new().unwrap();
     temp_dir.copy_from(sample_project_dir, &["**"]).unwrap();
     let project = Workspace::from_exact(temp_dir.path()).unwrap().unwrap();
-    let config = ConfigBuilder::new().unwrap().build().unwrap();
+    let config = config::Builder::new().unwrap().build().unwrap();
 
     let lockfile_before_test =
         String::from_utf8(tokio::fs::read(project.lockfile_path()).await.unwrap());
@@ -104,7 +104,7 @@ async fn run_busted_nlua_test_impl(no_lock: bool) {
     let tree_root = workspace.root().to_path_buf().join(".lux");
     let _ = remove_dir_all(&tree_root).await;
 
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(tree_root))
         .build()

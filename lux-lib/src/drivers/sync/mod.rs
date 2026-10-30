@@ -17,7 +17,7 @@ use crate::{
         GenLuaRc, GenLuaRcError, GenLuauRc, GenLuauRcError, InstallProject, InstallProjectError,
         PackageInstallSpec,
     },
-    package_db::{self, PackageDB},
+    package::db::PackageDB,
     rockspec::{self, Rockspec},
     tree::{self, EntryType, InstallTree},
     workspace::{self, TreeError, Workspace},
@@ -79,7 +79,7 @@ pub enum Error {
     Project(#[from] rockspec::toml::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageDB(#[from] package_db::Error),
+    PackageDB(#[from] package::db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     GenLuaRc(#[from] GenLuaRcError),
@@ -351,8 +351,8 @@ mod tests {
     use assert_fs::prelude::{FileWriteStr, PathChild, PathCopy};
 
     use crate::{
-        config::ConfigBuilder, lockfile::LockedPackageLockType, lua, package_db::PackageDB,
-        tree::InstallTree, workspace::Workspace,
+        config, lockfile::LockedPackageLockType, lua, package::db::PackageDB, tree::InstallTree,
+        workspace::Workspace,
     };
 
     use super::{Sync, SyncMode, TargetSet};
@@ -365,7 +365,7 @@ mod tests {
         temp.copy_from(sample, &["**"]).unwrap();
 
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()
@@ -408,7 +408,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()
@@ -489,7 +489,7 @@ mod tests {
             )
             .unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()
@@ -541,7 +541,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()

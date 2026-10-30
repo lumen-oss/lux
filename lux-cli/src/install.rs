@@ -6,7 +6,7 @@ use lux_lib::{
     drivers::InstallPackages,
     lockfile::PinnedState,
     lua, operations,
-    package_db::PackageDB,
+    package::db::PackageDB,
     workspace::{self, Workspace},
 };
 

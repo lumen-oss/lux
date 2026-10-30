@@ -2,7 +2,7 @@ use itertools::{Either, Itertools};
 use lux_lib::package;
 use lux_lib::{
     config::Config,
-    package_db::PackageDB,
+    package::db::PackageDB,
     rockspec::{dependency, lua_dependency},
     workspace::Workspace,
 };
@@ -113,7 +113,7 @@ pub async fn add(data: Add, config: Config) -> Result<()> {
 #[cfg(all(test, feature = "impure_tests"))]
 mod tests {
     use assert_fs::{prelude::PathCopy, TempDir};
-    use lux_lib::config::ConfigBuilder;
+    use lux_lib::config;
     use serial_test::serial;
 
     use super::*;
@@ -129,7 +129,7 @@ mod tests {
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(&project_root).unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let args = Add {
             package: None,
             package_req: vec!["penlight@1.5".parse().unwrap()],
@@ -171,7 +171,7 @@ mod tests {
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(&project_root).unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let args = Add {
             package: None,
             package_req: Vec::new(),
@@ -213,7 +213,7 @@ mod tests {
         project_root.copy_from(&sample_project, &["**"]).unwrap();
         let cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(&project_root).unwrap();
-        let config = ConfigBuilder::new().unwrap().build().unwrap();
+        let config = config::Builder::new().unwrap().build().unwrap();
         let args = Add {
             package: None,
             package_req: Vec::new(),

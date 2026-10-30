@@ -9,7 +9,7 @@ use lux_lib::operations::DistProjectBin;
 #[cfg(target_env = "msvc")]
 use lux_lib::project::Project;
 #[cfg(target_env = "msvc")]
-use lux_lib::{config::ConfigBuilder, lua, tree::FlatDistTree};
+use lux_lib::{config, lua, tree::FlatDistTree};
 #[cfg(target_env = "msvc")]
 use std::path::PathBuf;
 
@@ -28,7 +28,7 @@ async fn test_dist_bin_from_lua_source_compiles_and_runs() {
 
     let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
-    let config = ConfigBuilder::new()
+    let config = config::Builder::new()
         .unwrap()
         .lua_version(lua_version)
         .build()

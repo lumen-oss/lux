@@ -1,8 +1,7 @@
 use clap::ValueEnum;
 use lux_lib::package;
 use lux_lib::{
-    config::ConfigBuilder,
-    lua,
+    config, lua,
     tree::{NvimLayout, RojoLayout},
 };
 use miette::{miette, Result};
@@ -37,7 +36,7 @@ impl Preset {
         }
     }
 
-    pub fn apply(self, config: ConfigBuilder) -> ConfigBuilder {
+    pub fn apply(self, config: config::Builder) -> config::Builder {
         match self {
             Self::Nvim => config.entrypoint_layout(NvimLayout),
             Self::Rojo => config.entrypoint_layout(RojoLayout),

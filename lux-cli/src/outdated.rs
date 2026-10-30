@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{config::Config, lua, package_db::PackageDB, workspace::Workspace};
+use lux_lib::{config::Config, lua, package::db::PackageDB, workspace::Workspace};
 
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};

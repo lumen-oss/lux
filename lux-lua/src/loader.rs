@@ -446,7 +446,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_c_module_from_built_project() {
         use lux_lib::{
-            config::ConfigBuilder, lua, operations::InstallProject, path::Paths, project::Project,
+            config, lua, operations::InstallProject, path::Paths, project::Project,
             tree::InstallTree,
         };
 
@@ -456,7 +456,7 @@ mod tests {
         assert_fs::fixture::PathCopy::copy_from(&project_dir, &sample, &["**"]).unwrap();
 
         let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
-        let config = ConfigBuilder::new()
+        let config = config::Builder::new()
             .unwrap()
             .lua_version(Some(lua::Version::Lua51))
             .build()

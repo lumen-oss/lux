@@ -1,6 +1,6 @@
 use inquire::Confirm;
 use lux_lib::{
-    config::{Config, ConfigBuilder},
+    config::{self, Config},
     workspace::Workspace,
 };
 use miette::{miette, Context, IntoDiagnostic, Result};
@@ -43,7 +43,7 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
             let config_file = if init.workspace {
                 Workspace::current_or_err().into_diagnostic()?.config_file()
             } else {
-                ConfigBuilder::config_file()?
+                config::Builder::config_file()?
             };
             if !config_file.is_file() && !config.no_prompt()
                 || Confirm::new("Config already exists. Overwrite?")
@@ -59,10 +59,10 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
                 )
                 .into_diagnostic()?;
                 let content = if init.default {
-                    let cfg: ConfigBuilder = ConfigBuilder::default().build()?.into();
+                    let cfg: config::Builder = config::Builder::default().build()?.into();
                     toml::to_string(&cfg).into_diagnostic()?
                 } else if init.current {
-                    let cfg: ConfigBuilder = config.into();
+                    let cfg: config::Builder = config.into();
                     toml::to_string(&cfg).into_diagnostic()?
                 } else {
                     String::default()
@@ -75,7 +75,7 @@ pub fn config(cmd: ConfigCmd, config: Config) -> Result<()> {
             let config_file = if workspace {
                 Workspace::current_or_err().into_diagnostic()?.config_file()
             } else {
-                ConfigBuilder::config_file()?
+                config::Builder::config_file()?
             };
             if !config_file.is_file() {
                 let workspace_flag = if workspace { " --workspace " } else { "" };
@@ -92,7 +92,7 @@ or 'lx config init{workspace_flag} --current' to initialise a config file.
             edit::edit_file(config_file).into_diagnostic()?;
         }
         ConfigCmd::Show => {
-            let cfg: ConfigBuilder = config.into();
+            let cfg: config::Builder = config.into();
             print!("{}", toml::to_string(&cfg).into_diagnostic()?);
         }
     }
