@@ -878,7 +878,7 @@ pub struct LockedPackageHashesLua(pub LockedPackageHashes);
 
 impl Typed for LockedPackageHashesLua {
     fn ty() -> Type {
-        Type::named("LockedPackageHashes")
+        Type::named("lockfile.LockedPackageHashes")
     }
 }
 
@@ -913,7 +913,7 @@ pub struct LockedPackageLua(pub LockedPackage);
 
 impl Typed for LockedPackageLua {
     fn ty() -> Type {
-        Type::named("LockedPackage")
+        Type::named("lockfile.LockedPackage")
     }
 }
 
@@ -983,7 +983,7 @@ pub struct RockLayoutLua(pub RockLayout);
 
 impl Typed for RockLayoutLua {
     fn ty() -> Type {
-        Type::named("RockLayout")
+        Type::named("tree.RockLayout")
     }
 }
 
@@ -1033,7 +1033,7 @@ pub struct NvimLayoutLua(pub NvimLayout);
 
 impl Typed for NvimLayoutLua {
     fn ty() -> Type {
-        Type::named("NvimLayout")
+        Type::named("tree.NvimLayout")
     }
 }
 
@@ -1536,7 +1536,7 @@ pub struct AddDependenciesLua(pub lua_dependency::Kind<AddDependencyLua>);
 
 impl Typed for AddDependenciesLua {
     fn ty() -> Type {
-        Type::named("LuxDependencyKind")
+        Type::named("rockspec.lua_dependency.Kind")
     }
 }
 
@@ -2871,7 +2871,7 @@ pub struct PackageDBLua(pub PackageDB);
 
 impl Typed for PackageDBLua {
     fn ty() -> Type {
-        Type::named("package.db.PackageDB")
+        Type::named("PackageDB")
     }
 }
 
@@ -2952,7 +2952,7 @@ pub struct LockfileReadOnlyLua(pub Lockfile<ReadOnly>);
 
 impl Typed for LockfileReadOnlyLua {
     fn ty() -> Type {
-        Type::named("LockfileReadOnly")
+        Type::named("lockfile.ReadOnly")
     }
 }
 
@@ -3029,7 +3029,7 @@ pub struct LockfileGuardLua(pub LockfileGuard);
 
 impl Typed for LockfileGuardLua {
     fn ty() -> Type {
-        Type::named("LockfileGuard")
+        Type::named("lockfile.Guard")
     }
 }
 
@@ -3077,7 +3077,7 @@ pub struct LockfileReadWriteLua(pub Lockfile<ReadWrite>);
 
 impl Typed for LockfileReadWriteLua {
     fn ty() -> Type {
-        Type::named("LockfileReadWrite")
+        Type::named("lockfile.ReadWrite")
     }
 }
 
@@ -3350,7 +3350,7 @@ pub struct DownloadedRockspecLua(pub DownloadedRockspec);
 
 impl Typed for DownloadedRockspecLua {
     fn ty() -> Type {
-        Type::named("DownloadedRockspec")
+        Type::named("operations.DownloadedRockspec")
     }
 }
 
@@ -3415,11 +3415,11 @@ mod definitions_registry {
     submit_definitions! {
         "package.Spec" => PackageSpecLua,
         "package.Req" => PackageReqLua,
-        "LockedPackageHashes" => LockedPackageHashesLua,
-        "LockedPackage" => LockedPackageLua,
-        "RockLayout" => RockLayoutLua,
+        "lockfile.LockedPackageHashes" => LockedPackageHashesLua,
+        "lockfile.LockedPackage" => LockedPackageLua,
+        "tree.RockLayout" => RockLayoutLua,
         "Tree" => TreeLua,
-        "NvimLayout" => NvimLayoutLua,
+        "tree.NvimLayout" => NvimLayoutLua,
         "Config" => ConfigLua,
         "config.Builder" => ConfigBuilderLua,
         "rockspec.lua_dependency.Spec" => LuaDependencySpecLua,
@@ -3445,18 +3445,18 @@ mod definitions_registry {
         "rockspec.toml.Partial" => PartialProjectTomlLua,
         "rockspec.toml.Local" => LocalProjectTomlLua,
         "rockspec.toml.Remote" => RemoteProjectTomlLua,
-        "package.db.PackageDB" => PackageDBLua,
-        "LockfileReadOnly" => LockfileReadOnlyLua,
-        "LockfileGuard" => LockfileGuardLua,
-        "LockfileReadWrite" => LockfileReadWriteLua,
+        "PackageDB" => PackageDBLua,
+        "lockfile.ReadOnly" => LockfileReadOnlyLua,
+        "lockfile.Guard" => LockfileGuardLua,
+        "lockfile.ReadWrite" => LockfileReadWriteLua,
         "Project" => ProjectLua,
         "Workspace" => WorkspaceLua,
-        "DownloadedRockspec" => DownloadedRockspecLua,
+        "operations.DownloadedRockspec" => DownloadedRockspecLua,
     }
 
     inventory::submit! {
         LuxDefinition {
-            name: "AddSpec",
+            name: "rockspec.lua_dependency.AddSpec",
             build: || Type::class(
                 TypedClassBuilder::default()
                     .field(
@@ -3506,13 +3506,13 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "LuxDependencyKind",
+            name: "rockspec.lua_dependency.Kind",
             build: || Type::class(
                 TypedClassBuilder::default()
                     .field(
                         "regular",
                         Type::union([
-                            Type::array(Type::named("AddSpec")),
+                            Type::array(Type::named("rockspec.lua_dependency.AddSpec")),
                             Type::string(),
                             Type::nil(),
                         ]),
@@ -3521,7 +3521,7 @@ mod definitions_registry {
                     .field(
                         "build",
                         Type::union([
-                            Type::array(Type::named("AddSpec")),
+                            Type::array(Type::named("rockspec.lua_dependency.AddSpec")),
                             Type::string(),
                             Type::nil(),
                         ]),
@@ -3530,7 +3530,7 @@ mod definitions_registry {
                     .field(
                         "test",
                         Type::union([
-                            Type::array(Type::named("AddSpec")),
+                            Type::array(Type::named("rockspec.lua_dependency.AddSpec")),
                             Type::string(),
                             Type::nil(),
                         ]),

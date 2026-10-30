@@ -20,7 +20,7 @@ pub(crate) struct LuxModule;
 
 impl Typed for LuxModule {
     fn ty() -> Type {
-        Type::named("LuxModule")
+        Type::named("lux.Module")
     }
 }
 
@@ -58,7 +58,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "LuxModule",
+            name: "lux.Module",
             build: || Type::class(TypedClassBuilder::new::<super::LuxModule>().build()),
         }
     }

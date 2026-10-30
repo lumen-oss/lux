@@ -11,7 +11,7 @@ pub(crate) struct ConfigModule;
 
 impl Typed for ConfigModule {
     fn ty() -> Type {
-        Type::named("ConfigModule")
+        Type::named("config.Module")
     }
 }
 
@@ -68,7 +68,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "ConfigModule",
+            name: "config.Module",
             build: || Type::class(TypedClassBuilder::new::<ConfigModule>().build()),
         }
     }

@@ -9,7 +9,7 @@ pub(crate) struct WorkspaceModule;
 
 impl Typed for WorkspaceModule {
     fn ty() -> Type {
-        Type::named("WorkspaceModule")
+        Type::named("workspace.Module")
     }
 }
 
@@ -61,7 +61,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "WorkspaceModule",
+            name: "workspace.Module",
             build: || Type::class(TypedClassBuilder::new::<WorkspaceModule>().build()),
         }
     }

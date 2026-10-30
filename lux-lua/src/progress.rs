@@ -13,7 +13,7 @@ pub(crate) struct ProgressModule;
 
 impl Typed for ProgressModule {
     fn ty() -> Type {
-        Type::named("ProgressModule")
+        Type::named("progress.Module")
     }
 }
 
@@ -66,7 +66,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "ProgressModule",
+            name: "progress.Module",
             build: || Type::class(TypedClassBuilder::new::<ProgressModule>().build()),
         }
     }
