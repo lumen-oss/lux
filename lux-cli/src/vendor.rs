@@ -1,7 +1,7 @@
 use clap::Args;
+use lux_lib::rockspec;
 use lux_lib::{
     config::Config,
-    lua_rockspec::RemoteLuaRockspec,
     operations::{self, VendorTarget},
     workspace::Workspace,
 };
@@ -41,7 +41,7 @@ pub async fn vendor(data: Vendor, config: Config) -> Result<()> {
                 .unwrap_or("".into())
                 .as_str()
             {
-                "rockspec" => Ok(RemoteLuaRockspec::new(&content)?),
+                "rockspec" => Ok(rockspec::lua::Remote::new(&content)?),
                 _ => Err(miette!(
                     "expected a path to a .rockspec file, but got:\n'{}'",
                     rockspec_path.display()

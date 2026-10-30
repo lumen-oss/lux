@@ -26,24 +26,11 @@ use lux_lib::{
         LockfileGuard, OptState, PinnedState, ReadOnly, ReadWrite,
     },
     lua,
-    lua_rockspec::{
-        BuildBackendSpec, BuildSpec, BuiltinBuildSpec, BustedTestSpec, CMakeBuildSpec,
-        CommandBuildSpec, CommandTestSpec, ExternalDependencySpec, InstallSpec, LocalLuaRockspec,
-        LuaModule, LuaScriptTestSpec, MakeBuildSpec, ModulePaths, ModuleSpec, PartialLuaRockspec,
-        PartialOverride, PerPlatform, PlatformIdentifier, PlatformOverridable, PlatformSupport,
-        RemoteLuaRockspec, RemoteRockSource, RockDescription, RockSourceSpec, RockspecFormat,
-        RustBinaryBuildSpec, RustMluaBuildSpec, TestSpec, TreesitterParserBuildSpec,
-    },
     operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
     package_db::PackageDB,
-    project::{
-        project_toml::{LocalProjectToml, PartialProjectToml, RemoteProjectToml},
-        Project,
-    },
-    rockspec::{
-        lua_dependency::{DependencyType, LuaDependencySpec, LuaDependencyType},
-        Rockspec,
-    },
+    project::Project,
+    rockspec,
+    rockspec::{DependencyType, LuaDependencySpec, LuaDependencyType, Rockspec},
     tree::{EntryType, InstallTree, NvimLayout, RockLayout, RockMatches, Tree},
     workspace::Workspace,
 };
@@ -317,7 +304,7 @@ impl FromLua for LockConstraintLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExternalDependencySpecLua(pub ExternalDependencySpec);
+pub struct ExternalDependencySpecLua(pub rockspec::ExternalDependencySpec);
 
 impl Typed for ExternalDependencySpecLua {
     fn ty() -> Type {
@@ -343,10 +330,9 @@ impl FromLua for ExternalDependencySpecLua {
         if let LuaValue::Table(table) = value {
             let header: Option<PathBuf> = table.get("header")?;
             let library: Option<PathBuf> = table.get("library")?;
-            Ok(ExternalDependencySpecLua(ExternalDependencySpec {
-                header,
-                library,
-            }))
+            Ok(ExternalDependencySpecLua(
+                rockspec::ExternalDependencySpec { header, library },
+            ))
         } else {
             Err(LuaError::FromLuaConversionError {
                 from: "non-table",
@@ -358,7 +344,7 @@ impl FromLua for ExternalDependencySpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlatformIdentifierLua(pub PlatformIdentifier);
+pub struct PlatformIdentifierLua(pub rockspec::PlatformIdentifier);
 
 impl IntoLuaTypeLiteral for PlatformIdentifierLua {
     fn into_lua_type_literal(self) -> String {
@@ -368,7 +354,9 @@ impl IntoLuaTypeLiteral for PlatformIdentifierLua {
 
 impl Typed for PlatformIdentifierLua {
     fn ty() -> Type {
-        Type::union(PlatformIdentifier::iter().map(|p| Type::literal(PlatformIdentifierLua(p))))
+        Type::union(
+            rockspec::PlatformIdentifier::iter().map(|p| Type::literal(PlatformIdentifierLua(p))),
+        )
     }
 }
 
@@ -376,7 +364,8 @@ impl FromLua for PlatformIdentifierLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
         Ok(PlatformIdentifierLua(
-            s.parse().unwrap_or(PlatformIdentifier::Unknown(s)),
+            s.parse()
+                .unwrap_or(rockspec::PlatformIdentifier::Unknown(s)),
         ))
     }
 }
@@ -388,7 +377,7 @@ impl IntoLua for PlatformIdentifierLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RockspecFormatLua(pub RockspecFormat);
+pub struct RockspecFormatLua(pub rockspec::Format);
 
 impl Typed for RockspecFormatLua {
     fn ty() -> Type {
@@ -399,7 +388,7 @@ impl Typed for RockspecFormatLua {
 impl FromLua for RockspecFormatLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
-        RockspecFormat::from_str(&s)
+        rockspec::Format::from_str(&s)
             .map(RockspecFormatLua)
             .map_err(|err| LuaError::DeserializeError(err.to_string()))
     }
@@ -412,7 +401,7 @@ impl IntoLua for RockspecFormatLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaModuleLua(pub LuaModule);
+pub struct LuaModuleLua(pub rockspec::build::Module);
 
 impl Typed for LuaModuleLua {
     fn ty() -> Type {
@@ -429,7 +418,9 @@ impl IntoLua for LuaModuleLua {
 impl FromLua for LuaModuleLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
-        Ok(LuaModuleLua(LuaModule::from_str(&s).into_lua_err()?))
+        Ok(LuaModuleLua(
+            rockspec::build::Module::from_str(&s).into_lua_err()?,
+        ))
     }
 }
 
@@ -575,7 +566,7 @@ impl IntoLua for RockMatchesLua {
     }
 }
 
-pub struct RockSourceSpecLua(pub RockSourceSpec);
+pub struct RockSourceSpecLua(pub rockspec::RockSourceSpec);
 
 impl Typed for RockSourceSpecLua {
     fn ty() -> Type {
@@ -587,16 +578,16 @@ impl IntoLua for RockSourceSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            RockSourceSpec::Git(git) => {
+            rockspec::RockSourceSpec::Git(git) => {
                 table.set("git", GitSourceLua(git))?;
             }
-            RockSourceSpec::File(path) => {
+            rockspec::RockSourceSpec::File(path) => {
                 table.set("file", path.to_slash_lossy().to_string())?;
             }
-            RockSourceSpec::Url(url) => {
+            rockspec::RockSourceSpec::Url(url) => {
                 table.set("url", url.to_string())?;
             }
-            RockSourceSpec::Wally(package_req) => {
+            rockspec::RockSourceSpec::Wally(package_req) => {
                 table.set("wally", package_req.to_string())?;
             }
         };
@@ -604,7 +595,7 @@ impl IntoLua for RockSourceSpecLua {
     }
 }
 
-pub struct TestSpecLua(pub TestSpec);
+pub struct TestSpecLua(pub rockspec::TestSpec);
 
 impl Typed for TestSpecLua {
     fn ty() -> Type {
@@ -616,18 +607,20 @@ impl IntoLua for TestSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            TestSpec::AutoDetect => table.set("auto_detect", true)?,
-            TestSpec::Busted(spec) => table.set("busted", BustedTestSpecLua(spec))?,
-            TestSpec::BustedNlua(spec) => table.set("busted_nlua", BustedTestSpecLua(spec))?,
-            TestSpec::Command(spec) => table.set("command", CommandTestSpecLua(spec))?,
-            TestSpec::Script(spec) => table.set("script", LuaScriptTestSpecLua(spec))?,
-            TestSpec::Tiniest => table.set("tiniest", true)?,
+            rockspec::TestSpec::AutoDetect => table.set("auto_detect", true)?,
+            rockspec::TestSpec::Busted(spec) => table.set("busted", BustedTestSpecLua(spec))?,
+            rockspec::TestSpec::BustedNlua(spec) => {
+                table.set("busted_nlua", BustedTestSpecLua(spec))?
+            }
+            rockspec::TestSpec::Command(spec) => table.set("command", CommandTestSpecLua(spec))?,
+            rockspec::TestSpec::Script(spec) => table.set("script", LuaScriptTestSpecLua(spec))?,
+            rockspec::TestSpec::Tiniest => table.set("tiniest", true)?,
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-pub struct ModuleSpecLua(pub ModuleSpec);
+pub struct ModuleSpecLua(pub rockspec::build::ModuleSpec);
 
 impl Typed for ModuleSpecLua {
     fn ty() -> Type {
@@ -639,23 +632,25 @@ impl IntoLua for ModuleSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         let table = lua.create_table()?;
         match self.0 {
-            ModuleSpec::SourcePath(path) => {
+            rockspec::build::ModuleSpec::SourcePath(path) => {
                 table.set("source", path.to_slash_lossy().to_string())?
             }
-            ModuleSpec::SourcePaths(paths) => table.set(
+            rockspec::build::ModuleSpec::SourcePaths(paths) => table.set(
                 "sources",
                 paths
                     .into_iter()
                     .map(|p| p.to_slash_lossy().into_owned())
                     .collect::<Vec<_>>(),
             )?,
-            ModuleSpec::ModulePaths(mp) => table.set("modules", ModulePathsLua(mp))?,
+            rockspec::build::ModuleSpec::ModulePaths(mp) => {
+                table.set("modules", ModulePathsLua(mp))?
+            }
         }
         Ok(LuaValue::Table(table))
     }
 }
 
-pub struct BuiltinBuildSpecLua(pub BuiltinBuildSpec);
+pub struct BuiltinBuildSpecLua(pub rockspec::build::BuiltinBuildSpec);
 
 impl Typed for BuiltinBuildSpecLua {
     fn ty() -> Type {
@@ -673,7 +668,7 @@ impl IntoLua for BuiltinBuildSpecLua {
     }
 }
 
-pub struct BuildBackendSpecLua(pub BuildBackendSpec);
+pub struct BuildBackendSpecLua(pub rockspec::build::BuildBackendSpec);
 
 impl Typed for BuildBackendSpecLua {
     fn ty() -> Type {
@@ -684,17 +679,25 @@ impl Typed for BuildBackendSpecLua {
 impl IntoLua for BuildBackendSpecLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         match self.0 {
-            BuildBackendSpec::Builtin(spec) => BuiltinBuildSpecLua(spec).into_lua(lua),
-            BuildBackendSpec::Make(spec) => MakeBuildSpecLua(spec).into_lua(lua),
-            BuildBackendSpec::CMake(spec) => CMakeBuildSpecLua(spec).into_lua(lua),
-            BuildBackendSpec::Command(spec) => CommandBuildSpecLua(spec).into_lua(lua),
-            BuildBackendSpec::LuaRock(s) => s.into_lua(lua),
-            BuildBackendSpec::RustMlua(spec) => RustMluaBuildSpecLua(spec).into_lua(lua),
-            BuildBackendSpec::RustBinary(spec) => RustBinaryBuildSpecLua(spec).into_lua(lua),
-            BuildBackendSpec::TreesitterParser(spec) => {
+            rockspec::build::BuildBackendSpec::Builtin(spec) => {
+                BuiltinBuildSpecLua(spec).into_lua(lua)
+            }
+            rockspec::build::BuildBackendSpec::Make(spec) => MakeBuildSpecLua(spec).into_lua(lua),
+            rockspec::build::BuildBackendSpec::CMake(spec) => CMakeBuildSpecLua(spec).into_lua(lua),
+            rockspec::build::BuildBackendSpec::Command(spec) => {
+                CommandBuildSpecLua(spec).into_lua(lua)
+            }
+            rockspec::build::BuildBackendSpec::LuaRock(s) => s.into_lua(lua),
+            rockspec::build::BuildBackendSpec::RustMlua(spec) => {
+                RustMluaBuildSpecLua(spec).into_lua(lua)
+            }
+            rockspec::build::BuildBackendSpec::RustBinary(spec) => {
+                RustBinaryBuildSpecLua(spec).into_lua(lua)
+            }
+            rockspec::build::BuildBackendSpec::TreesitterParser(spec) => {
                 TreesitterParserBuildSpecLua(spec).into_lua(lua)
             }
-            BuildBackendSpec::Source => "source".into_lua(lua),
+            rockspec::build::BuildBackendSpec::Source => "source".into_lua(lua),
         }
     }
 }
@@ -1512,12 +1515,12 @@ fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<LuaDependencyS
             .parse::<RemoteGitUrlShorthand>()
             .map_err(|err| LuaError::DeserializeError(err.to_string()))?;
         let url: RemoteGitUrl = shorthand.into();
-        Some(RockSourceSpec::Git(GitSource {
+        Some(rockspec::RockSourceSpec::Git(GitSource {
             url,
             git_ref: rev.map(GitRef::Tag),
         }))
     } else {
-        path.map(|path| RockSourceSpec::File(PathBuf::from(path)))
+        path.map(|path| rockspec::RockSourceSpec::File(PathBuf::from(path)))
     };
 
     Ok(LuaDependencySpec::new(package_req, pin, opt, source))
@@ -1620,11 +1623,11 @@ impl mlua::UserData for LuaDependencySpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PlatformSupportLua(pub PlatformSupport);
+pub struct PlatformSupportLua(pub rockspec::PlatformSupport);
 
 impl Typed for PlatformSupportLua {
     fn ty() -> Type {
-        Type::named("PlatformSupport")
+        Type::named("rockspec.PlatformSupport")
     }
 }
 
@@ -1655,11 +1658,11 @@ impl mlua::UserData for PlatformSupportLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RockDescriptionLua(pub RockDescription);
+pub struct RockDescriptionLua(pub rockspec::RockDescription);
 
 impl Typed for RockDescriptionLua {
     fn ty() -> Type {
-        Type::named("RockDescription")
+        Type::named("rockspec.RockDescription")
     }
 }
 
@@ -1752,11 +1755,11 @@ impl mlua::UserData for GitSourceLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RemoteRockSourceLua(pub RemoteRockSource);
+pub struct RemoteRockSourceLua(pub rockspec::RemoteRockSource);
 
 impl Typed for RemoteRockSourceLua {
     fn ty() -> Type {
-        Type::named("RemoteRockSource")
+        Type::named("rockspec.RemoteRockSource")
     }
 }
 
@@ -1798,11 +1801,11 @@ impl mlua::UserData for RemoteRockSourceLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct BustedTestSpecLua(pub BustedTestSpec);
+pub struct BustedTestSpecLua(pub rockspec::BustedTestSpec);
 
 impl Typed for BustedTestSpecLua {
     fn ty() -> Type {
-        Type::named("BustedTestSpec")
+        Type::named("rockspec.BustedTestSpec")
     }
 }
 
@@ -1829,11 +1832,11 @@ impl mlua::UserData for BustedTestSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommandTestSpecLua(pub CommandTestSpec);
+pub struct CommandTestSpecLua(pub rockspec::CommandTestSpec);
 
 impl Typed for CommandTestSpecLua {
     fn ty() -> Type {
-        Type::named("CommandTestSpec")
+        Type::named("rockspec.CommandTestSpec")
     }
 }
 
@@ -1863,11 +1866,11 @@ impl mlua::UserData for CommandTestSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaScriptTestSpecLua(pub LuaScriptTestSpec);
+pub struct LuaScriptTestSpecLua(pub rockspec::LuaScriptTestSpec);
 
 impl Typed for LuaScriptTestSpecLua {
     fn ty() -> Type {
-        Type::named("LuaScriptTestSpec")
+        Type::named("rockspec.LuaScriptTestSpec")
     }
 }
 
@@ -1899,11 +1902,11 @@ impl mlua::UserData for LuaScriptTestSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct ModulePathsLua(pub ModulePaths);
+pub struct ModulePathsLua(pub rockspec::build::ModulePaths);
 
 impl Typed for ModulePathsLua {
     fn ty() -> Type {
-        Type::named("ModulePaths")
+        Type::named("rockspec.build.ModulePaths")
     }
 }
 
@@ -1978,11 +1981,11 @@ impl mlua::UserData for ModulePathsLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct CMakeBuildSpecLua(pub CMakeBuildSpec);
+pub struct CMakeBuildSpecLua(pub rockspec::build::CMakeBuildSpec);
 
 impl Typed for CMakeBuildSpecLua {
     fn ty() -> Type {
-        Type::named("CMakeBuildSpec")
+        Type::named("rockspec.build.CMakeBuildSpec")
     }
 }
 
@@ -2018,11 +2021,11 @@ impl mlua::UserData for CMakeBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct MakeBuildSpecLua(pub MakeBuildSpec);
+pub struct MakeBuildSpecLua(pub rockspec::build::MakeBuildSpec);
 
 impl Typed for MakeBuildSpecLua {
     fn ty() -> Type {
-        Type::named("MakeBuildSpec")
+        Type::named("rockspec.build.MakeBuildSpec")
     }
 }
 
@@ -2080,11 +2083,11 @@ impl mlua::UserData for MakeBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct TreesitterParserBuildSpecLua(pub TreesitterParserBuildSpec);
+pub struct TreesitterParserBuildSpecLua(pub rockspec::build::TreesitterParserBuildSpec);
 
 impl Typed for TreesitterParserBuildSpecLua {
     fn ty() -> Type {
-        Type::named("TreesitterParserBuildSpec")
+        Type::named("rockspec.build.TreesitterParserBuildSpec")
     }
 }
 
@@ -2136,11 +2139,11 @@ impl mlua::UserData for TreesitterParserBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RustMluaBuildSpecLua(pub RustMluaBuildSpec);
+pub struct RustMluaBuildSpecLua(pub rockspec::build::RustMluaBuildSpec);
 
 impl Typed for RustMluaBuildSpecLua {
     fn ty() -> Type {
-        Type::named("RustMluaBuildSpec")
+        Type::named("rockspec.build.RustMluaBuildSpec")
     }
 }
 
@@ -2215,11 +2218,11 @@ impl mlua::UserData for RustMluaBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RustBinaryBuildSpecLua(pub RustBinaryBuildSpec);
+pub struct RustBinaryBuildSpecLua(pub rockspec::build::RustBinaryBuildSpec);
 
 impl Typed for RustBinaryBuildSpecLua {
     fn ty() -> Type {
-        Type::named("RustBinaryBuildSpec")
+        Type::named("rockspec.build.RustBinaryBuildSpec")
     }
 }
 
@@ -2251,11 +2254,11 @@ impl mlua::UserData for RustBinaryBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommandBuildSpecLua(pub CommandBuildSpec);
+pub struct CommandBuildSpecLua(pub rockspec::build::CommandBuildSpec);
 
 impl Typed for CommandBuildSpecLua {
     fn ty() -> Type {
-        Type::named("CommandBuildSpec")
+        Type::named("rockspec.build.CommandBuildSpec")
     }
 }
 
@@ -2286,11 +2289,11 @@ impl mlua::UserData for CommandBuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct InstallSpecLua(pub InstallSpec);
+pub struct InstallSpecLua(pub rockspec::build::InstallSpec);
 
 impl Typed for InstallSpecLua {
     fn ty() -> Type {
-        Type::named("InstallSpec")
+        Type::named("rockspec.build.InstallSpec")
     }
 }
 
@@ -2364,11 +2367,11 @@ impl mlua::UserData for InstallSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct BuildSpecLua(pub BuildSpec);
+pub struct BuildSpecLua(pub rockspec::build::BuildSpec);
 
 impl Typed for BuildSpecLua {
     fn ty() -> Type {
-        Type::named("BuildSpec")
+        Type::named("rockspec.build.BuildSpec")
     }
 }
 
@@ -2423,11 +2426,11 @@ impl mlua::UserData for BuildSpecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalLuaRockspecLua(pub LocalLuaRockspec);
+pub struct LocalLuaRockspecLua(pub rockspec::lua::Local);
 
 impl Typed for LocalLuaRockspecLua {
     fn ty() -> Type {
-        Type::named("LocalLuaRockspec")
+        Type::named("rockspec.lua.Local")
     }
 }
 
@@ -2499,10 +2502,7 @@ impl TypedUserData for LocalLuaRockspecLua {
             Ok(this.0.format().clone().map(RockspecFormatLua))
         });
         methods.add_method("to_lua_rockspec_string", |_, this, ()| {
-            Ok(this
-                .0
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
+            this.0.to_lua_remote_rockspec_string().into_lua_err()
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -2523,18 +2523,18 @@ impl mlua::UserData for LocalLuaRockspecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct RemoteLuaRockspecLua(pub RemoteLuaRockspec);
+pub struct RemoteLuaRockspecLua(pub rockspec::lua::Remote);
 
 impl Typed for RemoteLuaRockspecLua {
     fn ty() -> Type {
-        Type::named("RemoteLuaRockspec")
+        Type::named("rockspec.lua.Remote")
     }
 }
 
 impl FromLua for RemoteLuaRockspecLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let content = String::from_lua(value, lua)?;
-        RemoteLuaRockspec::new(&content)
+        rockspec::lua::Remote::new(&content)
             .map(RemoteLuaRockspecLua)
             .into_lua_err()
     }
@@ -2608,10 +2608,7 @@ impl TypedUserData for RemoteLuaRockspecLua {
             Ok(this.0.format().clone().map(RockspecFormatLua))
         });
         methods.add_method("to_lua_rockspec_string", |_, this, ()| {
-            Ok(this
-                .0
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
+            this.0.to_lua_remote_rockspec_string().into_lua_err()
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -2631,18 +2628,18 @@ impl mlua::UserData for RemoteLuaRockspecLua {
     }
 }
 
-pub struct PartialLuaRockspecLua(pub PartialLuaRockspec);
+pub struct PartialLuaRockspecLua(pub rockspec::lua::Partial);
 
 impl Typed for PartialLuaRockspecLua {
     fn ty() -> Type {
-        Type::named("PartialLuaRockspec")
+        Type::named("rockspec.lua.Partial")
     }
 }
 
 impl FromLua for PartialLuaRockspecLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let content = String::from_lua(value, lua)?;
-        PartialLuaRockspec::new(&content)
+        rockspec::lua::Partial::new(&content)
             .map(PartialLuaRockspecLua)
             .into_lua_err()
     }
@@ -2667,11 +2664,11 @@ impl mlua::UserData for PartialLuaRockspecLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct PartialProjectTomlLua(pub PartialProjectToml);
+pub struct PartialProjectTomlLua(pub rockspec::toml::Partial);
 
 impl Typed for PartialProjectTomlLua {
     fn ty() -> Type {
-        Type::named("PartialProjectToml")
+        Type::named("rockspec.toml.Partial")
     }
 }
 
@@ -2714,11 +2711,11 @@ impl mlua::UserData for PartialProjectTomlLua {
     }
 }
 
-pub struct LocalProjectTomlLua(pub LocalProjectToml);
+pub struct LocalProjectTomlLua(pub rockspec::toml::Local);
 
 impl Typed for LocalProjectTomlLua {
     fn ty() -> Type {
-        Type::named("LocalProjectToml")
+        Type::named("rockspec.toml.Local")
     }
 }
 
@@ -2774,16 +2771,14 @@ impl TypedUserData for LocalProjectTomlLua {
         });
         methods.add_method("to_lua_rockspec_string", |_, this, ()| {
             let rockspec = this.0.to_lua_rockspec().into_lua_err()?;
-            Ok(rockspec
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
+            rockspec.to_lua_remote_rockspec_string().into_lua_err()
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
         docs.add(
             r#"The `lux.toml` file, after being properly deserialized.
 This struct may be used to build a local version of a project.
-To build a rockspec, use `RemoteProjectToml`.
+To build a rockspec, use `Remote`.
 "#,
         );
     }
@@ -2801,11 +2796,11 @@ impl mlua::UserData for LocalProjectTomlLua {
     }
 }
 
-pub struct RemoteProjectTomlLua(pub RemoteProjectToml);
+pub struct RemoteProjectTomlLua(pub rockspec::toml::Remote);
 
 impl Typed for RemoteProjectTomlLua {
     fn ty() -> Type {
-        Type::named("RemoteProjectToml")
+        Type::named("rockspec.toml.Remote")
     }
 }
 
@@ -2845,9 +2840,7 @@ impl TypedUserData for RemoteProjectTomlLua {
         });
         methods.add_method("to_lua_rockspec_string", |_, this, ()| {
             let rockspec = this.0.to_lua_rockspec().into_lua_err()?;
-            Ok(rockspec
-                .to_lua_remote_rockspec_string()
-                .unwrap_or_else(|e| match e {}))
+            rockspec.to_lua_remote_rockspec_string().into_lua_err()
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -3235,13 +3228,7 @@ impl TypedUserData for ProjectLua {
             Ok(this.0.extra_rockspec_path().to_slash_lossy().into_owned())
         });
         methods.add_method("root", |_, this, ()| {
-            Ok(this
-                .0
-                .root()
-                .as_ref()
-                .to_owned()
-                .to_slash_lossy()
-                .into_owned())
+            Ok(this.0.root().to_path_buf().to_slash_lossy().into_owned())
         });
         methods.add_method("toml", |_, this, ()| {
             Ok(PartialProjectTomlLua(this.0.toml().clone()))
@@ -3420,8 +3407,8 @@ mod definitions_registry {
     }
 
     submit_definitions! {
-        "Spec" => PackageSpecLua,
-        "Req" => PackageReqLua,
+        "package.Spec" => PackageSpecLua,
+        "package.Req" => PackageReqLua,
         "LockedPackageHashes" => LockedPackageHashesLua,
         "LockedPackage" => LockedPackageLua,
         "RockLayout" => RockLayoutLua,
@@ -3430,28 +3417,28 @@ mod definitions_registry {
         "Config" => ConfigLua,
         "ConfigBuilder" => ConfigBuilderLua,
         "LuaDependencySpec" => LuaDependencySpecLua,
-        "PlatformSupport" => PlatformSupportLua,
-        "RockDescription" => RockDescriptionLua,
+        "rockspec.PlatformSupport" => PlatformSupportLua,
+        "rockspec.RockDescription" => RockDescriptionLua,
         "GitSource" => GitSourceLua,
-        "RemoteRockSource" => RemoteRockSourceLua,
-        "BustedTestSpec" => BustedTestSpecLua,
-        "CommandTestSpec" => CommandTestSpecLua,
-        "LuaScriptTestSpec" => LuaScriptTestSpecLua,
-        "ModulePaths" => ModulePathsLua,
-        "CMakeBuildSpec" => CMakeBuildSpecLua,
-        "MakeBuildSpec" => MakeBuildSpecLua,
-        "TreesitterParserBuildSpec" => TreesitterParserBuildSpecLua,
-        "RustMluaBuildSpec" => RustMluaBuildSpecLua,
-        "RustBinaryBuildSpec" => RustBinaryBuildSpecLua,
-        "CommandBuildSpec" => CommandBuildSpecLua,
-        "InstallSpec" => InstallSpecLua,
-        "BuildSpec" => BuildSpecLua,
-        "LocalLuaRockspec" => LocalLuaRockspecLua,
-        "RemoteLuaRockspec" => RemoteLuaRockspecLua,
-        "PartialLuaRockspec" => PartialLuaRockspecLua,
-        "PartialProjectToml" => PartialProjectTomlLua,
-        "LocalProjectToml" => LocalProjectTomlLua,
-        "RemoteProjectToml" => RemoteProjectTomlLua,
+        "rockspec.RemoteRockSource" => RemoteRockSourceLua,
+        "rockspec.BustedTestSpec" => BustedTestSpecLua,
+        "rockspec.CommandTestSpec" => CommandTestSpecLua,
+        "rockspec.LuaScriptTestSpec" => LuaScriptTestSpecLua,
+        "rockspec.build.ModulePaths" => ModulePathsLua,
+        "rockspec.build.CMakeBuildSpec" => CMakeBuildSpecLua,
+        "rockspec.build.MakeBuildSpec" => MakeBuildSpecLua,
+        "rockspec.build.TreesitterParserBuildSpec" => TreesitterParserBuildSpecLua,
+        "rockspec.build.RustMluaBuildSpec" => RustMluaBuildSpecLua,
+        "rockspec.build.RustBinaryBuildSpec" => RustBinaryBuildSpecLua,
+        "rockspec.build.CommandBuildSpec" => CommandBuildSpecLua,
+        "rockspec.build.InstallSpec" => InstallSpecLua,
+        "rockspec.build.BuildSpec" => BuildSpecLua,
+        "rockspec.lua.Local" => LocalLuaRockspecLua,
+        "rockspec.lua.Remote" => RemoteLuaRockspecLua,
+        "rockspec.lua.Partial" => PartialLuaRockspecLua,
+        "rockspec.toml.Partial" => PartialProjectTomlLua,
+        "rockspec.toml.Local" => LocalProjectTomlLua,
+        "rockspec.toml.Remote" => RemoteProjectTomlLua,
         "PackageDB" => PackageDBLua,
         "LockfileReadOnly" => LockfileReadOnlyLua,
         "LockfileGuard" => LockfileGuardLua,
@@ -3463,7 +3450,7 @@ mod definitions_registry {
 
     inventory::submit! {
         LuxDefinition {
-            name: "AddDependency",
+            name: "AddSpec",
             build: || Type::class(
                 TypedClassBuilder::default()
                     .field(
@@ -3519,7 +3506,7 @@ mod definitions_registry {
                     .field(
                         "regular",
                         Type::union([
-                            Type::array(Type::named("AddDependency")),
+                            Type::array(Type::named("AddSpec")),
                             Type::string(),
                             Type::nil(),
                         ]),
@@ -3528,7 +3515,7 @@ mod definitions_registry {
                     .field(
                         "build",
                         Type::union([
-                            Type::array(Type::named("AddDependency")),
+                            Type::array(Type::named("AddSpec")),
                             Type::string(),
                             Type::nil(),
                         ]),
@@ -3537,7 +3524,7 @@ mod definitions_registry {
                     .field(
                         "test",
                         Type::union([
-                            Type::array(Type::named("AddDependency")),
+                            Type::array(Type::named("AddSpec")),
                             Type::string(),
                             Type::nil(),
                         ]),
@@ -3616,7 +3603,7 @@ fn split_add_deps(
 
                 match spec.source() {
                     None => packages.push(spec.package_req().clone()),
-                    Some(RockSourceSpec::Git(git_source)) => {
+                    Some(rockspec::RockSourceSpec::Git(git_source)) => {
                         if git_source.git_ref.is_some() {
                             return Err(LuaError::RuntimeError(
                                 "git revisions in add tables must be declared directly in lux.toml"

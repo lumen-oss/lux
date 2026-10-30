@@ -1,12 +1,12 @@
 use clap::Args;
 use lux_lib::package;
-use lux_lib::{config::Config, lua_rockspec::LuaModule, which};
+use lux_lib::{config::Config, rockspec, which};
 use miette::Result;
 
 #[derive(Args)]
 pub struct Which {
     /// The module to search for.
-    module: LuaModule,
+    module: rockspec::build::Module,
     /// Only search in these packages.
     packages: Option<Vec<package::Req>>,
 }

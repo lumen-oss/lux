@@ -1,23 +1,22 @@
 use crate::package;
 use std::collections::HashMap;
 
-use crate::{
-    lua_rockspec::RockspecFormat, rockspec::lua_dependency::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT,
-};
+use crate::{rockspec::Format, rockspec::LuaDependencySpec, ROCKSPEC_FUEL_LIMIT};
 use miette::Diagnostic;
 use ottavino::{Closure, Executor, Fuel};
 use ottavino_util::serde::from_value;
 use thiserror::Error;
 
-use super::{
-    parse_lua_tbl_or_default, BuildSpecInternal, DeploySpec, ExternalDependencySpec,
-    PlatformSupport, RockDescription, TestSpecInternal,
+use super::super::{
+    build::BuildSpecInternal, DeploySpec, ExternalDependencySpec, PlatformSupport, RockDescription,
+    TestSpecInternal,
 };
+use super::parse_lua_tbl_or_default;
 
 /// Deserialized from a Lua `.rockspec`, not yet validated
 #[derive(Debug)]
-pub struct PartialLuaRockspec {
-    pub(crate) rockspec_format: Option<RockspecFormat>,
+pub struct Partial {
+    pub(crate) format: Option<Format>,
     pub(crate) package: Option<package::Name>,
     pub(crate) build: Option<BuildSpecInternal>,
     pub(crate) deploy: Option<DeploySpec>,
@@ -46,7 +45,7 @@ pub enum PartialRockspecError {
     Io(#[from] std::io::Error),
 }
 
-impl PartialLuaRockspec {
+impl Partial {
     pub fn new(rockspec_content: &str) -> Result<Self, PartialRockspecError> {
         let mut lua = ottavino::Lua::core();
 
@@ -74,9 +73,8 @@ impl PartialLuaRockspec {
                 )));
             }
 
-            let rockspec = PartialLuaRockspec {
-                rockspec_format: from_value(globals.get_value(ctx, "rockspec_format"))
-                    .unwrap_or_default(),
+            let rockspec = Partial {
+                format: from_value(globals.get_value(ctx, "rockspec_format")).unwrap_or_default(),
                 package: from_value(globals.get_value(ctx, "package")).unwrap_or_default(),
                 description: parse_lua_tbl_or_default(ctx, "description").unwrap_or_default(),
                 supported_platforms: parse_lua_tbl_or_default(ctx, "supported_platforms")
@@ -111,7 +109,7 @@ mod tests {
             package = "my-package"
         "#;
 
-        PartialLuaRockspec::new(partial_rockspec).unwrap();
+        Partial::new(partial_rockspec).unwrap();
 
         // Whether the partial rockspec format can still support entire rockspecs
         let full_rockspec = r#"
@@ -160,12 +158,12 @@ mod tests {
             }
         "#;
 
-        let rockspec = PartialLuaRockspec::new(full_rockspec).unwrap();
+        let rockspec = Partial::new(full_rockspec).unwrap();
 
         // No need to verify if the fields were parsed correctly, but worth checking if they were
         // parsed at all.
 
-        assert!(rockspec.rockspec_format.is_some());
+        assert!(rockspec.format.is_some());
         assert!(rockspec.package.is_some());
         assert!(rockspec.description.is_some());
         assert!(rockspec.supported_platforms.is_some());
@@ -181,7 +179,7 @@ mod tests {
             version = "2.0.0"
         "#;
 
-        PartialLuaRockspec::new(partial_rockspec).unwrap_err();
+        Partial::new(partial_rockspec).unwrap_err();
 
         let partial_rockspec = r#"
             source = {
@@ -189,6 +187,6 @@ mod tests {
             }
         "#;
 
-        PartialLuaRockspec::new(partial_rockspec).unwrap_err();
+        Partial::new(partial_rockspec).unwrap_err();
     }
 }

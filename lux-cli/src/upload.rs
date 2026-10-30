@@ -1,10 +1,10 @@
 use lux_lib::package;
+use lux_lib::rockspec;
 use std::path::{Path, PathBuf};
 
 use clap::Args;
 use lux_lib::{
     config::Config,
-    lua_rockspec::RemoteLuaRockspec,
     package_db::PackageDB,
     upload::{Mode, PreparedRockspec, ProjectUpload, RockspecUpload},
     workspace::Workspace,
@@ -106,7 +106,7 @@ async fn upload_rockspec(
     mode: Mode,
 ) -> Result<PreparedRockspec> {
     let content = tokio::fs::read_to_string(path).await.into_diagnostic()?;
-    let rockspec = RemoteLuaRockspec::new(&content)?;
+    let rockspec = rockspec::lua::Remote::new(&content)?;
     let tfa_code = tfa_code_from_args_or_secret(data, config)?;
 
     let upload = RockspecUpload::new()

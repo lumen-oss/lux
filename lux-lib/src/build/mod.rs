@@ -1,7 +1,6 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
 use crate::lockfile::{self, RemotePackageSourceUrl};
-use crate::lua_rockspec::LuaVersionError;
 use crate::operations::UnpackError;
 use crate::project;
 use crate::rockspec::Rockspec;
@@ -19,8 +18,8 @@ use crate::{
     hash::HasIntegrity,
     lockfile::{LockedPackage, LockedPackageSpec},
     lua,
-    lua_rockspec::BuildBackendSpec,
     operations::FetchSrcError,
+    rockspec,
 };
 use external_dependency::ExternalDependencyInfo;
 
@@ -124,7 +123,7 @@ pub enum Error {
     CompileCFiles(#[from] compile::c_files::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersion(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
     #[error(
         r#"source integrity mismatch.
 - source: {src}
@@ -189,7 +188,8 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
             .is_some_and(|backend| {
                 !matches!(
                     backend,
-                    BuildBackendSpec::Builtin(_) | BuildBackendSpec::Source
+                    rockspec::build::BuildBackendSpec::Builtin(_)
+                        | rockspec::build::BuildBackendSpec::Source
                 )
             })
     {
@@ -197,23 +197,31 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
     } else {
         Ok(
             match rockspec.build().current_platform().build_backend.to_owned() {
-                Some(BuildBackendSpec::Builtin(build_spec)) => build_spec.run(args).await?,
-                Some(BuildBackendSpec::Make(make_spec)) => make_spec.run(args).await?,
-                Some(BuildBackendSpec::CMake(cmake_spec)) => cmake_spec.run(args).await?,
-                Some(BuildBackendSpec::Command(command_spec)) => command_spec.run(args).await?,
-                Some(BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
+                Some(rockspec::build::BuildBackendSpec::Builtin(build_spec)) => {
+                    build_spec.run(args).await?
+                }
+                Some(rockspec::build::BuildBackendSpec::Make(make_spec)) => {
+                    make_spec.run(args).await?
+                }
+                Some(rockspec::build::BuildBackendSpec::CMake(cmake_spec)) => {
+                    cmake_spec.run(args).await?
+                }
+                Some(rockspec::build::BuildBackendSpec::Command(command_spec)) => {
+                    command_spec.run(args).await?
+                }
+                Some(rockspec::build::BuildBackendSpec::RustMlua(rust_mlua_spec)) => {
                     rust_mlua_spec.run(args).await?
                 }
-                Some(BuildBackendSpec::RustBinary(rust_binary_spec)) => {
+                Some(rockspec::build::BuildBackendSpec::RustBinary(rust_binary_spec)) => {
                     rust_binary_spec.run(args).await?
                 }
-                Some(BuildBackendSpec::TreesitterParser(treesitter_parser_spec)) => {
-                    treesitter_parser_spec.run(args).await?
-                }
-                Some(BuildBackendSpec::LuaRock(build_backend_name)) => {
+                Some(rockspec::build::BuildBackendSpec::TreesitterParser(
+                    treesitter_parser_spec,
+                )) => treesitter_parser_spec.run(args).await?,
+                Some(rockspec::build::BuildBackendSpec::LuaRock(build_backend_name)) => {
                     luarocks::build(&build_backend_name, rockspec, args).await?
                 }
-                Some(BuildBackendSpec::Source) => source::build(args).await?,
+                Some(rockspec::build::BuildBackendSpec::Source) => source::build(args).await?,
                 None => BuildInfo::default(),
             },
         )
@@ -530,7 +538,6 @@ mod tests {
         config::ConfigBuilder,
         lockfile::{LockConstraint, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
         lua,
-        lua_rockspec::RemoteLuaRockspec,
         project::Project,
         remote_package_source::RemotePackageSource,
     };
@@ -623,7 +630,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn test_install_bin_sets_executable_permissions() {
-        let rockspec = RemoteLuaRockspec::new(
+        let rockspec = rockspec::lua::Remote::new(
             r#"
 rockspec_format = "3.0"
 package = "test-builtin-bin"
@@ -700,7 +707,7 @@ build = {
     modules = { ["git_src_rock"] = "lua/git_src_rock.lua" },
 }
 "#;
-        let rockspec = RemoteLuaRockspec::new(rockspec_content).unwrap();
+        let rockspec = rockspec::lua::Remote::new(rockspec_content).unwrap();
 
         let mut archive = Cursor::new(Vec::new());
         {
@@ -749,7 +756,7 @@ build = {
 
     #[tokio::test]
     async fn test_install_conf_directory_target() {
-        let rockspec = RemoteLuaRockspec::new(
+        let rockspec = rockspec::lua::Remote::new(
             r#"
 rockspec_format = "3.0"
 package = "test-install-conf"

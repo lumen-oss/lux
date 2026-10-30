@@ -10,6 +10,7 @@ use miette::Diagnostic;
 use tempfile::TempDir;
 use thiserror::Error;
 
+use crate::rockspec;
 use crate::{
     build::{self, RemotePackageSourceSpec, SrcRockSource},
     config::Config,
@@ -19,7 +20,6 @@ use crate::{
         LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
         RemotePackageSourceUrl,
     },
-    lua_rockspec::{RemoteLuaRockspec, RockSourceSpec},
     operations::{
         single_non_rockspec_entry, unpack_src_rock, FetchSrc, RemotePackageSourceMetadata,
     },
@@ -41,7 +41,7 @@ pub(crate) enum PackageSource {
 
 pub(crate) struct MaterialisedPackage {
     pub(crate) package: LockedPackage,
-    pub(crate) rockspec: RemoteLuaRockspec,
+    pub(crate) rockspec: rockspec::lua::Remote,
     pub(crate) entry_type: EntryType,
     pub(crate) build_behaviour: crate::build::BuildBehaviour,
     pub(crate) artifact: PackageSource,
@@ -233,7 +233,7 @@ fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
 /// | `foo/` and the rockspec  | `<unpacked>/foo`     |
 /// | source files at the root | `<unpacked>`         |
 fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> PathBuf {
-    if let RockSourceSpec::Git(git) = &rockspec.source().current_platform().source_spec {
+    if let rockspec::RockSourceSpec::Git(git) = &rockspec.source().current_platform().source_spec {
         let repo_dir = unpacked_root.join(git.url.repo());
         if let Ok(Some(entry)) = single_non_rockspec_entry(unpacked_root) {
             if entry == repo_dir && entry.is_dir() {

@@ -15,8 +15,8 @@ use which::which;
 use crate::{
     config::Config,
     fs, lua,
-    lua_rockspec::{DeploySpec, LuaModule},
     path::{self, Paths},
+    rockspec,
     tree::InstallTree,
 };
 
@@ -51,7 +51,7 @@ pub enum Error {
 )]
 pub(crate) fn lua_module(
     source: &PathBuf,
-    target_module: &LuaModule,
+    target_module: &rockspec::build::Module,
     target_dir: &Path,
 ) -> Result<(), fs::Error> {
     // Some rockspecs abuse `install.lua` to install non-lua files, such as teal (`.tl`) files.
@@ -86,7 +86,7 @@ pub(crate) async fn binary(
     target: &str,
     tree: &impl InstallTree,
     lua: &lua::Installation,
-    deploy: &DeploySpec,
+    deploy: &rockspec::DeploySpec,
     config: &Config,
 ) -> Result<PathBuf, Error> where
 {

@@ -1,6 +1,7 @@
 //! Support for running [tiniest](https://github.com/dphfox/tiniest) test suites.
 
 use crate::package;
+use crate::rockspec;
 use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
@@ -14,7 +15,6 @@ use crate::{
     build::{self, BuildBehaviour},
     config::Config,
     fs, lua,
-    lua_rockspec::RemoteLuaRockspec,
     pipeline::build_local::Build,
     tree::{self, InstallTree, RockMatches, Tree},
     workspace::LUX_DIR_NAME,
@@ -108,7 +108,7 @@ pub(crate) async fn ensure_installed(
         return Ok(src_dir);
     }
     let lua = lua::Installation::new(&lua::Version::Luau, config).await?;
-    let rockspec = RemoteLuaRockspec::new(&tiniest_rockspec()).unwrap_or_else(|err| {
+    let rockspec = rockspec::lua::Remote::new(&tiniest_rockspec()).unwrap_or_else(|err| {
         unreachable!("failed to parse the embedded tiniest rockspec: {err:?}")
     });
     let package = Build::new()

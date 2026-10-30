@@ -2,12 +2,8 @@ use crate::package;
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use path_slash::PathBufExt;
-use project_toml::{
-    LocalProjectTomlValidationError, PartialProjectToml, RemoteProjectTomlValidationError,
-};
 use std::{
     io,
-    ops::Deref,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -21,23 +17,15 @@ use crate::{
     config::Config,
     git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, utils::SemVerTagOrSha},
     lua,
-    lua_rockspec::{
-        self, LocalLuaRockspec, LuaVersionError, PartialLuaRockspec, PartialRockspecError,
-        RemoteLuaRockspec,
-    },
     package_db::PackageDB,
-    rockspec::{
-        lua_dependency::{DependencyType, LuaDependencyType},
-        LuaVersionCompatibility,
-    },
+    rockspec::{self, DependencyType, LuaDependencyType, LuaVersionCompatibility},
 };
 
-pub(crate) mod gen;
-pub mod project_toml;
+/// The file name of a project manifest.
+pub const TOML_FILE_NAME: &str = "lux.toml";
 
-pub use project_toml::PROJECT_TOML;
-
-pub const EXTRA_ROCKSPEC: &str = "extra.rockspec";
+/// The file name of an optional extra rockspec that extends the project manifest.
+const EXTRA_ROCKSPEC_FILE_NAME: &str = "extra.rockspec";
 
 /// A wrapper around [`toml::de::Error`] plus the original source code and the byte range where the
 /// error occurred so that `miette` can render the failure with line numbers and context.
@@ -88,28 +76,28 @@ pub enum Error {
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
     #[diagnostic(transparent)]
-    Project(#[from] LocalProjectTomlValidationError),
+    Project(#[from] rockspec::toml::Error),
     #[diagnostic(transparent)]
     Toml(#[from] TomlDeError),
     #[error("error when parsing 'extra.rockspec'")]
     #[diagnostic(forward(0))]
-    Rockspec(#[from] PartialRockspecError),
+    Rockspec(#[from] rockspec::lua::PartialRockspecError),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
 pub enum IntoLocalRockspecError {
-    LocalProjectTomlValidationError(Box<LocalProjectTomlValidationError>),
-    Rockspec(Box<lua_rockspec::Error>),
+    TomlValidation(Box<rockspec::toml::Error>),
+    Rockspec(Box<rockspec::Error>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
 pub enum IntoRemoteRockspecError {
-    RocksTomlValidationError(Box<RemoteProjectTomlValidationError>),
-    Rockspec(Box<lua_rockspec::Error>),
+    RocksTomlValidationError(Box<rockspec::toml::Error>),
+    Rockspec(Box<rockspec::Error>),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -122,7 +110,7 @@ pub enum EditError {
     Fs(#[from] fs::Error),
     #[error(transparent)]
     Toml(#[from] toml_edit::TomlError),
-    #[error("error parsing {PROJECT_TOML} after edit. This is probably a bug.")]
+    #[error("error parsing {TOML_FILE_NAME} after edit. This is probably a bug.")]
     #[diagnostic(forward(0))]
     TomlDe(#[from] TomlDeError),
     #[error(transparent)]
@@ -133,13 +121,13 @@ pub enum EditError {
     LatestVersionNotFound(package::Name),
     #[error("expected field to be a value, but got '{0}'")]
     #[diagnostic(
-        help("ensure your {PROJECT_TOML} matches the specification"),
+        help("ensure your {TOML_FILE_NAME} matches the specification"),
         url("https://lux.lumen-labs.org/reference/lux-toml")
     )]
     ExpectedValue(Box<toml_edit::Item>),
     #[error("expected string, but got '{0}'")]
     #[diagnostic(
-        help("ensure your {PROJECT_TOML} matches the specification"),
+        help("ensure your {TOML_FILE_NAME} matches the specification"),
         url("https://lux.lumen-labs.org/reference/lux-toml")
     )]
     ExpectedString(Box<toml_edit::Value>),
@@ -179,42 +167,16 @@ pub enum PinError {
     Fs(#[from] fs::Error),
 }
 
-/// A newtype for the project root directory.
-/// This is used to ensure that the project root is a valid project directory.
-#[derive(Clone, Debug)]
-#[cfg_attr(test, derive(Default))]
-pub struct ProjectRoot(PathBuf);
-
-impl ProjectRoot {
-    pub(crate) fn new() -> Self {
-        Self(PathBuf::new())
-    }
-}
-
-impl AsRef<Path> for ProjectRoot {
-    fn as_ref(&self) -> &Path {
-        self.0.as_ref()
-    }
-}
-
-impl Deref for ProjectRoot {
-    type Target = PathBuf;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// Lux project, with methods for managing dependencies, etc.
 #[derive(Clone, Debug)]
 pub struct Project {
     /// The path where the `lux.toml` resides.
-    lux_toml_dir: ProjectRoot,
+    lux_toml_dir: PathBuf,
     /// The project root. This is the same as [`Project::lux_toml_dir`],
     /// unless overridden by the `[project] root_dir` field.
-    root: ProjectRoot,
+    root: PathBuf,
     /// The parsed lux.toml.
-    toml: PartialProjectToml,
+    toml: rockspec::toml::Partial,
 }
 
 impl Project {
@@ -225,18 +187,18 @@ impl Project {
             return Ok(None);
         }
 
-        if start.as_ref().join(PROJECT_TOML).exists() {
-            let project_toml_path = start.as_ref().join(PROJECT_TOML);
+        if start.as_ref().join(TOML_FILE_NAME).exists() {
+            let project_toml_path = start.as_ref().join(TOML_FILE_NAME);
             let toml_content = fs::sync::read_to_string(&project_toml_path)?;
             let root = start.as_ref();
 
-            let toml = PartialProjectToml::new(
+            let toml = rockspec::toml::Partial::new(
                 &project_toml_path.to_string_lossy(),
                 &toml_content,
-                ProjectRoot(root.to_path_buf()),
+                root.to_path_buf(),
             )?;
             let mut project = Project {
-                lux_toml_dir: ProjectRoot(root.to_path_buf()),
+                lux_toml_dir: root.to_path_buf(),
                 root: toml.project.root.clone(),
                 toml,
             };
@@ -253,36 +215,36 @@ impl Project {
 
     /// Get the `lux.toml` path.
     pub fn toml_path(&self) -> PathBuf {
-        self.lux_toml_dir.join(PROJECT_TOML)
+        self.lux_toml_dir.join(TOML_FILE_NAME)
     }
 
     /// Get the `extra.rockspec` path.
     pub fn extra_rockspec_path(&self) -> PathBuf {
-        self.lux_toml_dir.join(EXTRA_ROCKSPEC)
+        self.lux_toml_dir.join(EXTRA_ROCKSPEC_FILE_NAME)
     }
 
-    pub fn root(&self) -> &ProjectRoot {
+    pub fn root(&self) -> &Path {
         &self.root
     }
 
-    pub fn toml(&self) -> &PartialProjectToml {
+    pub fn toml(&self) -> &rockspec::toml::Partial {
         &self.toml
     }
 
-    pub fn local_rockspec(&self) -> Result<LocalLuaRockspec, IntoLocalRockspecError> {
+    pub fn local_rockspec(&self) -> Result<rockspec::lua::Local, IntoLocalRockspecError> {
         self.toml()
             .into_local()
-            .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
+            .map_err(|err| IntoLocalRockspecError::TomlValidation(Box::new(err)))?
             .to_lua_rockspec()
             .map_err(|err| IntoLocalRockspecError::Rockspec(Box::new(err)))
     }
 
-    /// Returns this project's rockspec as a [`RemoteLuaRockspec`] whose source points at the
+    /// Returns this project's rockspec as a [`rockspec::lua::Remote`] whose source points at the
     /// project's own directory, so it can be built like any other package.
-    pub fn local_remote_rockspec(&self) -> Result<RemoteLuaRockspec, IntoLocalRockspecError> {
+    pub fn local_remote_rockspec(&self) -> Result<rockspec::lua::Remote, IntoLocalRockspecError> {
         self.toml()
             .into_local()
-            .map_err(|err| IntoLocalRockspecError::LocalProjectTomlValidationError(Box::new(err)))?
+            .map_err(|err| IntoLocalRockspecError::TomlValidation(Box::new(err)))?
             .to_local_rockspec()
             .map_err(|err| IntoLocalRockspecError::Rockspec(Box::new(err)))
     }
@@ -290,7 +252,7 @@ impl Project {
     pub fn remote_rockspec(
         &self,
         specrev: Option<package::version::SpecRev>,
-    ) -> Result<RemoteLuaRockspec, IntoRemoteRockspecError> {
+    ) -> Result<rockspec::lua::Remote, IntoRemoteRockspecError> {
         self.toml()
             .into_remote(specrev)
             .map_err(|err| IntoRemoteRockspecError::RocksTomlValidationError(Box::new(err)))?
@@ -298,9 +260,11 @@ impl Project {
             .map_err(|err| IntoRemoteRockspecError::Rockspec(Box::new(err)))
     }
 
-    pub fn extra_rockspec(&self) -> Result<Option<PartialLuaRockspec>, PartialRockspecError> {
+    pub fn extra_rockspec(
+        &self,
+    ) -> Result<Option<rockspec::lua::Partial>, rockspec::lua::PartialRockspecError> {
         if self.extra_rockspec_path().exists() {
-            Ok(Some(PartialLuaRockspec::new(
+            Ok(Some(rockspec::lua::Partial::new(
                 &fs::sync::read_to_string(self.extra_rockspec_path()).map_err(io::Error::other)?,
             )?))
         } else {
@@ -308,14 +272,14 @@ impl Project {
         }
     }
 
-    pub fn lua_version(&self, config: &Config) -> Result<lua::Version, LuaVersionError> {
+    pub fn lua_version(&self, config: &Config) -> Result<lua::Version, rockspec::Error> {
         self.toml().lua_version_matches(config)
     }
 
     async fn write_toml(&mut self, project_toml: DocumentMut) -> Result<(), EditError> {
         let toml_content = project_toml.to_string();
         fs::tokio::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(
+        self.toml = rockspec::toml::Partial::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
             self.lux_toml_dir.clone(),
@@ -588,7 +552,7 @@ impl Project {
 
         let toml_content = project_toml.to_string();
         fs::tokio::write(self.toml_path(), &toml_content).await?;
-        self.toml = PartialProjectToml::new(
+        self.toml = rockspec::toml::Partial::new(
             self.toml_path().to_str().unwrap_or("<lux.toml>"),
             &toml_content,
             self.lux_toml_dir.clone(),
@@ -616,7 +580,7 @@ impl Project {
     }
 
     pub fn project_files(&self) -> Vec<PathBuf> {
-        project_files(&self.root().0)
+        project_files(self.root())
     }
 }
 
@@ -778,7 +742,6 @@ mod tests {
     use crate::{
         config::ConfigBuilder,
         fs,
-        lua_rockspec::ExternalDependencySpec,
         manifest::{Manifest, ManifestMetadata},
         package_db::PackageDB,
         rockspec::Rockspec,
@@ -840,7 +803,7 @@ mod tests {
             .add(
                 DependencyType::External(HashMap::from([(
                     "lib".into(),
-                    ExternalDependencySpec {
+                    rockspec::ExternalDependencySpec {
                         library: Some("path.so".into()),
                         header: None,
                     },
@@ -873,7 +836,7 @@ mod tests {
                 .current_platform()
                 .get("lib")
                 .unwrap(),
-            &ExternalDependencySpec {
+            &rockspec::ExternalDependencySpec {
                 library: Some("path.so".into()),
                 header: None
             }
@@ -1145,7 +1108,7 @@ type = "builtin"
         let lux_toml_dir = root_dir.child("proj");
         lux_toml_dir.create_dir_all().unwrap();
         fs::tokio::write(
-            lux_toml_dir.join(PROJECT_TOML),
+            lux_toml_dir.join(TOML_FILE_NAME),
             r#"
             package = "my-package"
             version = "1.0.0"
@@ -1166,7 +1129,7 @@ type = "builtin"
             std::fs::canonicalize(root_dir.path()).unwrap()
         );
         // The `lux.toml` path must still point to the directory containing the `lux.toml`.
-        assert_eq!(project.toml_path(), lux_toml_dir.join(PROJECT_TOML));
+        assert_eq!(project.toml_path(), lux_toml_dir.join(TOML_FILE_NAME));
     }
 
     #[tokio::test]

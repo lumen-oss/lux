@@ -18,8 +18,7 @@ use crate::{
         PackageInstallSpec,
     },
     package_db::{self, PackageDB},
-    project::project_toml::LocalProjectTomlValidationError,
-    rockspec::Rockspec,
+    rockspec::{self, Rockspec},
     tree::{self, EntryType, InstallTree},
     workspace::{self, TreeError, Workspace},
 };
@@ -77,7 +76,7 @@ pub enum Error {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Project(#[from] LocalProjectTomlValidationError),
+    Project(#[from] rockspec::toml::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageDB(#[from] package_db::Error),

@@ -24,7 +24,7 @@ use url::Url;
 use crate::fs;
 use crate::package::RemotePackageTypeFilterSpec;
 use crate::remote_package_source::RemotePackageSource;
-use crate::rockspec::lua_dependency::LuaDependencySpec;
+use crate::rockspec::LuaDependencySpec;
 use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
 

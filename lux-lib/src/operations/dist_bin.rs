@@ -9,12 +9,12 @@ use itertools::Itertools;
 use thiserror::Error;
 use walkdir::WalkDir;
 
+use crate::rockspec;
 use crate::{
     config::Config,
     fs, lua,
-    lua_rockspec::LuaModule,
     operations::{InstallProject, InstallProjectError},
-    project::{project_toml::LocalProjectTomlValidationError, Project},
+    project::Project,
     rockspec::Rockspec,
     target::c_dylib_extension,
     tree::{self, InstallTree},
@@ -56,7 +56,7 @@ pub enum DistProjectBinError {
     InstallProject(#[from] Box<InstallProjectError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
+    LocalProjectTomlValidation(#[from] rockspec::toml::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
@@ -105,7 +105,7 @@ where
 #[derive(Debug)]
 struct InstalledFiles {
     /// Lua source files (.lua) to embed.
-    src: Vec<(LuaModule, PathBuf)>,
+    src: Vec<(rockspec::build::Module, PathBuf)>,
     /// Native Lua modules (.so/.dll/.dylib) to link.
     lib: Vec<PathBuf>,
 }
@@ -185,7 +185,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
                     .strip_prefix(&src_canonical)
                     .unwrap_or(&path)
                     .with_extension("");
-                if let Ok(module) = LuaModule::from_pathbuf(rel) {
+                if let Ok(module) = rockspec::build::Module::from_pathbuf(rel) {
                     lua_sources.push((module, path));
                 }
             }

@@ -9,11 +9,11 @@ use crate::{
     drivers::install_packages::{self, InstallPackages},
     lockfile::{LockedPackage, OptState, PinnedState},
     lua,
-    lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
     operations::PackageInstallSpec,
     package_db::{self, PackageDB},
     pipeline::discover::FoundPackage,
+    rockspec,
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{self, InstallTree},
 };
@@ -25,7 +25,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     LuaInstallation(#[from] lua::installation::Error),
     #[diagnostic(transparent)]
-    LuaVersion(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
     #[diagnostic(transparent)]
     PackageDB(#[from] package_db::Error),
     #[diagnostic(transparent)]
@@ -67,7 +67,7 @@ pub struct InstallRockspec<'a, T>
 where
     T: InstallTree,
 {
-    rockspec: RemoteLuaRockspec,
+    rockspec: rockspec::lua::Remote,
 
     pin: PinnedState,
 

@@ -3,7 +3,7 @@ use crate::build::{cargo, command};
 use crate::config::build;
 use crate::fs;
 use crate::lua;
-use crate::lua_rockspec::RustMluaBuildSpec;
+use crate::rockspec;
 use crate::target::c_dylib_extension;
 use crate::tree::InstallTree;
 use itertools::Itertools;
@@ -37,7 +37,7 @@ pub enum Error {
     LuauUnsupported,
 }
 
-impl BuildBackend for RustMluaBuildSpec {
+impl BuildBackend for rockspec::build::RustMluaBuildSpec {
     type Err = Error;
 
     #[tracing::instrument(name = "rust_mlua::run", skip_all, level = "debug")]

@@ -1,11 +1,10 @@
 use crate::package;
 use std::{env, io};
 
-use crate::lua_rockspec::RemoteLuaRockspec;
 use crate::operations::SearchAndDownloadError;
 use crate::package::SpecRevIterator;
 use crate::package_db::PackageDB;
-use crate::project::project_toml::{self, RemoteProjectTomlValidationError};
+use crate::rockspec;
 use crate::rockspec::Rockspec;
 use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
@@ -66,7 +65,7 @@ where
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct RockspecUpload<'a> {
-    rockspec: &'a RemoteLuaRockspec,
+    rockspec: &'a rockspec::lua::Remote,
     api_key: Option<ApiKey>,
     tfa_code: Option<String>,
     #[cfg(feature = "gpgme")]
@@ -195,13 +194,13 @@ if the issue persists, the server may be temporarily unavailable."#
     ApiKeyUnspecified(#[from] ApiKeyUnspecified),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ValidationError(#[from] RemoteProjectTomlValidationError),
+    ValidationError(#[from] rockspec::toml::Error),
     #[error("unsupported version: '{0}'")]
     #[diagnostic(help("Lux can upload packages with a SemVer version, 'dev' or 'scm'"))]
     UnsupportedVersion(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Rockspec(#[from] project_toml::Error),
+    Rockspec(#[from] rockspec::Error),
     #[error("the maximum supported number of rockspec revisions per version has been exceeded")]
     #[diagnostic(help("bump the version to a version that has not yet been published"))]
     MaxSpecRevsExceeded,
@@ -432,9 +431,7 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
         return Err(Error::RockExists(config.server().clone()));
     }
 
-    let rockspec_content = rockspec
-        .to_lua_remote_rockspec_string()
-        .expect("remote rockspec serialization is infallible");
+    let rockspec_content = rockspec.to_lua_remote_rockspec_string()?;
     let signed = sign_rockspec(&rockspec_content, protocol)?;
 
     upload_rockspec_content(
@@ -570,11 +567,11 @@ mod helpers {
     use super::*;
     use crate::hash::HasIntegrity;
     use crate::operations;
-    use crate::project::project_toml::RemoteProjectToml;
     use crate::upload::RockCheckError;
     use crate::upload::{ToolCheckError, UserCheckError};
     use itertools::Itertools;
     use reqwest::Client;
+    use rockspec::toml::Remote;
     use ssri::Integrity;
     use url::Url;
 
@@ -671,7 +668,7 @@ mod helpers {
         api_key: &ApiKey,
         config: &Config,
         package_db: &PackageDB,
-    ) -> Result<(RemoteProjectToml, String), Error> {
+    ) -> Result<(Remote, String), Error> {
         for specrev in SpecRevIterator::new() {
             let rockspec = project.toml().into_remote(Some(specrev))?;
 

@@ -12,8 +12,8 @@ use crate::lua;
 
 use crate::{
     config::{self, Config, ConfigBuilder},
-    lua_rockspec::per_platform_from_intermediate,
-    project::{project_toml::LocalProjectTomlValidationError, Project},
+    project::Project,
+    rockspec::per_platform_from_intermediate,
     rockspec::Rockspec,
 };
 
@@ -40,7 +40,7 @@ pub enum TestSpecError {
     NoTestSpecDetected,
     #[error("project validation failed")]
     #[diagnostic(forward(0))]
-    LocalProjectTomlValidation(#[from] LocalProjectTomlValidationError),
+    LocalProjectTomlValidation(#[from] super::toml::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -210,7 +210,7 @@ impl TryFrom<TestSpecInternal> for TestSpec {
                 flags: internal.flags.unwrap_or_default(),
             })),
             Some(TestType::Tiniest) => Ok(Self::Tiniest),
-            Some(TestType::Command) => match (internal.command, internal.lua_script) {
+            Some(TestType::Command) => match (internal.command, internal.script) {
                 (None, None) => Err(TestSpecDecodeError::NoCommandOrScript),
                 (None, Some(script)) => Ok(Self::Script(LuaScriptTestSpec {
                     script,
@@ -343,7 +343,7 @@ script = "tests.lua"
 flags = []
 "#))
     )]
-    pub(crate) lua_script: Option<PathBuf>,
+    pub(crate) script: Option<PathBuf>,
 }
 
 impl PartialOverride for TestSpecInternal {
@@ -362,13 +362,13 @@ impl PartialOverride for TestSpecInternal {
                 (override_vec @ Some(_), None) => override_vec,
                 _ => None,
             },
-            command: match override_spec.lua_script.clone() {
+            command: match override_spec.script.clone() {
                 Some(_) => None,
                 None => override_opt(&override_spec.command, &self.command),
             },
-            lua_script: match override_spec.command.clone() {
+            script: match override_spec.command.clone() {
                 Some(_) => None,
-                None => override_opt(&override_spec.lua_script, &self.lua_script),
+                None => override_opt(&override_spec.script, &self.script),
             },
         })
     }
@@ -399,7 +399,7 @@ mod tests {
     use ottavino::{Closure, Executor, Fuel, Lua};
     use ottavino_util::serde::from_value;
 
-    use crate::lua_rockspec::PlatformIdentifier;
+    use crate::rockspec::PlatformIdentifier;
 
     use super::*;
 

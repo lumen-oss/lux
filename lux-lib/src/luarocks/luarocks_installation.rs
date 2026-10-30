@@ -152,7 +152,7 @@ impl LuaRocksInstallation {
         &self,
         lua: &lua::Installation,
     ) -> Result<(), LuaRocksInstallError> {
-        use crate::{lua_rockspec::RemoteLuaRockspec, package};
+        use crate::{package, rockspec};
 
         let mut lockfile = self.tree.lockfile()?.write_guard();
 
@@ -161,7 +161,8 @@ impl LuaRocksInstallation {
         };
 
         if !self.tree.match_rocks(&luarocks_req)?.is_found() {
-            let rockspec = unsafe { RemoteLuaRockspec::new(LUAROCKS_ROCKSPEC).unwrap_unchecked() };
+            let rockspec =
+                unsafe { rockspec::lua::Remote::new(LUAROCKS_ROCKSPEC).unwrap_unchecked() };
             let pkg = Build::new()
                 .rockspec(&rockspec)
                 .lua(lua)

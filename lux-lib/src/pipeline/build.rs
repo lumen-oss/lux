@@ -4,12 +4,12 @@ use bon::Builder;
 use miette::Diagnostic;
 use thiserror::Error;
 
+use crate::rockspec;
 use crate::{
     build::Deploy,
     config::Config,
     lockfile::{LockedPackage, LockedPackageId},
     lua,
-    lua_rockspec::BuildBackendSpec,
     luarocks::{
         install_binary_rock::{self, BinaryRockInstall},
         luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
@@ -83,7 +83,7 @@ where
         let needs_luarocks = args.packages.iter().any(|package| {
             matches!(
                 package.rockspec.build().current_platform().build_backend,
-                Some(BuildBackendSpec::LuaRock(_))
+                Some(rockspec::build::BuildBackendSpec::LuaRock(_))
             )
         });
         if needs_luarocks {

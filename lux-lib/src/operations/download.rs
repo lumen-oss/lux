@@ -1,4 +1,5 @@
 use crate::package;
+use crate::rockspec;
 use std::{
     collections::HashMap,
     io::{Cursor, Read},
@@ -17,7 +18,6 @@ use crate::{
     fs,
     git::{GitRef, GitSource},
     lockfile::RemotePackageSourceUrl,
-    lua_rockspec::{self, RemoteLuaRockspec, RockSourceSpec},
     luarocks,
     package::{RemotePackage, RemotePackageTypeFilterSpec},
     package_db::{self, PackageDB, SearchError},
@@ -123,7 +123,7 @@ pub struct DownloadedPackedRock {
 /// Remote Lua RockSpec that has been downloaded from a remote server, along with its source metadata
 #[derive(Clone, Debug)]
 pub struct DownloadedRockspec {
-    pub rockspec: RemoteLuaRockspec,
+    pub rockspec: rockspec::lua::Remote,
     pub(crate) source: RemotePackageSource,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
 }
@@ -145,7 +145,7 @@ pub(crate) enum RemoteRockDownload {
 }
 
 impl RemoteRockDownload {
-    pub fn rockspec(&self) -> &RemoteLuaRockspec {
+    pub fn rockspec(&self) -> &rockspec::lua::Remote {
         &self.rockspec_download().rockspec
     }
     pub fn rockspec_download(&self) -> &DownloadedRockspec {
@@ -175,11 +175,11 @@ impl RemoteRockDownload {
     // Instead of downloading a rockspec, generate one from a `Req` and a `RockSourceSpec`.
     pub(crate) fn from_package_req_and_source_spec(
         package_req: package::Req,
-        source_spec: RockSourceSpec,
+        source_spec: rockspec::RockSourceSpec,
     ) -> Result<Self, SearchAndDownloadError> {
         let package_spec: package::Spec = package_req.try_into()?;
         let source_url = Some(match &source_spec {
-            RockSourceSpec::Git(GitSource { url, git_ref }) => {
+            rockspec::RockSourceSpec::Git(GitSource { url, git_ref }) => {
                 let checkout_ref = match git_ref {
                     Some(GitRef::Tag(tag)) => tag.clone(),
                     Some(GitRef::Branch(branch)) => branch.clone(),
@@ -193,23 +193,23 @@ impl RemoteRockDownload {
                     submodules: false, // unknown until the source is fetched
                 }
             }
-            RockSourceSpec::File(path) => RemotePackageSourceUrl::File { path: path.clone() },
-            RockSourceSpec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
-            RockSourceSpec::Wally(_) => {
+            rockspec::RockSourceSpec::File(path) => {
+                RemotePackageSourceUrl::File { path: path.clone() }
+            }
+            rockspec::RockSourceSpec::Url(url) => RemotePackageSourceUrl::Url { url: url.clone() },
+            rockspec::RockSourceSpec::Wally(_) => {
                 return Err(SearchAndDownloadError::WallySource(
                     package_spec.name().to_string(),
                 ))
             }
         });
-        let rockspec = RemoteLuaRockspec::from_source_spec(
+        let rockspec = rockspec::lua::Remote::from_source_spec(
             package_spec,
             source_spec,
             Vec::new(),
             HashMap::new(),
         );
-        let rockspec_content = rockspec
-            .to_lua_remote_rockspec_string()
-            .expect("the infallible happened");
+        let rockspec_content = rockspec.to_lua_remote_rockspec_string()?;
         let rockspec_download = DownloadedRockspec {
             rockspec,
             source_url,
@@ -311,8 +311,8 @@ async fn download_found_rock(
                 .await?;
             let content = String::from_utf8(bytes.into())?;
             let rockspec = DownloadedRockspec {
-                rockspec: RemoteLuaRockspec::new(&content)
-                    .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?,
+                rockspec: rockspec::lua::Remote::new(&content)
+                    .map_err(|err| SearchAndDownloadError::Rockspec(err.into()))?,
                 source: remote_package.source,
                 source_url: remote_package.source_url,
             };
@@ -322,8 +322,8 @@ async fn download_found_rock(
         }
         RemotePackageSource::RockspecContent(content) => {
             let rockspec = DownloadedRockspec {
-                rockspec: RemoteLuaRockspec::new(content)
-                    .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?,
+                rockspec: rockspec::lua::Remote::new(content)
+                    .map_err(|err| SearchAndDownloadError::Rockspec(err.into()))?,
                 source: remote_package.source,
                 source_url: remote_package.source_url,
             };
@@ -407,7 +407,7 @@ if the issue persists, the server may be temporarily unavailable."#
     Utf8(#[from] FromUtf8Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Rockspec(Box<lua_rockspec::Error>),
+    Rockspec(#[from] rockspec::Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     PackageDB(#[from] package_db::Error),
@@ -644,7 +644,7 @@ fn mk_packed_rock_name(name: &package::Name, version: &package::Version, ext: &s
 
 pub(crate) async fn unpack_rockspec(
     rock: &DownloadedPackedRockBytes,
-) -> Result<RemoteLuaRockspec, SearchAndDownloadError> {
+) -> Result<rockspec::lua::Remote, SearchAndDownloadError> {
     let cursor = Cursor::new(&rock.bytes);
     let rockspec_file_name = format!("{}-{}.rockspec", rock.name, rock.version);
     let mut zip = zip::ZipArchive::new(cursor)
@@ -668,7 +668,7 @@ pub(crate) async fn unpack_rockspec(
             path: PathBuf::from(&rockspec_file_name),
             source,
         })?;
-    let rockspec = RemoteLuaRockspec::new(&content)
-        .map_err(|err| SearchAndDownloadError::Rockspec(Box::new(err)))?;
+    let rockspec = rockspec::lua::Remote::new(&content)
+        .map_err(|err| SearchAndDownloadError::Rockspec(err.into()))?;
     Ok(rockspec)
 }

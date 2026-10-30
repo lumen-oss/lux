@@ -1,4 +1,5 @@
 use crate::package;
+use crate::rockspec;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -15,7 +16,6 @@ use crate::{
         LockedPackage, LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState,
         PinnedState, RemotePackageSourceUrl,
     },
-    lua_rockspec::{BuildBackendSpec, RemoteLuaRockspec},
     operations::PackageInstallSpec,
     package_db::PackageDB,
     remote_package_source::RemotePackageSource,
@@ -56,7 +56,7 @@ pub(crate) fn build_dependencies_to_install<R: Rockspec>(rockspec: &R) -> Vec<pa
 /// The name of the luarocks build backend rock required to build this rockspec (if any).
 pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<package::Name> {
     match &rockspec.build().current_platform().build_backend {
-        Some(BuildBackendSpec::LuaRock(backend)) => {
+        Some(rockspec::build::BuildBackendSpec::LuaRock(backend)) => {
             Some(package::Name::new(format!("luarocks-build-{backend}")))
         }
         _ => None,
@@ -65,7 +65,7 @@ pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<p
 
 pub(crate) struct ResolvedPackage {
     pub(crate) spec: LockedPackageSpec,
-    pub(crate) rockspec: RemoteLuaRockspec,
+    pub(crate) rockspec: rockspec::lua::Remote,
     pub(crate) source: RemotePackageSource,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     pub(crate) entry_type: EntryType,
@@ -515,7 +515,7 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), Error> {
 }
 
 fn build_dependency_specs(
-    rockspec: &RemoteLuaRockspec,
+    rockspec: &rockspec::lua::Remote,
     parent: &PackageInstallSpec,
 ) -> Vec<PackageInstallSpec> {
     build_dependencies_to_install(rockspec)
@@ -577,7 +577,7 @@ mod tests {
             rockspecs
                 .iter()
                 .map(|content| {
-                    let rockspec = match RemoteLuaRockspec::new(content) {
+                    let rockspec = match rockspec::lua::Remote::new(content) {
                         Ok(rockspec) => rockspec,
                         Err(err) => unreachable!("invalid test rockspec: {err}"),
                     };

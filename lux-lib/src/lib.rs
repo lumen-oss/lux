@@ -6,7 +6,6 @@ pub mod git;
 pub mod hash;
 pub mod lockfile;
 pub mod lua;
-pub mod lua_rockspec;
 pub mod luarocks;
 pub mod manifest;
 pub mod manifest_cache;

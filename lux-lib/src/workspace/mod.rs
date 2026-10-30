@@ -1,4 +1,5 @@
 use crate::package;
+use crate::rockspec;
 use std::{
     io,
     ops::Deref,
@@ -10,8 +11,7 @@ use crate::{
     fs,
     lockfile::{self, ReadOnly, WorkspaceLockfile},
     lua,
-    lua_rockspec::LuaVersionError,
-    project::{self, Project, TomlDeError, PROJECT_TOML},
+    project::{self, Project, TomlDeError, TOML_FILE_NAME},
     tree::{self, InstallTree, Tree},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
 };
@@ -25,7 +25,7 @@ use thiserror::Error;
 
 pub mod workspace_toml;
 
-pub const WORKSPACE_TOML: &str = PROJECT_TOML;
+pub const WORKSPACE_TOML: &str = TOML_FILE_NAME;
 pub(crate) const LUX_DIR_NAME: &str = ".lux";
 const EMMYRC: &str = ".emmyrc.json";
 const CONFIG_TOML: &str = "config.toml";
@@ -112,7 +112,7 @@ pub enum TreeError {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionError(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
 }
 
 /// A workspace, which can contain one or many Lux projects
@@ -255,7 +255,7 @@ impl Workspace {
         self.lua_version_tree(self.lua_version(config)?, config)
     }
 
-    pub fn lua_version(&self, config: &Config) -> Result<lua::Version, LuaVersionError> {
+    pub fn lua_version(&self, config: &Config) -> Result<lua::Version, rockspec::Error> {
         let mut lua_version = self.members().first().lua_version(config)?;
         // Ensure the lua version specified by the config matches all projects
         for project in self.members() {
@@ -377,7 +377,7 @@ impl Workspace {
                                     if workspace
                                         .members
                                         .iter()
-                                        .any(|project| project.root().as_ref() == root) =>
+                                        .any(|project| project.root() == root) =>
                                 {
                                     Ok(Some(workspace))
                                 }
@@ -399,7 +399,7 @@ impl Workspace {
                     Ok(None)
                 }
             }
-            // NOTE: If we hit a read error, it could be because we haven't found a PROJECT_TOML
+            // NOTE: If we hit a read error, it could be because we haven't found a TOML_FILE_NAME
             // or WORKSPACE_TOML and have started searching too far upwards.
             // See for example https://github.com/lumen-oss/lux/issues/532
             _ => Ok(None),

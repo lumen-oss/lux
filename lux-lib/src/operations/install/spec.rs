@@ -4,8 +4,7 @@ use bon::Builder;
 use crate::{
     build::BuildBehaviour,
     lockfile::{LockConstraint, OptState, PinnedState},
-    lua_rockspec::RockSourceSpec,
-    tree,
+    rockspec, tree,
 };
 
 /// Specifies how to install a package
@@ -21,7 +20,7 @@ pub struct PackageInstallSpec {
     pub(crate) pin: PinnedState,
     #[builder(default)]
     pub(crate) opt: OptState,
-    pub(crate) source: Option<RockSourceSpec>,
+    pub(crate) source: Option<rockspec::RockSourceSpec>,
     /// Optional constraint, carried over from a previous install,
     /// e.g. defined in a lockfile.
     pub(crate) constraint: Option<LockConstraint>,

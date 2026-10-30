@@ -14,7 +14,7 @@ use spdx::LicenseId;
 use crate::utils::github_metadata::{self, RepoMetadata};
 use lux_lib::{
     config::Config,
-    project::{Project, PROJECT_TOML},
+    project::{Project, TOML_FILE_NAME},
 };
 
 // TODO:
@@ -344,7 +344,7 @@ pub async fn write_project_rockspec(cli_flags: NewProject, config: Config) -> Re
 
     let _ = std::fs::create_dir_all(&validated.target).into_diagnostic();
 
-    let rocks_path = validated.target.join(PROJECT_TOML);
+    let rocks_path = validated.target.join(TOML_FILE_NAME);
 
     std::fs::write(
         &rocks_path,
@@ -420,7 +420,9 @@ type = "builtin"
 fn overwrite_prompt_confirmed<'a>(render_config: RenderConfig<'a>) -> Result<bool> {
     Confirm::new("Target directory already has a project, write anyway?")
         .with_default(false)
-        .with_help_message(&format!("This may overwrite your existing {PROJECT_TOML}",))
+        .with_help_message(&format!(
+            "This may overwrite your existing {TOML_FILE_NAME}",
+        ))
         .with_render_config(render_config)
         .prompt()
         .into_diagnostic()

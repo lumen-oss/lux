@@ -10,8 +10,7 @@ use crate::{
     build::external_dependency::ExternalDependencyInfo,
     config::Config,
     lockfile::LockedPackageSpec,
-    lua,
-    lua_rockspec::DeploySpec,
+    lua, rockspec,
     tree::{InstallTree, RockLayout},
     variables::{self, Environment, VariableSubstitutionError},
 };
@@ -23,7 +22,7 @@ pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
     pub(crate) no_install: bool,
     pub(crate) lua: &'a lua::Installation,
     pub(crate) external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,
-    pub(crate) deploy: &'a DeploySpec,
+    pub(crate) deploy: &'a rockspec::DeploySpec,
     pub(crate) config: &'a Config,
     pub(crate) tree: &'a T,
     pub(crate) build_dir: &'a Path,

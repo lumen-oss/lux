@@ -8,8 +8,7 @@ use target_lexicon::Triple;
 use thiserror::Error;
 
 use crate::{
-    build::external_dependency::ExternalDependencyInfo, config::Config, fs, lua,
-    lua_rockspec::LuaModule,
+    build::external_dependency::ExternalDependencyInfo, config::Config, fs, lua, rockspec,
 };
 
 use super::{c_link, CCExt};
@@ -48,7 +47,7 @@ if no C compiler was found, run `lx debug toolchains` to verify your build tools
 )]
 pub(crate) async fn compile(
     files: &Vec<PathBuf>,
-    target_module: &LuaModule,
+    target_module: &rockspec::build::Module,
     target_dir: &Path,
     lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,

@@ -3,10 +3,10 @@ use crate::git::url::RemoteGitUrlParseError;
 use crate::git::{GitRef, GitSource};
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
-use crate::lua_rockspec::{RemoteRockSource, RockSourceSpec};
 use crate::package;
 use crate::project;
 use crate::reqwest::{RequestBuilderExt, RequestError};
+use crate::rockspec;
 use crate::rockspec::Rockspec;
 use crate::wally;
 use crate::{fs, operations};
@@ -70,12 +70,14 @@ where
             Some(source_url) => match source_url {
                 RemotePackageSourceUrl::Git {
                     url, checkout_ref, ..
-                } => RockSourceSpec::Git(GitSource {
+                } => rockspec::RockSourceSpec::Git(GitSource {
                     url: url.parse()?,
                     git_ref: Some(GitRef::Tag(checkout_ref.clone())),
                 }),
-                RemotePackageSourceUrl::Url { url } => RockSourceSpec::Url(url.clone()),
-                RemotePackageSourceUrl::File { path } => RockSourceSpec::File(path.clone()),
+                RemotePackageSourceUrl::Url { url } => rockspec::RockSourceSpec::Url(url.clone()),
+                RemotePackageSourceUrl::File { path } => {
+                    rockspec::RockSourceSpec::File(path.clone())
+                }
             },
             None => rock_source.source_spec.clone(),
         };
@@ -89,7 +91,7 @@ where
                 Err(err)
             }
             Err(err) => match &fetch.rockspec.source().current_platform().source_spec {
-                RockSourceSpec::Git(_) | RockSourceSpec::Url(_) => {
+                rockspec::RockSourceSpec::Git(_) | rockspec::RockSourceSpec::Url(_) => {
                     let package = package::Spec::new(
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
@@ -105,7 +107,7 @@ where
                         }
                     }
                 }
-                RockSourceSpec::File(_) | RockSourceSpec::Wally(_) => Err(err),
+                rockspec::RockSourceSpec::File(_) | rockspec::RockSourceSpec::Wally(_) => Err(err),
             },
             Ok(metadata) => Ok(metadata),
         }
@@ -244,9 +246,9 @@ fn init_submodules(
     fields(location = source_spec.to_string()),
 )]
 async fn fetch_src_impl<R: Rockspec>(
-    mut source_spec: RockSourceSpec,
+    mut source_spec: rockspec::RockSourceSpec,
     rockspec: &R,
-    rock_source: &RemoteRockSource,
+    rock_source: &rockspec::RemoteRockSource,
     dest_dir: &Path,
     config: &Config,
 ) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
@@ -254,16 +256,16 @@ async fn fetch_src_impl<R: Rockspec>(
         source_spec = match source_spec {
             // could be a project directory (not vendored) or a local source
             // or a vendored dependency that we have already resolved
-            RockSourceSpec::File(_) => source_spec,
+            rockspec::RockSourceSpec::File(_) => source_spec,
             _ => {
                 let pkg_vendor_dir =
                     vendor_dir.join(format!("{}@{}", rockspec.package(), rockspec.version()));
-                RockSourceSpec::File(pkg_vendor_dir)
+                rockspec::RockSourceSpec::File(pkg_vendor_dir)
             }
         }
     }
     let metadata = match &source_spec {
-        RockSourceSpec::Git(git) => {
+        rockspec::RockSourceSpec::Git(git) => {
             let url = git.url.to_string();
             tracing::debug!(message = format!("Cloning {url}").as_str());
 
@@ -342,7 +344,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 },
             }
         }
-        RockSourceSpec::Url(url) => {
+        rockspec::RockSourceSpec::Url(url) => {
             tracing::debug!(message = format!("Downloading {url}").as_str());
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
@@ -379,10 +381,10 @@ async fn fetch_src_impl<R: Rockspec>(
                 source_url: RemotePackageSourceUrl::Url { url: url.clone() },
             }
         }
-        RockSourceSpec::Wally(_) => {
+        rockspec::RockSourceSpec::Wally(_) => {
             return Err(FetchSrcError::WallySource(rockspec.package().to_string()))
         }
-        RockSourceSpec::File(path) => {
+        rockspec::RockSourceSpec::File(path) => {
             tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {

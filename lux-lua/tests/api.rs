@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use lux_lib::{
     lockfile::{Lockfile, OptState, PinnedState},
-    lua_rockspec::RockSourceSpec,
+    rockspec,
 };
 use lux_lua::lua_impls::{AddDependencyLua, LockfileReadOnlyLua, LuaDependencySpecLua};
 use mlua::{IntoLua, Lua};
@@ -27,7 +27,10 @@ fn lua_dynamic_dependency_spec() {
     assert_eq!(spec.0.name().to_string(), "foo");
     assert_eq!(*spec.0.opt(), OptState::Optional);
     assert_eq!(*spec.0.pin(), PinnedState::Pinned);
-    assert!(matches!(spec.0.source(), Some(RockSourceSpec::Git(_))));
+    assert!(matches!(
+        spec.0.source(),
+        Some(rockspec::RockSourceSpec::Git(_))
+    ));
 }
 
 #[test]

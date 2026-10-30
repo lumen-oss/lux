@@ -8,9 +8,9 @@ use lux_lib::{
     drivers::install_packages::InstallPackages,
     git::{GitRef, GitSource},
     lua,
-    lua_rockspec::RockSourceSpec,
     operations::{Exec, PackageInstallSpec},
     package_db::PackageDB,
+    rockspec,
     tree::EntryType,
 };
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ use serial_test::serial;
 async fn install_git_package() {
     let install_spec =
         PackageInstallSpec::new("rustaceanvim@6.0.3".parse().unwrap(), EntryType::Entrypoint)
-            .source(RockSourceSpec::Git(GitSource {
+            .source(rockspec::RockSourceSpec::Git(GitSource {
                 url: "https://github.com/mrcjkb/rustaceanvim.git"
                     .parse()
                     .unwrap(),

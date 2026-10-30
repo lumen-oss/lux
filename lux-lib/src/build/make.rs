@@ -15,8 +15,8 @@ use crate::{
         backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
         command,
     },
-    lua_rockspec::MakeBuildSpec,
     path::{self, Paths},
+    rockspec,
     tree::{self, InstallTree},
     variables::VariableSubstitutionError,
 };
@@ -52,7 +52,7 @@ pub enum Error {
     MakefileNotFound(PathBuf),
 }
 
-impl BuildBackend for MakeBuildSpec {
+impl BuildBackend for rockspec::build::MakeBuildSpec {
     type Err = Error;
 
     #[tracing::instrument(name = "make::run", skip_all, level = "debug")]

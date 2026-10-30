@@ -8,8 +8,8 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{self, LockedPackage, LockedPackageHashes, LockedPackageSpec},
-    lua_rockspec::{LuaVersionError, RemoteLuaRockspec},
     remote_package_source::RemotePackageSource,
+    rockspec,
     rockspec::Rockspec,
     tree::{self, InstallTree},
 };
@@ -36,10 +36,10 @@ pub enum Error {
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ExternalDependency(#[from] external_dependency::Error),
+    ExternalSpec(#[from] external_dependency::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LuaVersionError(#[from] LuaVersionError),
+    LuaVersion(#[from] rockspec::Error),
     #[error("failed to unpack packed rock")]
     Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
@@ -51,7 +51,7 @@ pub(crate) struct BinaryRockInstall<'a, T>
 where
     T: InstallTree,
 {
-    rockspec: &'a RemoteLuaRockspec,
+    rockspec: &'a rockspec::lua::Remote,
     spec: LockedPackageSpec,
     rock_bytes: Bytes,
     source: RemotePackageSource,
@@ -66,7 +66,7 @@ where
     T: InstallTree,
 {
     pub(crate) fn new(
-        rockspec: &'a RemoteLuaRockspec,
+        rockspec: &'a rockspec::lua::Remote,
         spec: LockedPackageSpec,
         rock_bytes: Bytes,
         source: RemotePackageSource,
@@ -176,7 +176,7 @@ mod tests {
     #[cfg(feature = "impure_tests")]
     use flaky_test::flaky_test;
 
-    impl RemoteLuaRockspec {
+    impl rockspec::lua::Remote {
         fn to_locked_package_spec(&self) -> LockedPackageSpec {
             LockedPackageSpec::new(
                 self.package(),

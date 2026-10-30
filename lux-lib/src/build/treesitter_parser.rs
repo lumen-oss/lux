@@ -1,7 +1,7 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
 use crate::lua;
-use crate::lua_rockspec::TreesitterParserBuildSpec;
+use crate::rockspec;
 use crate::tree::InstallTree;
 use miette::Diagnostic;
 use std::num::ParseIntError;
@@ -34,7 +34,7 @@ pub enum Error {
     Fs(#[from] fs::Error),
 }
 
-impl BuildBackend for TreesitterParserBuildSpec {
+impl BuildBackend for rockspec::build::TreesitterParserBuildSpec {
     type Err = Error;
 
     #[tracing::instrument(name = "treesitter_parser::run", skip_all, level = "debug")]

@@ -18,8 +18,8 @@ use crate::{
     operations::{self, GenLuaRcError, GenLuauRcError},
     package_db::{self, PackageDB},
     pipeline::resolve::luarocks_build_backend_name,
-    project::{self, project_toml::LocalProjectTomlValidationError},
-    rockspec::{lua_dependency::LuaDependencySpec, Rockspec},
+    project,
+    rockspec::{self, LuaDependencySpec, Rockspec},
     tree::{self, InstallTree},
     workspace::{self, TreeError, Workspace},
 };
@@ -158,7 +158,7 @@ pub enum SyncError {
     Project(#[from] project::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LocalProjectTomlValidationError(#[from] LocalProjectTomlValidationError),
+    TomlValidation(#[from] rockspec::toml::Error),
     #[error("failed to generate `.luarc.json`")]
     #[diagnostic(forward(0))]
     GenLuaRc(#[from] GenLuaRcError),

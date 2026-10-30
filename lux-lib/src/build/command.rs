@@ -14,8 +14,8 @@ use crate::{
     build::backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
     config::Config,
     lua,
-    lua_rockspec::CommandBuildSpec,
     path::{self, Paths},
+    rockspec,
     tree::{self, InstallTree, RockLayout},
     variables::VariableSubstitutionError,
 };
@@ -75,7 +75,7 @@ pub(crate) fn trace_output(output: &Output) {
     }
 }
 
-impl BuildBackend for CommandBuildSpec {
+impl BuildBackend for rockspec::build::CommandBuildSpec {
     type Err = Error;
 
     #[tracing::instrument(name = "command::run", skip_all, level = "debug")]

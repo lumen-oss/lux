@@ -2,6 +2,7 @@
 pub(crate) mod wally;
 
 use crate::package;
+use crate::rockspec;
 use std::path::PathBuf;
 
 use bon::Builder;
@@ -10,7 +11,6 @@ use thiserror::Error;
 
 use crate::{
     config::Config,
-    lua_rockspec::{RemoteLuaRockspec, RockSourceSpec},
     operations,
     operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
     package::RemotePackage,
@@ -25,14 +25,14 @@ use super::materialise::PackageSource;
 #[derive(Clone, Debug)]
 pub(crate) struct FoundPackage {
     pub(crate) remote: RemotePackage,
-    pub(crate) rockspec: RemoteLuaRockspec,
+    pub(crate) rockspec: rockspec::lua::Remote,
     pub(crate) artifact: Option<PackageSource>,
 }
 
 impl FoundPackage {
     /// Builds a discovered package from an already-parsed rockspec, so it can
     /// be resolved as a root without contacting a remote package database.
-    pub(crate) fn from_rockspec(rockspec: RemoteLuaRockspec) -> Self {
+    pub(crate) fn from_rockspec(rockspec: rockspec::lua::Remote) -> Self {
         let source = rockspec
             .to_lua_remote_rockspec_string()
             .map(RemotePackageSource::RockspecContent)
@@ -51,7 +51,7 @@ impl FoundPackage {
 
     /// Builds a discovered package from a project root rockspec, using the
     /// project's own directory as the source.
-    pub(crate) fn from_project_root(rockspec: RemoteLuaRockspec, root_dir: PathBuf) -> Self {
+    pub(crate) fn from_project_root(rockspec: rockspec::lua::Remote, root_dir: PathBuf) -> Self {
         let remote = RemotePackage::new(
             package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
             RemotePackageSource::Local,
@@ -119,7 +119,7 @@ where
 }
 
 fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, Error> {
-    let Some(RockSourceSpec::File(path)) = &spec.source else {
+    let Some(rockspec::RockSourceSpec::File(path)) = &spec.source else {
         return Ok(None);
     };
     Ok(match Project::from_exact(path)? {
@@ -135,25 +135,27 @@ fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, E
 
 async fn discover_source_spec(
     spec: &PackageInstallSpec,
-    source: &RockSourceSpec,
+    source: &rockspec::RockSourceSpec,
     _config: &Config,
 ) -> Result<FoundPackage, Error> {
     match source {
-        RockSourceSpec::Git(_) | RockSourceSpec::File(_) | RockSourceSpec::Url(_) => {
-            discover_fetchable_source(spec, source.clone())
-        }
+        rockspec::RockSourceSpec::Git(_)
+        | rockspec::RockSourceSpec::File(_)
+        | rockspec::RockSourceSpec::Url(_) => discover_fetchable_source(spec, source.clone()),
         #[cfg(feature = "wally")]
-        RockSourceSpec::Wally(wally_req) => wally::discover(&spec.package, wally_req, _config)
-            .await
-            .map_err(Error::Wally),
+        rockspec::RockSourceSpec::Wally(wally_req) => {
+            wally::discover(&spec.package, wally_req, _config)
+                .await
+                .map_err(Error::Wally)
+        }
         #[cfg(not(feature = "wally"))]
-        RockSourceSpec::Wally(_) => Err(Error::WallyDisabled),
+        rockspec::RockSourceSpec::Wally(_) => Err(Error::WallyDisabled),
     }
 }
 
 fn discover_fetchable_source(
     spec: &PackageInstallSpec,
-    source: RockSourceSpec,
+    source: rockspec::RockSourceSpec,
 ) -> Result<FoundPackage, Error> {
     let download =
         RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source)
@@ -257,7 +259,7 @@ mod tests {
     #[test]
     fn from_rockspec_builds_local_found_package() {
         let content = "rockspec_format = '1.0'\npackage = 'foo'\nversion = '1.0.0-1'\nsource = { url = 'https://example.com/foo.zip' }";
-        let Ok(rockspec) = RemoteLuaRockspec::new(content) else {
+        let Ok(rockspec) = rockspec::lua::Remote::new(content) else {
             unreachable!("invalid test rockspec");
         };
 
@@ -284,7 +286,7 @@ mod tests {
             EntryType::DependencyOnly,
         )
         .build_behaviour(BuildBehaviour::Ignore)
-        .maybe_source(Some(RockSourceSpec::File(bar_dir)))
+        .maybe_source(Some(rockspec::RockSourceSpec::File(bar_dir)))
         .build();
 
         let found = Discover::new(PackageDB::from_local(Vec::new()), &config)

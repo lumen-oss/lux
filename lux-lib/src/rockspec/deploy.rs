@@ -54,7 +54,7 @@ fn default_wrap_bin_scripts() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::lua_rockspec::DisplayAsLuaKV;
+    use crate::rockspec::DisplayAsLuaKV;
 
     use super::*;
 

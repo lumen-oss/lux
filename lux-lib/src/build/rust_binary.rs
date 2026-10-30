@@ -2,7 +2,7 @@ use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::build::{cargo, command, install};
 use crate::config::{build, Config};
 use crate::fs;
-use crate::lua_rockspec::RustBinaryBuildSpec;
+use crate::rockspec;
 use crate::tree::InstallTree;
 use miette::Diagnostic;
 use path_slash::PathBufExt;
@@ -46,7 +46,7 @@ pub enum Error {
     Fs(#[from] fs::Error),
 }
 
-impl BuildBackend for RustBinaryBuildSpec {
+impl BuildBackend for rockspec::build::RustBinaryBuildSpec {
     type Err = Error;
 
     #[tracing::instrument(name = "rust_binary::run", skip_all, level = "debug")]
