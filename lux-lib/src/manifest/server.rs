@@ -126,13 +126,10 @@ pub(super) async fn get_manifest(
 }
 
 #[tracing::instrument(level = "trace", skip(config))]
-pub(crate) async fn manifest_from_cache_or_server(
-    server_url: &Url,
-    config: &Config,
-) -> Result<String, Error> {
+pub(crate) async fn load(server_url: &Url, config: &Config) -> Result<String, Error> {
     let manifest_version = lua::Version::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
-    manifest_from_cache_or_server_impl(&manifest_version, url, config).await
+    load_impl(&manifest_version, url, config).await
 }
 
 #[tracing::instrument(
@@ -141,11 +138,7 @@ pub(crate) async fn manifest_from_cache_or_server(
     skip_all,
     fields(url = url.to_string()),
 )]
-async fn manifest_from_cache_or_server_impl(
-    manifest_version: &str,
-    url: Url,
-    config: &Config,
-) -> Result<String, Error> {
+async fn load_impl(manifest_version: &str, url: Url, config: &Config) -> Result<String, Error> {
     let cache = mk_manifest_cache(&url, config).await?;
 
     #[cfg(not(test))]
@@ -190,13 +183,10 @@ async fn manifest_from_cache_or_server_impl(
 }
 
 #[tracing::instrument(level = "trace", skip(config))]
-pub(crate) async fn manifest_from_server_only(
-    server_url: &Url,
-    config: &Config,
-) -> Result<String, Error> {
+pub(crate) async fn fetch(server_url: &Url, config: &Config) -> Result<String, Error> {
     let manifest_version = lua::Version::from(config)?.version_compatibility_str();
     let url = mk_manifest_url(server_url, &manifest_version, config)?;
-    manifest_from_server_only_impl(url, &manifest_version, config).await
+    fetch_impl(url, &manifest_version, config).await
 }
 
 #[tracing::instrument(
@@ -205,11 +195,7 @@ pub(crate) async fn manifest_from_server_only(
     skip_all,
     fields(url = url.to_string()),
 )]
-async fn manifest_from_server_only_impl(
-    url: Url,
-    manifest_version: &str,
-    config: &Config,
-) -> Result<String, Error> {
+async fn fetch_impl(url: Url, manifest_version: &str, config: &Config) -> Result<String, Error> {
     let cache = mk_manifest_cache(&url, config).await?;
     let client = crate::reqwest::https_client(config)?;
     get_manifest(url, manifest_version, &cache, client, config).await
@@ -296,9 +282,7 @@ mod tests {
             .no_progress(Some(true))
             .build()
             .unwrap();
-        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config)
-            .await
-            .unwrap();
+        load(&Url::parse(&url_str).unwrap(), &config).await.unwrap();
     }
 
     #[tokio::test]
@@ -317,9 +301,7 @@ mod tests {
             .build()
             .unwrap();
 
-        manifest_from_cache_or_server(&Url::parse(&url_str).unwrap(), &config)
-            .await
-            .unwrap();
+        load(&Url::parse(&url_str).unwrap(), &config).await.unwrap();
     }
 
     #[tokio::test]
@@ -349,9 +331,7 @@ mod tests {
         .unwrap();
         let cache = mk_manifest_cache(&manifest_url, &config).await.unwrap();
         fs::tokio::write(&cache, &manifest_content).await.unwrap();
-        let result = manifest_from_cache_or_server(&server_url, &config)
-            .await
-            .unwrap();
+        let result = load(&server_url, &config).await.unwrap();
         assert_eq!(result, manifest_content);
     }
 }

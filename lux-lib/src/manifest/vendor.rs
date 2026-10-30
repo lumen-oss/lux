@@ -3,11 +3,11 @@ use std::{collections::HashMap, path::Path, str::FromStr};
 
 use walkdir::WalkDir;
 
-use crate::{manifest::ManifestMetadata, remote};
+use crate::{manifest::Metadata, remote};
 
 /// Construct manifest metadata from a vendor directory.
 #[tracing::instrument(level = "trace")]
-pub(crate) fn manifest_from_vendor_dir(vendor_dir: &Path) -> ManifestMetadata {
+pub(crate) fn from_dir(vendor_dir: &Path) -> Metadata {
     let mut repository = HashMap::new();
     for (package, package_type) in WalkDir::new(vendor_dir)
         .into_iter()
@@ -36,7 +36,7 @@ pub(crate) fn manifest_from_vendor_dir(vendor_dir: &Path) -> ManifestMetadata {
             .or_insert_with(HashMap::default);
         packages.insert(package.version().clone(), vec![package_type]);
     }
-    ManifestMetadata { repository }
+    Metadata { repository }
 }
 
 #[cfg(test)]
@@ -87,10 +87,10 @@ mod tests {
             "1.0.0-1".parse().unwrap(),
             vec![remote::package::Kind::Binary],
         );
-        let metadata = manifest_from_vendor_dir(vendor_dir.path());
+        let metadata = from_dir(vendor_dir.path());
         assert_eq!(
             metadata,
-            ManifestMetadata {
+            Metadata {
                 repository: expected
             }
         )

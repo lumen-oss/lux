@@ -9,11 +9,11 @@ use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ManifestMetadata {
+pub(crate) struct Metadata {
     pub repository: HashMap<package::Name, HashMap<package::Version, Vec<remote::package::Kind>>>,
 }
 
-impl<'de> serde::Deserialize<'de> for ManifestMetadata {
+impl<'de> serde::Deserialize<'de> for Metadata {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -25,7 +25,7 @@ impl<'de> serde::Deserialize<'de> for ManifestMetadata {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ManifestLuaError {
+pub enum LuaError {
     #[error("failed to parse Lua manifest")]
     ExecutionError(#[from] ottavino::ExternError),
     #[error("failed to deserialize Lua manifest")]
@@ -38,8 +38,8 @@ pub enum ManifestLuaError {
     FuelLimitExceeded,
 }
 
-impl ManifestMetadata {
-    pub fn new(manifest: &String) -> Result<Self, ManifestLuaError> {
+impl Metadata {
+    pub fn new(manifest: &String) -> Result<Self, LuaError> {
         let mut lua = Lua::core();
 
         let success = lua.try_enter(|ctx| {
@@ -51,7 +51,7 @@ impl ManifestMetadata {
         })?;
 
         if !success {
-            return Err(ManifestLuaError::FuelLimitExceeded);
+            return Err(LuaError::FuelLimitExceeded);
         }
 
         let intermediate = IntermediateManifest {
@@ -106,7 +106,7 @@ impl ManifestMetadata {
         ))
     }
 
-    /// Construct a `ManifestMetadata` from an intermediate representation,
+    /// Construct a `Metadata` from an intermediate representation,
     /// silently skipping entries for versions we don't know how to parse.
     fn from_intermediate(intermediate: IntermediateManifest) -> Self {
         let repository = intermediate
@@ -181,7 +181,7 @@ mod tests {
             repository = {}\n
             "
         .to_string();
-        ManifestMetadata::new(&manifest).unwrap();
+        Metadata::new(&manifest).unwrap();
     }
 
     #[tokio::test]
@@ -189,7 +189,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
-        ManifestMetadata::new(&manifest).unwrap();
+        Metadata::new(&manifest).unwrap();
     }
 
     #[tokio::test]
@@ -197,7 +197,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&manifest).unwrap();
+        let metadata = Metadata::new(&manifest).unwrap();
 
         let package_req: package::Req = "30log > 1.3.0".parse().unwrap();
         assert!(metadata
@@ -209,7 +209,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let manifest = String::from_utf8(fs::read(&test_manifest_path).await.unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&manifest).unwrap();
+        let metadata = Metadata::new(&manifest).unwrap();
         let package_req: package::Req = "combine == 1.0-1".parse().unwrap();
         assert!(metadata
             .latest_match(&package_req, &Default::default())
@@ -236,7 +236,7 @@ mod tests {
             }
         "#
         .to_string();
-        let metadata = ManifestMetadata::new(&manifest).unwrap();
+        let metadata = Metadata::new(&manifest).unwrap();
         let package_req: package::Req = "testpkg == 1.0-1".parse().unwrap();
 
         let (_, rock_type) = metadata

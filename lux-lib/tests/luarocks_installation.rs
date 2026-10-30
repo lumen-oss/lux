@@ -6,7 +6,7 @@ use assert_fs::TempDir;
 use flaky_test::flaky_test;
 #[cfg(unix)]
 use is_executable::IsExecutable;
-use lux_lib::{config, lua, luarocks::luarocks_installation::LuaRocksInstallation};
+use lux_lib::{config, lua, luarocks};
 use predicates::prelude::predicate;
 
 #[flaky_test(tokio, times = 5)]
@@ -22,7 +22,7 @@ async fn luarocks_make() {
         .build()
         .unwrap();
     let tree = config.user_tree(lua_version.unwrap()).unwrap();
-    let luarocks = LuaRocksInstallation::new(&config, tree).unwrap();
+    let luarocks = luarocks::Installation::new(&config, tree).unwrap();
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
     luarocks.ensure_installed(&lua).await.unwrap();
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -71,7 +71,7 @@ build = { type = "none", install = { bin = { foo = "foo.lua" } } }
 
         let dest_dir = TempDir::new().unwrap();
         let luarocks =
-            LuaRocksInstallation::new(&config, config.user_tree(lua_version.clone()).unwrap())
+            luarocks::Installation::new(&config, config.user_tree(lua_version.clone()).unwrap())
                 .unwrap();
         luarocks
             .make(&rockspec_path, build_dir.path(), dest_dir.path(), &lua)

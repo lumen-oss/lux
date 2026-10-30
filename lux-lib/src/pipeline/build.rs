@@ -11,8 +11,8 @@ use crate::{
     lockfile::{LockedPackage, LockedPackageId},
     lua,
     luarocks::{
+        self,
         install_binary_rock::{self, BinaryRockInstall},
-        luarocks_installation::{LuaRocksError, LuaRocksInstallError, LuaRocksInstallation},
     },
     rockspec::Rockspec,
     tree::{self, InstallTree},
@@ -33,17 +33,14 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LuaInstallation(#[from] lua::installation::Error),
-    #[error("error instantiating LuaRocks compatibility layer")]
+    #[error("error preparing the LuaRocks compatibility layer")]
     #[diagnostic(forward(0))]
-    LuaRocks(#[from] LuaRocksError),
-    #[error("error installing LuaRocks compatibility layer")]
-    #[diagnostic(forward(0))]
-    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
+    LuaRocks(#[from] Box<luarocks::installation::Error>),
 }
 
-impl From<LuaRocksInstallError> for Error {
-    fn from(source: LuaRocksInstallError) -> Self {
-        Self::LuaRocksInstall(Box::new(source))
+impl From<luarocks::installation::Error> for Error {
+    fn from(source: luarocks::installation::Error) -> Self {
+        Self::LuaRocks(Box::new(source))
     }
 }
 
@@ -87,7 +84,7 @@ where
             )
         });
         if needs_luarocks {
-            LuaRocksInstallation::new(args.config, args.tree.build_tree(args.config)?)?
+            luarocks::Installation::new(args.config, args.tree.build_tree(args.config)?)?
                 .ensure_installed(&lua)
                 .await?;
         }

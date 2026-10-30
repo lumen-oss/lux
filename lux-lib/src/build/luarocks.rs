@@ -11,8 +11,7 @@ use std::path::Path;
 use crate::{
     config::Config,
     lockfile::LockedPackageSpec,
-    luarocks::luarocks_installation::{ExecLuaRocksError, LuaRocksError, LuaRocksInstallation},
-    luarocks::{install_rock_manifest, InstallRockManifestError, RockManifestSources},
+    luarocks::{self, install_rock_manifest, installation::exec, RockManifestSources},
 };
 
 use crate::fs::tempfile::tempdir;
@@ -27,16 +26,16 @@ pub enum Error {
     Fs(#[from] fs::Error),
     #[error("error instantiating luarocks compatibility layer")]
     #[diagnostic(forward(0))]
-    LuaRocksError(#[from] LuaRocksError),
+    LuaRocks(#[from] luarocks::installation::Error),
     #[error("error running 'luarocks make'")]
     #[diagnostic(forward(0))]
-    ExecLuaRocksError(#[from] ExecLuaRocksError),
+    Exec(#[from] exec::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallRockManifest(#[from] InstallRockManifestError),
+    InstallRockManifest(#[from] luarocks::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Rockspec(Box<dyn Diagnostic + Send + Sync>),
@@ -74,7 +73,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
             .map_err(|err| Error::Rockspec(Box::new(err)))?,
     )
     .await?;
-    let luarocks = LuaRocksInstallation::new(config, tree.build_tree(config)?)?;
+    let luarocks = luarocks::Installation::new(config, tree.build_tree(config)?)?;
     let luarocks_tree = tempdir()?;
     luarocks
         .make(&rockspec_file, build_dir, luarocks_tree.path(), lua)

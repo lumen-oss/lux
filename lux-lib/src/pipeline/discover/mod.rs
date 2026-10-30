@@ -85,7 +85,7 @@ pub enum Error {
     #[cfg(feature = "wally")]
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Wally(#[from] wally::WallyDiscoverError),
+    Wally(#[from] wally::Error),
     #[cfg(not(feature = "wally"))]
     #[error("wally support is disabled in this build")]
     #[diagnostic(help("this build of Lux was compiled without the `wally` feature"))]

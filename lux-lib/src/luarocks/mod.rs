@@ -7,10 +7,12 @@ use crate::{fs, project, tree::RockLayout};
 use miette::Diagnostic;
 use thiserror::Error;
 
-use self::rock_manifest::{Error, RockManifest};
+use self::rock_manifest::RockManifest;
 
 pub mod install_binary_rock;
-pub mod luarocks_installation;
+pub mod installation;
+
+pub use installation::Installation;
 pub mod rock_manifest;
 
 /// Retrieves the target compilation platform and returns it as a luarocks identifier.
@@ -24,7 +26,7 @@ pub(crate) fn current_platform_luarocks_identifier() -> String {
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum InstallRockManifestError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -33,7 +35,7 @@ pub enum InstallRockManifestError {
     RockManifestNotFound,
     #[error(transparent)]
     #[diagnostic(transparent)]
-    RockManifest(#[from] Error),
+    RockManifest(#[from] rock_manifest::Error),
 }
 
 pub(crate) struct RockManifestSources {
@@ -86,10 +88,10 @@ pub(crate) async fn install_rock_manifest(
     sources: RockManifestSources,
     layout: &RockLayout,
     bin_dest: &Path,
-) -> Result<(), InstallRockManifestError> {
+) -> Result<(), Error> {
     let rock_manifest_file = sources.root.join("rock_manifest");
     if !rock_manifest_file.is_file() {
-        return Err(InstallRockManifestError::RockManifestNotFound);
+        return Err(Error::RockManifestNotFound);
     }
     let rock_manifest_content = fs::tokio::read_to_string(rock_manifest_file).await?;
     let rock_manifest = RockManifest::new(&rock_manifest_content)?;

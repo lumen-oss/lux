@@ -741,7 +741,7 @@ mod tests {
     use super::*;
     use crate::{
         config, fs,
-        manifest::{Manifest, ManifestMetadata},
+        manifest::{metadata::Metadata, Manifest},
         package::db::PackageDB,
         rockspec::Rockspec,
     };
@@ -764,7 +764,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
+        let metadata = Metadata::new(&content).unwrap();
         let config = config::Builder::new().unwrap().build().unwrap();
         let package_db = PackageDB::from_manifest(
             Manifest::new(
@@ -855,7 +855,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
+        let metadata = Metadata::new(&content).unwrap();
         let config = config::Builder::new().unwrap().build().unwrap();
         let package_db = PackageDB::from_manifest(
             Manifest::new(
@@ -895,7 +895,7 @@ mod tests {
         let test_manifest_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/manifest-5.1");
         let content = String::from_utf8(std::fs::read(&test_manifest_path).unwrap()).unwrap();
-        let metadata = ManifestMetadata::new(&content).unwrap();
+        let metadata = Metadata::new(&content).unwrap();
         let config = config::Builder::default().build().unwrap();
         let package_db = PackageDB::from_manifest(
             Manifest::new(

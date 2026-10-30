@@ -22,8 +22,31 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-use super::DownloadSrcRockError;
+mod src_rock;
+
 use super::UnpackError;
+
+/// A rocks package source fetcher, providing fine-grained control
+/// over how a package should be fetched.
+#[derive(Builder)]
+#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
+pub(super) struct SrcRock<'a> {
+    #[builder(start_fn)]
+    package: &'a package::Spec,
+    #[builder(start_fn)]
+    dest_dir: &'a Path,
+    #[builder(start_fn)]
+    config: &'a Config,
+}
+
+impl<State> SrcRockBuilder<'_, State>
+where
+    State: src_rock_builder::State + src_rock_builder::IsComplete,
+{
+    pub async fn fetch(self) -> Result<RemotePackageSourceMetadata, src_rock::Error> {
+        src_rock::do_fetch_src_rock(self._build()).await
+    }
+}
 
 /// A rocks package source fetcher, providing fine-grained control
 /// over how a package should be fetched.
@@ -93,7 +116,7 @@ where
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
                     );
-                    match FetchSrcRock::new(&package, fetch.dest_dir, fetch.config)
+                    match SrcRock::new(&package, fetch.dest_dir, fetch.config)
                         .fetch()
                         .await
                     {
@@ -131,7 +154,7 @@ pub enum FetchSrcError {
     Unpack(#[from] UnpackError),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    FetchSrcRock(#[from] FetchSrcRockError),
+    SrcRock(#[from] src_rock::Error),
     #[error("unable to remove the '.git' directory")]
     #[diagnostic(help(
         "check that no process is using the directory and you have write permissions."
@@ -154,37 +177,6 @@ impl From<reqwest::Error> for FetchSrcError {
     fn from(err: reqwest::Error) -> Self {
         Self::Request(err.into())
     }
-}
-
-/// A rocks package source fetcher, providing fine-grained control
-/// over how a package should be fetched.
-#[derive(Builder)]
-#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-struct FetchSrcRock<'a> {
-    #[builder(start_fn)]
-    package: &'a package::Spec,
-    #[builder(start_fn)]
-    dest_dir: &'a Path,
-    #[builder(start_fn)]
-    config: &'a Config,
-}
-
-impl<State> FetchSrcRockBuilder<'_, State>
-where
-    State: fetch_src_rock_builder::State + fetch_src_rock_builder::IsComplete,
-{
-    pub async fn fetch(self) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
-        do_fetch_src_rock(self._build()).await
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-#[error(transparent)]
-pub enum FetchSrcRockError {
-    DownloadSrcRock(#[from] DownloadSrcRockError),
-    Unpack(#[from] UnpackError),
-    Io(#[from] io::Error),
 }
 
 /// A no-prompt implementer for auth_git2's prompter
@@ -419,27 +411,4 @@ async fn fetch_src_impl<R: Rockspec>(
         }
     };
     Ok(metadata)
-}
-
-#[tracing::instrument(
-    name = "Fetching src.rock",
-    level = "info",
-    skip_all,
-    fields(package = fetch.package.to_string(),),
-)]
-async fn do_fetch_src_rock(
-    fetch: FetchSrcRock<'_>,
-) -> Result<RemotePackageSourceMetadata, FetchSrcRockError> {
-    let package = fetch.package;
-    let dest_dir = fetch.dest_dir;
-    let config = fetch.config;
-    let src_rock = operations::download_src_rock(package, config.server(), fetch.config).await?;
-    let hash = src_rock.bytes.hash().await?;
-    let cursor = Cursor::new(src_rock.bytes);
-    let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
-    operations::unpack::unpack(mime_type, cursor, true, src_rock.file_name, dest_dir).await?;
-    Ok(RemotePackageSourceMetadata {
-        hash,
-        source_url: RemotePackageSourceUrl::Url { url: src_rock.url },
-    })
 }

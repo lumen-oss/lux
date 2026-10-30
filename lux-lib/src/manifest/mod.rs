@@ -4,27 +4,27 @@ use path_slash::PathExt;
 use thiserror::Error;
 use url::Url;
 
+use self::metadata::{LuaError, Metadata};
 use crate::config::Config;
-pub use crate::manifest::metadata::*;
-use crate::manifest::metadata_from_server::*;
-use crate::manifest::metadata_from_vendor_dir::manifest_from_vendor_dir;
+
+use self::vendor::from_dir;
 use crate::remote;
 
 pub mod metadata;
-mod metadata_from_server;
-mod metadata_from_vendor_dir;
+pub(crate) mod server;
+pub(crate) mod vendor;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Lua(#[from] ManifestLuaError),
+    Lua(#[from] LuaError),
     #[error("failed to fetch manifest from {url}:\n{source}")]
     #[diagnostic(forward(source))]
     Server {
         url: String,
-        source: Box<metadata_from_server::Error>,
+        source: Box<server::Error>,
     },
     #[error("error parsing URL from `vendor-dir`: {0}:")]
     Vendor(String),
@@ -33,14 +33,14 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub(crate) struct Manifest {
     server_url: Url,
-    metadata: ManifestMetadata,
+    metadata: Metadata,
     default_filter: remote::package::kind::FilterSpec,
 }
 
 impl Manifest {
     pub fn new(
         server_url: Url,
-        metadata: ManifestMetadata,
+        metadata: Metadata,
         default_filter: remote::package::kind::FilterSpec,
     ) -> Self {
         Self {
@@ -57,32 +57,33 @@ impl Manifest {
                 .map_err(|_err| Error::Vendor(vendor_dir.to_slash_lossy().to_string()))?;
             return Ok(Self::new(
                 server_url,
-                manifest_from_vendor_dir(vendor_dir),
+                from_dir(vendor_dir),
                 config.package_types().clone(),
             ));
         }
-        let content = manifest_from_cache_or_server(&server_url, config)
+        let content = server::load(&server_url, config)
             .await
             .map_err(|source| Error::Server {
                 url: server_url.to_string(),
                 source: Box::new(source),
             })?;
-        match ManifestMetadata::new(&content) {
+        match Metadata::new(&content) {
             Ok(metadata) => Ok(Self::new(
                 server_url,
                 metadata,
                 config.package_types().clone(),
             )),
             Err(_) => {
-                let manifest = manifest_from_server_only(&server_url, config)
-                    .await
-                    .map_err(|source| Error::Server {
-                        url: server_url.to_string(),
-                        source: Box::new(source),
-                    })?;
+                let manifest =
+                    server::fetch(&server_url, config)
+                        .await
+                        .map_err(|source| Error::Server {
+                            url: server_url.to_string(),
+                            source: Box::new(source),
+                        })?;
                 Ok(Self::new(
                     server_url,
-                    ManifestMetadata::new(&manifest)?,
+                    Metadata::new(&manifest)?,
                     config.package_types().clone(),
                 ))
             }
@@ -93,7 +94,7 @@ impl Manifest {
         &self.server_url
     }
 
-    pub fn metadata(&self) -> &ManifestMetadata {
+    pub fn metadata(&self) -> &Metadata {
         &self.metadata
     }
 

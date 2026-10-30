@@ -9,7 +9,7 @@ use crate::{
     drivers::{InstallPackages, InstallPackagesError},
     lockfile::{LockedPackage, OptState, PinnedState},
     lua,
-    luarocks::luarocks_installation::{LuaRocksError, LuaRocksInstallError},
+    luarocks::installation,
     operations::PackageInstallSpec,
     package::db::PackageDB,
     pipeline::discover::FoundPackage,
@@ -33,9 +33,7 @@ pub enum InstallRockspecError {
     #[diagnostic(transparent)]
     Install(#[from] Box<InstallPackagesError>),
     #[diagnostic(transparent)]
-    LuaRocks(#[from] LuaRocksError),
-    #[diagnostic(transparent)]
-    LuaRocksInstall(#[from] Box<LuaRocksInstallError>),
+    LuaRocks(#[from] Box<installation::Error>),
     #[diagnostic(transparent)]
     Build(#[from] Box<build::Error>),
     #[error("package '{0}' was not installed")]
@@ -48,9 +46,9 @@ impl From<InstallPackagesError> for InstallRockspecError {
     }
 }
 
-impl From<LuaRocksInstallError> for InstallRockspecError {
-    fn from(source: LuaRocksInstallError) -> Self {
-        Self::LuaRocksInstall(Box::new(source))
+impl From<installation::Error> for InstallRockspecError {
+    fn from(source: installation::Error) -> Self {
+        Self::LuaRocks(Box::new(source))
     }
 }
 
