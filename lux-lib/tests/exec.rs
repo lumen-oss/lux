@@ -3,7 +3,7 @@
 #[cfg(not(target_env = "msvc"))]
 use flaky_test::flaky_test;
 #[cfg(not(target_env = "msvc"))]
-use lux_lib::{config, lua, operations::Exec};
+use lux_lib::{config, lua, operations};
 
 #[cfg(not(target_env = "msvc"))]
 #[flaky_test(tokio, times = 5)]
@@ -18,7 +18,7 @@ async fn run_nlua() {
         .lua_version(lua_version)
         .build()
         .unwrap();
-    Exec::new("nlua", None, &config)
+    operations::Exec::new("nlua", None, &config)
         .arg("-v")
         .exec()
         .await

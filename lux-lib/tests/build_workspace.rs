@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
-use lux_lib::operations::BuildWorkspace;
+use lux_lib::operations;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config, lua};
@@ -24,7 +24,7 @@ async fn test_build_multi_workspace_local_dependencies() {
         .build()
         .unwrap();
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
-    BuildWorkspace::new(&workspace, &config)
+    operations::BuildWorkspace::new(&workspace, &config)
         .no_lock(false)
         .only_deps(false)
         .build()
@@ -32,7 +32,7 @@ async fn test_build_multi_workspace_local_dependencies() {
         .unwrap();
 
     // Building an already-built workspace must be idempotent
-    BuildWorkspace::new(&workspace, &config)
+    operations::BuildWorkspace::new(&workspace, &config)
         .no_lock(false)
         .only_deps(false)
         .build()

@@ -12,8 +12,8 @@ use lux_lib::{
     config::{self, Config},
     drivers::InstallPackages,
     lockfile::LockedPackage,
-    lua,
-    operations::{InstallProject, PackageInstallSpec},
+    lua, operations,
+    operations::install,
     package::db::PackageDB,
     pipeline::build_local::Build,
     tree::{self, FlatDistTree, InstallTree},
@@ -148,7 +148,7 @@ async fn install_project(
     };
     let lua_version = project.lua_version(config)?;
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
-    let pkg = InstallProject::new()
+    let pkg = operations::InstallProject::new()
         .project(project)
         .config(config)
         .tree(&tree)
@@ -166,7 +166,7 @@ async fn install_package(
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, config)?;
     let packages = InstallPackages::new(config, &tree)
         .package(
-            PackageInstallSpec::new(package.clone(), tree::EntryType::Entrypoint)
+            install::Spec::new(package.clone(), tree::EntryType::Entrypoint)
                 .build_behaviour(BuildBehaviour::Force)
                 .build(),
         )

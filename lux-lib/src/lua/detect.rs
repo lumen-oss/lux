@@ -17,7 +17,7 @@ pub enum Error {
     ParseVersion(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    PackageVersionParse(#[from] package::version::ParseError),
+    PackageVersionParse(#[from] package::version::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Version(#[from] version::Error),

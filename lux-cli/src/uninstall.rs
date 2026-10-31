@@ -7,8 +7,8 @@ use lux_lib::{
     config::Config,
     drivers::InstallPackages,
     lockfile::LockedPackageId,
-    lua,
-    operations::{self, PackageInstallSpec},
+    lua, operations,
+    operations::install,
     package::db::PackageDB,
     tree::{self, InstallTree, RockMatches},
 };
@@ -137,7 +137,7 @@ Reinstall?
                 .iter()
                 .map(|pkg_id| {
                     let package = unsafe { lockfile.get_unchecked(pkg_id) };
-                    PackageInstallSpec::new(
+                    install::Spec::new(
                         package.clone().into_package_req(),
                         tree::EntryType::DependencyOnly,
                     )

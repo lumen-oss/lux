@@ -2,10 +2,11 @@ use crate::rockspec;
 use std::io;
 use tokio::process::Command;
 
+use super::BuildWorkspace;
 use crate::{
     config::Config,
     lua,
-    operations::{BuildWorkspace, BuildWorkspaceError},
+    operations::build_workspace,
     path::{self, Paths},
     tree::{self, InstallTree},
     workspace::{TreeError, Workspace},
@@ -52,7 +53,7 @@ impl<State> ExecBuilder<'_, State>
 where
     State: exec_builder::State + exec_builder::IsComplete,
 {
-    pub async fn exec(self) -> Result<(), ExecError>
+    pub async fn exec(self) -> Result<(), Error>
     where
         State: exec_builder::IsComplete,
     {
@@ -61,7 +62,7 @@ where
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum ExecError {
+pub enum Error {
     #[error("failed to run {cmd}: {source}")]
     RunCommandFailed {
         cmd: String,
@@ -89,7 +90,7 @@ pub enum ExecError {
     LuaVersionError(#[from] rockspec::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    BuildWorkspace(#[from] Box<BuildWorkspaceError>),
+    BuildWorkspace(#[from] Box<build_workspace::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Command(#[from] Box<command::Error>),
@@ -100,19 +101,19 @@ pub enum ExecError {
     Io(String, io::Error),
 }
 
-impl From<BuildWorkspaceError> for ExecError {
-    fn from(source: BuildWorkspaceError) -> Self {
+impl From<build_workspace::Error> for Error {
+    fn from(source: build_workspace::Error) -> Self {
         Self::BuildWorkspace(Box::new(source))
     }
 }
 
-impl From<command::Error> for ExecError {
+impl From<command::Error> for Error {
     fn from(source: command::Error) -> Self {
         Self::Command(Box::new(source))
     }
 }
 
-async fn exec(run: Exec<'_>) -> Result<(), ExecError> {
+async fn exec(run: Exec<'_>) -> Result<(), Error> {
     let lua_version = run
         .workspace
         .map(|project| project.lua_version(run.config))
@@ -182,7 +183,7 @@ To suppress this warning, set the `--no-loader` option."#
             } else {
                 None
             };
-            Err(ExecError::RunCommandFailed {
+            Err(Error::RunCommandFailed {
                 cmd: run.command.to_string(),
                 source: err,
                 help,
@@ -192,7 +193,7 @@ To suppress this warning, set the `--no-loader` option."#
     if status.success() {
         Ok(())
     } else {
-        Err(ExecError::RunCommandNonZeroExitCode {
+        Err(Error::RunCommandNonZeroExitCode {
             cmd: run.command.to_string(),
             exit_code: status.code(),
         })

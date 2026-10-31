@@ -118,7 +118,7 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{LockConstraint, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{self, LockedPackageSpec, OptState, PinnedState},
         lua,
         rockspec::Rockspec,
         tree::InstallTree,
@@ -157,7 +157,7 @@ build = { type = "test-custom" }
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             Vec::new(),
             Vec::new(),
             &PinnedState::default(),

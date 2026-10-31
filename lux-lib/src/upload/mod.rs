@@ -1,12 +1,11 @@
 use crate::package;
 use std::{env, io};
 
-use crate::operations::SearchAndDownloadError;
+use crate::operations::download;
 use crate::package::db::PackageDB;
 use crate::package::SpecRevIterator;
 use crate::rockspec;
 use crate::rockspec::Rockspec;
-use crate::TOOL_VERSION;
 use crate::{config::Config, project::Project};
 
 use bon::Builder;
@@ -25,6 +24,23 @@ use gpgme::{Context, Data};
 use std::io::Read;
 
 const TFA_TOKEN_HEADER: &str = "X-TFA-Token";
+
+pub mod check;
+
+/// WARNING: This function is unsafe,
+/// because it adds the unmasked API key to the URL.
+/// When using URLs created by this function,
+/// pay attention not to leak the API key in errors.
+pub(crate) unsafe fn url_for_method(
+    server_url: &Url,
+    api_key: &ApiKey,
+    endpoint: &str,
+) -> Result<Url, url::ParseError> {
+    server_url
+        .join("api/1/")?
+        .join(&format!("{}/", api_key.get()))?
+        .join(endpoint)
+}
 
 /// Whether to perform the upload or only report what would be uploaded.
 #[derive(Clone, Copy, Debug, Default)]
@@ -86,65 +102,6 @@ where
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct VersionCheckResponse {
-    version: String,
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum ToolCheckError {
-    #[error("error parsing tool check URL")]
-    #[diagnostic(help("check your server configuration"))]
-    ParseError(#[from] url::ParseError),
-    #[error("error sending HTTP request")]
-    #[diagnostic(help(
-        r#"check your network connection and server configuration.
-if the issue persists, the server may be temporarily unavailable."#
-    ))]
-    Request(#[from] reqwest::Error),
-    #[error(r#"Lux is out of date with {0}'s expected tool version.
-    Lux is at version {TOOL_VERSION}, server is at {server_version}"#, server_version = _1.version)]
-    #[diagnostic(help("ensure you have an up-to-date version of Lux installed"))]
-    ToolOutdated(String, VersionCheckResponse),
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum UserCheckError {
-    #[error("error parsing user check URL")]
-    #[diagnostic(help("check your server configuration"))]
-    Parse(#[from] url::ParseError),
-    #[error(transparent)]
-    #[diagnostic(help(
-        r#"check your network connection and server configuration.
-if the issue persists, the server may be temporarily unavailable."#
-    ))]
-    Request(#[from] reqwest::Error),
-    #[diagnostic(help(
-        "ensure that the API key provided via the $LUX_API_KEY environemnt variable is correct"
-    ))]
-    #[error("invalid API key provided")]
-    UserNotFound,
-    #[error("server '{0}' responded with error status: '{1}'")]
-    #[diagnostic(help("the server may be temporarily unavailable"))]
-    Server(Url, StatusCode),
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum RockCheckError {
-    #[error("parse error while checking rock status on server")]
-    #[diagnostic(help("check your server configuration"))]
-    ParseError(#[from] url::ParseError),
-    #[error("HTTP request error while checking rock status on server")]
-    #[diagnostic(help(
-        r#"check your network connection and server configuration.
-if the issue persists, the server may be temporarily unavailable."#
-    ))]
-    Request(#[from] reqwest::Error),
-}
-
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
@@ -157,7 +114,7 @@ pub enum Error {
         r#"check your network connection and server configuration.
 if the issue persists, the server may be temporarily unavailable."#
     ))]
-    Request(#[from] reqwest::Error),
+    Request(#[from] crate::reqwest::Error),
     #[error("server '{0}' responded with error status: '{1}'")]
     #[diagnostic(help("the server may be temporarily unavailable"))]
     Server(Url, StatusCode),
@@ -168,7 +125,7 @@ if the issue persists, the server may be temporarily unavailable."#
     ))]
     Client(Url, String),
     #[diagnostic(transparent)]
-    RockCheck(#[from] RockCheckError),
+    RockCheck(#[from] check::rock::Error),
     #[error("a package with the same rockspec content already exists on the server: '{0}'")]
     #[diagnostic(help("try uploading a rockspec with a different version"))]
     RockExists(Url),
@@ -185,10 +142,10 @@ if the issue persists, the server may be temporarily unavailable."#
     Signature(#[from] gpgme::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ToolCheck(#[from] ToolCheckError),
+    ToolCheck(#[from] check::tool::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    UserCheck(#[from] UserCheckError),
+    UserCheck(#[from] check::user::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     ApiKeyUnspecified(#[from] ApiKeyUnspecified),
@@ -206,7 +163,7 @@ if the issue persists, the server may be temporarily unavailable."#
     MaxSpecRevsExceeded,
     #[error("rock already exists on server. Error downloading existing rockspec")]
     #[diagnostic(forward(0))]
-    SearchAndDownload(#[from] Box<SearchAndDownloadError>),
+    SearchAndDownload(#[from] Box<download::Error>),
     #[error("error computing rockspec hash")]
     Hash(io::Error),
     #[error("the 2FA code '{0}' was rejected by the server: {1}")]
@@ -214,8 +171,8 @@ if the issue persists, the server may be temporarily unavailable."#
     TfaCodeRejected(String, String),
 }
 
-impl From<SearchAndDownloadError> for Error {
-    fn from(source: SearchAndDownloadError) -> Self {
+impl From<download::Error> for Error {
+    fn from(source: download::Error) -> Self {
         Self::SearchAndDownload(Box::new(source))
     }
 }
@@ -366,8 +323,8 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec
 
     let client = crate::reqwest::https_client(config)?;
 
-    helpers::ensure_tool_version(client, config.server()).await?;
-    helpers::ensure_user_exists(client, &api_key, config.server()).await?;
+    check::tool::ensure_version(client, config.server()).await?;
+    check::user::ensure(client, &api_key, config.server()).await?;
 
     let (rockspec, rockspec_content) =
         helpers::generate_rockspec(project, client, &api_key, config, package_db).await?;
@@ -412,14 +369,14 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
 
     let client = crate::reqwest::https_client(config)?;
 
-    helpers::ensure_tool_version(client, config.server()).await?;
-    helpers::ensure_user_exists(client, &api_key, config.server()).await?;
+    check::tool::ensure_version(client, config.server()).await?;
+    check::user::ensure(client, &api_key, config.server()).await?;
 
     if let package::Version::StringVer(ver) = rockspec.version() {
         return Err(Error::UnsupportedVersion(ver.to_string()));
     }
 
-    if helpers::rock_exists(
+    if check::rock::exists(
         client,
         &api_key,
         rockspec.package(),
@@ -503,7 +460,7 @@ async fn prepare_upload_request(
     };
 
     let mut request = client
-        .post(unsafe { helpers::url_for_method(config.server(), api_key, "upload")? })
+        .post(unsafe { url_for_method(config.server(), api_key, "upload")? })
         .multipart(multipart);
 
     if let Some(code) = tfa_code {
@@ -562,57 +519,13 @@ fn sign_rockspec(
 }
 
 mod helpers {
-    use std::collections::HashMap;
-
     use super::*;
     use crate::hash::HasIntegrity;
-    use crate::operations;
-    use crate::upload::RockCheckError;
-    use crate::upload::{ToolCheckError, UserCheckError};
     use itertools::Itertools;
     use reqwest::Client;
     use rockspec::toml;
     use ssri::Integrity;
     use url::Url;
-
-    /// WARNING: This function is unsafe,
-    /// because it adds the unmasked API key to the URL.
-    /// When using URLs created by this function,
-    /// pay attention not to leak the API key in errors.
-    pub(crate) unsafe fn url_for_method(
-        server_url: &Url,
-        api_key: &ApiKey,
-        endpoint: &str,
-    ) -> Result<Url, url::ParseError> {
-        server_url
-            .join("api/1/")?
-            .join(&format!("{}/", api_key.get()))?
-            .join(endpoint)
-    }
-
-    #[tracing::instrument(level = "trace", skip(client))]
-    pub(crate) async fn ensure_tool_version(
-        client: &Client,
-        server_url: &Url,
-    ) -> Result<(), ToolCheckError> {
-        let url = server_url.join("api/tool_version")?;
-        let response: VersionCheckResponse = client
-            .post(url)
-            .json(&("current", TOOL_VERSION))
-            .send()
-            .await?
-            .json()
-            .await?;
-
-        if response.version == TOOL_VERSION {
-            Ok(())
-        } else {
-            Err(ToolCheckError::ToolOutdated(
-                server_url.to_string(),
-                response,
-            ))
-        }
-    }
 
     #[tracing::instrument(level = "trace", skip(client, api_key))]
     pub(crate) async fn verify_tfa_code(
@@ -641,26 +554,6 @@ mod helpers {
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(client, api_key))]
-    pub(crate) async fn ensure_user_exists(
-        client: &Client,
-        api_key: &ApiKey,
-        server_url: &Url,
-    ) -> Result<(), UserCheckError> {
-        let response = client
-            .get(unsafe { url_for_method(server_url, api_key, "status")? })
-            .send()
-            .await?;
-        let status = response.status();
-        if status.is_client_error() {
-            Err(UserCheckError::UserNotFound)
-        } else if status.is_server_error() {
-            Err(UserCheckError::Server(server_url.clone(), status))
-        } else {
-            Ok(())
-        }
-    }
-
     #[tracing::instrument(level = "trace", skip_all)]
     pub(crate) async fn generate_rockspec(
         project: &Project,
@@ -677,7 +570,7 @@ mod helpers {
             if let package::Version::StringVer(ver) = rockspec.version() {
                 return Err(Error::UnsupportedVersion(ver.to_string()));
             }
-            if helpers::rock_exists(
+            if check::rock::exists(
                 client,
                 api_key,
                 rockspec.package(),
@@ -688,10 +581,9 @@ mod helpers {
             {
                 let package =
                     package::Spec::new(rockspec.package().clone(), rockspec.version().clone());
-                let existing_rockspec =
-                    operations::download_exact_rockspec(&package, package_db, config)
-                        .await?
-                        .rockspec;
+                let existing_rockspec = download::exact_rockspec(&package, package_db, config)
+                    .await?
+                    .rockspec;
                 let existing_rockspec_hash = existing_rockspec.hash().await.map_err(Error::Hash)?;
                 if existing_rockspec_hash
                     .matches(&Integrity::from(&rockspec_content))
@@ -705,38 +597,18 @@ mod helpers {
         }
         Err(Error::MaxSpecRevsExceeded)
     }
+}
 
-    pub(crate) async fn rock_exists(
-        client: &Client,
-        api_key: &ApiKey,
-        name: &package::Name,
-        version: &package::Version,
-        server: &Url,
-    ) -> Result<bool, RockCheckError> {
-        let server_response_raw_json = client
-            .get(unsafe { url_for_method(server, api_key, "check_rockspec")? })
-            .query(&(
-                ("package", name.to_string()),
-                ("version", version.to_string()),
-            ))
-            .send()
-            .await?
-            .error_for_status()?
-            .text()
-            .await?;
-        Ok(rock_exists_in_response(&server_response_raw_json))
-    }
-
-    pub(super) fn rock_exists_in_response(response: &str) -> bool {
-        serde_json::from_str::<HashMap<String, serde_json::Value>>(response).is_ok_and(|response| {
-            let present = |key| response.get(key).is_some_and(|value| !value.is_null());
-            present("module") && present("version")
-        })
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::TOOL_VERSION;
+
     use super::*;
 
     use crate::config;
@@ -787,19 +659,6 @@ mod test {
 "#;
         let result = serde_json::from_str(response_str).unwrap();
         assert!(matches!(result, LuarocksErrorResponse { .. }));
-    }
-
-    #[test]
-    fn test_rock_exists_in_response() {
-        for (response, expected) in [
-            ("{}", false),
-            (r#"{"module":null,"version":null}"#, false),
-            (r#"{"module":{},"version":null}"#, false),
-            (r#"{"module":null,"version":{}}"#, false),
-            (r#"{"module":{},"version":{}}"#, true),
-        ] {
-            assert_eq!(helpers::rock_exists_in_response(response), expected);
-        }
     }
 
     const API_KEY: &str = "test-api-key";
@@ -1074,7 +933,7 @@ type = "builtin"
             .unwrap_err();
         assert!(matches!(
             err,
-            Error::ToolCheck(ToolCheckError::ToolOutdated(..))
+            Error::ToolCheck(check::tool::Error::ToolOutdated(..))
         ));
     }
 
@@ -1091,7 +950,7 @@ type = "builtin"
             .unwrap_err();
         assert!(matches!(
             err,
-            Error::UserCheck(UserCheckError::UserNotFound)
+            Error::UserCheck(check::user::Error::UserNotFound)
         ));
     }
 }

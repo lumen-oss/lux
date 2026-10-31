@@ -10,7 +10,7 @@ use crate::{
     lockfile::{LockedPackage, OptState, PinnedState},
     lua,
     luarocks::installation,
-    operations::PackageInstallSpec,
+    operations::install,
     package::db::PackageDB,
     pipeline::discover::FoundPackage,
     rockspec,
@@ -21,7 +21,7 @@ use crate::{
 #[derive(Debug, Error, Diagnostic)]
 #[error(transparent)]
 #[non_exhaustive]
-pub enum InstallRockspecError {
+pub enum Error {
     #[diagnostic(transparent)]
     LuaInstallation(#[from] lua::installation::Error),
     #[diagnostic(transparent)]
@@ -40,19 +40,19 @@ pub enum InstallRockspecError {
     PackageNotInstalled(package::Name),
 }
 
-impl From<InstallPackagesError> for InstallRockspecError {
+impl From<InstallPackagesError> for Error {
     fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<installation::Error> for InstallRockspecError {
+impl From<installation::Error> for Error {
     fn from(source: installation::Error) -> Self {
         Self::LuaRocks(Box::new(source))
     }
 }
 
-impl From<build::Error> for InstallRockspecError {
+impl From<build::Error> for Error {
     fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
@@ -79,7 +79,7 @@ impl<
         State: install_rockspec_builder::State + install_rockspec_builder::IsComplete,
     > InstallRockspecBuilder<'_, T, State>
 {
-    pub async fn install(self) -> Result<LockedPackage, InstallRockspecError> {
+    pub async fn install(self) -> Result<LockedPackage, Error> {
         let args = self._build();
         let rockspec = args.rockspec;
         let pin = args.pin;
@@ -92,7 +92,7 @@ impl<
         let root = FoundPackage::from_rockspec(rockspec);
         let package_db = PackageDB::from_config(config).await?.with_local(vec![root]);
 
-        let install_spec = PackageInstallSpec::new(
+        let install_spec = install::Spec::new(
             package::Req::from(name.clone()),
             tree::EntryType::Entrypoint,
         )
@@ -109,6 +109,6 @@ impl<
             .0
             .into_iter()
             .find(|package| package.name() == &name)
-            .ok_or(InstallRockspecError::PackageNotInstalled(name))
+            .ok_or(Error::PackageNotInstalled(name))
     }
 }

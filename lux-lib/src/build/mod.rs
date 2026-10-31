@@ -1,7 +1,7 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
 use crate::lockfile::{self, RemotePackageSourceUrl};
-use crate::operations::UnpackError;
+use crate::operations::{fetch, unpack};
 use crate::project;
 use crate::rockspec::Rockspec;
 use crate::tree::{self, EntryType, InstallTree};
@@ -17,9 +17,7 @@ use crate::{
     config::Config,
     hash::HasIntegrity,
     lockfile::{LockedPackage, LockedPackageSpec},
-    lua,
-    operations::FetchSrcError,
-    rockspec,
+    lua, rockspec,
 };
 use external_dependency::ExternalDependencyInfo;
 
@@ -141,10 +139,10 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
     },
     #[error("failed to unpack src.rock")]
     #[diagnostic(forward(0))]
-    UnpackSrcRock(#[source] UnpackError),
+    UnpackSrcRock(#[source] unpack::Error),
     #[error("failed to fetch rock source")]
     #[diagnostic(forward(0))]
-    FetchSrcError(#[from] FetchSrcError),
+    FetchSrc(#[from] fetch::Error),
     #[error("failed to install binary '{file_name}'")]
     InstallBinary {
         file_name: String,
@@ -537,13 +535,13 @@ mod tests {
     use crate::pipeline::build_local::Build;
     use crate::{
         config,
-        lockfile::{LockConstraint, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{self, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
         lua,
         project::Project,
     };
     #[cfg(feature = "impure_tests")]
     use crate::{
-        operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        operations::{self, download},
         tree::Tree,
     };
 
@@ -570,7 +568,7 @@ mod tests {
         let rockspec = project.toml().into_remote(None).unwrap();
         let package = LockedPackage::from(
             &package::Spec::new(rockspec.package().clone(), rockspec.version().clone()),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             LockedPackageHashes {
@@ -660,7 +658,7 @@ deploy = { wrap_bin_scripts = false }
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             Vec::new(),
             Vec::new(),
             &PinnedState::default(),
@@ -790,7 +788,7 @@ build = {
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             Vec::new(),
             Vec::new(),
             &PinnedState::default(),
@@ -852,7 +850,7 @@ build = {
         behaviour: BuildBehaviour,
     ) -> LockedPackage {
         let bytes = luatest_src_rock_bytes();
-        let rock = DownloadedPackedRockBytes {
+        let rock = download::PackedRockBytes {
             name: "luatest".into(),
             version: "0.2-1".parse().unwrap(),
             bytes: bytes.clone(),
@@ -861,7 +859,7 @@ build = {
                 .parse()
                 .unwrap(),
         };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let lua = lua::Installation::new_from_config(config).await.unwrap();
         Build::new()
             .rockspec(&rockspec)

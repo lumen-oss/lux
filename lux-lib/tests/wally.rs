@@ -4,12 +4,7 @@ use std::path::PathBuf;
 
 use assert_fs::{prelude::PathCopy, TempDir};
 use flaky_test::flaky_test;
-use lux_lib::{
-    config, lua,
-    operations::{BuildWorkspace, Run},
-    path::LuaEnvironment,
-    workspace::Workspace,
-};
+use lux_lib::{config, lua, operations, path::LuaEnvironment, workspace::Workspace};
 
 #[flaky_test(tokio, times = 5)]
 async fn test_install_wally_dependency() {
@@ -26,14 +21,14 @@ async fn test_install_wally_dependency() {
         .unwrap();
 
     let workspace = Workspace::from_exact(project.path()).unwrap().unwrap();
-    BuildWorkspace::new(&workspace, &config)
+    operations::BuildWorkspace::new(&workspace, &config)
         .no_lock(false)
         .only_deps(false)
         .build()
         .await
         .unwrap();
 
-    Run::new()
+    operations::Run::new()
         .workspace(&workspace)
         .config(&config)
         .args(&Vec::new())

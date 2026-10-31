@@ -2,7 +2,7 @@ use clap::Args;
 use lux_lib::rockspec;
 use lux_lib::{
     config::Config,
-    operations::{self, VendorTarget},
+    operations::{self, vendor},
     workspace::Workspace,
 };
 use miette::{miette, IntoDiagnostic, Result};
@@ -47,10 +47,10 @@ pub async fn vendor(data: Vendor, config: Config) -> Result<()> {
                     rockspec_path.display()
                 )),
             }?;
-            VendorTarget::Rockspec(rockspec)
+            vendor::Target::Rockspec(rockspec)
         }
         None => match Workspace::current_or_err() {
-            Ok(ws) => VendorTarget::Workspace(ws),
+            Ok(ws) => vendor::Target::Workspace(ws),
             Err(_) => {
                 return Err(miette!(
                     "`lx vendor` must be run in a workspace root or with a rockspec argument."

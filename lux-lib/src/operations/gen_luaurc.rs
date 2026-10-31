@@ -17,7 +17,7 @@ use thiserror::Error;
 const LUAURC: &str = ".luaurc";
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum GenLuauRcError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -46,7 +46,7 @@ where
 {
     /// Generates a .luaurc in the workspace root.
     /// No-op if the specified workspace tree is not a Luau tree.
-    pub async fn generate_luau_rc(self) -> Result<(), GenLuauRcError> {
+    pub async fn generate_luau_rc(self) -> Result<(), Error> {
         do_generate_luau_rc(self._build()).await
     }
 }
@@ -61,7 +61,7 @@ struct LuauRc {
     aliases: BTreeMap<String, String>,
 }
 
-async fn do_generate_luau_rc(args: GenLuauRc<'_>) -> Result<(), GenLuauRcError> {
+async fn do_generate_luau_rc(args: GenLuauRc<'_>) -> Result<(), Error> {
     let workspace = args.workspace;
     let tree = workspace.tree(args.config)?;
     if tree.version() != &lua::Version::Luau {
@@ -108,9 +108,9 @@ async fn do_generate_luau_rc(args: GenLuauRc<'_>) -> Result<(), GenLuauRcError> 
 fn update_luau_rc_content(
     prev_contents: &str,
     aliases: BTreeMap<String, String>,
-) -> Result<String, GenLuauRcError> {
-    let mut luaurc: LuauRc = serde_json::from_str(prev_contents)
-        .map_err(|err| GenLuauRcError::Deserialize(err.to_string()))?;
+) -> Result<String, Error> {
+    let mut luaurc: LuauRc =
+        serde_json::from_str(prev_contents).map_err(|err| Error::Deserialize(err.to_string()))?;
 
     // remove any preexisting lux-managed aliases
     luaurc.aliases.retain(|_, path| {
@@ -122,7 +122,7 @@ fn update_luau_rc_content(
 
     luaurc.aliases.extend(aliases);
 
-    serde_json::to_string_pretty(&luaurc).map_err(|err| GenLuauRcError::Serialize(err.to_string()))
+    serde_json::to_string_pretty(&luaurc).map_err(|err| Error::Serialize(err.to_string()))
 }
 
 #[cfg(test)]

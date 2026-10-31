@@ -1,3 +1,3 @@
-pub use crate::operations::install::spec::PackageInstallSpec;
-
 pub mod spec;
+
+pub use spec::Spec;

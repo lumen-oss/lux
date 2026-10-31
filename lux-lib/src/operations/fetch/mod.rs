@@ -1,14 +1,14 @@
 use crate::config::Config;
+use crate::fs;
 use crate::git;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
 use crate::package;
 use crate::project;
-use crate::reqwest::{RequestBuilderExt, RequestError};
+use crate::reqwest::RequestBuilderExt;
 use crate::rockspec;
 use crate::rockspec::Rockspec;
 use crate::wally;
-use crate::{fs, operations};
 use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
 use git2::build::RepoBuilder;
@@ -24,7 +24,7 @@ use thiserror::Error;
 
 mod src_rock;
 
-use super::UnpackError;
+use crate::operations::unpack;
 
 /// A rocks package source fetcher, providing fine-grained control
 /// over how a package should be fetched.
@@ -74,14 +74,14 @@ where
     State: fetch_src_builder::State + fetch_src_builder::IsComplete,
 {
     /// Fetch and unpack the source into the `dest_dir`.
-    pub async fn fetch(self) -> Result<(), FetchSrcError> {
+    pub async fn fetch(self) -> Result<(), Error> {
         self.fetch_internal().await?;
         Ok(())
     }
 
     /// Fetch and unpack the source into the `dest_dir`,
     /// returning the source `Integrity`.
-    pub(crate) async fn fetch_internal(self) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
+    pub(crate) async fn fetch_internal(self) -> Result<RemotePackageSourceMetadata, Error> {
         let fetch = self._build();
         let rockspec = fetch.rockspec;
         let rock_source = rockspec.source().current_platform();
@@ -136,7 +136,7 @@ where
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum FetchSrcError {
+pub enum Error {
     #[error("failed to clone rock source")]
     #[diagnostic(help("check your network connection and verify the git URL is correct."))]
     GitClone(#[from] git2::Error),
@@ -148,10 +148,10 @@ pub enum FetchSrcError {
     GitUrlParse(#[from] git::url::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Request(#[from] RequestError),
+    Request(#[from] crate::reqwest::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Unpack(#[from] UnpackError),
+    Unpack(#[from] unpack::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     SrcRock(#[from] src_rock::Error),
@@ -171,12 +171,6 @@ pub enum FetchSrcError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
-}
-
-impl From<reqwest::Error> for FetchSrcError {
-    fn from(err: reqwest::Error) -> Self {
-        Self::Request(err.into())
-    }
 }
 
 /// A no-prompt implementer for auth_git2's prompter
@@ -203,7 +197,7 @@ fn init_submodules(
     repo: &git2::Repository,
     auth: &GitAuthenticator,
     git_config: &git2::Config,
-) -> Result<Vec<PathBuf>, FetchSrcError> {
+) -> Result<Vec<PathBuf>, Error> {
     let workdir = repo
         .workdir()
         .ok_or_else(|| git2::Error::from_str("cloned repository has no working directory"))?;
@@ -240,7 +234,7 @@ async fn fetch_src_impl<R: Rockspec>(
     rock_source: &rockspec::source::Remote,
     dest_dir: &Path,
     config: &Config,
-) -> Result<RemotePackageSourceMetadata, FetchSrcError> {
+) -> Result<RemotePackageSourceMetadata, Error> {
     if let Some(vendor_dir) = config.vendor_dir() {
         source_spec = match source_spec {
             // could be a project directory (not vendored) or a local source
@@ -317,13 +311,13 @@ async fn fetch_src_impl<R: Rockspec>(
 
                 let submodule_paths = init_submodules(&repo, &auth, &git_config)?;
 
-                Ok::<_, FetchSrcError>((checkout_ref, !submodule_paths.is_empty()))
+                Ok::<_, Error>((checkout_ref, !submodule_paths.is_empty()))
             })
             .await??;
 
             // The .git directory is not deterministic
-            remove_dir_all(dest_dir.join(".git")).map_err(FetchSrcError::CleanGitDir)?;
-            let hash = dest_dir.hash().await.map_err(FetchSrcError::Hash)?;
+            remove_dir_all(dest_dir.join(".git")).map_err(Error::CleanGitDir)?;
+            let hash = dest_dir.hash().await.map_err(Error::Hash)?;
             RemotePackageSourceMetadata {
                 hash,
                 source_url: RemotePackageSourceUrl::Git {
@@ -343,7 +337,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 .apply_access_token(config, url);
             let request = wally::apply_content_headers(request, url);
             let response = request.send().await?.error_for_status()?.bytes().await?;
-            let hash = response.hash().await.map_err(FetchSrcError::Hash)?;
+            let hash = response.hash().await.map_err(Error::Hash)?;
             let file_name = url
                 .path_segments()
                 .and_then(|mut segments| segments.next_back())
@@ -357,7 +351,7 @@ async fn fetch_src_impl<R: Rockspec>(
                 .unwrap_or(url.to_string());
             let cursor = Cursor::new(response);
             let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
-            operations::unpack::unpack(
+            unpack::extract(
                 mime_type,
                 cursor,
                 rock_source.unpack_dir.is_none(),
@@ -371,13 +365,13 @@ async fn fetch_src_impl<R: Rockspec>(
             }
         }
         rockspec::source::Spec::Wally(_) => {
-            return Err(FetchSrcError::WallySource(rockspec.package().to_string()))
+            return Err(Error::WallySource(rockspec.package().to_string()))
         }
         rockspec::source::Spec::File(path) => {
             tracing::debug!(message = format!("Copying {}", path.display()).as_str());
 
             let hash = if path.is_dir() {
-                let hash = path.hash().await.map_err(FetchSrcError::Hash)?;
+                let hash = path.hash().await.map_err(Error::Hash)?;
                 project::copy_dir(path, dest_dir).await?;
                 hash
             } else {
@@ -394,7 +388,7 @@ async fn fetch_src_impl<R: Rockspec>(
                     .map(|os_str| os_str.to_string_lossy())
                     .unwrap_or(path.to_string_lossy())
                     .to_string();
-                operations::unpack::unpack(
+                unpack::extract(
                     mime_type,
                     file,
                     rock_source.unpack_dir.is_none(),
@@ -402,7 +396,7 @@ async fn fetch_src_impl<R: Rockspec>(
                     dest_dir,
                 )
                 .await?;
-                path.hash().await.map_err(FetchSrcError::Hash)?
+                path.hash().await.map_err(Error::Hash)?
             };
             RemotePackageSourceMetadata {
                 hash,
@@ -411,4 +405,10 @@ async fn fetch_src_impl<R: Rockspec>(
         }
     };
     Ok(metadata)
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
 }

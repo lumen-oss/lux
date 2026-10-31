@@ -4,6 +4,7 @@ use std::{
     process::Stdio,
 };
 
+use super::InstallProject;
 use bon::Builder;
 use itertools::Itertools;
 use thiserror::Error;
@@ -13,7 +14,7 @@ use crate::rockspec;
 use crate::{
     config::Config,
     fs, lua,
-    operations::{InstallProject, InstallProjectError},
+    operations::install_project,
     project::Project,
     rockspec::Rockspec,
     target::c_dylib_extension,
@@ -30,7 +31,7 @@ use crate::{
 /// Based on [luastatic](https://github.com/ers35/luastatic)
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct DistProjectBin<'a, T>
+pub struct ProjectBin<'a, T>
 where
     T: InstallTree,
 {
@@ -50,10 +51,10 @@ where
 use miette::Diagnostic;
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum DistProjectBinError {
+pub enum Error {
     #[error("error installing project")]
     #[diagnostic(forward(0))]
-    InstallProject(#[from] Box<InstallProjectError>),
+    InstallProject(#[from] Box<install_project::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     LocalProjectTomlValidation(#[from] rockspec::toml::Error),
@@ -85,18 +86,18 @@ Cannot link the following binaries:
     },
 }
 
-impl From<InstallProjectError> for DistProjectBinError {
-    fn from(source: InstallProjectError) -> Self {
+impl From<install_project::Error> for Error {
+    fn from(source: install_project::Error) -> Self {
         Self::InstallProject(Box::new(source))
     }
 }
 
-impl<T, State> DistProjectBinBuilder<'_, T, State>
+impl<T, State> ProjectBinBuilder<'_, T, State>
 where
     T: InstallTree + Sync + Send + Clone + 'static,
-    State: dist_project_bin_builder::State + dist_project_bin_builder::IsComplete,
+    State: project_bin_builder::State + project_bin_builder::IsComplete,
 {
-    pub async fn compile(self) -> Result<PathBuf, DistProjectBinError> {
+    pub async fn compile(self) -> Result<PathBuf, Error> {
         do_dist_project_bin(self._build()).await
     }
 }
@@ -112,7 +113,7 @@ struct InstalledFiles {
 
 #[tracing::instrument(name = "Distributing binary", skip_all)]
 
-async fn do_dist_project_bin<T>(args: DistProjectBin<'_, T>) -> Result<PathBuf, DistProjectBinError>
+async fn do_dist_project_bin<T>(args: ProjectBin<'_, T>) -> Result<PathBuf, Error>
 where
     T: InstallTree + Sync + Send + Clone + 'static,
 {
@@ -166,7 +167,7 @@ where
 }
 
 #[allow(clippy::result_large_err)]
-fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, DistProjectBinError> {
+fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Error> {
     let mut lua_sources = Vec::new();
     let mut native_modules = Vec::new();
     let c_dylib_ext = c_dylib_extension();
@@ -205,7 +206,7 @@ fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Di
     }
     #[cfg(not(target_os = "linux"))]
     if !native_modules.is_empty() {
-        return Err(DistProjectBinError::CannotLinkBinaryLibs(
+        return Err(Error::CannotLinkBinaryLibs(
             native_modules
                 .iter()
                 .unique()
@@ -327,7 +328,7 @@ async fn compile_binary(
     native_modules: &[PathBuf],
     work_dir: &tempfile::TempDir,
     config: &Config,
-) -> Result<(), DistProjectBinError> {
+) -> Result<(), Error> {
     let mut build = cc::Build::new();
     let host = target_lexicon::Triple::host().to_string();
 
@@ -410,7 +411,7 @@ async fn compile_binary(
         .await?;
 
     if !out.status.success() {
-        return Err(DistProjectBinError::CompilationFailed {
+        return Err(Error::CompilationFailed {
             status: out.status,
             stdout: String::from_utf8_lossy(&out.stdout).into(),
             stderr: String::from_utf8_lossy(&out.stderr).into(),
@@ -555,7 +556,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
-        lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
+        lockfile::{self, LockedPackage, LockedPackageHashes},
     };
 
     #[cfg(target_os = "linux")]
@@ -570,7 +571,7 @@ mod tests {
         };
         LockedPackage::from(
             &spec,
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             hashes,
@@ -729,7 +730,7 @@ mod tests {
             "sample-project"
         });
 
-        DistProjectBin::new()
+        ProjectBin::new()
             .project(&project)
             .config(&config)
             .tree(&tree)

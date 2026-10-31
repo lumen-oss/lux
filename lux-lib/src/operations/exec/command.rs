@@ -3,7 +3,7 @@ use crate::{
     config::Config,
     drivers::{InstallPackages, InstallPackagesError},
     lua,
-    operations::PackageInstallSpec,
+    operations::install,
     package,
     package::db::PackageDB,
     tree::{self, InstallTree},
@@ -39,7 +39,7 @@ pub(super) async fn install(command: &str, config: &Config) -> Result<(), Error>
     {
         return Ok(());
     }
-    let install_spec = PackageInstallSpec::new(package, tree::EntryType::Entrypoint)
+    let install_spec = install::Spec::new(package, tree::EntryType::Entrypoint)
         .build_behaviour(BuildBehaviour::Force)
         .build();
     InstallPackages::new(config, &tree)

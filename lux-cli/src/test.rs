@@ -2,7 +2,7 @@ use clap::Args;
 use lux_lib::package;
 use lux_lib::{
     config::Config,
-    operations::{self, TestEnv},
+    operations::{self, test},
     workspace::Workspace,
 };
 use miette::Result;
@@ -29,9 +29,9 @@ pub async fn test(test: Test, config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
     let test_args = test.test_args.unwrap_or_default();
     let test_env = if test.impure {
-        TestEnv::Impure
+        test::Env::Impure
     } else {
-        TestEnv::Pure
+        test::Env::Pure
     };
     operations::Test::new(workspace, &config)
         .args(test_args)

@@ -1,16 +1,15 @@
-use crate::package;
 use bon::Builder;
 
 use crate::{
     build::BuildBehaviour,
-    lockfile::{LockConstraint, OptState, PinnedState},
-    rockspec, tree,
+    lockfile::{self, OptState, PinnedState},
+    package, rockspec, tree,
 };
 
 /// Specifies how to install a package
 #[derive(Debug, Builder, PartialEq, Eq, Hash, Clone)]
 #[builder(start_fn = new, finish_fn(name = build, vis = "pub"))]
-pub struct PackageInstallSpec {
+pub struct Spec {
     #[builder(start_fn)]
     pub(crate) package: package::Req,
     #[builder(start_fn)]
@@ -23,5 +22,5 @@ pub struct PackageInstallSpec {
     pub(crate) source: Option<rockspec::source::Spec>,
     /// Optional constraint, carried over from a previous install,
     /// e.g. defined in a lockfile.
-    pub(crate) constraint: Option<LockConstraint>,
+    pub(crate) constraint: Option<lockfile::Constraint>,
 }

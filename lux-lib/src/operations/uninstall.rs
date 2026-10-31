@@ -13,7 +13,7 @@ use thiserror::Error;
 use tracing::Instrument;
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
-pub enum RemoveError {
+pub enum Error {
     #[diagnostic(transparent)]
     LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
@@ -62,7 +62,7 @@ where
     State: uninstall_builder::State + uninstall_builder::IsComplete,
 {
     /// Remove the packages.
-    pub async fn remove(self) -> Result<Vec<LockedPackageId>, RemoveError> {
+    pub async fn remove(self) -> Result<Vec<LockedPackageId>, Error> {
         let args = self._build();
         let tree = args.tree.unwrap_or(
             args.config
@@ -77,7 +77,7 @@ async fn remove(
     package_ids: Vec<LockedPackageId>,
     tree: Tree,
     config: &Config,
-) -> Result<Vec<LockedPackageId>, RemoveError> {
+) -> Result<Vec<LockedPackageId>, Error> {
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids
@@ -124,7 +124,7 @@ async fn remove_package(
     package: LockedPackage,
     tree: Tree,
     entry_type: EntryType,
-) -> Result<(), RemoveError> {
+) -> Result<(), Error> {
     tree.cleanup(&package, entry_type)?;
     Ok(())
 }

@@ -1,11 +1,7 @@
 use std::{fs::File, io::Read, path::PathBuf};
 
 use assert_fs::{prelude::PathCopy, TempDir};
-use lux_lib::{
-    config, lua,
-    operations::{BuildWorkspace, Pack},
-    workspace::Workspace,
-};
+use lux_lib::{config, lua, operations, workspace::Workspace};
 use mlua::Lua;
 use zip::ZipArchive;
 
@@ -60,7 +56,7 @@ url = "https://github.com/lumen-oss/luarocks-stub"
     let temp_dir = TempDir::new().unwrap();
     let dest_dir = temp_dir.to_path_buf();
 
-    let package = BuildWorkspace::new(&workspace, &config)
+    let package = operations::BuildWorkspace::new(&workspace, &config)
         .no_lock(false)
         .only_deps(false)
         .build()
@@ -69,7 +65,10 @@ url = "https://github.com/lumen-oss/luarocks-stub"
         .first()
         .cloned()
         .unwrap();
-    let archive_path = Pack::new(dest_dir, tree, package).pack().await.unwrap();
+    let archive_path = operations::Pack::new(dest_dir, tree, package)
+        .pack()
+        .await
+        .unwrap();
     let archive_file = File::open(&archive_path).unwrap();
     let mut archive = ZipArchive::new(archive_file).unwrap();
     let mut rock_manifest_entry = archive.by_name("rock_manifest").unwrap();

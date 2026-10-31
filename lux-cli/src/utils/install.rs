@@ -6,7 +6,7 @@ use lux_lib::{
     build::BuildBehaviour,
     config::Config,
     lockfile::{OptState, PinnedState},
-    operations::install::PackageInstallSpec,
+    operations::install,
     tree::{self, InstallTree, Tree},
 };
 use miette::Result;
@@ -17,7 +17,7 @@ pub fn apply_build_behaviour(
     force: bool,
     tree: &Tree,
     config: &Config,
-) -> Result<Vec<PackageInstallSpec>> {
+) -> Result<Vec<install::Spec>> {
     let lockfile = tree.lockfile()?;
     Ok(package_reqs
         .into_iter()
@@ -43,7 +43,7 @@ pub fn apply_build_behaviour(
                 None => Some(BuildBehaviour::Force),
             };
             build_behaviour.map(|build_behaviour| {
-                PackageInstallSpec::new(req, tree::EntryType::Entrypoint)
+                install::Spec::new(req, tree::EntryType::Entrypoint)
                     .build_behaviour(build_behaviour)
                     .pin(pin)
                     .opt(OptState::Required)

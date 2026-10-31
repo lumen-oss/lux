@@ -6,7 +6,7 @@ use crate::{
     build::{self, BuildBehaviour, Deploy, RemotePackageSourceSpec},
     config::Config,
     hash::HasIntegrity,
-    lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
+    lockfile::{self, LockedPackage, LockedPackageSpec, OptState, PinnedState},
     lua,
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{EntryType, InstallTree},
@@ -30,7 +30,7 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     #[builder(default)]
     opt: OptState,
     #[builder(default)]
-    constraint: LockConstraint,
+    constraint: lockfile::Constraint,
     behaviour: BuildBehaviour,
 
     #[builder(setters(vis = "pub(crate)"))]

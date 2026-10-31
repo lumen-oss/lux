@@ -210,7 +210,7 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
+        lockfile::{self, LockedPackage, LockedPackageHashes},
         lua,
         tree::{EntryType, InstallTree, NvimLayout, RojoLayout},
     };
@@ -245,7 +245,7 @@ mod tests {
     fn sample_package() -> LockedPackage {
         LockedPackage::from(
             &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             mock_hashes(),

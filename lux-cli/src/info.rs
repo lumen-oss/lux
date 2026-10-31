@@ -1,6 +1,6 @@
 use clap::Args;
 use lux_lib::package;
-use lux_lib::{config::Config, operations::Download, rockspec::Rockspec, tree::InstallTree};
+use lux_lib::{config::Config, operations, rockspec::Rockspec, tree::InstallTree};
 
 use miette::Result;
 
@@ -14,7 +14,7 @@ pub struct Info {
 pub async fn info(data: Info, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
 
-    let rockspec = Download::new(&data.package, &config)
+    let rockspec = operations::Download::new(&data.package, &config)
         .download_rockspec()
         .await?
         .rockspec;

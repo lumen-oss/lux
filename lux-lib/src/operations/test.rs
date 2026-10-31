@@ -45,7 +45,7 @@ pub struct Test<'a> {
     no_lock: Option<bool>,
 
     #[builder(default)]
-    env: TestEnv,
+    env: Env,
 }
 
 impl<State: test_builder::State> TestBuilder<'_, State> {
@@ -59,7 +59,7 @@ impl<State: test_builder::State> TestBuilder<'_, State> {
         self
     }
 
-    pub async fn run(self) -> Result<(), RunTestsError>
+    pub async fn run(self) -> Result<(), Error>
     where
         State: test_builder::IsComplete,
     {
@@ -68,7 +68,7 @@ impl<State: test_builder::State> TestBuilder<'_, State> {
 }
 
 #[derive(Default)]
-pub enum TestEnv {
+pub enum Env {
     /// An environment that is isolated from `HOME` and `XDG` base directories (default).
     #[default]
     Pure,
@@ -78,7 +78,7 @@ pub enum TestEnv {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum RunTestsError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] config::Error),
@@ -124,13 +124,13 @@ pub enum RunTestsError {
     LuaBinary(#[from] lua::installation::Error),
     #[error("failed to set up tiniest")]
     #[diagnostic(forward(0))]
-    Tiniest(#[from] tiniest::TiniestError),
+    Tiniest(#[from] tiniest::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    RunLua(#[from] super::run_lua::RunLuaError),
+    RunLua(#[from] super::run_lua::Error),
 }
 
-impl From<sync::Error> for RunTestsError {
+impl From<sync::Error> for Error {
     fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
@@ -138,7 +138,7 @@ impl From<sync::Error> for RunTestsError {
 
 #[tracing::instrument(name = "🧪 Running tests", skip_all)]
 
-async fn run_tests(test: Test<'_>) -> Result<(), RunTestsError> {
+async fn run_tests(test: Test<'_>) -> Result<(), Error> {
     let workspace = test.workspace;
     let config = test.config;
     let no_lock = test.no_lock.unwrap_or(false);
@@ -165,9 +165,9 @@ async fn run_project_tests(
     project: &Project,
     no_lock: bool,
     test_args: &[String],
-    test_env: &TestEnv,
+    test_env: &Env,
     config: &Config,
-) -> Result<(), RunTestsError> {
+) -> Result<(), Error> {
     let rocks = project.toml().into_local()?;
     let test_spec = match rocks.test().current_platform().to_validated(project) {
         Ok(test_spec) => test_spec,
@@ -219,7 +219,7 @@ async fn run_project_tests(
         rockspec::test::internal::Validated::Tiniest
         | rockspec::test::internal::Validated::LuaScript(_) => {
             let runtime =
-                super::run_lua::resolve_lua_runtime(&lua_version.clone(), &test_config).await?;
+                super::run_lua::resolve_runtime(&lua_version.clone(), &test_config).await?;
             runtime.to_string_lossy().to_string()
         }
     };
@@ -246,7 +246,7 @@ async fn run_project_tests(
             .arg("--directory")
             .arg(directory.to_slash_lossy().to_string());
     }
-    if let TestEnv::Pure = test_env {
+    if let Env::Pure = test_env {
         // isolate the test runner from the user's own config/data files
         // by initialising empty HOME and XDG base directory paths
         let home = test_tree.root().join("home");
@@ -275,7 +275,7 @@ async fn run_project_tests(
             } else {
                 None
             };
-            Err(RunTestsError::RunCommandFailure {
+            Err(Error::RunCommandFailure {
                 cmd: test_executable,
                 source: err,
                 help,
@@ -283,7 +283,7 @@ async fn run_project_tests(
         }
     }?;
     if !status.success() {
-        Err(RunTestsError::TestFailure)
+        Err(Error::TestFailure)
     } else {
         Ok(())
     }

@@ -10,6 +10,7 @@ use crate::{
         WorkspaceLockfile,
     },
     lua,
+    operations::install,
     package::db::PackageDB,
     package::RockConstraintUnsatisfied,
     tree::{self, InstallTree, Tree},
@@ -20,13 +21,13 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use super::{PackageInstallSpec, RemoveError, Uninstall};
+use crate::operations::uninstall::{self, Uninstall};
 
 use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
 use crate::drivers::{InstallPackages, InstallPackagesError};
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum UpdateError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     RockConstraintUnsatisfied(#[from] RockConstraintUnsatisfied),
@@ -35,7 +36,7 @@ pub enum UpdateError {
     Install(#[from] Box<InstallPackagesError>),
     #[error("failed to remove old rock")]
     #[diagnostic(forward(0))]
-    Remove(#[from] RemoveError),
+    Remove(#[from] uninstall::Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     PackageDB(#[from] package::db::Error),
@@ -58,13 +59,13 @@ pub enum UpdateError {
     Sync(#[from] Box<sync::Error>),
 }
 
-impl From<InstallPackagesError> for UpdateError {
+impl From<InstallPackagesError> for Error {
     fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<sync::Error> for UpdateError {
+impl From<sync::Error> for Error {
     fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
@@ -118,7 +119,7 @@ impl<State: update_builder::State> UpdateBuilder<'_, State> {
 
 impl<State: update_builder::State> UpdateBuilder<'_, State> {
     #[tracing::instrument(name = "Updating packages", skip_all)]
-    pub async fn update(self) -> Result<Vec<LockedPackage>, UpdateError>
+    pub async fn update(self) -> Result<Vec<LockedPackage>, Error>
     where
         State: update_builder::IsComplete,
     {
@@ -156,7 +157,7 @@ async fn update_workspace(
     workspace: Workspace,
     args: Update<'_>,
     package_db: PackageDB,
-) -> Result<Vec<LockedPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, Error> {
     let tree = workspace.tree(args.config)?;
 
     let sync_report = Sync::new(&workspace, args.config)
@@ -218,7 +219,7 @@ async fn update_dependency_tree(
     package_db: PackageDB,
     config: &Config,
     packages: &Option<Vec<package::Req>>,
-) -> Result<Vec<LockedPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, Error> {
     let lockfile = tree.lockfile()?;
     let dependencies = updatable_packages(&lockfile)
         .into_iter()
@@ -247,7 +248,7 @@ fn is_included(
 async fn update_install_tree(
     args: Update<'_>,
     package_db: PackageDB,
-) -> Result<Vec<LockedPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, Error> {
     let tree = args
         .config
         .user_tree(lua::Version::from(args.config)?.clone())?;
@@ -265,7 +266,7 @@ async fn update(
     tree: &Tree,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
-) -> Result<Vec<LockedPackage>, UpdateError> {
+) -> Result<Vec<LockedPackage>, Error> {
     let mut updatable = Vec::new();
     for (package, constraint) in packages.clone() {
         match package
@@ -326,13 +327,13 @@ fn updatable_packages(lockfile: &Lockfile<ReadOnly>) -> Vec<(LockedPackage, pack
 fn mk_install_spec(
     (package, req): &(LockedPackage, package::Req),
     lockfile: &Lockfile<ReadOnly>,
-) -> PackageInstallSpec {
+) -> install::Spec {
     let entry_type = if lockfile.is_entrypoint(&package.id()) {
         tree::EntryType::Entrypoint
     } else {
         tree::EntryType::DependencyOnly
     };
-    PackageInstallSpec::new(req.clone(), entry_type)
+    install::Spec::new(req.clone(), entry_type)
         .build_behaviour(BuildBehaviour::Force)
         .pin(PinnedState::Unpinned)
         .opt(package.opt())

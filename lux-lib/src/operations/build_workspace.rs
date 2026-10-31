@@ -12,13 +12,13 @@ use tracing::{info_span, Instrument};
 
 #[derive(Debug, Error, miette::Diagnostic)]
 #[non_exhaustive]
-pub enum BuildWorkspaceError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Sync(Box<sync::Error>),
 }
 
-impl From<sync::Error> for BuildWorkspaceError {
+impl From<sync::Error> for Error {
     fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
@@ -49,7 +49,7 @@ pub struct BuildWorkspace<'a> {
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>
     BuildWorkspaceBuilder<'_, State>
 {
-    pub async fn build(self) -> Result<Vec<LockedPackage>, BuildWorkspaceError> {
+    pub async fn build(self) -> Result<Vec<LockedPackage>, Error> {
         let build = self._build();
         let span = match &build.package {
             Some(package) => info_span!("Building workspace", package = package.to_string()),

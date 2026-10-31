@@ -10,7 +10,7 @@ use lux_lib::{
     config::Config,
     drivers::InstallPackages,
     lua,
-    operations::{self, PackageInstallSpec},
+    operations::{self, install},
     package::db::PackageDB,
     pipeline::build_local::Build,
     rockspec::Rockspec as _,
@@ -123,7 +123,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let tree = temp_config.user_tree(lua_version.clone())?;
                     let packages = InstallPackages::new(&temp_config, &tree)
                         .package(
-                            PackageInstallSpec::new(package_req, tree::EntryType::Entrypoint)
+                            install::Spec::new(package_req, tree::EntryType::Entrypoint)
                                 .build_behaviour(BuildBehaviour::Force)
                                 .build(),
                         )

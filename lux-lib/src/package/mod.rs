@@ -1,62 +1,27 @@
+use std::fmt::Display;
+
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use crate::rockspec;
-use crate::{
-    rockspec::lua_dependency,
-    variables::{GetVariableError, HasVariables},
-};
-use miette::Diagnostic;
-use serde::{de, Deserialize, Deserializer, Serialize};
-use std::{fmt::Display, str::FromStr};
-use thiserror::Error;
+use crate::rockspec::lua_dependency;
+
 pub mod db;
 mod outdated;
+pub mod req;
+pub mod spec;
 pub mod version;
 
 pub use outdated::*;
+pub use req::Req;
+pub use spec::Spec;
 pub use version::{Version, VersionReq};
-
-use version::{HasModRev, ParseError, ReqError, ReqToVersionError};
 
 pub(crate) use version::SpecRevIterator;
 
-/// A lua package requirement with a name and an optional version requirement.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "clap", derive(clap::Args))]
-pub struct Req {
-    /// The name of the package.
-    pub(crate) name: Name,
-    /// The version requirement, for example "1.0.0" or ">=1.0.0".
-    pub(crate) version_req: VersionReq,
-}
-
-impl Display for Req {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.version_req.is_any() {
-            self.name.fmt(f)
-        } else {
-            f.write_str(format!("{}{}", self.name, self.version_req).as_str())
-        }
-    }
-}
-
-impl From<Spec> for Req {
-    fn from(value: Spec) -> Self {
-        value.into_package_req()
-    }
-}
-
-impl From<Name> for Req {
-    fn from(name: Name) -> Self {
-        Self {
-            name,
-            version_req: VersionReq::any(),
-        }
-    }
-}
-
 /// Wrapper structs for proper serialization of various dependency types.
 pub(crate) struct Dependencies<'a>(pub(crate) &'a Vec<lua_dependency::Spec>);
+
 pub(crate) struct BuildDependencies<'a>(pub(crate) &'a Vec<lua_dependency::Spec>);
 
 impl rockspec::display::AsLuaKV for Dependencies<'_> {
@@ -84,93 +49,6 @@ impl rockspec::display::AsLuaKV for BuildDependencies<'_> {
                     .collect(),
             ),
         }
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-pub enum ReqParseError {
-    #[error("could not parse dependency name from '{0}'")]
-    InvalidDependencyName(String),
-    #[error("could not parse version requirement in '{str}': {error}")]
-    InvalidPackageVersionReq {
-        #[source]
-        error: ReqError,
-        str: String,
-    },
-}
-
-impl FromStr for Req {
-    type Err = ReqParseError;
-
-    fn from_str(str: &str) -> Result<Self, ReqParseError> {
-        let rock_name_str = str
-            .chars()
-            .peeking_take_while(|t| t.is_alphanumeric() || matches!(t, '-' | '_' | '.'))
-            .collect::<String>();
-
-        if rock_name_str.is_empty() {
-            return Err(ReqParseError::InvalidDependencyName(str.to_string()));
-        }
-
-        let constraints = str.trim_start_matches(&rock_name_str).trim();
-        let version_req = match constraints {
-            "" => VersionReq::any(),
-            constraints => VersionReq::parse(constraints.trim_start()).map_err(|error| {
-                ReqParseError::InvalidPackageVersionReq {
-                    error,
-                    str: str.to_string(),
-                }
-            })?,
-        };
-        Ok(Self {
-            name: Name::new(rock_name_str),
-            version_req,
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for Req {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Self::from_str(&s).map_err(de::Error::custom)
-    }
-}
-
-impl Req {
-    pub fn new(name: String, version: Option<String>) -> Result<Self, ReqError> {
-        let version_req = match version {
-            Some(version_req_str) => VersionReq::parse(version_req_str.as_str())?,
-            None => VersionReq::any(),
-        };
-        Ok(Self {
-            name: Name::new(name),
-            version_req,
-        })
-    }
-
-    /// # Safety
-    ///
-    /// Call this only if you are absolutely sure that a `Req` can be parsed from the arguments.
-    /// Calling this with invalid arguments is undefined behaviour.
-    pub unsafe fn new_unchecked(name: String, version: Option<String>) -> Self {
-        Self::new(name, version).unwrap_unchecked()
-    }
-
-    pub fn parse(pkg_constraints: &str) -> Result<Self, ReqParseError> {
-        Self::from_str(pkg_constraints)
-    }
-    pub fn name(&self) -> &Name {
-        &self.name
-    }
-    pub fn version_req(&self) -> &VersionReq {
-        &self.version_req
-    }
-    /// Evaluate whether the given package satisfies the package requirement given by `self`.
-    pub fn matches(&self, package: &Spec) -> bool {
-        self.name() == package.name() && self.version_req.matches(package.version())
     }
 }
 
@@ -228,78 +106,6 @@ impl List {
 impl Display for List {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.iter().map(|pkg| pkg.to_string()).join(", ").as_str())
-    }
-}
-
-#[derive(Debug, Error, Diagnostic)]
-pub enum SpecFromReqError {
-    #[error("invalid version for rock {rock}: {err}")]
-    Version { rock: Name, err: ReqToVersionError },
-}
-
-/// Specification for a package with an exact name and version
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "clap", derive(clap::Args))]
-pub struct Spec {
-    name: Name,
-    version: Version,
-}
-
-impl Spec {
-    pub fn new(name: Name, version: Version) -> Self {
-        Self { name, version }
-    }
-    pub fn parse(name: String, version: String) -> Result<Self, ParseError> {
-        Ok(Self::new(Name::new(name), Version::parse(&version)?))
-    }
-    pub fn name(&self) -> &Name {
-        &self.name
-    }
-    pub fn version(&self) -> &Version {
-        &self.version
-    }
-    /// Note that the version requirement loses the specrev information.
-    pub fn into_package_req(self) -> Req {
-        Req {
-            name: self.name,
-            version_req: self.version.into_version_req(),
-        }
-    }
-}
-
-impl TryFrom<Req> for Spec {
-    type Error = SpecFromReqError;
-
-    fn try_from(value: Req) -> Result<Self, Self::Error> {
-        let name = value.name;
-        let version = value
-            .version_req
-            .try_into()
-            .map_err(|err| SpecFromReqError::Version {
-                rock: name.clone(),
-                err,
-            })?;
-        Ok(Self { name, version })
-    }
-}
-
-impl<'de> Deserialize<'de> for Spec {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let (name, version) = <_>::deserialize(deserializer)?;
-        Self::parse(name, version).map_err(serde::de::Error::custom)
-    }
-}
-
-impl HasVariables for Spec {
-    fn get_variable(&self, input: &str) -> Result<Option<String>, GetVariableError> {
-        Ok(match input {
-            "PACKAGE" => Some(self.name.to_string()),
-            "VERSION" => Some(self.version.to_modrev_string()),
-            _ => None,
-        })
     }
 }
 

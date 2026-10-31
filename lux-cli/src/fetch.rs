@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lux_lib::{config::Config, operations::Download, rockspec::Rockspec};
+use lux_lib::{config::Config, operations, rockspec::Rockspec};
 
 use miette::Result;
 
@@ -9,7 +9,7 @@ use crate::unpack::UnpackRemote;
 pub async fn fetch_remote(data: UnpackRemote, config: Config) -> Result<()> {
     let package_req = data.package_req;
 
-    let rockspec = Download::new(&package_req, &config)
+    let rockspec = operations::Download::new(&package_req, &config)
         .download_rockspec()
         .await?
         .rockspec;

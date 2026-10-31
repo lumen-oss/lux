@@ -11,7 +11,7 @@ use crate::{
     fs,
     hash::HasIntegrity,
     lua,
-    operations::{self, UnpackError},
+    operations::unpack,
 };
 use bon::Builder;
 use git2::{build::RepoBuilder, FetchOptions};
@@ -48,9 +48,9 @@ pub struct BuildLua<'a> {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum BuildLuaError {
+pub enum Error {
     #[error(transparent)]
-    Request(#[from] reqwest::Error),
+    Request(#[from] crate::reqwest::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -58,7 +58,7 @@ pub enum BuildLuaError {
     Fs(#[from] fs::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Unpack(#[from] UnpackError),
+    Unpack(#[from] unpack::Error),
     #[error(transparent)]
     Git(#[from] git2::Error),
     #[error(transparent)]
@@ -97,7 +97,7 @@ check the source, then rerun the command with `--no-lock` to update the hash."#
 }
 
 impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBuilder<'_, State> {
-    pub async fn build(self) -> Result<(), BuildLuaError> {
+    pub async fn build(self) -> Result<(), Error> {
         let args = self._build();
         let lua_version = args.lua_version;
         match lua_version {
@@ -118,7 +118,7 @@ impl<State: build_lua_builder::State + build_lua_builder::IsComplete> BuildLuaBu
     skip_all,
     fields(version = LUAJIT_MM_VERSION),
 )]
-async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
+async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), Error> {
     let build_dir = fs::tempfile::tempdir()?;
     // XXX luajit.org responds with an invalid content-type, so we'll use the github mirror for now.
     // let luajit_url = "https://luajit.org/git/luajit.git";
@@ -149,7 +149,7 @@ async fn do_build_luajit(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 }
 
 #[tracing::instrument(name = "Compiling LuaJIT", skip_all)]
-async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
+async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<(), Error> {
     let lua_version = args.lua_version;
     let config = args.config;
     let install_dir = args.install_dir;
@@ -209,7 +209,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     match make_cmd.output().await {
         Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
-            return Err(BuildLuaError::CommandFailure {
+            return Err(Error::CommandFailure {
                 name: "build".into(),
                 status: output.status,
                 stdout: String::from_utf8_lossy(&output.stdout).into(),
@@ -217,7 +217,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
             });
         }
         Err(err) => {
-            return Err(BuildLuaError::Io(io::Error::other(format!(
+            return Err(Error::Io(io::Error::other(format!(
                 "Failed to run `{} build`:\n{}",
                 config.make_cmd(),
                 err
@@ -236,7 +236,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     {
         Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
-            return Err(BuildLuaError::CommandFailure {
+            return Err(Error::CommandFailure {
                 name: "install".into(),
                 status: output.status,
                 stdout: String::from_utf8_lossy(&output.stdout).into(),
@@ -244,7 +244,7 @@ async fn do_build_luajit_unix(args: BuildLua<'_>, build_dir: &Path) -> Result<()
             });
         }
         Err(err) => {
-            return Err(BuildLuaError::Io(io::Error::other(format!(
+            return Err(Error::Io(io::Error::other(format!(
                 "Failed to run `{} install`:\n{}",
                 config.make_cmd(),
                 err
@@ -284,7 +284,7 @@ async fn move_luajit_includes(install_dir: &Path) -> io::Result<()> {
 // https://luajit.org/install.html: "You may link LuaJIT statically on Windows
 // only if you don't intend to load Lua/C modules at runtime."
 #[tracing::instrument(name = "Compiling LuaJIT", skip_all)]
-async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<(), BuildLuaError> {
+async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<(), Error> {
     let lua_version = args.lua_version;
     let install_dir = args.install_dir;
     let lib_dir = install_dir.join("lib");
@@ -308,7 +308,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     }
     let host = Triple::host();
     let target = host.to_string();
-    let cl = cc::windows_registry::find_tool(&target, "cl.exe").ok_or(BuildLuaError::ClNotFound)?;
+    let cl = cc::windows_registry::find_tool(&target, "cl.exe").ok_or(Error::ClNotFound)?;
     for (k, v) in cl.get_envs() {
         msvcbuild.env(k, v);
     }
@@ -318,7 +318,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     match msvcbuild.output().await {
         Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
-            return Err(BuildLuaError::CommandFailure {
+            return Err(Error::CommandFailure {
                 name: "build".into(),
                 status: output.status,
                 stdout: String::from_utf8_lossy(&output.stdout).into(),
@@ -326,7 +326,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
             });
         }
         Err(err) => {
-            return Err(BuildLuaError::Io(io::Error::other(format!(
+            return Err(Error::Io(io::Error::other(format!(
                 "Failed to run msvcbuild.bat:\n{}",
                 err
             ))))
@@ -349,7 +349,7 @@ async fn do_build_luajit_msvc(args: BuildLua<'_>, build_dir: &Path) -> Result<()
     Ok(())
 }
 
-async fn do_build_luau(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
+async fn do_build_luau(args: BuildLua<'_>) -> Result<(), Error> {
     let install_dir = args.install_dir;
     let build_dir = fs::tempfile::tempdir()?;
 
@@ -424,7 +424,7 @@ async fn do_build_luau(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
             .iter()
             .map(|dir| dir.join(name))
             .find(|path| path.is_file())
-            .ok_or(BuildLuaError::LuauBinaryNotFound {
+            .ok_or(Error::LuauBinaryNotFound {
                 name: name.to_string(),
             })?;
         fs::tokio::copy(&src, bin_dir.join(name)).await?;
@@ -432,7 +432,7 @@ async fn do_build_luau(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     Ok(())
 }
 
-async fn run_cmake(cwd: &Path, args: &[String], config: &Config) -> Result<(), BuildLuaError> {
+async fn run_cmake(cwd: &Path, args: &[String], config: &Config) -> Result<(), Error> {
     let mut cmd = Command::new(config.cmake_cmd());
     cmd.current_dir(cwd);
     cmd.args(args);
@@ -443,13 +443,13 @@ async fn run_cmake(cwd: &Path, args: &[String], config: &Config) -> Result<(), B
             command::trace_output(&output);
             Ok(())
         }
-        Ok(output) => Err(BuildLuaError::CommandFailure {
+        Ok(output) => Err(Error::CommandFailure {
             name: config.cmake_cmd(),
             status: output.status,
             stdout: String::from_utf8_lossy(&output.stdout).into(),
             stderr: String::from_utf8_lossy(&output.stderr).into(),
         }),
-        Err(err) => Err(BuildLuaError::CmakeSpawn {
+        Err(err) => Err(Error::CmakeSpawn {
             cmd: config.cmake_cmd(),
             source: err,
         }),
@@ -462,7 +462,7 @@ async fn run_cmake(cwd: &Path, args: &[String], config: &Config) -> Result<(), B
     skip_all,
     fields(version = args.lua_version.to_string()),
 )]
-async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
+async fn do_build_lua(args: BuildLua<'_>) -> Result<(), Error> {
     let lua_version = args.lua_version;
     let build_dir = fs::tempfile::tempdir()?;
 
@@ -498,7 +498,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
     let hash = response.hash().await?;
 
     if hash.matches(&source_integrity).is_none() {
-        return Err(BuildLuaError::SourceIntegrityMismatch {
+        return Err(Error::SourceIntegrityMismatch {
             src: source_url.to_string(),
             expected: source_integrity,
             actual: hash,
@@ -507,7 +507,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), BuildLuaError> {
 
     let cursor = Cursor::new(response);
     let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
-    operations::unpack::unpack(mime_type, cursor, true, file_name, build_dir.path()).await?;
+    unpack::extract(mime_type, cursor, true, file_name, build_dir.path()).await?;
 
     if cfg!(target_env = "msvc") {
         do_build_lua_msvc(args, build_dir.path(), lua_version, pkg_version).await
@@ -522,7 +522,7 @@ async fn do_build_lua_unix(
     build_dir: &Path,
     lua_version: &lua::Version,
     _pkg_version: &str,
-) -> Result<(), BuildLuaError> {
+) -> Result<(), Error> {
     tracing::debug!(message = "Compiling Lua (Unix)...");
     let config = args.config;
     let install_dir = args.install_dir;
@@ -576,7 +576,7 @@ async fn do_build_lua_unix(
     {
         Ok(output) if output.status.success() => command::trace_output(&output),
         Ok(output) => {
-            return Err(BuildLuaError::CommandFailure {
+            return Err(Error::CommandFailure {
                 name: "install".into(),
                 status: output.status,
                 stdout: String::from_utf8_lossy(&output.stdout).into(),
@@ -584,7 +584,7 @@ async fn do_build_lua_unix(
             });
         }
         Err(err) => {
-            return Err(BuildLuaError::Io(io::Error::other(format!(
+            return Err(Error::Io(io::Error::other(format!(
                 "Failed to run `{} install`:\n{}",
                 config.make_cmd(),
                 err
@@ -601,7 +601,7 @@ async fn do_build_lua_msvc(
     build_dir: &Path,
     lua_version: &lua::Version,
     _pkg_version: &str,
-) -> Result<(), BuildLuaError> {
+) -> Result<(), Error> {
     tracing::debug!(message = "Compiling Lua (MSVC)...");
     let config = args.config;
     let install_dir = args.install_dir;
@@ -701,8 +701,7 @@ async fn do_build_lua_msvc(
     });
 
     let target = host.to_string();
-    let link =
-        cc::windows_registry::find_tool(&target, "link.exe").ok_or(BuildLuaError::LinkNotFound)?;
+    let link = cc::windows_registry::find_tool(&target, "link.exe").ok_or(Error::LinkNotFound)?;
 
     let dll_path = bin_dir.join(format!("{dll_name}.dll"));
     let lua_bin_path = bin_dir.join(format!("{lua_bin_name}.exe"));
@@ -756,19 +755,19 @@ fn guard_success(
     output: io::Result<std::process::Output>,
     config: &Config,
     cmd_name: &str,
-) -> Result<(), BuildLuaError> {
+) -> Result<(), Error> {
     match output {
         Ok(output) if output.status.success() => {
             command::trace_output(&output);
             Ok(())
         }
-        Ok(output) => Err(BuildLuaError::CommandFailure {
+        Ok(output) => Err(Error::CommandFailure {
             name: cmd_name.to_string(),
             status: output.status,
             stdout: String::from_utf8_lossy(&output.stdout).into(),
             stderr: String::from_utf8_lossy(&output.stderr).into(),
         }),
-        Err(err) => Err(BuildLuaError::Io(io::Error::other(format!(
+        Err(err) => Err(Error::Io(io::Error::other(format!(
             "Failed to run `{} build`:\n{}",
             config.make_cmd(),
             err
@@ -793,4 +792,10 @@ async fn copy_includes(src_dir: &Path, include_dir: &Path) -> Result<(), io::Err
         }
     }
     Ok(())
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
+    }
 }

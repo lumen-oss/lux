@@ -1,7 +1,7 @@
 use assert_fs::{assert::PathAssert, prelude::PathChild};
 use flaky_test::flaky_test;
 use lux_lib::lua;
-use lux_lib::{config, operations::BuildLua};
+use lux_lib::{config, operations};
 use predicates::prelude::predicate;
 
 #[flaky_test(tokio, times = 5)]
@@ -15,7 +15,7 @@ async fn test_build_luau() {
         .lua_version(Some(lua::Version::Luau))
         .build()
         .unwrap();
-    BuildLua::new()
+    operations::BuildLua::new()
         .lua_version(&lua::Version::Luau)
         .install_dir(&target_path)
         .config(&config)

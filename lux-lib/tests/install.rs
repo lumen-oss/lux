@@ -7,7 +7,7 @@ use lux_lib::{
     config,
     drivers::InstallPackages,
     git, lua,
-    operations::{Exec, PackageInstallSpec},
+    operations::{self, install},
     package::db::PackageDB,
     rockspec,
     tree::EntryType,
@@ -21,7 +21,7 @@ use serial_test::serial;
 #[flaky_test(tokio, times = 5)]
 async fn install_git_package() {
     let install_spec =
-        PackageInstallSpec::new("rustaceanvim@6.0.3".parse().unwrap(), EntryType::Entrypoint)
+        install::Spec::new("rustaceanvim@6.0.3".parse().unwrap(), EntryType::Entrypoint)
             .source(rockspec::source::Spec::Git(git::Source {
                 url: "https://github.com/mrcjkb/rustaceanvim.git"
                     .parse()
@@ -41,10 +41,9 @@ async fn install_http_package() {
     let cflags = std::env::var("CFLAGS").unwrap_or_default();
     // See https://github.com/wahern/luaossl/issues/220#issuecomment-3401472124
     std::env::set_var("CFLAGS", "-Wno-error=incompatible-pointer-types");
-    let install_spec =
-        PackageInstallSpec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint)
-            .build_behaviour(BuildBehaviour::Force)
-            .build();
+    let install_spec = install::Spec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint)
+        .build_behaviour(BuildBehaviour::Force)
+        .build();
     test_install(install_spec).await;
     std::env::set_var("CFLAGS", cflags);
 }
@@ -61,7 +60,7 @@ async fn install_and_use_toml_edit() {
 
 #[cfg(test)]
 async fn install_and_use(package: package::Req, module_name: &str) {
-    let install_spec = PackageInstallSpec::new(package, EntryType::Entrypoint)
+    let install_spec = install::Spec::new(package, EntryType::Entrypoint)
         .build_behaviour(BuildBehaviour::Force)
         .build();
     let dir = TempDir::new().unwrap();
@@ -86,7 +85,7 @@ async fn install_and_use(package: package::Req, module_name: &str) {
         .0;
     assert!(!installed.is_empty());
 
-    Exec::new("lua", None, &config)
+    operations::Exec::new("lua", None, &config)
         .arg("-e")
         .arg(format!("require('{module_name}')"))
         .exec()
@@ -103,10 +102,9 @@ async fn no_build_artifacts_in_cwd() {
         .filter_map(Result::ok)
         .map(|entry| entry.into_path())
         .collect_vec();
-    let install_spec =
-        PackageInstallSpec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint)
-            .build_behaviour(BuildBehaviour::Force)
-            .build();
+    let install_spec = install::Spec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint)
+        .build_behaviour(BuildBehaviour::Force)
+        .build();
     test_install(install_spec).await;
     let build_artifacts = WalkDir::new(&cwd)
         .into_iter()
@@ -118,7 +116,7 @@ async fn no_build_artifacts_in_cwd() {
 }
 
 #[cfg(test)]
-async fn test_install(install_spec: PackageInstallSpec) {
+async fn test_install(install_spec: install::Spec) {
     let dir = TempDir::new().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum GenLuaRcError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -44,7 +44,7 @@ impl<State> GenLuaRcBuilder<'_, State>
 where
     State: gen_lua_rc_builder::State + gen_lua_rc_builder::IsComplete,
 {
-    pub async fn generate_luarc(self) -> Result<(), GenLuaRcError> {
+    pub async fn generate_luarc(self) -> Result<(), Error> {
         do_generate_luarc(self._build()).await
     }
 }
@@ -68,7 +68,7 @@ struct LuaRcWorkspace {
     library: Vec<String>,
 }
 
-async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
+async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), Error> {
     let config = args.config;
     if !config.generate_luarc() {
         return Ok(());
@@ -114,12 +114,9 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), GenLuaRcError> {
     Ok(())
 }
 
-fn update_luarc_content(
-    prev_contents: &str,
-    extra_paths: Vec<PathBuf>,
-) -> Result<String, GenLuaRcError> {
-    let mut luarc: LuaRC = serde_json::from_str(prev_contents)
-        .map_err(|err| GenLuaRcError::Deserialize(err.to_string()))?;
+fn update_luarc_content(prev_contents: &str, extra_paths: Vec<PathBuf>) -> Result<String, Error> {
+    let mut luarc: LuaRC =
+        serde_json::from_str(prev_contents).map_err(|err| Error::Deserialize(err.to_string()))?;
 
     // remove any preexisting lux library paths
     luarc
@@ -132,7 +129,7 @@ fn update_luarc_content(
         .map(|path| path.to_slash_lossy().to_string())
         .for_each(|path_str| luarc.workspace.library.push(path_str));
 
-    serde_json::to_string_pretty(&luarc).map_err(|err| GenLuaRcError::Serialize(err.to_string()))
+    serde_json::to_string_pretty(&luarc).map_err(|err| Error::Serialize(err.to_string()))
 }
 
 fn is_non_empty_dir(dir: &Path) -> bool {

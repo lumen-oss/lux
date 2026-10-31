@@ -23,7 +23,7 @@ pub(crate) enum ManifestCacheError {
     #[error("unsupported manifest cache format {found} (expected {expected})")]
     UnsupportedFormat { found: u32, expected: u32 },
     #[error("failed to request the manifest cache")]
-    Request(#[source] reqwest::Error),
+    Request(#[source] crate::reqwest::Error),
     #[error("failed to parse the manifest cache response")]
     Parse(#[source] serde_json::Error),
     #[error("invalid manifest cache URL")]
@@ -191,7 +191,7 @@ impl ManifestCache {
             .get(url.clone())
             .send()
             .await
-            .map_err(ManifestCacheError::Request)?;
+            .map_err(|err| ManifestCacheError::Request(err.into()))?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Err(ManifestCacheError::NotFound);
@@ -199,9 +199,12 @@ impl ManifestCache {
 
         let response = response
             .error_for_status()
-            .map_err(ManifestCacheError::Request)?;
+            .map_err(|err| ManifestCacheError::Request(err.into()))?;
 
-        let text = response.text().await.map_err(ManifestCacheError::Request)?;
+        let text = response
+            .text()
+            .await
+            .map_err(|err| ManifestCacheError::Request(err.into()))?;
         serde_json::from_str(&text).map_err(ManifestCacheError::Parse)
     }
 }

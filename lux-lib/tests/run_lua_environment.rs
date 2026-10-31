@@ -3,8 +3,8 @@
 use assert_fs::prelude::*;
 use lux_lib::{
     config, lua,
-    operations::{RunLua, RunLuaError},
     path::LuaEnvironment,
+    run_lua::{self, RunLua},
 };
 use serial_test::serial;
 use which::which;
@@ -53,7 +53,7 @@ async fn pure_environment_hides_inherited_lua_paths() {
         .run_lua()
         .await;
     assert!(
-        matches!(pure, Err(RunLuaError::LuaCommandNonZeroExitCode { .. })),
+        matches!(pure, Err(run_lua::Error::LuaCommandNonZeroExitCode { .. })),
         "pure environment should not see the inherited LUA_PATH: {pure:?}"
     );
 

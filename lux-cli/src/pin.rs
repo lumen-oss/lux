@@ -4,7 +4,7 @@ use lux_lib::config::Config;
 use lux_lib::drivers::sync::{Sync, SyncMode, TargetSet};
 use lux_lib::lockfile::PinnedState;
 use lux_lib::lua;
-use lux_lib::operations;
+use lux_lib::operations::pin;
 use lux_lib::package;
 use lux_lib::rockspec::lua_dependency;
 use lux_lib::tree::RockMatches;
@@ -95,7 +95,7 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
             for package in &data.package_req {
                 match tree.match_rocks_and(package, |package| pin != package.pinned())? {
                     RockMatches::Single(rock) => {
-                        operations::set_pinned_state(&rock, &tree, pin)?;
+                        pin::set_state(&rock, &tree, pin)?;
                     }
                     RockMatches::Many(_) => {
                         return Err(miette!(

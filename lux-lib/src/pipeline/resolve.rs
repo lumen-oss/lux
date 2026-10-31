@@ -17,7 +17,7 @@ use crate::{
         LockedPackage, LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState,
         PinnedState, RemotePackageSourceUrl,
     },
-    operations::PackageInstallSpec,
+    operations::install,
     package::db::PackageDB,
     rockspec::Rockspec,
     tree::EntryType,
@@ -101,7 +101,7 @@ pub(crate) struct ResolvePackageDependencies<'a> {
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     #[builder(field)]
-    pub(crate) packages: Artifacts<Vec<PackageInstallSpec>>,
+    pub(crate) packages: Artifacts<Vec<install::Spec>>,
     #[builder(default)]
     pub(crate) installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
 }
@@ -110,20 +110,20 @@ impl<State> ResolvePackageDependenciesBuilder<'_, State>
 where
     State: resolve_package_dependencies_builder::State,
 {
-    fn set(mut self, section: LockedPackageLockType, packages: Vec<PackageInstallSpec>) -> Self {
+    fn set(mut self, section: LockedPackageLockType, packages: Vec<install::Spec>) -> Self {
         *self.packages.get_mut(section) = Some(packages);
         self
     }
 
-    pub(crate) fn packages(self, packages: Vec<PackageInstallSpec>) -> Self {
+    pub(crate) fn packages(self, packages: Vec<install::Spec>) -> Self {
         self.set(LockedPackageLockType::Regular, packages)
     }
 
-    pub(crate) fn build_packages(self, packages: Vec<PackageInstallSpec>) -> Self {
+    pub(crate) fn build_packages(self, packages: Vec<install::Spec>) -> Self {
         self.set(LockedPackageLockType::Build, packages)
     }
 
-    pub(crate) fn test_packages(self, packages: Vec<PackageInstallSpec>) -> Self {
+    pub(crate) fn test_packages(self, packages: Vec<install::Spec>) -> Self {
         self.set(LockedPackageLockType::Test, packages)
     }
 }
@@ -152,7 +152,7 @@ struct RequestKey {
 }
 
 impl RequestKey {
-    fn from_install_spec(section: LockedPackageLockType, spec: &PackageInstallSpec) -> Self {
+    fn from_install_spec(section: LockedPackageLockType, spec: &install::Spec) -> Self {
         Self {
             section,
             package: spec.package.clone(),
@@ -164,7 +164,7 @@ impl RequestKey {
 
 /// A discovered node in the dependency graph.
 struct Node {
-    install_spec: PackageInstallSpec,
+    install_spec: install::Spec,
     id: LockedPackageId,
     found: FoundPackage,
     children: Vec<(bool, RequestKey)>,
@@ -174,8 +174,8 @@ struct Resolver {
     package_db: PackageDB,
     config: Arc<Config>,
     max_concurrent: usize,
-    joinset: JoinSet<(RequestKey, PackageInstallSpec, Result<FoundPackage, Error>)>,
-    pending: VecDeque<(RequestKey, PackageInstallSpec)>,
+    joinset: JoinSet<(RequestKey, install::Spec, Result<FoundPackage, Error>)>,
+    pending: VecDeque<(RequestKey, install::Spec)>,
     seen: HashSet<RequestKey>,
     nodes: HashMap<RequestKey, Node>,
     resolved: ResolvedArtifacts,
@@ -219,7 +219,7 @@ impl Resolver {
 
     async fn run(
         mut self,
-        packages: Artifacts<Vec<PackageInstallSpec>>,
+        packages: Artifacts<Vec<install::Spec>>,
     ) -> Result<ResolvedArtifacts, Error> {
         for (section, specs) in packages {
             let Some(specs) = specs else {
@@ -247,7 +247,7 @@ impl Resolver {
     }
 
     /// Registers a request for discovery, unless it has already been seen.
-    fn enqueue(&mut self, key: RequestKey, spec: PackageInstallSpec) {
+    fn enqueue(&mut self, key: RequestKey, spec: install::Spec) {
         if self.seen.insert(key.clone()) {
             self.pending.push_back((key, spec));
         }
@@ -273,7 +273,7 @@ impl Resolver {
     }
 
     /// Records a discovered package and queues any children it introduces.
-    fn on_discovered(&mut self, key: RequestKey, spec: PackageInstallSpec, found: FoundPackage) {
+    fn on_discovered(&mut self, key: RequestKey, spec: install::Spec, found: FoundPackage) {
         let section = key.section;
         let is_binary = matches!(
             found.remote.source,
@@ -291,22 +291,20 @@ impl Resolver {
             constraint,
         );
 
-        let mut child_specs: Vec<(bool, RequestKey, PackageInstallSpec)> = Vec::new();
+        let mut child_specs: Vec<(bool, RequestKey, install::Spec)> = Vec::new();
         if !is_binary {
             for child_spec in build_dependency_specs(&found.rockspec, &spec) {
                 push_child(&mut child_specs, true, section, child_spec);
             }
         }
         for dependency in found.rockspec.dependencies().current_platform() {
-            let child_spec = PackageInstallSpec::new(
-                dependency.package_req().clone(),
-                EntryType::DependencyOnly,
-            )
-            .build_behaviour(BuildBehaviour::Ignore)
-            .pin(spec.pin)
-            .opt(spec.opt)
-            .maybe_source(dependency.source().clone())
-            .build();
+            let child_spec =
+                install::Spec::new(dependency.package_req().clone(), EntryType::DependencyOnly)
+                    .build_behaviour(BuildBehaviour::Ignore)
+                    .pin(spec.pin)
+                    .opt(spec.opt)
+                    .maybe_source(dependency.source().clone())
+                    .build();
             push_child(&mut child_specs, false, section, child_spec);
         }
 
@@ -344,7 +342,7 @@ impl Resolver {
     fn installed_match(
         &self,
         section: LockedPackageLockType,
-        spec: &PackageInstallSpec,
+        spec: &install::Spec,
     ) -> Option<LockedPackageId> {
         if !matches!(spec.build_behaviour, BuildBehaviour::Ignore) || spec.source.is_some() {
             return None;
@@ -432,10 +430,10 @@ impl Resolver {
 
 /// Adds a child request unless an equivalent request is already present.
 fn push_child(
-    children: &mut Vec<(bool, RequestKey, PackageInstallSpec)>,
+    children: &mut Vec<(bool, RequestKey, install::Spec)>,
     is_build: bool,
     section: LockedPackageLockType,
-    spec: PackageInstallSpec,
+    spec: install::Spec,
 ) {
     let child_section = if is_build {
         LockedPackageLockType::Build
@@ -516,8 +514,8 @@ fn detect_cycles(nodes: &HashMap<RequestKey, Node>) -> Result<(), Error> {
 
 fn build_dependency_specs(
     rockspec: &rockspec::lua::Remote,
-    parent: &PackageInstallSpec,
-) -> Vec<PackageInstallSpec> {
+    parent: &install::Spec,
+) -> Vec<install::Spec> {
     build_dependencies_to_install(rockspec)
         .into_iter()
         .filter_map(|name| {
@@ -527,7 +525,7 @@ fn build_dependency_specs(
                 .iter()
                 .find(|dep| dep.name() == &name)
                 .map(|dep| {
-                    PackageInstallSpec::new(dep.package_req().clone(), EntryType::Entrypoint)
+                    install::Spec::new(dep.package_req().clone(), EntryType::Entrypoint)
                         .build_behaviour(BuildBehaviour::Ignore)
                         .pin(parent.pin)
                         .opt(parent.opt)
@@ -536,7 +534,7 @@ fn build_dependency_specs(
                 })
                 .or_else(|| {
                     Some(
-                        PackageInstallSpec::new(package::Req::from(name), EntryType::Entrypoint)
+                        install::Spec::new(package::Req::from(name), EntryType::Entrypoint)
                             .build_behaviour(BuildBehaviour::Ignore)
                             .pin(parent.pin)
                             .opt(parent.opt)
@@ -553,7 +551,7 @@ mod tests {
 
     use super::*;
     use crate::config;
-    use crate::lockfile::{LockConstraint, LockedPackageHashes};
+    use crate::lockfile::{self, LockedPackageHashes};
     use crate::remote;
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
@@ -598,12 +596,12 @@ mod tests {
         )
     }
 
-    fn install_spec(name: &str) -> PackageInstallSpec {
+    fn install_spec(name: &str) -> install::Spec {
         let package = match name.parse::<package::Req>() {
             Ok(package) => package,
             Err(err) => unreachable!("invalid package req: {err}"),
         };
-        PackageInstallSpec::new(package, EntryType::Entrypoint)
+        install::Spec::new(package, EntryType::Entrypoint)
             .build_behaviour(BuildBehaviour::Ignore)
             .build()
     }
@@ -612,7 +610,7 @@ mod tests {
         let spec = package::Spec::parse(name.to_string(), "1.0.0-1".to_string()).unwrap();
         LockedPackage::from(
             &spec,
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             LockedPackageHashes {
@@ -626,7 +624,7 @@ mod tests {
         )
     }
 
-    fn roots(spec: PackageInstallSpec) -> Artifacts<Vec<PackageInstallSpec>> {
+    fn roots(spec: install::Spec) -> Artifacts<Vec<install::Spec>> {
         Artifacts {
             regular: Some(vec![spec]),
             build: None,

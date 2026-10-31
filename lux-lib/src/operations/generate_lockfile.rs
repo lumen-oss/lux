@@ -28,12 +28,12 @@ impl<State> GenerateLockfileBuilder<'_, State>
 where
     State: generate_lockfile_builder::State + generate_lockfile_builder::IsComplete,
 {
-    pub async fn generate(self) -> Result<(), GenerateLockfileError> {
+    pub async fn generate(self) -> Result<(), Error> {
         generate_lockfile(self._build()).await
     }
 }
 
-async fn generate_lockfile(args: GenerateLockfile<'_>) -> Result<(), GenerateLockfileError> {
+async fn generate_lockfile(args: GenerateLockfile<'_>) -> Result<(), Error> {
     let GenerateLockfile { config, workspace } = args;
 
     let members = workspace.member_names()?;
@@ -71,7 +71,7 @@ async fn generate_lockfile(args: GenerateLockfile<'_>) -> Result<(), GenerateLoc
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum GenerateLockfileError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageDB(#[from] db::Error),
@@ -89,7 +89,7 @@ pub enum GenerateLockfileError {
     Materialise(#[from] MaterialiseError),
 }
 
-impl From<sync::Error> for GenerateLockfileError {
+impl From<sync::Error> for Error {
     fn from(source: sync::Error) -> Self {
         Self::Sync(Box::new(source))
     }
