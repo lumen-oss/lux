@@ -15,7 +15,7 @@ default-members = ["lux-cli", "lux-lib", "kalua"]
 resolver = "2"
 
 [workspace.package]
-version = "0.52.2"
+version = "0.53.0"
 
 [workspace.dependencies]
 clap_mangen = "0.3"
@@ -35,7 +35,7 @@ lux-workspace-hack = { version = "0.1", path = "./lux-workspace-hack" }
 rustix = { version = "1.1", features = ["process"] }
 check_elevation = "0.3"
 ci_env = "0.5"
-lux-macros = { version = "0.2", path = "./lux-macros" }
+lux-macros = { version = "0.3", path = "./lux-macros" }
 kalua = { version = "0.1.1", path = "./kalua" }
 miette = { version = "7.6", features = ["derive"] }
 path-absolutize = "4.0"
