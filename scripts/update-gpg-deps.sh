@@ -3,7 +3,10 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 source_file="$repo_root/xtask/src/static_gpg.rs"
-base_url="https://gnupg.org/ftp/gcrypt"
+mirrors=(
+    "https://mirrors.dotsrc.org/gcrypt"
+    "https://gnupg.org/ftp/gcrypt"
+)
 
 deps=(
     "libgpg-error VERSION SRI 1"
@@ -14,17 +17,21 @@ deps=(
 latest_release() {
     local name="$1"
     local major="$2"
-    local listing
-    listing="$(
-        curl -fsSL "$base_url/$name/" \
-            | grep -oE "$name-$major\.[0-9]+(\.[0-9]+)?\.tar\.bz2" \
-            | sort -uV
-    )"
-    if [[ -z "$listing" ]]; then
-        echo "could not fetch the $name release listing" >&2
-        return 1
-    fi
-    printf '%s\n' "$listing" | sort -V | tail -1
+    local base listing
+    for base in "${mirrors[@]}"; do
+        if listing="$(
+            curl -fsSL "$base/$name/" \
+                | grep -oE "$name-$major\.[0-9]+(\.[0-9]+)?\.tar\.bz2" \
+                | sort -uV
+        )"; then
+            if [[ -n "$listing" ]]; then
+                printf '%s\n' "$listing" | sort -V | tail -1
+                return 0
+            fi
+        fi
+    done
+    echo "could not fetch the $name release listing" >&2
+    return 1
 }
 
 current_version() {
@@ -34,17 +41,21 @@ current_version() {
 sha256_of() {
     local name="$1"
     local tarball="$2"
-    local hash
-    hash="sha256-$(
-        curl -fsSL "$base_url/$name/$tarball" \
-            | openssl dgst -sha256 -binary \
-            | openssl base64 -A
-    )"
-    if [[ -z "$hash" ]]; then
-        echo "could not compute the $name checksum" >&2
-        return 1
-    fi
-    printf '%s\n' "$hash"
+    local base hash
+    for base in "${mirrors[@]}"; do
+        if hash="$(
+            curl -fsSL "$base/$name/$tarball" \
+                | openssl dgst -sha256 -binary \
+                | openssl base64 -A
+        )"; then
+            if [[ -n "$hash" ]]; then
+                printf '%s\n' "sha256-$hash"
+                return 0
+            fi
+        fi
+    done
+    echo "could not compute the $name checksum" >&2
+    return 1
 }
 
 update_source_file() {
