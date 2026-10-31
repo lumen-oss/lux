@@ -178,7 +178,7 @@ async fn discover_package_db(
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<FoundPackage, Error> {
-    if let Some(found) = package_db.resolve(spec, config).await? {
+    if let Some(found) = package_db.resolve(spec).await? {
         Ok(found)
     } else {
         download_remote(spec, package_db, config).await

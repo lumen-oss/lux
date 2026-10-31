@@ -44,7 +44,6 @@ pub struct Config {
     enable_development_packages: bool,
     server: Url,
     extra_servers: Vec<Url>,
-    manifest_cache_url: Option<Url>,
     extra_wally_registries: Vec<Url>,
     namespace: Option<String>,
     lua_dir: Option<PathBuf>,
@@ -148,11 +147,6 @@ impl Config {
     /// Additional luarocks repository servers
     pub fn extra_servers(&self) -> &Vec<Url> {
         self.extra_servers.as_ref()
-    }
-
-    /// The base URL of the precomputed manifest cache.
-    pub fn manifest_cache_url(&self) -> Option<&Url> {
-        self.manifest_cache_url.as_ref()
     }
 
     /// Additional wally package registries (git-index URLs), in addition to the
@@ -424,14 +418,6 @@ pub struct Builder {
     )]
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     extra_servers: Option<Vec<Url>>,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_url",
-        serialize_with = "serialize_url"
-    )]
-    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-    manifest_cache_url: Option<Url>,
-    no_manifest_cache: Option<bool>,
     /// Additional wally package registries (git-index URLs), in addition to the
     /// official wally index.
     #[serde(
@@ -559,24 +545,6 @@ impl Builder {
     pub fn extra_servers(self, extra_servers: Option<Vec<Url>>) -> Self {
         Self {
             extra_servers: extra_servers.or(self.extra_servers),
-            ..self
-        }
-    }
-
-    /// The base URL of the precomputed manifest cache.
-    /// Default is https://cache.luanox.org/
-    pub fn manifest_cache_url(self, manifest_cache_url: Option<Url>) -> Self {
-        Self {
-            manifest_cache_url: manifest_cache_url.or(self.manifest_cache_url),
-            ..self
-        }
-    }
-
-    /// Whether to disable the precomputed manifest cache.
-    /// Default: `false`
-    pub fn no_manifest_cache(self, no_manifest_cache: Option<bool>) -> Self {
-        Self {
-            no_manifest_cache: no_manifest_cache.or(self.no_manifest_cache),
             ..self
         }
     }
@@ -856,8 +824,6 @@ impl Builder {
         Self {
             server: other.server.or(self.server),
             extra_servers: other.extra_servers.or(self.extra_servers),
-            manifest_cache_url: other.manifest_cache_url.or(self.manifest_cache_url),
-            no_manifest_cache: other.no_manifest_cache.or(self.no_manifest_cache),
             extra_wally_registries: other.extra_wally_registries.or(self.extra_wally_registries),
             namespace: other.namespace.or(self.namespace),
             lua_version: other.lua_version.or(self.lua_version),
@@ -906,13 +872,6 @@ impl Builder {
                 Url::parse("https://luarocks.org/").unwrap_unchecked()
             }),
             extra_servers: self.extra_servers.unwrap_or_default(),
-            manifest_cache_url: if self.no_manifest_cache.unwrap_or(false) {
-                None
-            } else {
-                self.manifest_cache_url.or_else(|| unsafe {
-                    Some(Url::parse("https://cache.luanox.org/").unwrap_unchecked())
-                })
-            },
             extra_wally_registries: self.extra_wally_registries.unwrap_or_default(),
             namespace: self.namespace,
             lua_dir: self.lua_dir,
@@ -954,13 +913,10 @@ impl Builder {
 /// Useful for printing the current config
 impl From<Config> for Builder {
     fn from(value: Config) -> Self {
-        let no_manifest_cache = Some(value.manifest_cache_url.is_none());
         Builder {
             enable_development_packages: Some(value.enable_development_packages),
             server: Some(value.server),
             extra_servers: Some(value.extra_servers),
-            manifest_cache_url: value.manifest_cache_url,
-            no_manifest_cache,
             extra_wally_registries: Some(value.extra_wally_registries),
             namespace: value.namespace,
             lua_dir: value.lua_dir,
@@ -1023,7 +979,6 @@ fn normalise_base_urls(mut config: Config) -> Config {
         .into_iter()
         .map(normalise_base_url)
         .collect();
-    config.manifest_cache_url = config.manifest_cache_url.map(normalise_base_url);
     config
 }
 

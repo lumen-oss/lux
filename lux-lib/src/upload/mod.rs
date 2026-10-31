@@ -702,7 +702,6 @@ type = "builtin"
             .server(Some(Url::parse(&server.url_str("/")).unwrap()))
             .data_dir(Some(config_dir.path().to_path_buf()))
             .cache_dir(Some(config_dir.path().to_path_buf()))
-            .no_manifest_cache(Some(true))
             .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
