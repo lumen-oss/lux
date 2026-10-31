@@ -40,3 +40,6 @@
 
 # Generated definitions by lux-definitions
 /definitions
+
+# Profile outputs
+/profile.json.gz

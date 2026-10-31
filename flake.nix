@@ -103,6 +103,7 @@
                 ++ (with pkgs; [
                   rust-analyzer
                   lspmux
+                  samply
                   cargo-nextest
                   cargo-hakari
                   cargo-insta

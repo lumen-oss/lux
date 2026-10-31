@@ -64,3 +64,10 @@ zip = "9.0"
 [profile.release]
 lto = true
 codegen-units = 1
+
+# Used for profiling with `samply`
+[profile.profiling]
+inherits = "release"
+debug = true
+lto = "thin"
+codegen-units = 16
