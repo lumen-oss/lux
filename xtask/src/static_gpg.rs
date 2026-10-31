@@ -4,6 +4,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     process::Command,
+    time::Duration,
 };
 
 use bzip2::read::BzDecoder;
@@ -18,6 +19,10 @@ const ASSUAN_VERSION: &str = "2.5.7";
 const ASSUAN_SRI: &str = "sha256-AQMIH/wng4ouUEeRU8oQXoc9PWXYqVkygunJTH5q+3Y=";
 const GPGME_VERSION: &str = "1.24.3";
 const GPGME_SRI: &str = "sha256-v8F/W9GxeMhkn92RiVbSdwgPM98Aai3ECs3s3OaMUN0=";
+const MIRRORS: &[&str] = &[
+    "https://mirrors.dotsrc.org/gcrypt",
+    "https://gnupg.org/ftp/gcrypt",
+];
 
 struct Dependency {
     name: &'static str,
@@ -197,14 +202,32 @@ fn install(src_dir: &Path) -> Result<(), DynError> {
 
 fn download(dependency: &Dependency, tarball: &Path) -> Result<(), DynError> {
     println!("downloading {} {}", dependency.name, dependency.version);
-    let url = format!(
-        "https://gnupg.org/ftp/gcrypt/{}/{}-{}.tar.bz2",
-        dependency.name, dependency.name, dependency.version
-    );
-    let mut response = reqwest::blocking::get(url)?.error_for_status()?;
-    let mut file = fs::File::create(tarball)?;
-    io::copy(&mut response, &mut file)?;
-    Ok(())
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()?;
+    let mut last_error = None;
+    for base in MIRRORS {
+        let url = format!(
+            "{base}/{}/{}-{}.tar.bz2",
+            dependency.name, dependency.name, dependency.version
+        );
+        match client
+            .get(&url)
+            .send()
+            .and_then(|response| response.error_for_status())
+        {
+            Ok(mut response) => {
+                let mut file = fs::File::create(tarball)?;
+                io::copy(&mut response, &mut file)?;
+                return Ok(());
+            }
+            Err(error) => {
+                eprintln!("failed to download {url}: {error}");
+                last_error = Some(error);
+            }
+        }
+    }
+    Err(last_error.expect("at least one mirror is configured"))?
 }
 
 fn verify_integrity(tarball: &Path, expected: &str, name: &str) -> Result<(), DynError> {
