@@ -1,21 +1,19 @@
 use crate::package;
 
 pub mod search;
-use crate::rockspec;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     config::{self, Config},
     lockfile::PackageLock,
     manifest::{self, Manifest},
-    manifest_cache::{Closure, ClosureSpec, ManifestCache},
-    operations::{download, install},
+    operations::install,
     pipeline::discover::{self, FoundPackage},
     remote,
     workspace::{self, Workspace},
 };
 use itertools::Itertools;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use url::Url;
 
 use miette::Diagnostic;
@@ -54,8 +52,6 @@ pub(crate) enum Provider {
     Lockfile(Vec<PackageLock>),
     /// A luarocks manifest.
     Manifest(ManifestProvider),
-    /// The manifest cache.
-    Closure(ClosureProvider),
 }
 
 /// A luarocks manifest that is only fetched when it is first needed.
@@ -115,21 +111,15 @@ impl Provider {
                 })
                 .next()),
             Self::Manifest(manifest) => Ok(manifest.get().await?.find(package_req, filter)),
-            Self::Closure(closure) => Ok(closure.find(package_req, filter).await),
         }
     }
 
-    async fn resolve(
-        &self,
-        spec: &install::Spec,
-        config: &Config,
-    ) -> Result<Option<FoundPackage>, discover::Error> {
+    async fn resolve(&self, spec: &install::Spec) -> Result<Option<FoundPackage>, discover::Error> {
         match self {
             Self::Local(packages) => Ok(packages
                 .iter()
                 .find(|package| package.remote.spec.name() == spec.package.name())
                 .cloned()),
-            Self::Closure(closure) => closure.resolve(spec, config).await,
             Self::Lockfile(_) | Self::Manifest(_) => Ok(None),
         }
     }
@@ -190,115 +180,7 @@ impl Provider {
                     }
                 })
                 .collect()),
-            // The cache only supports lookups by exact name, not substring search.
-            Self::Closure(_) => Ok(Vec::new()),
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct ClosureProvider {
-    cache: ManifestCache,
-    rock_server: Url,
-    loaded: Arc<Mutex<HashMap<package::Name, Arc<Closure>>>>,
-}
-
-impl ClosureProvider {
-    fn new(cache: ManifestCache, config: &Config) -> Self {
-        Self {
-            cache,
-            rock_server: config.server().clone(),
-            loaded: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    async fn load_closure_for(&self, req: &package::Req) -> Option<Arc<Closure>> {
-        if let Some(closure) = self.loaded.lock().await.get(req.name()) {
-            return Some(closure.clone());
-        }
-
-        let versions = self.cache.versions(req.name()).await.ok()?;
-        let chosen = versions
-            .iter()
-            .find(|version| req.version_req().matches(version))?;
-
-        let is_latest = versions.first().is_some_and(|latest| latest == chosen);
-        let closure = if is_latest {
-            self.cache.latest_closure(req.name()).await.ok()?
-        } else {
-            self.cache.closure(req.name(), chosen).await.ok()?
-        };
-        let closure = Arc::new(closure);
-
-        self.loaded
-            .lock()
-            .await
-            .insert(req.name().clone(), closure.clone());
-        Some(closure)
-    }
-
-    fn remote_package(
-        &self,
-        spec: &ClosureSpec,
-        package_type: remote::package::Kind,
-    ) -> remote::Package {
-        let source = match package_type {
-            remote::package::Kind::Rockspec => {
-                remote::package::Source::LuarocksRockspec(self.rock_server.clone())
-            }
-            remote::package::Kind::Src => {
-                remote::package::Source::LuarocksSrcRock(self.rock_server.clone())
-            }
-            remote::package::Kind::Binary => {
-                remote::package::Source::LuarocksBinaryRock(self.rock_server.clone())
-            }
-        };
-        remote::Package::new(
-            package::Spec::new(spec.package().clone(), spec.version().clone()),
-            source,
-            None,
-        )
-    }
-
-    async fn find(
-        &self,
-        req: &package::Req,
-        filter: Option<remote::package::kind::FilterSpec>,
-    ) -> Option<remote::Package> {
-        let closure = self.load_closure_for(req).await?;
-        let (spec, package_type) = closure.spec(req, filter.as_ref())?;
-        Some(self.remote_package(spec, package_type))
-    }
-
-    async fn resolve(
-        &self,
-        spec: &install::Spec,
-        _config: &Config,
-    ) -> Result<Option<FoundPackage>, discover::Error> {
-        let Some(closure) = self.load_closure_for(&spec.package).await else {
-            return Ok(None);
-        };
-        let Some((closure_spec, package_type)) = closure.spec(&spec.package, None) else {
-            return Ok(None);
-        };
-        // Only rockspec-type packages can be resolved fully offline, as they have no source archive
-        // to download and hash. For src/binary rocks we fall through to the generic download step,
-        // which fetches the archive.
-        if package_type != remote::package::Kind::Rockspec {
-            return Ok(None);
-        }
-        let rockspec = rockspec::lua::Remote::new(closure_spec.rockspec_raw()).map_err(|err| {
-            discover::Error::Download(
-                spec.package.clone(),
-                Box::new(download::Error::Rockspec(err.into())),
-            )
-        })?;
-        let remote = self.remote_package(closure_spec, package_type);
-        Ok(Some(FoundPackage {
-            remote,
-            rockspec,
-            artifact: None,
-        }))
     }
 }
 
@@ -306,9 +188,6 @@ impl PackageDB {
     #[tracing::instrument(level = "trace", skip_all)]
     pub async fn from_config(config: &Config) -> Result<Self, Error> {
         let mut providers = Vec::new();
-        if let Some(cache) = ManifestCache::from_config(config) {
-            providers.push(Provider::Closure(ClosureProvider::new(cache, config)));
-        }
         for server in config.enabled_dev_servers()? {
             providers.push(Provider::Manifest(ManifestProvider::new(server, config)));
         }
@@ -365,19 +244,16 @@ impl PackageDB {
         let index = self
             .providers
             .iter()
-            .position(|provider| matches!(provider, Provider::Closure(_) | Provider::Manifest(_)))
+            .position(|provider| matches!(provider, Provider::Manifest(_)))
             .unwrap_or(self.providers.len());
         self.providers.insert(index, Provider::Lockfile(locks));
         self
     }
 
     pub(crate) fn has_remote_sources(&self) -> bool {
-        self.providers.iter().any(|provider| {
-            matches!(
-                provider,
-                Provider::Lockfile(_) | Provider::Manifest(_) | Provider::Closure(_)
-            )
-        })
+        self.providers
+            .iter()
+            .any(|provider| matches!(provider, Provider::Lockfile(_) | Provider::Manifest(_)))
     }
 }
 

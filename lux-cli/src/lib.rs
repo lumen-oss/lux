@@ -132,10 +132,6 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "cache-dir")]
     pub cache_dir: Option<PathBuf>,
 
-    /// Disable the precomputed manifest cache.
-    #[arg(long)]
-    pub no_manifest_cache: bool,
-
     /// Specifies the data directory,{n}
     /// in which the default user install tree resides{n}
     /// (e.g. ~/.local/share/lux).
