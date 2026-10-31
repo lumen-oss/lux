@@ -15,7 +15,7 @@ jobs:
     if: github.event.pull_request.draft == false
     strategy:
       matrix:
-        os: ["ubuntu-24.04", "macos-14"]
+        os: ["ubuntu-24.04", "macos-15"]
         lua: [
           { version: "5.1", feature: "lua51" },
           { version: "5.2", feature: "lua52" },
