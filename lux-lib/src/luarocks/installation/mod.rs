@@ -114,7 +114,7 @@ impl Installation {
     #[cfg(target_family = "windows")]
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn ensure_installed(&self, _lua: &lua::Installation) -> Result<(), Error> {
-        use crate::{hash::HasIntegrity, operations};
+        use crate::hash::HasIntegrity;
         use std::io::Cursor;
         let file_name = "luarocks-3.13.0-windows-64";
         let url = format!("https://luarocks.github.io/luarocks/releases/{file_name}.zip");
