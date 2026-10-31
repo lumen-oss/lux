@@ -14,7 +14,7 @@ use thiserror::Error;
 // TODO(vhyrro): Differentiate pinned LockedPackages at the type level?
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum PinError {
+pub enum Error {
     #[error("package with ID '{0}' not found in the lockfile")]
     #[diagnostic(help("this is probably a bug"))]
     PackageNotFound(LockedPackageId),
@@ -47,25 +47,21 @@ pub enum PinError {
     Fs(#[from] fs::Error),
 }
 
-pub fn set_pinned_state(
-    package_id: &LockedPackageId,
-    tree: &Tree,
-    pin: PinnedState,
-) -> Result<(), PinError> {
+pub fn set_state(package_id: &LockedPackageId, tree: &Tree, pin: PinnedState) -> Result<(), Error> {
     let lockfile = tree.lockfile()?;
     let package = lockfile
         .get(package_id)
-        .ok_or_else(|| PinError::PackageNotFound(package_id.clone()))?
+        .ok_or_else(|| Error::PackageNotFound(package_id.clone()))?
         .clone();
 
     if !lockfile.is_entrypoint(&package.id()) {
-        return Err(PinError::NotAnEntrypoint {
+        return Err(Error::NotAnEntrypoint {
             rock: package.to_package(),
         });
     }
 
     if pin == package.pinned() {
-        return Err(PinError::PinStateUnchanged {
+        return Err(Error::PinStateUnchanged {
             pin_state: package.pinned(),
             rock: package.to_package(),
         });
@@ -81,7 +77,7 @@ pub fn set_pinned_state(
     let package = package.repin(pin);
 
     if lockfile.get(&package.id()).is_some() {
-        return Err(PinError::PinStateConflict {
+        return Err(Error::PinStateConflict {
             pin_state: package.pinned(),
             rock: package.to_package(),
         });

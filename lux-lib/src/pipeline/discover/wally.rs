@@ -17,7 +17,6 @@ use url::Url;
 use crate::{
     config::Config,
     lockfile::{OptState, PinnedState, RemotePackageSourceUrl},
-    reqwest::RequestError,
     rockspec,
     rockspec::lua_dependency,
     wally,
@@ -44,7 +43,7 @@ pub enum Error {
     #[diagnostic(help(
         "the package manifest contains an invalid version; report it to the package author."
     ))]
-    Version(#[from] package::version::ParseError),
+    Version(#[from] package::version::Error),
     #[error("wally package '{0}' was not found in any registry")]
     #[diagnostic(help(
         "check the package name and version, or add its registry to `extra_wally_registries` in your Lux config."
@@ -70,7 +69,7 @@ pub enum Error {
     Requirement(#[from] semver::Error),
     #[error("client error")]
     #[diagnostic(transparent)]
-    Request(#[from] RequestError),
+    Request(#[from] crate::reqwest::Error),
 }
 
 impl From<reqwest::Error> for Error {

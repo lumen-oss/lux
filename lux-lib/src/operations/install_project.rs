@@ -9,7 +9,7 @@ use crate::{
     drivers::{InstallPackages, InstallPackagesError},
     hash::HasIntegrity,
     lockfile::LockedPackage,
-    operations::PackageInstallSpec,
+    operations::install,
     package::db::PackageDB,
     pipeline::discover::FoundPackage,
     project::{self, IntoLocalRockspecError, Project},
@@ -19,7 +19,7 @@ use crate::{
 };
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum InstallProjectError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] project::Error),
@@ -47,13 +47,13 @@ pub enum InstallProjectError {
     Workspace(#[from] workspace::Error),
 }
 
-impl From<InstallPackagesError> for InstallProjectError {
+impl From<InstallPackagesError> for Error {
     fn from(source: InstallPackagesError) -> Self {
         Self::Install(Box::new(source))
     }
 }
 
-impl From<build::Error> for InstallProjectError {
+impl From<build::Error> for Error {
     fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
@@ -88,7 +88,7 @@ impl<
 {
     /// Builds the project's root package, installing its dependencies through
     /// the pipeline. Returns the installed root package.
-    pub async fn build(self) -> Result<LockedPackage, InstallProjectError> {
+    pub async fn build(self) -> Result<LockedPackage, Error> {
         let args = self._build();
         let config = args.config;
         let project = args.project;
@@ -100,11 +100,7 @@ impl<
         let behaviour = if matches!(args.behaviour, BuildBehaviour::Ignore) {
             match tree.lockfile()?.entrypoint(&name) {
                 Some(existing) => {
-                    let source_hash = project
-                        .root()
-                        .hash()
-                        .await
-                        .map_err(InstallProjectError::Hash)?;
+                    let source_hash = project.root().hash().await.map_err(Error::Hash)?;
                     if existing.version() == rockspec.version()
                         && existing.hashes().source == source_hash
                     {
@@ -125,7 +121,7 @@ impl<
         }
         .with_local(vec![root]);
 
-        let install_spec = PackageInstallSpec::new(
+        let install_spec = install::Spec::new(
             package::Req::from(name.clone()),
             tree::EntryType::Entrypoint,
         )
@@ -140,6 +136,6 @@ impl<
             .0
             .into_iter()
             .find(|package| package.name() == &name)
-            .ok_or(InstallProjectError::PackageNotInstalled(name))
+            .ok_or(Error::PackageNotInstalled(name))
     }
 }

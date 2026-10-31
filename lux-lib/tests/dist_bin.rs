@@ -5,7 +5,7 @@ use assert_fs::TempDir;
 #[cfg(target_env = "msvc")]
 use flaky_test::flaky_test;
 #[cfg(target_env = "msvc")]
-use lux_lib::operations::DistProjectBin;
+use lux_lib::operations::dist;
 #[cfg(target_env = "msvc")]
 use lux_lib::project::Project;
 #[cfg(target_env = "msvc")]
@@ -49,7 +49,7 @@ async fn test_dist_bin_from_lua_source_compiles_and_runs() {
         "sample-project"
     });
 
-    DistProjectBin::new()
+    ProjectBin::new()
         .project(&project)
         .config(&config)
         .tree(&tree)

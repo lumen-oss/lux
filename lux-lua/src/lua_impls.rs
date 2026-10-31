@@ -20,13 +20,14 @@ use url::Url;
 use lux_lib::{
     build::BuildBehaviour,
     config::{self, Config},
+    drivers::sync::SyncReport,
     git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl},
     lockfile::{
-        LockConstraint, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile,
-        LockfileGuard, OptState, PinnedState, ReadOnly, ReadWrite,
+        self, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile, LockfileGuard,
+        OptState, PinnedState, ReadOnly, ReadWrite,
     },
     lua,
-    operations::{DownloadedRockspec, PackageInstallSpec, SyncReport},
+    operations::{self, download, install},
     package::db::PackageDB,
     project::Project,
     rockspec,
@@ -274,29 +275,29 @@ impl IntoLua for LockedPackageIdLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LockConstraintLua(pub LockConstraint);
+pub struct ConstraintLua(pub lockfile::Constraint);
 
-impl Typed for LockConstraintLua {
+impl Typed for ConstraintLua {
     fn ty() -> Type {
         Type::string()
     }
 }
 
-impl IntoLua for LockConstraintLua {
+impl IntoLua for ConstraintLua {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         match self.0 {
-            LockConstraint::Unconstrained => "*".into_lua(lua),
-            LockConstraint::Constrained(req) => req.to_string().into_lua(lua),
+            lockfile::Constraint::Unconstrained => "*".into_lua(lua),
+            lockfile::Constraint::Constrained(req) => req.to_string().into_lua(lua),
         }
     }
 }
 
-impl FromLua for LockConstraintLua {
+impl FromLua for ConstraintLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
         match s.as_str() {
-            "*" => Ok(LockConstraintLua(LockConstraint::Unconstrained)),
-            _ => Ok(LockConstraintLua(LockConstraint::Constrained(
+            "*" => Ok(ConstraintLua(lockfile::Constraint::Unconstrained)),
+            _ => Ok(ConstraintLua(lockfile::Constraint::Constrained(
                 s.parse().into_lua_err()?,
             ))),
         }
@@ -739,7 +740,7 @@ impl IntoLua for SyncReportLua {
     }
 }
 
-pub struct PackageInstallSpecLua(pub PackageInstallSpec);
+pub struct PackageInstallSpecLua(pub install::Spec);
 
 impl Typed for PackageInstallSpecLua {
     fn ty() -> Type {
@@ -767,7 +768,7 @@ impl FromLua for PackageInstallSpecLua {
             } => (package, entry_type.into(), pin, opt, build_behaviour),
         };
         let req = package::Req::parse(&package_str).into_lua_err()?;
-        let spec = PackageInstallSpec::new(req, entry_type)
+        let spec = install::Spec::new(req, entry_type)
             .pin(PinnedState::from(pin))
             .opt(OptState::from(opt))
             .build_behaviour(build_behaviour.into())
@@ -950,7 +951,7 @@ impl TypedUserData for LockedPackageLua {
         });
         methods.add_method("opt", |_, this, ()| Ok(OptStateLua(this.0.opt())));
         methods.add_method("constraint", |_, this, ()| {
-            Ok(LockConstraintLua(this.0.constraint()))
+            Ok(ConstraintLua(this.0.constraint()))
         });
         methods.add_method("hashes", |_, this, ()| {
             Ok(LockedPackageHashesLua(this.0.hashes().clone()))
@@ -3346,11 +3347,11 @@ impl mlua::UserData for ProjectLua {
 }
 
 #[derive(Clone)]
-pub struct DownloadedRockspecLua(pub DownloadedRockspec);
+pub struct DownloadedRockspecLua(pub download::Rockspec);
 
 impl Typed for DownloadedRockspecLua {
     fn ty() -> Type {
-        Type::named("operations.DownloadedRockspec")
+        Type::named("operations.download.Rockspec")
     }
 }
 
@@ -3451,7 +3452,7 @@ mod definitions_registry {
         "lockfile.ReadWrite" => LockfileReadWriteLua,
         "Project" => ProjectLua,
         "Workspace" => WorkspaceLua,
-        "operations.DownloadedRockspec" => DownloadedRockspecLua,
+        "operations.download.Rockspec" => DownloadedRockspecLua,
     }
 
     inventory::submit! {

@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::lockfile::RemotePackageSourceUrl;
-use crate::package::version::ParseError;
+use crate::package::version;
 use crate::package::Spec;
 
 #[derive(Clone, Debug)]
@@ -59,7 +59,7 @@ pub enum Error {
     #[error("unable to parse package {package_str}:\n{error}")]
     InvalidPackageVersion {
         #[source]
-        error: ParseError,
+        error: version::Error,
         package_str: String,
     },
 }

@@ -7,7 +7,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use serde::Deserialize;
 use thiserror::Error;
-use tokio::process::Command;
+use tokio::process::Command as ProcessCommand;
 
 use crate::{
     config::Config,
@@ -18,44 +18,42 @@ use crate::{
     workspace::{self, TreeError, Workspace},
 };
 
-use super::RunLuaError;
-
 #[derive(Debug, Error, Diagnostic)]
 #[error("'{0}' should not be used as a `command` as it is not cross-platform.
 You should only change the default `command` if it is a different Lua interpreter that behaves identically on all platforms.
 Consider removing the `command` field and letting Lux choose the default Lua interpreter instead.")]
-pub struct RunCommandError(String);
+pub struct CommandError(String);
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", serde(transparent))]
-pub struct RunCommand(String);
+pub struct Command(String);
 
-impl RunCommand {
-    pub fn from(command: String) -> Result<Self, RunCommandError> {
+impl Command {
+    pub fn from(command: String) -> Result<Self, CommandError> {
         match command.as_str() {
             // Common Lua interpreters that could lead to cross-platform issues
             // Luajit is also included because it may or may not have lua52 syntax support compiled in.
             "lua" | "lua5.1" | "lua5.2" | "lua5.3" | "lua5.4" | "luajit" => {
-                Err(RunCommandError(command))
+                Err(CommandError(command))
             }
             _ => Ok(Self(command)),
         }
     }
 }
 
-impl<'de> Deserialize<'de> for RunCommand {
+impl<'de> Deserialize<'de> for Command {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let command = String::deserialize(deserializer)?;
 
-        RunCommand::from(command).map_err(serde::de::Error::custom)
+        Command::from(command).map_err(serde::de::Error::custom)
     }
 }
 
-impl Deref for RunCommand {
+impl Deref for Command {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
@@ -66,15 +64,15 @@ impl Deref for RunCommand {
 #[derive(Debug, Error, Diagnostic)]
 #[error(transparent)]
 #[non_exhaustive]
-pub enum RunError {
+pub enum Error {
     #[diagnostic(transparent)]
     Toml(#[from] rockspec::toml::Error),
     #[diagnostic(transparent)]
-    RunCommand(#[from] RunCommandError),
+    Command(#[from] CommandError),
     #[diagnostic(transparent)]
     LuaVersion(#[from] rockspec::Error),
     #[diagnostic(transparent)]
-    RunLua(#[from] RunLuaError),
+    RunLua(#[from] run_lua::Error),
     #[error("failed to detect or install a luau runtime")]
     #[diagnostic(forward(0))]
     LuaInstallation(#[from] lua::installation::Error),
@@ -105,7 +103,7 @@ impl<State> RunBuilder<'_, State>
 where
     State: run_builder::State + run_builder::IsComplete,
 {
-    pub async fn run(self) -> Result<(), RunError> {
+    pub async fn run(self) -> Result<(), Error> {
         let run = self._build();
         let workspace = run.workspace;
         let config = run.config;
@@ -115,7 +113,7 @@ where
 
         let run_spec = toml
             .run()
-            .ok_or(RunError::NoRunField)?
+            .ok_or(Error::NoRunField)?
             .current_platform()
             .clone();
 
@@ -161,12 +159,12 @@ async fn run_with_local_lua(
     args: &Vec<String>,
     config: &Config,
     environment: LuaEnvironment,
-) -> Result<(), RunError> {
+) -> Result<(), Error> {
     let version = workspace.lua_version(config)?;
 
     let tree = workspace.tree(config)?;
 
-    let lua_cmd = lua::Binary::from(run_lua::resolve_lua_runtime(&version, config).await?);
+    let lua_cmd = lua::Binary::from(run_lua::resolve_runtime(&version, config).await?);
 
     RunLua::new()
         .root(&root_dir.unwrap_or(workspace.root().to_path_buf()))
@@ -184,13 +182,13 @@ async fn run_with_local_lua(
 
 async fn run_with_command(
     workspace: &Workspace,
-    command: &RunCommand,
+    command: &Command,
     root_dir: Option<PathBuf>,
     disable_loader: bool,
     args: &[String],
     config: &Config,
     environment: LuaEnvironment,
-) -> Result<(), RunError> {
+) -> Result<(), Error> {
     let tree = workspace.tree(config)?;
     let paths = Paths::for_environment(&tree, config, environment)?;
 
@@ -203,7 +201,7 @@ async fn run_with_command(
         Some(paths.init())
     };
 
-    let mut cmd = Command::new(command.deref());
+    let mut cmd = ProcessCommand::new(command.deref());
     if let Some(dir) = root_dir {
         cmd.current_dir(dir);
     } else {
@@ -218,7 +216,7 @@ async fn run_with_command(
         .code()
     {
         Some(0) => Ok(()),
-        code => Err(RunLuaError::LuaCommandNonZeroExitCode {
+        code => Err(run_lua::Error::LuaCommandNonZeroExitCode {
             lua_cmd: command.to_string(),
             exit_code: code,
         }

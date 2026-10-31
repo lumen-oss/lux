@@ -28,9 +28,9 @@ use crate::pipeline::{
     resolve::{self, ResolvePackageDependencies},
 };
 
-use crate::operations::PackageInstallSpec;
+use crate::operations::install;
 
-/// Installs a set of [`PackageInstallSpec`]s into a tree.
+/// Installs a set of [`install::Spec`]s into a tree.
 ///
 /// Returns a [`LockfileHandle`] so changes can be committed into
 /// the correct lockfile.
@@ -45,11 +45,11 @@ where
     #[builder(start_fn)]
     tree: &'a T,
     #[builder(field)]
-    build_packages: Vec<PackageInstallSpec>,
+    build_packages: Vec<install::Spec>,
     #[builder(field)]
-    test_packages: Option<Vec<PackageInstallSpec>>,
+    test_packages: Option<Vec<install::Spec>>,
     #[builder(field)]
-    packages: Vec<PackageInstallSpec>,
+    packages: Vec<install::Spec>,
     package_db: PackageDB,
 }
 
@@ -58,22 +58,22 @@ where
     T: InstallTree + Send + Sync,
     State: install_packages_builder::State,
 {
-    pub fn packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
+    pub fn packages(mut self, packages: Vec<install::Spec>) -> Self {
         self.packages = packages;
         self
     }
 
-    pub fn package(mut self, package: PackageInstallSpec) -> Self {
+    pub fn package(mut self, package: install::Spec) -> Self {
         self.packages.push(package);
         self
     }
 
-    pub fn build_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
+    pub fn build_packages(mut self, packages: Vec<install::Spec>) -> Self {
         self.build_packages = packages;
         self
     }
 
-    pub fn test_packages(mut self, packages: Vec<PackageInstallSpec>) -> Self {
+    pub fn test_packages(mut self, packages: Vec<install::Spec>) -> Self {
         self.test_packages = Some(packages);
         self
     }

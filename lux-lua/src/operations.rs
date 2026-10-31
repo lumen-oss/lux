@@ -11,7 +11,7 @@ use lux_lib::{
     drivers::InstallPackages,
     lockfile::LockedPackageId,
     lua,
-    operations::{set_pinned_state, BuildWorkspace, DistProjectBin, Download, Uninstall, Update},
+    operations::{self, pin},
     package::db::PackageDB,
     rockspec::dependency,
     tree::{RockMatches, Tree},
@@ -97,7 +97,7 @@ impl TypedUserData for OperationsModule {
             },
         );
 
-        methods.document("Uninstall one or multiple package(s)");
+        methods.document("operations::Uninstall one or multiple package(s)");
         methods.param("packages", "IDs of packages to uninstall");
         methods.param("tree", "Install tree");
         methods.param("config", "Lux config");
@@ -106,7 +106,7 @@ impl TypedUserData for OperationsModule {
             |_, (packages, tree, config): (Vec<LockedPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
-                Uninstall::new()
+                operations::Uninstall::new()
                     .config(&config.0)
                     .packages(ids)
                     .maybe_tree(tree.map(|tree| tree.0))
@@ -117,7 +117,7 @@ impl TypedUserData for OperationsModule {
             },
         );
 
-        methods.document("Update installed packages in a workspace");
+        methods.document("operations::Update installed packages in a workspace");
         methods.param("workspace", "Workspace to update packages in");
         methods.param(
             "packages",
@@ -138,7 +138,7 @@ impl TypedUserData for OperationsModule {
                     .transpose()
                     .into_lua_err()?;
 
-                Update::new(&config.0)
+                operations::Update::new(&config.0)
                     .workspace(workspace.0)
                     .packages(package_reqs)
                     .update()
@@ -226,7 +226,7 @@ impl TypedUserData for OperationsModule {
                     .await
                     .into_lua_err()?;
 
-                Uninstall::new()
+                operations::Uninstall::new()
                     .config(&config.0)
                     .tree(tree)
                     .packages(ids_to_remove)
@@ -283,7 +283,7 @@ impl TypedUserData for OperationsModule {
             "build",
             |_, (workspace, package, config): (WorkspaceLua, Option<PackageNameLua>, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
-                BuildWorkspace::new(&workspace.0, &config.0)
+                operations::BuildWorkspace::new(&workspace.0, &config.0)
                     .maybe_package(package.map(|p| p.0))
                     .no_lock(false)
                     .only_deps(false)
@@ -304,7 +304,7 @@ impl TypedUserData for OperationsModule {
             "dist_bin",
             |_, (project, tree, output, config): (ProjectLua, TreeLua, String, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
-                DistProjectBin::new()
+                operations::dist::ProjectBin::new()
                     .project(&project.0)
                     .tree(&tree.0)
                     .output(PathBuf::from(output))
@@ -316,7 +316,7 @@ impl TypedUserData for OperationsModule {
             },
         );
 
-        methods.document("Download the RockSpec for a package");
+        methods.document("operations::Download the RockSpec for a package");
         methods.param(
             "package_req",
             "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
@@ -327,7 +327,7 @@ impl TypedUserData for OperationsModule {
             |_, (package_req, config): (String, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
                 let req = package_req.parse().into_lua_err()?;
-                Download::new(&req, &config.0)
+                operations::Download::new(&req, &config.0)
                     .download_rockspec()
                     .await
                     .into_lua_err()
@@ -342,7 +342,7 @@ impl TypedUserData for OperationsModule {
         methods.add_function(
             "pin",
             |_, (package_id, tree, pin_state): (LockedPackageIdLua, TreeLua, PinnedStateLua)| {
-                set_pinned_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
+                pin::set_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
             },
         );
     }

@@ -51,14 +51,14 @@ impl<State> PackBuilder<State>
 where
     State: pack_builder::State + pack_builder::IsComplete,
 {
-    pub async fn pack(self) -> Result<PathBuf, PackError> {
+    pub async fn pack(self) -> Result<PathBuf, Error> {
         do_pack(self._build()).await
     }
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("failed to pack rock")]
-pub enum PackError {
+pub enum Error {
     Zip(#[from] zip::result::ZipError),
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -72,7 +72,7 @@ pub enum PackError {
     MissingRockspec,
 }
 
-async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
+async fn do_pack(args: Pack) -> Result<PathBuf, Error> {
     let package = args.package;
     let tree = args.tree;
     let layout = tree.layout_for(&package.spec);
@@ -107,7 +107,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, PackError> {
     // luarocks expects a <package>-<version>.rockspec,
     // so we copy it the package.rockspec to our temporary root directory and rename it
     if !layout.rockspec_path().is_file() {
-        return Err(PackError::MissingRockspec);
+        return Err(Error::MissingRockspec);
     }
     let packed_rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
     let renamed_rockspec_entry = temp_root_dir.path().join(packed_rockspec_name);
@@ -180,7 +180,7 @@ fn add_rock_entries(
     zip: &mut ZipWriter<File>,
     source_dir: &Path,
     zip_dir: PathBuf,
-) -> Result<HashMap<PathBuf, DirOrFileEntry>, PackError> {
+) -> Result<HashMap<PathBuf, DirOrFileEntry>, Error> {
     let mut result = HashMap::new();
     if source_dir.is_dir() {
         for file in WalkDir::new(source_dir).into_iter().filter_map_ok(|entry| {
@@ -204,7 +204,7 @@ fn add_rock_entry(
     file: PathBuf,
     source_dir: &Path,
     zip_dir: &Path,
-) -> Result<(PathBuf, String), PackError> {
+) -> Result<(PathBuf, String), Error> {
     let relative_path: PathBuf = file
         .strip_prefix(source_dir)
         .unwrap_or(file.as_path())
@@ -342,7 +342,7 @@ mod tests {
     // non-regression for https://github.com/lumen-oss/lux/issues/2116
     #[cfg(unix)]
     #[test]
-    fn add_rock_entries_with_relative_source_dir() -> Result<(), PackError> {
+    fn add_rock_entries_with_relative_source_dir() -> Result<(), Error> {
         let temp = fs::tempfile::tempdir()?;
         let abs_source_dir = temp.path().join("src");
         fs::sync::create_dir_all(abs_source_dir.join("sub"))?;

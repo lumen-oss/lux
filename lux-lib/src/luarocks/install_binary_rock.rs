@@ -166,9 +166,9 @@ mod tests {
     use crate::luarocks::rock_manifest::RockManifest;
     use crate::{
         config,
-        lockfile::{LockConstraint, LockedPackageId, OptState, PinnedState},
+        lockfile::{self, LockedPackageId, OptState, PinnedState},
         lua,
-        operations::{unpack_rockspec, DownloadedPackedRockBytes},
+        operations::download,
         package,
     };
 
@@ -181,7 +181,7 @@ mod tests {
             LockedPackageSpec::new(
                 self.package(),
                 self.version(),
-                LockConstraint::Unconstrained,
+                lockfile::Constraint::Unconstrained,
                 Vec::new(),
                 Vec::new(),
                 &PinnedState::default(),
@@ -203,14 +203,14 @@ mod tests {
         let mut manifest_file = zip.by_index(manifest_index).unwrap();
         let mut content = String::new();
         manifest_file.read_to_string(&mut content).unwrap();
-        let rock = DownloadedPackedRockBytes {
+        let rock = download::PackedRockBytes {
             name: "sample-project".into(),
             version: "0.1.0-1".parse().unwrap(),
             bytes: rock_bytes,
             file_name: packed_rock_file_name.clone(),
             url: "https://test.org".parse().unwrap(),
         };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let install_root = assert_fs::TempDir::new().unwrap();
         let config = config::Builder::new()
             .unwrap()
@@ -274,14 +274,14 @@ source = { url = "https://example.com/test-binary-bin.zip" }
     #[cfg(unix)]
     #[tokio::test]
     async fn install_binary_rock_makes_bin_executable() {
-        let rock = DownloadedPackedRockBytes {
+        let rock = download::PackedRockBytes {
             name: "test-binary-bin".into(),
             version: "1.0-1".parse().unwrap(),
             bytes: Bytes::from(packed_rock_with_bin()),
             file_name: "test-binary-bin-1.0-1.all.rock".into(),
             url: "https://test.org".parse().unwrap(),
         };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let install_root = TempDir::new().unwrap();
         let config = config::Builder::new()
             .unwrap()
@@ -308,25 +308,25 @@ source = { url = "https://example.com/test-binary-bin.zip" }
 
     #[tokio::test]
     async fn install_binary_rock_preserves_dependencies() {
-        let rock = DownloadedPackedRockBytes {
+        let rock = download::PackedRockBytes {
             name: "test-binary-bin".into(),
             version: "1.0-1".parse().unwrap(),
             bytes: Bytes::from(packed_rock_with_bin()),
             file_name: "test-binary-bin-1.0-1.all.rock".into(),
             url: "https://test.org".parse().unwrap(),
         };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let dependency = LockedPackageId::new(
             &package::Name::from("transitive-dependency"),
             &"1.0-1".parse().unwrap(),
             PinnedState::default(),
             OptState::default(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
         );
         let spec = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             vec![dependency.clone()],
             Vec::new(),
             &PinnedState::default(),
@@ -360,17 +360,17 @@ source = { url = "https://example.com/test-binary-bin.zip" }
     /// This relatively large integration test case tests the following:
     ///
     /// - Install a packed rock that was packed using luarocks 3.11 from the test resources.
-    /// - Pack the rock using our own `Pack` implementation.
+    /// - operations::Pack the rock using our own `operations::Pack` implementation.
     /// - Verify that the `rock_manifest` entry of the original packed rock and our own packed rock
     ///   are equal (this means luarocks should be able to install our packed rock).
-    /// - Uninstall the local package.
+    /// - operations::Uninstall the local package.
     /// - Install the package from our packed rock.
     /// - Verify that the contents of the install directories when installing from both packed rocks
     ///   are the same.
     #[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "impure_tests"))]
     #[flaky_test(tokio, times = 5)]
     async fn install_binary_rock_roundtrip() {
-        use crate::operations::{Pack, Uninstall};
+        use crate::operations;
 
         let rock = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/toml-edit-0.6.0-1.linux-x86_64.rock");
@@ -384,14 +384,14 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         let mut content = String::new();
         manifest_file.read_to_string(&mut content).unwrap();
         let orig_manifest = RockManifest::new(&content).unwrap();
-        let rock = DownloadedPackedRockBytes {
+        let rock = download::PackedRockBytes {
             name: "toml-edit".into(),
             version: "0.6.0-1".parse().unwrap(),
             bytes: rock_bytes,
             file_name: packed_rock_file_name.clone(),
             url: "https://test.org".parse().unwrap(),
         };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let install_root = assert_fs::TempDir::new().unwrap();
         let config = config::Builder::new()
             .unwrap()
@@ -419,7 +419,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         let orig_install_tree_integrity = layout.root.hash().await.unwrap();
 
         let pack_dest_dir = assert_fs::TempDir::new().unwrap();
-        let packed_rock = Pack::new(
+        let packed_rock = operations::Pack::new(
             pack_dest_dir.to_path_buf(),
             tree.clone(),
             local_package.clone(),
@@ -437,7 +437,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         );
 
         // let's make sure our own pack/unpack implementation roundtrips correctly
-        Uninstall::new()
+        operations::Uninstall::new()
             .config(&config)
             .package(local_package.id())
             .remove()
@@ -453,14 +453,14 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         manifest_file.read_to_string(&mut content).unwrap();
         let packed_manifest = RockManifest::new(&content).unwrap();
         assert_eq!(packed_manifest, orig_manifest);
-        let rock = DownloadedPackedRockBytes {
+        let rock = download::PackedRockBytes {
             name: "toml-edit".into(),
             version: "0.6.0-1".parse().unwrap(),
             bytes: rock_bytes,
             file_name: packed_rock_file_name.clone(),
             url: "https://test.org".parse().unwrap(),
         };
-        let rockspec = unpack_rockspec(&rock).await.unwrap();
+        let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let local_package = BinaryRockInstall::new(
             &rockspec,
             rockspec.to_locked_package_spec(),

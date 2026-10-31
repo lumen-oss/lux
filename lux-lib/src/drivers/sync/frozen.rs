@@ -1,7 +1,7 @@
 use crate::package;
 use std::io;
 
-use crate::operations::{PackageInstallSpec, RemoveError, Uninstall};
+use crate::operations::{self, uninstall};
 
 use super::reconcile::{reconcile_locks, SyncReport};
 
@@ -15,7 +15,8 @@ use crate::{
         PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
     },
     luarocks::installation::LUAROCKS_VERSION,
-    operations::{self, GenLuaRcError, GenLuauRcError},
+    operations::install,
+    operations::{gen_luarc, gen_luaurc},
     package::db::PackageDB,
     pipeline::resolve::luarocks_build_backend_name,
     project,
@@ -140,7 +141,7 @@ pub enum Error {
     Install(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Remove(#[from] RemoveError),
+    Remove(#[from] uninstall::Error),
     #[error("integrity error for package '{package}'")]
     Integrity {
         package: package::Name,
@@ -161,10 +162,10 @@ pub enum Error {
     TomlValidation(#[from] rockspec::toml::Error),
     #[error("failed to generate `.luarc.json`")]
     #[diagnostic(forward(0))]
-    GenLuaRc(#[from] GenLuaRcError),
+    GenLuaRc(#[from] gen_luarc::Error),
     #[error("failed to generate `.luaurc`")]
     #[diagnostic(forward(0))]
-    GenLuauRc(#[from] GenLuauRcError),
+    GenLuauRc(#[from] gen_luaurc::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageDB(Box<package::db::Error>),
@@ -238,7 +239,7 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
 
     let packages_to_remove = report.removed.iter().map(|pkg| pkg.id()).collect_vec();
 
-    Uninstall::new()
+    operations::Uninstall::new()
         .config(args.config)
         .packages(packages_to_remove)
         .tree(tree.clone())
@@ -355,11 +356,11 @@ impl<'a, 'b> SyncPackages<'a, 'b> {
     }
 }
 
-fn install_specs_to_force(to_add: &[(tree::EntryType, LockedPackage)]) -> Vec<PackageInstallSpec> {
+fn install_specs_to_force(to_add: &[(tree::EntryType, LockedPackage)]) -> Vec<install::Spec> {
     to_add
         .iter()
         .map(|(entry_type, pkg)| {
-            PackageInstallSpec::new(pkg.clone().into_package_req(), *entry_type)
+            install::Spec::new(pkg.clone().into_package_req(), *entry_type)
                 .build_behaviour(BuildBehaviour::Force)
                 .pin(pkg.pinned())
                 .opt(pkg.opt())
@@ -410,7 +411,7 @@ where
         .to_add
         .iter()
         .map(|dep| {
-            PackageInstallSpec::new(dep.package_req().clone(), tree::EntryType::Entrypoint)
+            install::Spec::new(dep.package_req().clone(), tree::EntryType::Entrypoint)
                 .build_behaviour(BuildBehaviour::Force)
                 .pin(*dep.pin())
                 .opt(*dep.opt())

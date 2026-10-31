@@ -9,7 +9,7 @@ use crate::{
     lockfile::PackageLock,
     manifest::{self, Manifest},
     manifest_cache::{Closure, ClosureSpec, ManifestCache},
-    operations::PackageInstallSpec,
+    operations::{download, install},
     pipeline::discover::{self, FoundPackage},
     remote,
     workspace::{self, Workspace},
@@ -121,7 +121,7 @@ impl Provider {
 
     async fn resolve(
         &self,
-        spec: &PackageInstallSpec,
+        spec: &install::Spec,
         config: &Config,
     ) -> Result<Option<FoundPackage>, discover::Error> {
         match self {
@@ -272,7 +272,7 @@ impl ClosureProvider {
 
     async fn resolve(
         &self,
-        spec: &PackageInstallSpec,
+        spec: &install::Spec,
         _config: &Config,
     ) -> Result<Option<FoundPackage>, discover::Error> {
         let Some(closure) = self.load_closure_for(&spec.package).await else {
@@ -290,9 +290,7 @@ impl ClosureProvider {
         let rockspec = rockspec::lua::Remote::new(closure_spec.rockspec_raw()).map_err(|err| {
             discover::Error::Download(
                 spec.package.clone(),
-                Box::new(crate::operations::SearchAndDownloadError::Rockspec(
-                    err.into(),
-                )),
+                Box::new(download::Error::Rockspec(err.into())),
             )
         })?;
         let remote = self.remote_package(closure_spec, package_type);

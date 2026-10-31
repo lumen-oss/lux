@@ -5,7 +5,7 @@ use thiserror::Error;
 
 pub mod exec;
 
-use crate::{build, config::Config, fs, lua, operations::UnpackError, tree::InstallTree};
+use crate::{build, config::Config, fs, lua, operations::unpack, tree::InstallTree};
 
 #[cfg(target_family = "unix")]
 use crate::tree::{self, Tree};
@@ -54,10 +54,10 @@ pub enum Error {
     #[diagnostic(transparent)]
     Build(#[from] Box<build::Error>),
     #[error(transparent)]
-    Request(#[from] reqwest::Error),
+    Request(#[from] crate::reqwest::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    UnpackError(#[from] UnpackError),
+    Unpack(#[from] unpack::Error),
     #[error("luarocks integrity mismatch.\nExpected: {expected}\nBut got: {got}")]
     IntegrityMismatch { expected: Integrity, got: Integrity },
 }
@@ -134,7 +134,7 @@ impl Installation {
         let cursor = Cursor::new(response);
         let mime_type = infer::get(cursor.get_ref()).map(|file_type| file_type.mime_type());
         let unpack_dir = fs::tempfile::tempdir()?;
-        operations::unpack(
+        unpack::extract(
             mime_type,
             cursor,
             false,
@@ -146,5 +146,11 @@ impl Installation {
         fs::tokio::copy(luarocks_exe, &self.tree.bin().join(LUAROCKS_EXE)).await?;
 
         Ok(())
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Self::Request(err.into())
     }
 }

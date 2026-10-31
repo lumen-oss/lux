@@ -14,7 +14,7 @@ use thiserror::Error;
 pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Req(#[from] package::ReqParseError),
+    Req(#[from] package::req::Error),
 }
 
 /// Specification for a Lua dependency in a Lux project

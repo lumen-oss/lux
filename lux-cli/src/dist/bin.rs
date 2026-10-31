@@ -4,8 +4,7 @@ use std::path::PathBuf;
 use clap::Args;
 use lux_lib::{
     config::{self, Config},
-    lua,
-    operations::DistProjectBin,
+    lua, operations,
     tree::FlatDistTree,
     workspace::Workspace,
 };
@@ -51,7 +50,7 @@ pub async fn bin(data: Bin, config: Config) -> Result<()> {
     }
     let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, &config)?;
 
-    let out = DistProjectBin::new()
+    let out = operations::dist::ProjectBin::new()
         .project(project)
         .config(&config)
         .tree(&tree)

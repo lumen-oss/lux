@@ -21,9 +21,7 @@ use crate::{
         LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
         RemotePackageSourceUrl,
     },
-    operations::{
-        single_non_rockspec_entry, unpack_src_rock, FetchSrc, RemotePackageSourceMetadata,
-    },
+    operations::{self, fetch, unpack},
     rockspec::Rockspec,
     tree::EntryType,
 };
@@ -235,7 +233,7 @@ fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
 fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> PathBuf {
     if let rockspec::source::Spec::Git(git) = &rockspec.source().current_platform().source_spec {
         let repo_dir = unpacked_root.join(git.url.repo());
-        if let Ok(Some(entry)) = single_non_rockspec_entry(unpacked_root) {
+        if let Ok(Some(entry)) = unpack::single_non_rockspec_entry(unpacked_root) {
             if entry == repo_dir && entry.is_dir() {
                 return repo_dir;
             }
@@ -264,19 +262,19 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
             let hash = bytes.hash().await?;
             let cursor = Cursor::new(bytes);
-            unpack_src_rock(cursor, temp_dir.path().to_path_buf())
+            unpack::src_rock(cursor, temp_dir.path().to_path_buf())
                 .await
                 .map_err(build::Error::UnpackSrcRock)?;
-            RemotePackageSourceMetadata { hash, source_url }
+            fetch::RemotePackageSourceMetadata { hash, source_url }
         }
         Some(RemotePackageSourceSpec::RockSpec(source_url)) => {
-            FetchSrc::new(temp_dir.path(), rockspec, config)
+            operations::FetchSrc::new(temp_dir.path(), rockspec, config)
                 .maybe_source_url(source_url)
                 .fetch_internal()
                 .await?
         }
         None => {
-            FetchSrc::new(temp_dir.path(), rockspec, config)
+            operations::FetchSrc::new(temp_dir.path(), rockspec, config)
                 .fetch_internal()
                 .await?
         }

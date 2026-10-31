@@ -75,7 +75,7 @@ end
 "#;
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum TiniestError {
+pub enum Error {
     #[error("failed to install tiniest")]
     #[diagnostic(transparent)]
     Build(Box<build::Error>),
@@ -90,7 +90,7 @@ pub enum TiniestError {
     Tree(#[from] tree::Error),
 }
 
-impl From<build::Error> for TiniestError {
+impl From<build::Error> for Error {
     fn from(source: build::Error) -> Self {
         Self::Build(Box::new(source))
     }
@@ -98,10 +98,7 @@ impl From<build::Error> for TiniestError {
 
 /// Returns the `src` directory of tiniest installed in the given tree,
 /// installing it first if necessary.
-pub(crate) async fn ensure_installed(
-    tree: &Tree,
-    config: &Config,
-) -> Result<PathBuf, TiniestError> {
+pub(crate) async fn ensure_installed(tree: &Tree, config: &Config) -> Result<PathBuf, Error> {
     let tiniest =
         unsafe { package::Req::new_unchecked("tiniest".into(), Some(TINIEST_VERSION.into())) };
     if let Some(src_dir) = find_installed_src(tree, &tiniest)? {
@@ -175,7 +172,7 @@ pub(crate) async fn write_collector(
     workspace_root: &Path,
     spec_files: &[PathBuf],
     tiniest_src: &Path,
-) -> Result<PathBuf, TiniestError> {
+) -> Result<PathBuf, Error> {
     let collector_dir = workspace_root.join(LUX_DIR_NAME);
     let requires = spec_files
         .iter()

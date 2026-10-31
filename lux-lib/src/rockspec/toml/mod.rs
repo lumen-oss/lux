@@ -7,7 +7,7 @@ use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
 use crate::lockfile::PinnedState;
 use crate::lua;
-use crate::operations::RunCommand;
+use crate::operations::run;
 use crate::package;
 use crate::project::TomlDeError;
 use crate::rockspec;
@@ -667,7 +667,7 @@ impl Default for ProjectSpec {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RunSpec {
     /// The command to execute when running the project
-    pub(crate) command: Option<RunCommand>,
+    pub(crate) command: Option<run::Command>,
     /// Arguments to pass to the command
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub(crate) args: Option<NonEmpty<String>>,

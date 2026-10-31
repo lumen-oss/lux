@@ -12,8 +12,7 @@ use thiserror::Error;
 
 use crate::{
     config::Config,
-    operations,
-    operations::{Download, FetchVendored, PackageInstallSpec, RemoteRockDownload},
+    operations::{self, download, fetch_vendored, install},
     package::db::{search, PackageDB},
     project::Project,
     rockspec::Rockspec,
@@ -72,10 +71,10 @@ pub enum Error {
     Search(#[from] search::Error),
     #[error("failed to acquire metadata for '{0}'")]
     #[diagnostic(forward(1))]
-    Download(package::Req, Box<operations::SearchAndDownloadError>),
+    Download(package::Req, Box<download::Error>),
     #[error("failed to fetch vendored package for '{0}'")]
     #[diagnostic(forward(1))]
-    FetchVendored(package::Req, Box<operations::FetchVendoredError>),
+    FetchVendored(package::Req, Box<fetch_vendored::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] crate::project::Error),
@@ -105,7 +104,7 @@ impl<State> DiscoverBuilder<'_, State>
 where
     State: discover_builder::State + discover_builder::IsComplete,
 {
-    pub(crate) async fn discover(self, spec: &PackageInstallSpec) -> Result<FoundPackage, Error> {
+    pub(crate) async fn discover(self, spec: &install::Spec) -> Result<FoundPackage, Error> {
         let args = self._build();
         if let Some(found) = discover_project(spec)? {
             return Ok(found);
@@ -117,7 +116,7 @@ where
     }
 }
 
-fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, Error> {
+fn discover_project(spec: &install::Spec) -> Result<Option<FoundPackage>, Error> {
     let Some(rockspec::source::Spec::File(path)) = &spec.source else {
         return Ok(None);
     };
@@ -133,7 +132,7 @@ fn discover_project(spec: &PackageInstallSpec) -> Result<Option<FoundPackage>, E
 }
 
 async fn discover_source_spec(
-    spec: &PackageInstallSpec,
+    spec: &install::Spec,
     source: &rockspec::source::Spec,
     _config: &Config,
 ) -> Result<FoundPackage, Error> {
@@ -153,19 +152,16 @@ async fn discover_source_spec(
 }
 
 fn discover_fetchable_source(
-    spec: &PackageInstallSpec,
+    spec: &install::Spec,
     source: rockspec::source::Spec,
 ) -> Result<FoundPackage, Error> {
     let download =
-        RemoteRockDownload::from_package_req_and_source_spec(spec.package.clone(), source)
+        download::RemoteRock::from_package_req_and_source_spec(spec.package.clone(), source)
             .map_err(|err| Error::Download(spec.package.clone(), Box::new(err)))?;
     let rockspec = download.rockspec().clone();
     let remote = remote::Package::new(
         spec.package.clone().try_into().map_err(|err| {
-            Error::Download(
-                spec.package.clone(),
-                Box::new(operations::SearchAndDownloadError::from(err)),
-            )
+            Error::Download(spec.package.clone(), Box::new(download::Error::from(err)))
         })?,
         download.rockspec_download().source.clone(),
         download.rockspec_download().source_url.clone(),
@@ -178,7 +174,7 @@ fn discover_fetchable_source(
 }
 
 async fn discover_package_db(
-    spec: &PackageInstallSpec,
+    spec: &install::Spec,
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<FoundPackage, Error> {
@@ -190,7 +186,7 @@ async fn discover_package_db(
 }
 
 async fn download_remote(
-    spec: &PackageInstallSpec,
+    spec: &install::Spec,
     package_db: &PackageDB,
     config: &Config,
 ) -> Result<FoundPackage, Error> {
@@ -207,7 +203,7 @@ async fn download_remote(
             return Err(Error::WallyDisabled);
         }
         let download = if let Some(vendor_dir) = config.vendor_dir() {
-            FetchVendored::new()
+            operations::FetchVendored::new()
                 .vendor_dir(vendor_dir)
                 .package(&spec.package)
                 .package_db(package_db)
@@ -215,7 +211,7 @@ async fn download_remote(
                 .await
                 .map_err(|err| Error::FetchVendored(spec.package.clone(), Box::new(err)))?
         } else {
-            Download::new(&spec.package, config)
+            operations::Download::new(&spec.package, config)
                 .package_db(package_db)
                 .download_remote_rock()
                 .await
@@ -223,7 +219,7 @@ async fn download_remote(
         };
         let rockspec = download.rockspec().clone();
         let artifact = match &download {
-            RemoteRockDownload::SrcRock {
+            download::RemoteRock::SrcRock {
                 src_rock,
                 source_url,
                 ..
@@ -231,10 +227,10 @@ async fn download_remote(
                 remote.source_url = Some(source_url.clone());
                 Some(PackageSource::Archive(src_rock.clone()))
             }
-            RemoteRockDownload::BinaryRock { packed_rock, .. } => {
+            download::RemoteRock::BinaryRock { packed_rock, .. } => {
                 Some(PackageSource::Archive(packed_rock.clone()))
             }
-            RemoteRockDownload::RockspecOnly { .. } => None,
+            download::RemoteRock::RockspecOnly { .. } => None,
         };
         Ok(FoundPackage {
             remote,
@@ -280,7 +276,7 @@ mod tests {
             .join("resources/test/sample-projects/multi-project-local-deps/projects/bar");
 
         let config = config::Builder::new().unwrap().build().unwrap();
-        let spec = PackageInstallSpec::new(
+        let spec = install::Spec::new(
             package::Req::new("bar".into(), Some("1.0.0".into())).unwrap(),
             EntryType::DependencyOnly,
         )

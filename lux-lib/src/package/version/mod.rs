@@ -4,24 +4,22 @@ use std::{
     str::FromStr,
 };
 
-use html_escape::decode_html_entities;
 use itertools::Itertools;
-
 use miette::Diagnostic;
 use nonempty::NonEmpty;
-use semver::{Comparator, Error, Op, Prerelease};
+use semver::{Comparator, Error as SemverError, Op, Prerelease};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
+mod req;
+mod spec_rev;
 mod upgrade;
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum ReqToVersionError {
-    #[error("cannot parse version from non-exact version requirement '{0}'")]
-    NonExactVersionReq(semver::VersionReq),
-    #[error("cannot parse version from version requirement '*' (any version)")]
-    Any,
-}
+use spec_rev::split_specrev;
+
+pub use req::{FromReqError, ReqError, VersionReq};
+pub(crate) use spec_rev::SpecRevIterator;
+pub use spec_rev::{SpecRev, SpecRevParseError};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Version {
@@ -47,7 +45,7 @@ impl HasModRev for Version {
 }
 
 impl Version {
-    pub fn parse(text: &str) -> Result<Self, ParseError> {
+    pub fn parse(text: &str) -> Result<Self, Error> {
         Version::from_str(text)
     }
     /// The package version without its spec revision.
@@ -115,7 +113,7 @@ impl Version {
 }
 
 impl TryFrom<VersionReq> for Version {
-    type Error = ReqToVersionError;
+    type Error = FromReqError;
 
     fn try_from(req: VersionReq) -> Result<Self, Self::Error> {
         match req {
@@ -126,7 +124,7 @@ impl TryFrom<VersionReq> for Version {
                             .iter()
                             .any(|comparator| comparator.op != semver::Op::Exact) =>
                     {
-                        Err(ReqToVersionError::NonExactVersionReq(version_req))
+                        Err(FromReqError::NonExactVersionReq(version_req))
                     }
                     Ok(comparators) => {
                         let comparator = comparators.first();
@@ -143,7 +141,7 @@ impl TryFrom<VersionReq> for Version {
                             specrev: 1.into(),
                         }))
                     }
-                    Err(_) => Err(ReqToVersionError::NonExactVersionReq(version_req)),
+                    Err(_) => Err(FromReqError::NonExactVersionReq(version_req)),
                 }
             }
             VersionReq::DevVer(modrev) => Ok(Version::DevVer(DevVer {
@@ -154,19 +152,19 @@ impl TryFrom<VersionReq> for Version {
                 modrev,
                 specrev: 1.into(),
             })),
-            VersionReq::Any => Err(ReqToVersionError::Any),
+            VersionReq::Any => Err(FromReqError::Any),
         }
     }
 }
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum ParseError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Specrev(#[from] SpecrevParseError),
+    Specrev(#[from] SpecRevParseError),
     #[error("failed to parse version")]
-    Version(#[from] Error),
+    Version(#[from] SemverError),
 }
 
 impl Serialize for Version {
@@ -225,7 +223,7 @@ impl Ord for Version {
 }
 
 impl FromStr for Version {
-    type Err = ParseError;
+    type Err = Error;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let (modrev, specrev) = split_specrev(text)?;
@@ -253,61 +251,13 @@ impl FromStr for Version {
     }
 }
 
-/// The revision of a rov
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct SpecRev(u16);
-
-impl From<u16> for SpecRev {
-    fn from(value: u16) -> Self {
-        Self(value)
-    }
-}
-
-impl Display for SpecRev {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl Default for SpecRev {
-    fn default() -> Self {
-        Self(1)
-    }
-}
-
-/// Iterates `SpecRev`s upwards, starting from `1`.
-pub(crate) struct SpecRevIterator {
-    current: u16,
-}
-
-impl SpecRevIterator {
-    pub fn new() -> Self {
-        SpecRevIterator {
-            current: SpecRev::default().0,
-        }
-    }
-}
-
-impl Iterator for SpecRevIterator {
-    type Item = SpecRev;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current;
-        self.current += 1;
-        if self.current == 0 {
-            None // overflow
-        } else {
-            Some(SpecRev(current))
-        }
-    }
-}
-
 // TODO: Stop deriving Eq here
+
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct SemVer {
-    version: semver::Version,
-    component_count: usize,
-    specrev: SpecRev,
+    pub(crate) version: semver::Version,
+    pub(crate) component_count: usize,
+    pub(crate) specrev: SpecRev,
 }
 
 impl HasModRev for SemVer {
@@ -381,16 +331,7 @@ fn cmp_versions(a: &semver::Version, b: &semver::Version) -> Ordering {
     }
 }
 
-fn cmp_prerelease(a: &Prerelease, b: &Prerelease) -> Ordering {
-    match (a.is_empty(), b.is_empty()) {
-        (true, true) => Ordering::Equal,
-        (false, true) => Ordering::Greater,
-        (true, false) => Ordering::Less,
-        (false, false) => a.cmp(b),
-    }
-}
-
-fn comparator_component_count(comparator: &Comparator) -> usize {
+pub(super) fn comparator_component_count(comparator: &Comparator) -> usize {
     if comparator.patch.is_some() {
         3
     } else if comparator.minor.is_some() {
@@ -398,138 +339,6 @@ fn comparator_component_count(comparator: &Comparator) -> usize {
     } else {
         1
     }
-}
-
-/// Based on `semver`'s matching, but with the prerelease compared as an extension
-/// for compatibility with LuaRocks.
-/// The "prereleases only match prerelease comparators" rule is not applied.
-fn comparator_matches(comparator: &Comparator, version: &semver::Version) -> bool {
-    match comparator.op {
-        Op::Exact | Op::Wildcard => matches_exact(comparator, version),
-        Op::Greater => matches_greater(comparator, version),
-        Op::GreaterEq => matches_greater(comparator, version) || matches_exact(comparator, version),
-        Op::Less => matches_less(comparator, version),
-        Op::LessEq => matches_less(comparator, version) || matches_exact(comparator, version),
-        Op::Tilde => matches_tilde(comparator, version),
-        Op::Caret => matches_caret(comparator, version),
-        _ => false,
-    }
-}
-
-fn matches_exact(comparator: &Comparator, version: &semver::Version) -> bool {
-    if version.major != comparator.major {
-        return false;
-    }
-    if let Some(minor) = comparator.minor {
-        if version.minor != minor {
-            return false;
-        }
-    }
-    if let Some(patch) = comparator.patch {
-        if version.patch != patch {
-            return false;
-        }
-    }
-    version.pre == comparator.pre
-}
-
-fn matches_greater(comparator: &Comparator, version: &semver::Version) -> bool {
-    if version.major != comparator.major {
-        return version.major > comparator.major;
-    }
-    match comparator.minor {
-        None => return false,
-        Some(minor) => {
-            if version.minor != minor {
-                return version.minor > minor;
-            }
-        }
-    }
-    match comparator.patch {
-        None => return false,
-        Some(patch) => {
-            if version.patch != patch {
-                return version.patch > patch;
-            }
-        }
-    }
-    cmp_prerelease(&version.pre, &comparator.pre) == Ordering::Greater
-}
-
-fn matches_less(comparator: &Comparator, version: &semver::Version) -> bool {
-    if version.major != comparator.major {
-        return version.major < comparator.major;
-    }
-    match comparator.minor {
-        None => return false,
-        Some(minor) => {
-            if version.minor != minor {
-                return version.minor < minor;
-            }
-        }
-    }
-    match comparator.patch {
-        None => return false,
-        Some(patch) => {
-            if version.patch != patch {
-                return version.patch < patch;
-            }
-        }
-    }
-    cmp_prerelease(&version.pre, &comparator.pre) == Ordering::Less
-}
-
-fn matches_tilde(comparator: &Comparator, version: &semver::Version) -> bool {
-    if version.major != comparator.major {
-        return false;
-    }
-    if let Some(minor) = comparator.minor {
-        if version.minor != minor {
-            return false;
-        }
-    }
-    if let Some(patch) = comparator.patch {
-        if version.patch != patch {
-            return version.patch > patch;
-        }
-    }
-    cmp_prerelease(&version.pre, &comparator.pre) != Ordering::Less
-}
-
-fn matches_caret(comparator: &Comparator, version: &semver::Version) -> bool {
-    if version.major != comparator.major {
-        return false;
-    }
-    let minor = match comparator.minor {
-        None => return true,
-        Some(minor) => minor,
-    };
-    let patch = match comparator.patch {
-        None => {
-            if comparator.major > 0 {
-                return version.minor >= minor;
-            } else {
-                return version.minor == minor;
-            }
-        }
-        Some(patch) => patch,
-    };
-    if comparator.major > 0 {
-        if version.minor != minor {
-            return version.minor > minor;
-        } else if version.patch != patch {
-            return version.patch > patch;
-        }
-    } else if minor > 0 {
-        if version.minor != minor {
-            return false;
-        } else if version.patch != patch {
-            return version.patch > patch;
-        }
-    } else if version.minor != minor || version.patch != patch {
-        return false;
-    }
-    cmp_prerelease(&version.pre, &comparator.pre) != Ordering::Less
 }
 
 impl PartialOrd for SemVer {
@@ -557,8 +366,8 @@ impl Display for DevVersion {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct DevVer {
-    modrev: DevVersion,
-    specrev: SpecRev,
+    pub(crate) modrev: DevVersion,
+    pub(crate) specrev: SpecRev,
 }
 
 impl DevVer {
@@ -611,8 +420,8 @@ impl PartialOrd for DevVer {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct StringVer {
-    modrev: String,
-    specrev: SpecRev,
+    pub(crate) modrev: String,
+    pub(crate) specrev: SpecRev,
 }
 
 impl HasModRev for StringVer {
@@ -660,230 +469,20 @@ pub(crate) trait HasModRev {
     fn to_modrev_string(&self) -> String;
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-#[error(transparent)]
-pub struct ReqError(#[from] Error);
-
-/// **SemVer version** requirement as defined by <https://semver.org>.
-/// or a **Dev** version requirement, which can be one of "dev", "scm", or "git"
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub enum VersionReq {
-    /// A VersionReq that matches a SemVer version.
-    SemVer(semver::VersionReq),
-    /// A VersionReq that matches only known dev versions.
-    DevVer(DevVersion),
-    /// A VersionReq that matches a arbitrary string version.
-    StringVer(String),
-    /// A VersionReq that has no version constraint.
-    Any,
-}
-
-impl VersionReq {
-    /// Returns a `VersionReq` that matches any version.
-    pub fn any() -> Self {
-        VersionReq::Any
-    }
-
-    pub fn parse(text: &str) -> Result<Self, ReqError> {
-        VersionReq::from_str(text)
-    }
-
-    pub fn matches(&self, version: &Version) -> bool {
-        match (self, version) {
-            (VersionReq::SemVer(req), Version::SemVer(ver)) => req
-                .comparators
-                .iter()
-                .all(|comparator| comparator_matches(comparator, &ver.version)),
-            (VersionReq::DevVer(req), Version::DevVer(ver)) => req == &ver.modrev,
-            (VersionReq::StringVer(req), Version::StringVer(ver)) => req == &ver.modrev,
-            (VersionReq::Any, _) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_any(&self) -> bool {
-        matches!(self, VersionReq::Any)
-    }
-
-    /// Returns true if this requirement pins the Luau dialect (`lua = "luau"`).
-    pub fn is_luau(&self) -> bool {
-        matches!(self, VersionReq::StringVer(req) if req == "luau")
-    }
-}
-
-impl Display for VersionReq {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VersionReq::SemVer(version_req) => {
-                let mut str = version_req.to_string();
-                if str.starts_with("=") {
-                    str = str.replacen("=", "==", 1);
-                } else if str.starts_with("^") {
-                    str = str.replacen("^", "~>", 1);
-                }
-                str.fmt(f)
-            }
-            VersionReq::DevVer(name_req) => write!(f, "=={}", name_req),
-            VersionReq::StringVer(name_req) => write!(f, "=={}", name_req),
-            VersionReq::Any => f.write_str("any"),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for VersionReq {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        String::deserialize(deserializer)?
-            .parse()
-            .map_err(serde::de::Error::custom)
-    }
-}
-
-impl FromStr for VersionReq {
-    type Err = ReqError;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let text = correct_version_req_str(text);
-
-        let trimmed = text.trim_start_matches('=').trim_start_matches('@').trim();
-
-        match parse_version_req(&text) {
-            Ok(ver) if ver.comparators.is_empty() => Ok(VersionReq::Any),
-            Ok(ver) => Ok(VersionReq::SemVer(ver)),
-            Err(_) => match trimmed {
-                "scm" => Ok(VersionReq::DevVer(DevVersion::Scm)),
-                "dev" => Ok(VersionReq::DevVer(DevVersion::Dev)),
-                ver => Ok(VersionReq::StringVer(ver.to_string())),
-            },
-        }
-    }
-}
-
-fn correct_version_req_str(text: &str) -> String {
-    text.chars()
-        .chunk_by(|t| t.is_alphanumeric() || matches!(t, '-' | '_' | '.'))
-        .into_iter()
-        .map(|(is_version_str, chars)| (is_version_str, chars.collect::<String>()))
-        .map(|(is_version_str, chunk)| {
-            if is_version_str && !is_known_dev_version_str(&chunk) {
-                let version_str = trim_specrev(&chunk);
-                correct_prerelease_version_string(version_str)
-            } else {
-                chunk
-            }
-        })
-        .collect::<String>()
-}
-
-fn trim_specrev(version_str: &str) -> &str {
-    if let Some(pos) = version_str.rfind('-') {
-        let suffix = &version_str[pos + 1..];
-        if suffix.chars().all(|c| c.is_ascii_digit()) {
-            &version_str[..pos]
-        } else {
-            version_str
-        }
-    } else {
-        version_str
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum SpecrevParseError {
-    #[error("specrev {specrev} in version {full_version} contains non-numeric characters")]
-    InvalidSpecrev {
-        specrev: String,
-        full_version: String,
-    },
-    #[error("could not parse specrev in version {0}")]
-    InvalidVersion(String),
-}
-
-fn split_specrev(version_str: &str) -> Result<(&str, SpecRev), SpecrevParseError> {
-    if let Some(pos) = version_str.rfind('-') {
-        if let Some(specrev_str) = version_str.get(pos + 1..) {
-            if specrev_str.chars().all(|c| c.is_ascii_digit()) {
-                let specrev =
-                    specrev_str
-                        .parse::<u16>()
-                        .map_err(|_| SpecrevParseError::InvalidSpecrev {
-                            specrev: specrev_str.into(),
-                            full_version: version_str.into(),
-                        })?;
-                Ok((&version_str[..pos], specrev.into()))
-            } else {
-                // A non-numeric suffix is a semver prerelease, not a specrev.
-                Ok((version_str, 1.into()))
-            }
-        } else {
-            Err(SpecrevParseError::InvalidVersion(version_str.into()))
-        }
-    } else {
-        // We assume a specrev of 1 if none can be found.
-        Ok((version_str, 1.into()))
-    }
-}
-
-fn is_known_dev_version_str(text: &str) -> bool {
-    matches!(text, "dev" | "scm")
-}
-
 /// Parses a Version from a string, automatically supplying any missing details (i.e. missing
 /// minor/patch sections).
-fn parse_version(s: &str) -> Result<semver::Version, Error> {
+fn parse_version(s: &str) -> Result<semver::Version, SemverError> {
     let version_str = correct_version_string(s);
     semver::Version::parse(&version_str)
 }
 
-/// Transform LuaRocks constraints into constraints that can be parsed by the semver crate.
-fn parse_version_req(version_constraints: &str) -> Result<semver::VersionReq, Error> {
-    let unescaped = decode_html_entities(version_constraints)
-        .to_string()
-        .as_str()
-        .to_owned();
-    let transformed = match unescaped {
-        s if s.starts_with("~>") => parse_pessimistic_version_constraint(s)?,
-        s if s.starts_with("@") => format!("={}", &s[1..]),
-        // The semver crate only understands "= version", unlike luarocks which understands "== version".
-        s if s.starts_with("==") => s[1..].to_string(),
-        s if s // semver parses no constraint prefix as ^, unlike luarocks which reads it as "=="
-            .find(|c: char| c.is_alphanumeric())
-            .is_some_and(|idx| idx == 0) =>
-        {
-            format!("={}", s)
-        }
-        s => s,
-    };
-
-    let version_req = semver::VersionReq::parse(&transformed)?;
-    Ok(version_req)
-}
-
-fn parse_pessimistic_version_constraint(version_constraint: String) -> Result<String, Error> {
-    // pessimistic operator
-    let min_version_str = &version_constraint[2..].trim();
-    let min_version = semver::Version::parse(&correct_version_string(min_version_str))?;
-
-    let max_version = match min_version_str.matches('.').count() {
-        0 => semver::Version {
-            major: &min_version.major + 1,
-            ..min_version.clone()
-        },
-        1 => semver::Version {
-            minor: &min_version.minor + 1,
-            ..min_version.clone()
-        },
-        _ => semver::Version {
-            patch: &min_version.patch + 1,
-            ..min_version.clone()
-        },
-    };
-
-    Ok(format!(">= {min_version}, < {max_version}"))
+fn cmp_prerelease(a: &Prerelease, b: &Prerelease) -> Ordering {
+    match (a.is_empty(), b.is_empty()) {
+        (true, true) => Ordering::Equal,
+        (false, true) => Ordering::Greater,
+        (true, false) => Ordering::Less,
+        (false, false) => a.cmp(b),
+    }
 }
 
 /// ┻━┻ ︵╰(°□°╰) Luarocks allows for an arbitrary number of version digits

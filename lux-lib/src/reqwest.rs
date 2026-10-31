@@ -15,7 +15,7 @@ static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 /// An error that occurred while performing a web request.
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
-pub enum RequestError {
+pub enum Error {
     #[error("request refused")]
     RequestRefused {
         #[help]
@@ -30,7 +30,7 @@ pub enum RequestError {
     Other(#[source] reqwest::Error),
 }
 
-impl From<reqwest::Error> for RequestError {
+impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         if err.status() == Some(reqwest::StatusCode::NOT_FOUND) {
             Self::NotFound(err)

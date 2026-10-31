@@ -14,8 +14,7 @@ use crate::build::external_dependency::to_lib_name;
 use crate::build::external_dependency::ExternalDependencyInfo;
 use crate::config::external_deps::ExternalDependencySearchConfig;
 use crate::fs;
-use crate::operations;
-use crate::operations::BuildLuaError;
+use crate::operations::build_lua;
 use crate::package;
 use crate::rockspec;
 use crate::tree::InstallTree;
@@ -44,7 +43,7 @@ pub struct Installation {
 pub enum Error {
     #[error("could not find a Lua installation and failed to build Lua from source")]
     #[diagnostic(forward(0))]
-    Build(#[from] BuildLuaError),
+    Build(#[from] build_lua::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Version(#[from] version::Error),
@@ -196,7 +195,7 @@ impl Installation {
 
         let target = Self::root_dir(version, config);
 
-        operations::BuildLua::new()
+        build_lua::BuildLua::new()
             .lua_version(version)
             .install_dir(&target)
             .config(config)

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum UnpackError {
+pub enum Error {
     #[error("failed to unpack source")]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -30,11 +30,11 @@ pub enum UnpackError {
     UnknownMimeType,
 }
 
-pub async fn unpack_src_rock<R: Read + Seek + Send + 'static>(
+pub async fn src_rock<R: Read + Seek + Send + 'static>(
     rock_src: R,
     destination: PathBuf,
-) -> Result<PathBuf, UnpackError> {
-    unpack(
+) -> Result<PathBuf, Error> {
+    extract(
         Some("application/zip"),
         rock_src,
         true,
@@ -51,13 +51,13 @@ pub async fn unpack_src_rock<R: Read + Seek + Send + 'static>(
     fields(file_name = %file_name)
 )]
 #[async_recursion]
-pub(crate) async fn unpack<R>(
+pub(crate) async fn extract<R>(
     mime_type: Option<&str>,
     reader: R,
     extract_nested_archive: bool,
     file_name: String,
     dest_dir: &Path,
-) -> Result<(), UnpackError>
+) -> Result<(), Error>
 where
     // NOTE: tokio::spawn_blocking requires Send + 'static
     R: Read + Seek + Send + 'static,
@@ -77,7 +77,7 @@ where
         )
     })
     .await
-    .map_err(|err| UnpackError::Io(io::Error::other(err)))??;
+    .map_err(|err| Error::Io(io::Error::other(err)))??;
 
     if extract_nested_archive {
         // If the source is an archive, luarocks will pack the source archive and the rockspec.
@@ -90,7 +90,7 @@ where
                 .unwrap_or(nested_archive_path.to_string_lossy())
                 .to_string();
             let buffer = fs::tokio::read(&nested_archive_path).await?;
-            unpack(
+            extract(
                 mime_type,
                 Cursor::new(buffer),
                 extract_nested_archive, // It might be a nested archive inside a .src.rock
@@ -109,7 +109,7 @@ fn extract_archive<R: Read + Seek + Send>(
     reader: R,
     extract_nested_archive: bool,
     dest_dir: &Path,
-) -> Result<(), UnpackError> {
+) -> Result<(), Error> {
     match mime_type {
         Some("application/zip") => {
             tracing::debug!("extracting zip archive");
@@ -155,13 +155,13 @@ fn extract_archive<R: Read + Seek + Send>(
             }
         }
         Some("text/html") => {
-            return Err(UnpackError::SourceMovedOrDeleted);
+            return Err(Error::SourceMovedOrDeleted);
         }
         Some(other) => {
-            return Err(UnpackError::UnsupportedFileType(other.to_string()));
+            return Err(Error::UnsupportedFileType(other.to_string()));
         }
         None => {
-            return Err(UnpackError::UnknownMimeType);
+            return Err(Error::UnknownMimeType);
         }
     }
 
@@ -255,18 +255,18 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_unpack_src_rock() {
+    pub async fn test_src_rock() {
         let test_rock_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources")
             .join("test")
             .join("luatest-0.2-1.src.rock");
         let file = File::open(&test_rock_path).unwrap();
         let dest = TempDir::new().unwrap();
-        unpack_src_rock(file, dest.to_path_buf()).await.unwrap();
+        src_rock(file, dest.to_path_buf()).await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_unpack_src_rock_extracts_nested_archive() {
+    async fn test_src_rock_extracts_nested_archive() {
         let source_archive = make_zip(&[("foo-1.0/lua/foo.lua", b"return {}")]);
         let src_rock = make_zip(&[
             (
@@ -280,7 +280,7 @@ source = { url = 'https://example.com/foo.zip', dir = 'foo-1.0' }
         ]);
         let dest = TempDir::new().unwrap();
 
-        unpack_src_rock(Cursor::new(src_rock), dest.to_path_buf())
+        super::src_rock(Cursor::new(src_rock), dest.to_path_buf())
             .await
             .unwrap();
 

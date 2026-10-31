@@ -414,7 +414,7 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{LockConstraint, LockedPackage, LockedPackageHashes},
+        lockfile::{self, LockedPackage, LockedPackageHashes},
         lua,
         tree::{InstallTree, RockLayout},
         variables,
@@ -447,7 +447,7 @@ mod tests {
 
         let package = LockedPackage::from(
             &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             mock_hashes.clone(),
@@ -532,7 +532,7 @@ mod tests {
 
         let package = LockedPackage::from(
             &package::Spec::parse("neorg".into(), "8.0.0-1-1".into()).unwrap(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             mock_hashes.clone(),

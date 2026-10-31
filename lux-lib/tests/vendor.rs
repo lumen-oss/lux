@@ -8,7 +8,7 @@ use flaky_test::flaky_test;
 use lux_lib::rockspec;
 use lux_lib::{
     config,
-    operations::{Vendor, VendorTarget},
+    operations::{self, vendor::Target},
     workspace::Workspace,
 };
 use predicates::prelude::predicate;
@@ -40,8 +40,8 @@ async fn vendor_dependencies() {
     let config = config::Builder::new().unwrap().build().unwrap();
     let vendor_dir = assert_fs::TempDir::new().unwrap();
 
-    Vendor::new()
-        .target(VendorTarget::Workspace(workspace))
+    operations::Vendor::new()
+        .target(Target::Workspace(workspace))
         .vendor_dir(vendor_dir.to_path_buf())
         .config(&config)
         .vendor_dependencies()

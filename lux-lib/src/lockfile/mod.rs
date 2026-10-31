@@ -27,6 +27,10 @@ use crate::rockspec::lua_dependency;
 use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
 
+pub mod constraint;
+
+pub use constraint::Constraint;
+
 /// Bump this whenever an incompatible change is made to the lockfile format.
 /// Lockfiles with a different major version are rejected on load.
 const LOCKFILE_VERSION: u64 = 2;
@@ -183,7 +187,7 @@ impl LockedPackageId {
         version: &package::Version,
         pinned: PinnedState,
         opt: OptState,
-        constraint: LockConstraint,
+        constraint: Constraint,
     ) -> Self {
         let mut hasher = Sha256::new();
 
@@ -194,8 +198,8 @@ impl LockedPackageId {
             pinned.as_bool(),
             opt.as_bool(),
             match constraint {
-                LockConstraint::Unconstrained => String::default(),
-                LockConstraint::Constrained(version_req) => version_req.to_string(),
+                Constraint::Unconstrained => String::default(),
+                Constraint::Constrained(version_req) => version_req.to_string(),
             },
         ));
 
@@ -229,7 +233,7 @@ impl LockedPackageSpec {
     pub(crate) fn new(
         name: &package::Name,
         version: &package::Version,
-        constraint: LockConstraint,
+        constraint: Constraint,
         dependencies: Vec<LockedPackageId>,
         build_dependencies: Vec<LockedPackageId>,
         pinned: &PinnedState,
@@ -243,8 +247,8 @@ impl LockedPackageSpec {
             dependencies,
             build_dependencies,
             constraint: match constraint {
-                LockConstraint::Unconstrained => None,
-                LockConstraint::Constrained(version_req) => Some(version_req.to_string()),
+                Constraint::Unconstrained => None,
+                Constraint::Constrained(version_req) => Some(version_req.to_string()),
             },
         }
     }
@@ -256,15 +260,15 @@ impl LockedPackageSpec {
             self.pinned,
             self.opt,
             match &self.constraint {
-                None => LockConstraint::Unconstrained,
+                None => Constraint::Unconstrained,
                 Some(_) => self.constraint(),
             },
         )
     }
 
-    pub fn constraint(&self) -> LockConstraint {
+    pub fn constraint(&self) -> Constraint {
         // Safe to unwrap as the data can only end up in the struct as a valid constraint
-        unsafe { LockConstraint::try_from(&self.constraint).unwrap_unchecked() }
+        unsafe { Constraint::try_from(&self.constraint).unwrap_unchecked() }
     }
 
     pub fn name(&self) -> &package::Name {
@@ -297,8 +301,8 @@ impl LockedPackageSpec {
 
     pub fn into_package_req(self) -> package::Req {
         match self.constraint() {
-            LockConstraint::Unconstrained => self.name.into(),
-            LockConstraint::Constrained(version_req) => package::Req {
+            Constraint::Unconstrained => self.name.into(),
+            Constraint::Constrained(version_req) => package::Req {
                 name: self.name,
                 version_req,
             },
@@ -307,8 +311,8 @@ impl LockedPackageSpec {
 
     pub(crate) fn as_package_req(&self) -> package::Req {
         match self.constraint() {
-            LockConstraint::Unconstrained => self.name.clone().into(),
-            LockConstraint::Constrained(version_req) => package::Req {
+            Constraint::Unconstrained => self.name.clone().into(),
+            Constraint::Constrained(version_req) => package::Req {
                 name: self.name.clone(),
                 version_req: version_req.clone(),
             },
@@ -369,7 +373,7 @@ impl LockedPackage {
     #[cfg(test)]
     pub(crate) fn from(
         package: &package::Spec,
-        constraint: LockConstraint,
+        constraint: Constraint,
         source: remote::package::Source,
         source_url: Option<RemotePackageSourceUrl>,
         hashes: LockedPackageHashes,
@@ -444,7 +448,7 @@ impl LockedPackage {
         self.spec.build_dependencies()
     }
 
-    pub fn constraint(&self) -> LockConstraint {
+    pub fn constraint(&self) -> Constraint {
         self.spec.constraint()
     }
 
@@ -490,10 +494,10 @@ struct LockedPackageIntermediate {
 }
 
 impl TryFrom<LockedPackageIntermediate> for LockedPackage {
-    type Error = LockConstraintParseError;
+    type Error = constraint::Error;
 
     fn try_from(value: LockedPackageIntermediate) -> Result<Self, Self::Error> {
-        let constraint = LockConstraint::try_from(&value.constraint)?;
+        let constraint = Constraint::try_from(&value.constraint)?;
         Ok(Self {
             spec: LockedPackageSpec::new(
                 &value.name,
@@ -564,76 +568,6 @@ impl Ord for LockedPackageHashes {
 impl PartialOrd for LockedPackageHashes {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub enum LockConstraint {
-    #[default]
-    Unconstrained,
-    Constrained(package::VersionReq),
-}
-
-impl<'de> Deserialize<'de> for LockConstraint {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let str = String::deserialize(deserializer)?;
-        match str.as_str() {
-            "*" => Ok(LockConstraint::Unconstrained),
-            _ => Ok(LockConstraint::Constrained(
-                str.parse().map_err(serde::de::Error::custom)?,
-            )),
-        }
-    }
-}
-
-impl LockConstraint {
-    pub fn to_string_opt(&self) -> Option<String> {
-        match self {
-            LockConstraint::Unconstrained => None,
-            LockConstraint::Constrained(req) => Some(req.to_string()),
-        }
-    }
-
-    fn matches_version_req(&self, req: &package::VersionReq) -> bool {
-        match self {
-            LockConstraint::Unconstrained => req.is_any(),
-            LockConstraint::Constrained(package_version_req) => package_version_req == req,
-        }
-    }
-}
-
-impl From<package::VersionReq> for LockConstraint {
-    fn from(value: package::VersionReq) -> Self {
-        if value.is_any() {
-            Self::Unconstrained
-        } else {
-            Self::Constrained(value)
-        }
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[non_exhaustive]
-pub enum LockConstraintParseError {
-    #[error("Invalid constraint in LuaPackage")]
-    #[diagnostic(forward(0))]
-    LockConstraintParseError(#[from] package::version::ReqError),
-}
-
-impl TryFrom<&Option<String>> for LockConstraint {
-    type Error = LockConstraintParseError;
-
-    fn try_from(constraint: &Option<String>) -> Result<Self, Self::Error> {
-        match constraint {
-            Some(constraint) => {
-                let package_version_req = constraint.parse()?;
-                Ok(LockConstraint::Constrained(package_version_req))
-            }
-            None => Ok(LockConstraint::Unconstrained),
-        }
     }
 }
 
@@ -1818,7 +1752,7 @@ mod tests {
         let test_package = package::Spec::parse("test1".to_string(), "0.1.0".to_string()).unwrap();
         let test_local_package = LockedPackage::from(
             &test_package,
-            crate::lockfile::LockConstraint::Unconstrained,
+            crate::lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
             mock_hashes.clone(),
@@ -1829,7 +1763,7 @@ mod tests {
             package::Spec::parse("test2".to_string(), "0.1.0".to_string()).unwrap();
         let mut test_local_dep_package = LockedPackage::from(
             &test_dep_package,
-            crate::lockfile::LockConstraint::Constrained(">= 1.0.0".parse().unwrap()),
+            crate::lockfile::Constraint::Constrained(">= 1.0.0".parse().unwrap()),
             remote::package::Source::Test,
             None,
             mock_hashes.clone(),
@@ -1887,28 +1821,28 @@ mod tests {
             .iter()
             .any(|pkg| pkg.name().to_string() == "nvim-nio"
                 && pkg.constraint()
-                    == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
+                    == Constraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
         assert!(!sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap())));
+                && pkg.constraint() == Constraint::Constrained("=1.0.2".parse().unwrap())));
         assert!(!sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "plenary.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap())));
+                && pkg.constraint() == Constraint::Constrained("=0.1.4".parse().unwrap())));
         assert!(!sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "nui.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap())));
+                && pkg.constraint() == Constraint::Constrained("=0.3.0".parse().unwrap())));
         assert!(!sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
                 && pkg.constraint()
-                    == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
+                    == Constraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
     }
 
     #[test]
@@ -1938,28 +1872,28 @@ mod tests {
             .iter()
             .any(|pkg| pkg.name().to_string() == "nvim-nio"
                 && pkg.constraint()
-                    == LockConstraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
+                    == Constraint::Constrained(">=1.7.0, <1.8.0".parse().unwrap())));
         assert!(sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "lua-utils.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=1.0.2".parse().unwrap())));
+                && pkg.constraint() == Constraint::Constrained("=1.0.2".parse().unwrap())));
         assert!(sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "plenary.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.1.4".parse().unwrap())));
+                && pkg.constraint() == Constraint::Constrained("=0.1.4".parse().unwrap())));
         assert!(sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "nui.nvim"
-                && pkg.constraint() == LockConstraint::Constrained("=0.3.0".parse().unwrap())));
+                && pkg.constraint() == Constraint::Constrained("=0.3.0".parse().unwrap())));
         assert!(sync_spec
             .to_remove
             .iter()
             .any(|pkg| pkg.name().to_string() == "pathlib.nvim"
                 && pkg.constraint()
-                    == LockConstraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
+                    == Constraint::Constrained(">=2.2.0, <2.3.0".parse().unwrap())));
     }
 
     #[test]

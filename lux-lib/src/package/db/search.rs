@@ -4,7 +4,7 @@ use thiserror::Error;
 use super::PackageDB;
 use crate::config::Config;
 use crate::manifest;
-use crate::operations::PackageInstallSpec;
+use crate::operations::install;
 use crate::package;
 use crate::pipeline::discover::{self, FoundPackage};
 use crate::remote;
@@ -44,7 +44,7 @@ impl PackageDB {
     /// Resolves a package install spec to a package that is already available.
     pub(crate) async fn resolve(
         &self,
-        spec: &PackageInstallSpec,
+        spec: &install::Spec,
         config: &Config,
     ) -> Result<Option<FoundPackage>, discover::Error> {
         for provider in &self.providers {

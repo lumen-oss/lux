@@ -1,4 +1,4 @@
-use self::reconcile::SyncReport;
+pub use self::reconcile::SyncReport;
 use crate::package;
 use bon::Builder;
 use miette::Diagnostic;
@@ -13,10 +13,8 @@ use crate::{
     config::Config,
     drivers::{InstallPackages, InstallPackagesError},
     lockfile::LockedPackageLockType,
-    operations::{
-        GenLuaRc, GenLuaRcError, GenLuauRc, GenLuauRcError, InstallProject, InstallProjectError,
-        PackageInstallSpec,
-    },
+    operations::install,
+    operations::{self, gen_luarc, gen_luaurc, install_project},
     package::db::PackageDB,
     rockspec::{self, Rockspec},
     tree::{self, EntryType, InstallTree},
@@ -64,7 +62,7 @@ pub enum Error {
     InstallPackages(#[from] Box<InstallPackagesError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallProject(Box<InstallProjectError>),
+    InstallProject(Box<install_project::Error>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),
@@ -82,10 +80,10 @@ pub enum Error {
     PackageDB(#[from] package::db::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    GenLuaRc(#[from] GenLuaRcError),
+    GenLuaRc(#[from] gen_luarc::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    GenLuauRc(#[from] GenLuauRcError),
+    GenLuauRc(#[from] gen_luaurc::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Frozen(Box<frozen::Error>),
@@ -97,8 +95,8 @@ impl From<InstallPackagesError> for Error {
     }
 }
 
-impl From<InstallProjectError> for Error {
-    fn from(source: InstallProjectError) -> Self {
+impl From<install_project::Error> for Error {
+    fn from(source: install_project::Error) -> Self {
         Self::InstallProject(Box::new(source))
     }
 }
@@ -164,7 +162,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
     )?
     .into_iter()
     .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
-    .map(|spec| PackageInstallSpec {
+    .map(|spec| install::Spec {
         build_behaviour: BuildBehaviour::Force,
         ..spec
     })
@@ -177,7 +175,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
                 .match_rocks(&spec.package)
                 .is_ok_and(|m| m.is_found())
         })
-        .map(|spec| PackageInstallSpec {
+        .map(|spec| install::Spec {
             build_behaviour: BuildBehaviour::Force,
             ..spec
         })
@@ -192,7 +190,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
                     .match_rocks(&spec.package)
                     .is_ok_and(|m| m.is_found())
             })
-            .map(|spec| PackageInstallSpec {
+            .map(|spec| install::Spec {
                 build_behaviour: BuildBehaviour::Force,
                 ..spec
             })
@@ -233,7 +231,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
             .collect::<Result<Vec<_>, _>>()?;
         for project in projects {
             added.push(
-                InstallProject::new()
+                operations::InstallProject::new()
                     .project(project)
                     .config(config)
                     .tree(&tree)
@@ -246,12 +244,12 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
     }
 
     if !args.no_lock {
-        GenLuaRc::new()
+        operations::GenLuaRc::new()
             .config(config)
             .workspace(workspace)
             .generate_luarc()
             .await?;
-        GenLuauRc::new()
+        operations::GenLuauRc::new()
             .config(config)
             .workspace(workspace)
             .generate_luau_rc()
@@ -275,7 +273,7 @@ pub(crate) fn gather_dependencies(
     workspace: &Workspace,
     kind: DependencyKind,
     members: &NonEmpty<package::Name>,
-) -> Result<Vec<PackageInstallSpec>, Error> {
+) -> Result<Vec<install::Spec>, Error> {
     let mut packages = Vec::new();
     for project in workspace.members() {
         if !members.contains(project.toml().package()) {
@@ -289,7 +287,7 @@ pub(crate) fn gather_dependencies(
                     continue;
                 }
                 packages.push(
-                    PackageInstallSpec::new(dependency, EntryType::Entrypoint)
+                    install::Spec::new(dependency, EntryType::Entrypoint)
                         .build_behaviour(BuildBehaviour::Ignore)
                         .build(),
                 );
@@ -299,15 +297,12 @@ pub(crate) fn gather_dependencies(
                     continue;
                 }
                 packages.push(
-                    PackageInstallSpec::new(
-                        dependency.package_req().clone(),
-                        EntryType::Entrypoint,
-                    )
-                    .build_behaviour(BuildBehaviour::Ignore)
-                    .pin(*dependency.pin())
-                    .opt(*dependency.opt())
-                    .maybe_source(dependency.source.clone())
-                    .build(),
+                    install::Spec::new(dependency.package_req().clone(), EntryType::Entrypoint)
+                        .build_behaviour(BuildBehaviour::Ignore)
+                        .pin(*dependency.pin())
+                        .opt(*dependency.opt())
+                        .maybe_source(dependency.source.clone())
+                        .build(),
                 );
             }
         } else {
@@ -318,15 +313,12 @@ pub(crate) fn gather_dependencies(
             for dependency in dependencies {
                 // From the perspective of a project, dependencies are entrypoints.
                 packages.push(
-                    PackageInstallSpec::new(
-                        dependency.package_req().clone(),
-                        EntryType::Entrypoint,
-                    )
-                    .build_behaviour(BuildBehaviour::Ignore)
-                    .pin(*dependency.pin())
-                    .opt(*dependency.opt())
-                    .maybe_source(dependency.source().clone())
-                    .build(),
+                    install::Spec::new(dependency.package_req().clone(), EntryType::Entrypoint)
+                        .build_behaviour(BuildBehaviour::Ignore)
+                        .pin(*dependency.pin())
+                        .opt(*dependency.opt())
+                        .maybe_source(dependency.source().clone())
+                        .build(),
                 );
             }
         }

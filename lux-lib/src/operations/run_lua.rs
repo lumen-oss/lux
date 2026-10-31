@@ -23,7 +23,7 @@ use crate::{
 };
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum RunLuaError {
+pub enum Error {
     #[error("failed to detect or install the lua runtime")]
     #[diagnostic(forward(0))]
     LuaInstallation(#[from] lua::installation::Error),
@@ -67,7 +67,7 @@ impl<State> RunLuaBuilder<'_, State>
 where
     State: run_lua_builder::State + run_lua_builder::IsComplete,
 {
-    pub async fn run_lua(self) -> Result<(), RunLuaError> {
+    pub async fn run_lua(self) -> Result<(), Error> {
         let args = self._build();
         let mut paths = Paths::for_environment(args.tree, args.config, args.environment)?;
 
@@ -119,7 +119,7 @@ where
             .await
         {
             Ok(status) => Ok(status),
-            Err(err) => Err(RunLuaError::LuaCommandFailed {
+            Err(err) => Err(Error::LuaCommandFailed {
                 lua_cmd: lua_cmd.to_string_lossy().to_string(),
                 source: err,
             }),
@@ -127,7 +127,7 @@ where
         if status.success() {
             Ok(())
         } else {
-            Err(RunLuaError::LuaCommandNonZeroExitCode {
+            Err(Error::LuaCommandNonZeroExitCode {
                 lua_cmd: lua_cmd.to_string_lossy().to_string(),
                 exit_code: status.code(),
             })
@@ -169,10 +169,10 @@ async fn detect_lua_module(
 ///
 /// Falls back to probing, reusing or building a toolchain via
 /// `Installation` when no suitable binary is found on the PATH.
-pub(crate) async fn resolve_lua_runtime(
+pub(crate) async fn resolve_runtime(
     version: &lua::Version,
     config: &Config,
-) -> Result<PathBuf, RunLuaError> {
+) -> Result<PathBuf, Error> {
     match <lua::Binary as TryInto<PathBuf>>::try_into(lua::Binary::new(version.clone(), config)) {
         Ok(lua_cmd) => Ok(lua_cmd),
         Err(err) => {
@@ -180,7 +180,7 @@ pub(crate) async fn resolve_lua_runtime(
             lua_installation
                 .bin()
                 .clone()
-                .ok_or(RunLuaError::LuaInstallation(err))
+                .ok_or(Error::LuaInstallation(err))
         }
     }
 }

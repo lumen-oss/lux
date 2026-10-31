@@ -206,7 +206,7 @@ pub enum GenerateVersionError {
     Git(#[from] git2::Error),
     #[error("error parsing version from git ref")]
     #[diagnostic(forward(0))]
-    PackageVersionParse(#[from] package::version::ParseError),
+    PackageVersionParse(#[from] package::version::Error),
 }
 
 impl PackageVersionTemplate {

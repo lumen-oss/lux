@@ -23,7 +23,8 @@ use crate::{
     config::Config,
     fs,
     lockfile::LockedPackageLockType,
-    operations::{self, PackageInstallSpec, UnpackError},
+    operations::install,
+    operations::{self, fetch, unpack},
     package::db::PackageDB,
     pipeline::{
         materialise::{Error as MaterialiseError, Materialise, MaterialisedPackage, PackageSource},
@@ -36,7 +37,7 @@ use crate::{
 };
 
 #[allow(clippy::large_enum_variant)]
-pub enum VendorTarget {
+pub enum Target {
     /// Vendor dependencies of a Lux workspace
     Workspace(Workspace),
 
@@ -50,7 +51,7 @@ pub enum VendorTarget {
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Vendor<'a> {
-    target: VendorTarget,
+    target: Target,
 
     /// The directory in which to vendor the dependencies.
     vendor_dir: PathBuf,
@@ -66,7 +67,7 @@ pub struct Vendor<'a> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum VendorError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),
@@ -89,10 +90,10 @@ pub enum VendorError {
     LuaRockSpec(String),
     #[error("failed to unpack src.rock")]
     #[diagnostic(forward(0))]
-    Unpack(#[from] UnpackError),
+    Unpack(#[from] unpack::Error),
     #[error("failed to fetch rock source")]
     #[diagnostic(forward(0))]
-    FetchSrc(#[from] crate::operations::FetchSrcError),
+    FetchSrc(#[from] fetch::Error),
     #[error("failed to run `cargo vendor`")]
     #[diagnostic(help("ensure cargo is installed"))]
     CargoVendor { source: io::Error },
@@ -109,7 +110,7 @@ impl<State> VendorBuilder<'_, State>
 where
     State: vendor_builder::State + vendor_builder::IsComplete,
 {
-    pub async fn vendor_dependencies(self) -> Result<(), VendorError> {
+    pub async fn vendor_dependencies(self) -> Result<(), Error> {
         do_vendor_dependencies(self._build()).await
     }
 }
@@ -120,8 +121,8 @@ const CARGO_VENDOR_SUBDIR: &str = "cargo";
 async fn resolve_and_download(
     config: &Config,
     package_db: PackageDB,
-    install_specs: Artifacts<Vec<PackageInstallSpec>>,
-) -> Result<Vec<MaterialisedPackage>, VendorError> {
+    install_specs: Artifacts<Vec<install::Spec>>,
+) -> Result<Vec<MaterialisedPackage>, Error> {
     let Artifacts {
         regular,
         build,
@@ -162,7 +163,7 @@ async fn vendor_sources(
     vendor_dir: &Path,
     packages: &[MaterialisedPackage],
     config: &Config,
-) -> Result<(), VendorError> {
+) -> Result<(), Error> {
     futures::stream::iter(
         packages
             .iter()
@@ -196,7 +197,7 @@ fn cargo_dependencies(
         .collect()
 }
 
-async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
+async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), Error> {
     let vendor_dir = args.vendor_dir;
     let no_delete = args.no_delete.unwrap_or(false);
     let no_lock = args.no_lock.unwrap_or(false);
@@ -223,26 +224,26 @@ async fn do_vendor_dependencies(args: Vendor<'_>) -> Result<(), VendorError> {
 
 async fn gather_install_specs(
     no_lock: bool,
-    target: &VendorTarget,
+    target: &Target,
     config: &Config,
-) -> Result<(PackageDB, Artifacts<Vec<PackageInstallSpec>>), VendorError> {
+) -> Result<(PackageDB, Artifacts<Vec<install::Spec>>), Error> {
     // Resolve against the project's lockfile if present, otherwise fall back to
     // the remote package DB (e.g. for a project that has not yet generated a lockfile).
     let package_db = match target {
-        VendorTarget::Workspace(workspace) => match workspace.try_lockfile()? {
+        Target::Workspace(workspace) => match workspace.try_lockfile()? {
             Some(lockfile) if !no_lock => lockfile.local_pkg_locks().into(),
             _ => PackageDB::from_config(config).await?,
         },
-        VendorTarget::Rockspec(_) => PackageDB::from_config(config).await?,
+        Target::Rockspec(_) => PackageDB::from_config(config).await?,
     };
 
-    let mut install_specs: Artifacts<Vec<PackageInstallSpec>> = Artifacts::default();
+    let mut install_specs: Artifacts<Vec<install::Spec>> = Artifacts::default();
     for lock_type in LockedPackageLockType::iter() {
         let specs = install_specs
             .get_mut(lock_type)
             .get_or_insert_with(Vec::new);
         match target {
-            VendorTarget::Workspace(workspace) => {
+            Target::Workspace(workspace) => {
                 for project in workspace.members() {
                     let toml = project.toml().into_local()?;
                     push_dependencies(&lock_type, &toml, specs)?;
@@ -254,7 +255,7 @@ async fn gather_install_specs(
                                 .iter()
                                 .cloned()
                                 .map(|dep| {
-                                    PackageInstallSpec::new(dep, EntryType::Entrypoint)
+                                    install::Spec::new(dep, EntryType::Entrypoint)
                                         .build_behaviour(BuildBehaviour::Ignore)
                                         .build()
                                 }),
@@ -262,7 +263,7 @@ async fn gather_install_specs(
                     }
                 }
             }
-            VendorTarget::Rockspec(rockspec) => {
+            Target::Rockspec(rockspec) => {
                 push_dependencies(&lock_type, rockspec, specs)?;
             }
         }
@@ -274,7 +275,7 @@ async fn gather_install_specs(
 fn push_dependencies<R: Rockspec>(
     lock_type: &LockedPackageLockType,
     rockspec: &R,
-    install_specs: &mut Vec<PackageInstallSpec>,
+    install_specs: &mut Vec<install::Spec>,
 ) -> Result<(), rockspec::toml::Error> {
     let mut dependencies: Vec<package::Req> = match lock_type {
         LockedPackageLockType::Regular => rockspec
@@ -306,7 +307,7 @@ fn push_dependencies<R: Rockspec>(
             .into_iter()
             .unique()
             .map(|dep| {
-                PackageInstallSpec::new(dep, EntryType::Entrypoint)
+                install::Spec::new(dep, EntryType::Entrypoint)
                     .build_behaviour(BuildBehaviour::Ignore)
                     .build()
             })
@@ -327,7 +328,7 @@ fn push_dependencies<R: Rockspec>(
 async fn vendor_package_sources(
     vendor_dir: &Path,
     package: &MaterialisedPackage,
-) -> Result<(), VendorError> {
+) -> Result<(), Error> {
     let rockspec = &package.rockspec;
     let name = rockspec.package();
     let version = rockspec.version();
@@ -336,7 +337,7 @@ async fn vendor_package_sources(
 
     let rockspec_lua_content = rockspec
         .to_lua_remote_rockspec_string()
-        .map_err(|err| VendorError::LuaRockSpec(err.to_string()))?;
+        .map_err(|err| Error::LuaRockSpec(err.to_string()))?;
     let rockspec_path = vendor_dir.join(format!("{}-{}.rockspec", name, version));
     fs::tokio::write(&rockspec_path, rockspec_lua_content).await?;
 
@@ -364,15 +365,15 @@ async fn vendor_package_sources(
 #[tracing::instrument(name = "Vendoring cargo dependencies", level = "info", skip_all)]
 async fn vendor_target_cargo_deps(
     vendor_dir: &Path,
-    target: &VendorTarget,
+    target: &Target,
     config: &Config,
-) -> Result<(), VendorError> {
+) -> Result<(), Error> {
     if is_cargo_build_backend(target) {
         match target {
-            VendorTarget::Workspace(workspace) => {
+            Target::Workspace(workspace) => {
                 cargo_vendor(vendor_dir, workspace.root().as_path(), config).await
             }
-            VendorTarget::Rockspec(rockspec) => {
+            Target::Rockspec(rockspec) => {
                 let temp_dir = fs::tempfile::tempdir()?;
                 operations::FetchSrc::new(temp_dir.path(), rockspec, config)
                     .fetch_internal()
@@ -409,7 +410,7 @@ async fn vendor_package_cargo_deps(
     unpack_dir: &Option<PathBuf>,
     copy_dirs: &[PathBuf],
     config: &Config,
-) -> Result<(), VendorError> {
+) -> Result<(), Error> {
     let source_dir = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
     if source_dir.is_dir() {
         cargo_vendor(
@@ -432,9 +433,9 @@ async fn vendor_package_cargo_deps(
     Ok(())
 }
 
-fn is_cargo_build_backend(target: &VendorTarget) -> bool {
+fn is_cargo_build_backend(target: &Target) -> bool {
     match target {
-        VendorTarget::Workspace(workspace) => workspace.members().iter().any(|project| {
+        Target::Workspace(workspace) => workspace.members().iter().any(|project| {
             project.toml().into_local().is_ok_and(|toml| {
                 matches!(
                     toml.build().current_platform().backend.to_owned(),
@@ -445,7 +446,7 @@ fn is_cargo_build_backend(target: &VendorTarget) -> bool {
                 )
             })
         }),
-        VendorTarget::Rockspec(rockspec) => matches!(
+        Target::Rockspec(rockspec) => matches!(
             rockspec.build().current_platform().backend.to_owned(),
             Some(
                 rockspec::build::backend::Spec::RustMlua(_)
@@ -459,7 +460,7 @@ async fn extract_source_archive(
     source_file: &Path,
     unpack_dir: Option<&Path>,
     dest_dir: &Path,
-) -> Result<(), VendorError> {
+) -> Result<(), Error> {
     let bytes = fs::tokio::read(source_file).await?;
     let mime_type = infer::get(&bytes).map(|file_type| file_type.mime_type());
     let file_name = source_file
@@ -467,7 +468,7 @@ async fn extract_source_archive(
         .map(|file_name| file_name.to_string_lossy())
         .unwrap_or(source_file.to_slash_lossy())
         .to_string();
-    operations::unpack::unpack(
+    unpack::extract(
         mime_type,
         Cursor::new(bytes),
         unpack_dir.is_none(),
@@ -478,11 +479,7 @@ async fn extract_source_archive(
     Ok(())
 }
 
-async fn cargo_vendor(
-    vendor_dir: &Path,
-    source_dir: &Path,
-    config: &Config,
-) -> Result<(), VendorError> {
+async fn cargo_vendor(vendor_dir: &Path, source_dir: &Path, config: &Config) -> Result<(), Error> {
     let cargo_vendor_dir = fs::sync::absolute(vendor_dir.join(CARGO_VENDOR_SUBDIR))?;
     fs::tokio::create_dir_all(&cargo_vendor_dir).await?;
 
@@ -492,12 +489,12 @@ async fn cargo_vendor(
         .current_dir(source_dir)
         .output()
         .await
-        .map_err(|source| VendorError::CargoVendor { source })?;
+        .map_err(|source| Error::CargoVendor { source })?;
 
     if output.status.success() {
         Ok(())
     } else {
-        Err(VendorError::CargoVendorFailure {
+        Err(Error::CargoVendorFailure {
             status: output.status,
             stdout: String::from_utf8_lossy(&output.stdout).into(),
             stderr: String::from_utf8_lossy(&output.stderr).into(),
@@ -513,7 +510,7 @@ mod tests {
     use crate::remote;
     use crate::{
         build::BuildBehaviour,
-        lockfile::{LockConstraint, LockedPackage, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{self, LockedPackage, LockedPackageSpec, OptState, PinnedState},
     };
     #[cfg(feature = "impure_tests")]
     use {crate::config, assert_fs::prelude::PathCopy, std::path::PathBuf};
@@ -536,7 +533,7 @@ mod tests {
         let spec = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
-            LockConstraint::Unconstrained,
+            lockfile::Constraint::Unconstrained,
             Vec::new(),
             Vec::new(),
             &PinnedState::Unpinned,
@@ -655,7 +652,7 @@ mod tests {
         std::fs::write(&marker, "keep me").unwrap();
 
         Vendor::new()
-            .target(VendorTarget::Workspace(workspace))
+            .target(Target::Workspace(workspace))
             .vendor_dir(vendor_dir.to_path_buf())
             .no_delete(true)
             .config(&config)

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 use itertools::Itertools;
-use lux_lib::{config::Config, lua, operations::Exec, workspace::Workspace};
+use lux_lib::{config::Config, lua, operations, workspace::Workspace};
 use path_slash::PathBufExt;
 
 use crate::utils;
@@ -75,7 +75,7 @@ pub async fn lint(lint_args: Lint, config: Config) -> Result<()> {
             }
         };
 
-        Exec::new("luacheck", None, &config)
+        operations::Exec::new("luacheck", None, &config)
             .arg(target_path)
             .args(check_args)
             .disable_loader(true)

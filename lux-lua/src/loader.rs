@@ -445,10 +445,7 @@ mod tests {
     #[cfg(all(target_os = "linux", feature = "impure_tests"))]
     #[tokio::test]
     async fn test_load_c_module_from_built_project() {
-        use lux_lib::{
-            config, lua, operations::InstallProject, path::Paths, project::Project,
-            tree::InstallTree,
-        };
+        use lux_lib::{config, lua, operations, path::Paths, project::Project, tree::InstallTree};
 
         let sample = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../lux-lib/resources/test/sample-projects/c-src/");
@@ -462,7 +459,7 @@ mod tests {
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
-        InstallProject::new()
+        operations::InstallProject::new()
             .project(&project)
             .config(&config)
             .tree(&tree)

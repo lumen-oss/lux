@@ -15,7 +15,7 @@ use zip::ZipArchive;
 
 use crate::config::Config;
 use crate::lua;
-use crate::reqwest::{RequestBuilderExt, RequestError};
+use crate::reqwest::RequestBuilderExt;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -27,7 +27,7 @@ pub enum Error {
     Fs(#[from] fs::Error),
     #[error("failed to pull manifest")]
     #[diagnostic(transparent)]
-    Request(#[from] RequestError),
+    Request(#[from] crate::reqwest::Error),
     #[error("failed to parse manifest")]
     #[diagnostic(help(
         r#"the server returned a manifest that is not valid UTF-8.

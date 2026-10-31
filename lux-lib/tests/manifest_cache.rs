@@ -6,7 +6,7 @@ use lux_lib::{
     config,
     drivers::InstallPackages,
     lua,
-    operations::PackageInstallSpec,
+    operations::install,
     package::db::PackageDB,
     tree::{EntryType, InstallTree},
 };
@@ -30,10 +30,9 @@ async fn install_rock_lockfile(rock: &str, manifest_cache: bool) -> String {
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
 
-    let spec =
-        PackageInstallSpec::new(package::Req::from_str(rock).unwrap(), EntryType::Entrypoint)
-            .build_behaviour(BuildBehaviour::Force)
-            .build();
+    let spec = install::Spec::new(package::Req::from_str(rock).unwrap(), EntryType::Entrypoint)
+        .build_behaviour(BuildBehaviour::Force)
+        .build();
 
     InstallPackages::new(&config, &tree)
         .package(spec)

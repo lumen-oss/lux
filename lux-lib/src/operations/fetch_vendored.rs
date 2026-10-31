@@ -3,10 +3,10 @@ use crate::remote;
 use crate::rockspec;
 use std::path::{Path, PathBuf};
 
+use super::download::{RemoteRock, Rockspec};
 use crate::{
     fs,
     lockfile::RemotePackageSourceUrl,
-    operations::{DownloadedRockspec, RemoteRockDownload},
     package::db::{search, PackageDB},
 };
 use bon::Builder;
@@ -23,7 +23,7 @@ pub(crate) struct FetchVendored<'a> {
 }
 
 #[derive(Error, Debug, Diagnostic)]
-pub enum FetchVendoredError {
+pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Search(#[from] search::Error),
@@ -53,9 +53,7 @@ impl<State> FetchVendoredBuilder<'_, State>
 where
     State: fetch_vendored_builder::State + fetch_vendored_builder::IsComplete,
 {
-    pub(crate) async fn fetch_vendored_rock(
-        self,
-    ) -> Result<RemoteRockDownload, FetchVendoredError> {
+    pub(crate) async fn fetch_vendored_rock(self) -> Result<RemoteRock, Error> {
         do_fetch_vendored_rock(self._build()).await
     }
 }
@@ -66,9 +64,7 @@ where
     skip_all,
     fields(package = args.package.to_string()),
 )]
-async fn do_fetch_vendored_rock(
-    args: FetchVendored<'_>,
-) -> Result<RemoteRockDownload, FetchVendoredError> {
+async fn do_fetch_vendored_rock(args: FetchVendored<'_>) -> Result<RemoteRock, Error> {
     let vendor_dir = args.vendor_dir;
     let package = args.package;
     let package_db = args.package_db;
@@ -76,8 +72,8 @@ async fn do_fetch_vendored_rock(
     let package_spec = package_db.find(package, None).await?.spec;
     let rockspec = load_vendored_rockspec(vendor_dir, &package_spec).await?;
     match load_vendored_package(vendor_dir, &package_spec)? {
-        VendoredPackage::Source(path) => Ok(RemoteRockDownload::RockspecOnly {
-            rockspec_download: DownloadedRockspec {
+        VendoredPackage::Source(path) => Ok(RemoteRock::RockspecOnly {
+            rockspec_download: Rockspec {
                 rockspec,
                 source: remote::package::Source::Local,
                 source_url: Some(RemotePackageSourceUrl::File { path }),
@@ -86,12 +82,10 @@ async fn do_fetch_vendored_rock(
         VendoredPackage::BinaryRock(path) => {
             let packed_rock = fs::tokio::read(&path)
                 .await
-                .map_err(|err| {
-                    FetchVendoredError::ReadBinaryRock(path.to_slash_lossy().to_string(), err)
-                })?
+                .map_err(|err| Error::ReadBinaryRock(path.to_slash_lossy().to_string(), err))?
                 .into();
-            Ok(RemoteRockDownload::BinaryRock {
-                rockspec_download: DownloadedRockspec {
+            Ok(RemoteRock::BinaryRock {
+                rockspec_download: Rockspec {
                     rockspec,
                     source: remote::package::Source::Local,
                     source_url: None,
@@ -111,22 +105,21 @@ async fn do_fetch_vendored_rock(
 async fn load_vendored_rockspec(
     vendor_dir: &Path,
     package: &package::Spec,
-) -> Result<rockspec::lua::Remote, FetchVendoredError> {
+) -> Result<rockspec::lua::Remote, Error> {
     let rockspec_path =
         vendor_dir.join(format!("{}-{}.rockspec", package.name(), package.version()));
     if !rockspec_path.is_file() {
-        return Err(FetchVendoredError::RockspecNotFound(
+        return Err(Error::RockspecNotFound(
             package.clone(),
             vendor_dir.to_slash_lossy().to_string(),
         ));
     }
     let rockspec_content = fs::tokio::read_to_string(&rockspec_path).await?;
-    let rockspec = rockspec::lua::Remote::new(&rockspec_content).map_err(|err| {
-        FetchVendoredError::ParseRockspec {
+    let rockspec =
+        rockspec::lua::Remote::new(&rockspec_content).map_err(|err| Error::ParseRockspec {
             rockspec_path: rockspec_path.to_slash_lossy().to_string(),
             source: Box::new(err),
-        }
-    })?;
+        })?;
     Ok(rockspec)
 }
 
@@ -135,7 +128,7 @@ async fn load_vendored_rockspec(
 fn load_vendored_package(
     vendor_dir: &Path,
     package: &package::Spec,
-) -> Result<VendoredPackage, FetchVendoredError> {
+) -> Result<VendoredPackage, Error> {
     let source_path = vendor_dir.join(format!("{}@{}", package.name(), package.version()));
     if source_path.is_dir() || source_path.is_file() {
         Ok(VendoredPackage::Source(source_path.clone()))
@@ -144,7 +137,7 @@ fn load_vendored_package(
         if rock_path.is_file() {
             Ok(VendoredPackage::BinaryRock(rock_path.clone()))
         } else {
-            Err(FetchVendoredError::PackageNotFound(
+            Err(Error::PackageNotFound(
                 package.clone(),
                 vendor_dir.to_slash_lossy().to_string(),
             ))
