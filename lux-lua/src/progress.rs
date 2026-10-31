@@ -39,9 +39,7 @@ impl TypedUserData for ProgressModule {
     }
 
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
-        docs.add(
-            "build::backend::Module for connecting Lux progress reports to a running LSP server",
-        );
+        docs.add("Module for connecting Lux progress reports to a running LSP server");
     }
 }
 

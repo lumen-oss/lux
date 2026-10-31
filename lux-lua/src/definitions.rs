@@ -17,27 +17,27 @@ pub fn definitions() -> Definitions {
         .field(
             "config",
             Type::named("config.Module"),
-            "build::backend::Module for building a Lux `Config`",
+            "Module for building a Lux `Config`",
         )
         .field(
             "workspace",
             Type::named("workspace.Module"),
-            "build::backend::Module for interacting with a Lux workspace",
+            "Module for interacting with a Lux workspace",
         )
         .field(
             "project",
             Type::named("project.Module"),
-            "build::backend::Module for interacting with a Lux project",
+            "Module for interacting with a Lux project",
         )
         .field(
             "operations",
             Type::named("operations.Module"),
-            "build::backend::Module for Lux operations",
+            "Module for Lux operations",
         )
         .field(
             "progress",
             Type::named("progress.Module"),
-            "build::backend::Module for connecting Lux progress reports to the LSP server",
+            "Module for connecting Lux progress reports to the LSP server",
         )
         .build();
 
