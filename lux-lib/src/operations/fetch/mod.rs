@@ -12,7 +12,7 @@ use crate::wally;
 use auth_git2::{GitAuthenticator, Prompter};
 use bon::Builder;
 use git2::build::RepoBuilder;
-use git2::{FetchOptions, RemoteCallbacks};
+use git2::{Direction, FetchOptions, ObjectType, RemoteCallbacks};
 use miette::Diagnostic;
 use remove_dir_all::remove_dir_all;
 use ssri::Integrity;
@@ -112,6 +112,11 @@ where
             }
             Err(err) => match &fetch.rockspec.source().current_platform().source_spec {
                 rockspec::source::Spec::Git(_) | rockspec::source::Spec::Url(_) => {
+                    // A failed fetch may leave a partial source tree behind, which confuses source
+                    // root detection after unpacking the fallback archive.
+                    if fetch.dest_dir.exists() {
+                        fs::sync::remove_dir_all(fetch.dest_dir)?;
+                    }
                     let package = package::Spec::new(
                         fetch.rockspec.package().clone(),
                         fetch.rockspec.version().clone(),
@@ -191,6 +196,110 @@ impl Prompter for NullPrompter {
     }
 }
 
+/// Returns the refspecs to try for a pinned git ref.
+fn ref_candidates(git_ref: &git::Ref) -> Vec<(String, String)> {
+    // Some rockspecs reference a tag in the `branch` field (penlight), so a branch should also try
+    // falling back to a tag.
+    let tag_candidate = |name: &str| {
+        let ref_name = format!("refs/tags/{name}");
+        (ref_name.clone(), format!("+{ref_name}:{ref_name}"))
+    };
+    // Some rockspecs pin a commit hash in the `branch` or `tag` field (e.g. tiniest).
+    let sha_candidate = |name: &str| {
+        git2::Oid::from_str(name)
+            .ok()
+            .map(|_| (name.to_string(), name.to_string()))
+    };
+
+    match git_ref {
+        git::Ref::Branch(branch) => {
+            let mut candidates = vec![
+                (
+                    format!("refs/heads/{branch}"),
+                    format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+                ),
+                tag_candidate(branch),
+            ];
+            candidates.extend(sha_candidate(branch));
+            candidates
+        }
+        git::Ref::Tag(tag) => {
+            let mut candidates = vec![tag_candidate(tag)];
+            candidates.extend(sha_candidate(tag));
+            candidates
+        }
+    }
+}
+
+/// Initialises an empty repository and shallow-fetches only the necessary ref.
+fn fetch_pinned_ref(
+    path: &Path,
+    url: &str,
+    auth: &GitAuthenticator,
+    git_config: &git2::Config,
+    candidates: &[(String, String)],
+) -> Result<git2::Repository, git2::Error> {
+    let repo = git2::Repository::init(path)?;
+
+    // Scopes used to prevent the Borrow Checker™ from complaining.
+    {
+        let mut remote = repo.remote("origin", url)?;
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(auth.credentials(git_config));
+        let mut connection = remote.connect_auth(Direction::Fetch, Some(callbacks), None)?;
+
+        let available = connection.list()?;
+        let (refspec, oid) = candidates
+            .iter()
+            .find_map(|(ref_name, refspec)| {
+                available
+                    .iter()
+                    .find(|head| head.name() == ref_name)
+                    .map(|head| (refspec.as_str(), head.oid()))
+            })
+            .or_else(|| {
+                // A pinned commit hash isn't advertised as a ref, but the server can fetch it.
+                candidates.iter().find_map(|(ref_name, refspec)| {
+                    git2::Oid::from_str(ref_name)
+                        .ok()
+                        .map(|oid| (refspec.as_str(), oid))
+                })
+            })
+            .ok_or_else(|| git2::Error::from_str("no matching branch or tag found"))?;
+
+        let mut fetch_options = FetchOptions::new();
+        fetch_options.depth(1);
+        fetch_options.update_fetchhead(false);
+        connection
+            .remote()
+            .download(&[refspec], Some(&mut fetch_options))?;
+
+        let commit = repo.find_object(oid, None)?.peel(ObjectType::Commit)?;
+        repo.checkout_tree(&commit, None)?;
+    };
+
+    Ok(repo)
+}
+
+/// Shallow-clones the remote's default branch.
+fn clone_default_branch(
+    path: &Path,
+    url: &str,
+    auth: &GitAuthenticator,
+    git_config: &git2::Config,
+) -> Result<git2::Repository, git2::Error> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(auth.credentials(git_config));
+    let mut fetch_options = FetchOptions::new();
+    fetch_options.update_fetchhead(false);
+    fetch_options.remote_callbacks(callbacks);
+    fetch_options.depth(1);
+
+    RepoBuilder::new()
+        .fetch_options(fetch_options)
+        .clone(url, path)
+}
+
 /// Initialises and checks out git submodules,
 /// returning the relative paths of any submodules that were checked out.
 fn init_submodules(
@@ -201,8 +310,14 @@ fn init_submodules(
     let workdir = repo
         .workdir()
         .ok_or_else(|| git2::Error::from_str("cloned repository has no working directory"))?;
+    let index = repo.index()?;
     let mut submodule_paths = Vec::new();
     for mut submodule in repo.submodules()? {
+        // `.gitmodules` may list paths that are not gitlinks in the checked-out tree.
+        // Updating those does nothing and leaves no `.git` to clean up below.
+        if index.get_path(submodule.path(), 0).is_none() {
+            continue;
+        }
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(auth.credentials(git_config));
         let mut fetch_options = FetchOptions::new();
@@ -274,39 +389,22 @@ async fn fetch_src_impl<R: Rockspec>(
                     });
                 }
                 let git_config = git2::Config::open_default()?;
-                let mut callbacks = RemoteCallbacks::new();
-                callbacks.credentials(auth.credentials(&git_config));
-                let mut fetch_options = FetchOptions::new();
-                fetch_options.update_fetchhead(false);
-                fetch_options.remote_callbacks(callbacks);
-                let checkout_ref = match &git_ref {
-                    Some(git::Ref::Tag(tag)) => Some(tag.as_str()),
-                    Some(git::Ref::Branch(branch)) => Some(branch.as_str()),
-                    None => None,
+                let repo = match &git_ref {
+                    Some(git_ref) => fetch_pinned_ref(
+                        &clone_dir,
+                        &clone_url,
+                        &auth,
+                        &git_config,
+                        &ref_candidates(git_ref),
+                    )?,
+                    None => clone_default_branch(&clone_dir, &clone_url, &auth, &git_config)?,
                 };
-                if checkout_ref.is_none() {
-                    fetch_options.depth(1);
-                };
-                let mut repo_builder = RepoBuilder::new();
-                repo_builder.fetch_options(fetch_options);
-                let repo = repo_builder.clone(&clone_url, &clone_dir)?;
 
-                let checkout_ref = match checkout_ref {
-                    Some(checkout_ref) => {
-                        let ref_name = if let Some(git::Ref::Branch(branch)) = &git_ref {
-                            format!("origin/{branch}")
-                        } else {
-                            checkout_ref.to_string()
-                        };
-                        let (object, _) = repo.revparse_ext(&ref_name)?;
-                        repo.checkout_tree(&object, None)?;
-                        checkout_ref.to_string()
-                    }
-                    None => {
-                        let head = repo.head()?;
-                        let commit = head.peel_to_commit()?;
-                        commit.id().to_string()
-                    }
+                let checkout_ref = match &git_ref {
+                    Some(git_ref) => match git_ref {
+                        git::Ref::Tag(name) | git::Ref::Branch(name) => name.clone(),
+                    },
+                    None => repo.head()?.peel_to_commit()?.id().to_string(),
                 };
 
                 let submodule_paths = init_submodules(&repo, &auth, &git_config)?;
