@@ -43,7 +43,7 @@ if present, or otherwise by instantiating the default config"#,
         methods.add_function("nvim_layout", |_, ()| Ok(NvimLayoutLua(NvimLayout)));
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
-        docs.add("build::backend::Module for building a Lux `Config`");
+        docs.add("Module for building a Lux `Config`");
     }
 }
 

@@ -348,7 +348,7 @@ impl TypedUserData for OperationsModule {
     }
 
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
-        docs.add("build::backend::Module for Lux operations");
+        docs.add("Module for Lux operations");
     }
 }
 
