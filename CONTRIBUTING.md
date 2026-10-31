@@ -209,6 +209,20 @@ When adding traces, be sure to [instrument async code properly](https://docs.rs/
 In general, prefer the [`#[instrument]` attribute macro](https://docs.rs/tracing/latest/tracing/attr.instrument.html),
 as it automatically generates correct code when used on an async function.
 
+### Profiling
+
+Use [`samply`](https://github.com/mstange/samply) to record a CPU profile and
+open it in the Firefox Profiler. `scripts/profile.sh` builds `lx` with debug
+info and profiles a command in one go:
+
+```console
+# runs `lx install busted --force` as a default test
+scripts/profile.sh
+
+# any other invocation
+scripts/profile.sh install busted --force --tree /tmp/lux-tree
+```
+
 ### Schema generation
 
 We generate JSON Schema for `config.toml` and `lux.toml` from their Rust types
