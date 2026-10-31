@@ -5,7 +5,7 @@ use assert_fs::TempDir;
 #[cfg(target_env = "msvc")]
 use flaky_test::flaky_test;
 #[cfg(target_env = "msvc")]
-use lux_lib::operations::dist;
+use lux_lib::operations::dist::ProjectBin;
 #[cfg(target_env = "msvc")]
 use lux_lib::project::Project;
 #[cfg(target_env = "msvc")]
