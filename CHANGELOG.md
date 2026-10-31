@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.71.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.70.2...lux-lib-v0.71.0) `lux-lib` - 2026-10-31
+
+### Added
+- [**breaking**] replace octocrab with handrolled API code (closes #1354)
+
+### Fixed
+- ci failures on windows
+- *(build/command)* don't strip shell expansions ([#2172](https://github.com/lumen-oss/lux/pull/2172))
+
+### Reverted
+- [**breaking**] luanox manifest cache
+
+## [0.53.0](https://github.com/lumen-oss/lux/compare/v0.52.2...v0.53.0) `lux-cli` - 2026-10-31
+
+### Added
+- [**breaking**] replace octocrab with handrolled API code (closes #1354)
+
+### Reverted
+- [**breaking**] luanox manifest cache
+
 ## [0.52.2](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.52.1...lux-lsp-v0.52.2) `lux-lsp` - 2026-10-29
 
 ### Other
