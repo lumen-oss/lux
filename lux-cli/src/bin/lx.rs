@@ -82,7 +82,6 @@ async fn main() -> Result<()> {
         .lua_version(lua_version)
         .namespace(cli.namespace)
         .cache_dir(cli.cache_dir)
-        .no_manifest_cache(Some(cli.no_manifest_cache))
         .data_dir(cli.data_dir)
         .vendor_dir(cli.vendor_dir)
         .server(cli.server)

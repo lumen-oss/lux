@@ -2,7 +2,6 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use super::PackageDB;
-use crate::config::Config;
 use crate::manifest;
 use crate::operations::install;
 use crate::package;
@@ -45,12 +44,11 @@ impl PackageDB {
     pub(crate) async fn resolve(
         &self,
         spec: &install::Spec,
-        config: &Config,
     ) -> Result<Option<FoundPackage>, discover::Error> {
         for provider in &self.providers {
-            // Providers that can serve a package without downloading it (local packages and the
-            // manifest cache) resolve early.
-            if let Some(found) = provider.resolve(spec, config).await? {
+            // Providers that can serve a package without downloading it (local packages)
+            // resolve early.
+            if let Some(found) = provider.resolve(spec).await? {
                 return Ok(Some(found));
             }
 

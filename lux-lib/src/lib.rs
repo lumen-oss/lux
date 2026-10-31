@@ -8,7 +8,6 @@ pub mod lockfile;
 pub mod lua;
 pub mod luarocks;
 pub mod manifest;
-pub mod manifest_cache;
 pub mod operations;
 pub mod package;
 pub mod path;
