@@ -2,7 +2,10 @@ use std::io::IsTerminal;
 
 use std::time::Duration;
 
-use clap::Parser;
+use clap::{
+    builder::{Resettable, StyledStr},
+    CommandFactory, FromArgMatches,
+};
 use lux_cli::{
     add,
     args::Preset,
@@ -46,12 +49,21 @@ async fn main() -> Result<()> {
                 .build(),
         )
     }))?;
-    let cli = match Cli::try_parse() {
+    let cli = match parse_cli() {
         Ok(cli) => cli,
         Err(err) => {
             if !err.use_stderr() {
                 let _ = err.print();
                 return Ok(());
+            }
+
+            // Print help pages manually so that colour is preserved.
+            if matches!(
+                err.kind(),
+                clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+            ) {
+                let _ = err.print();
+                return Err(miette::miette!("not enough arguments supplied"));
             }
 
             match clap_to_miette(err) {
@@ -226,6 +238,30 @@ async fn main() -> Result<()> {
         Commands::Sync(sync_args) => sync::sync(sync_args, config).await?,
     }
     Ok(())
+}
+
+fn parse_cli() -> Result<Cli, clap::Error> {
+    let mut cmd = normalize_help(Cli::command());
+    let mut matches = cmd.try_get_matches_from_mut(std::env::args_os())?;
+    Cli::from_arg_matches_mut(&mut matches)
+}
+
+fn normalize_help(cmd: clap::Command) -> clap::Command {
+    fn stripped(text: Option<&StyledStr>) -> Resettable<StyledStr> {
+        text.map(|text| text.to_string().replace("{n} ", "{n}").into())
+            .map_or(Resettable::Reset, Resettable::Value)
+    }
+
+    let about = stripped(cmd.get_about());
+    let long_about = stripped(cmd.get_long_about());
+    cmd.about(about)
+        .long_about(long_about)
+        .mut_args(|arg| {
+            let help = stripped(arg.get_help());
+            let long_help = stripped(arg.get_long_help());
+            arg.help(help).long_help(long_help)
+        })
+        .mut_subcommands(normalize_help)
 }
 
 /// Whether the current process is running with root/administrator privileges.

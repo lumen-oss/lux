@@ -13,7 +13,10 @@ use std::path::PathBuf;
 use add::Add;
 use build::Build;
 use check::Check;
-use clap::{Parser, Subcommand};
+use clap::{
+    builder::styling::{AnsiColor, Styles},
+    Parser, Subcommand,
+};
 use config::ConfigCmd;
 use debug::Debug;
 use doc::Doc;
@@ -90,9 +93,22 @@ pub mod vendor;
 pub mod which;
 pub mod workspace;
 
+const STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Yellow.on_default().bold())
+    .usage(AnsiColor::Green.on_default().bold())
+    .literal(AnsiColor::Cyan.on_default().bold())
+    .placeholder(AnsiColor::Cyan.on_default());
+
 /// A luxurious package manager for Lua.
 #[derive(Parser)]
-#[command(author, version, about, long_about = None, arg_required_else_help = true)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = None,
+    arg_required_else_help = true,
+    styles = STYLES
+)]
 pub struct Cli {
     /// Enable the sub-repositories in luarocks servers for rockspecs of in-development versions.
     #[arg(long)]
