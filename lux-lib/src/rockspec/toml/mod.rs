@@ -745,10 +745,16 @@ impl Local {
         )?)
     }
 
-    /// Renders the rockspec for local builds, using the rockspec's own version
-    /// and its source pointing at the project root.
-    pub fn to_local_rockspec(&self) -> Result<rockspec::lua::Remote, rockspec::Error> {
-        let content = self.to_lua_local_rockspec_string()?;
+    /// Generates this project's rockspec for building it in place.
+    ///
+    /// Uses the remote source when one can be generated,
+    /// so that the rockspec stored in the install tree points at the published source.
+    /// The returned rockspec's effective source points at the project root.
+    pub fn to_build_rockspec(&self) -> Result<rockspec::lua::Remote, rockspec::Error> {
+        let content = match self.to_lua_remote_rockspec_string() {
+            Ok(content) => content,
+            Err(_) => self.to_lua_local_rockspec_string()?,
+        };
         Ok(rockspec::lua::Local::from_project_toml(self, content)
             .into_remote_with_source(self.source.clone()))
     }

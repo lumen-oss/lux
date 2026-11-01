@@ -94,7 +94,7 @@ impl<
         let project = args.project;
         let tree = args.tree;
 
-        let rockspec = project.local_remote_rockspec()?;
+        let rockspec = project.build_rockspec()?;
         let name = rockspec.package().clone();
 
         let behaviour = if matches!(args.behaviour, BuildBehaviour::Ignore) {
