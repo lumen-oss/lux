@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.72.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.72.0...lux-lib-v0.72.1) `lux-lib` - 2026-11-01
+
+### Other
+- update luau ([#2180](https://github.com/lumen-oss/lux/pull/2180))
+
 ## [0.72.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.71.0...lux-lib-v0.72.0) `lux-lib` - 2026-11-01
 
 ### Added
