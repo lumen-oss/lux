@@ -41,6 +41,7 @@
           hooks = {
             # NOTE: When adding/removing hooks, make sure
             # to update CONTRIBUTING.md for non-nix users.
+            actionlint.enable = true;
             alejandra.enable = true;
             rustfmt.enable = true;
             taplo = {
