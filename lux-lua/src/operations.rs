@@ -21,9 +21,9 @@ use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
 use path_slash::PathBufExt;
 
 use crate::lua_impls::{
-    self, AddDependenciesLua, ConfigLua, DependencyKindLua, DownloadedRockspecLua,
-    LockedPackageIdLua, LockedPackageLua, PackageInstallSpecLua, PackageNameLua, PinnedStateLua,
-    ProjectLua, SyncReportLua, TreeLua, WorkspaceLua,
+    self, AddDependenciesLua, ConfigLua, DependencyKindLua, DownloadedRockspec, LockedPackageIdLua,
+    LockedPackageLua, PackageInstallSpec, PackageNameLua, PinnedStateLua, ProjectLua,
+    SyncReportLua, TreeLua, WorkspaceLua,
 };
 
 #[derive(Clone)]
@@ -83,7 +83,7 @@ impl TypedUserData for OperationsModule {
         methods.param("config", "Lux config");
         methods.add_async_function(
             "install",
-            |_, (packages, tree, config): (Vec<PackageInstallSpecLua>, TreeLua, ConfigLua)| async move {
+            |_, (packages, tree, config): (Vec<PackageInstallSpec>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
@@ -331,7 +331,7 @@ impl TypedUserData for OperationsModule {
                     .download_rockspec()
                     .await
                     .into_lua_err()
-                    .map(DownloadedRockspecLua)
+                    .map(DownloadedRockspec)
             },
         );
 
@@ -423,7 +423,7 @@ mod tests {
     use flaky_test::flaky_test;
     use mlua::{FromLua, Lua, LuaSerdeExt};
 
-    use crate::lua_impls::PackageInstallSpecLua;
+    use crate::lua_impls::PackageInstallSpec;
 
     fn setup_lua() -> Lua {
         let lua = Lua::new();
@@ -488,7 +488,7 @@ type = "builtin"
     fn test_package_install_spec_from_string() {
         let lua = Lua::new();
         let value = lua.to_value("say >= 1.3").unwrap();
-        PackageInstallSpecLua::from_lua(value, &lua).unwrap();
+        PackageInstallSpec::from_lua(value, &lua).unwrap();
     }
 
     #[test]
@@ -498,14 +498,14 @@ type = "builtin"
             .load(r#"{ package = "busted >= 2.0", entry_type = "dependency_only", pin = true, opt = true, build_behaviour = "ignore" }"#)
             .eval()
             .unwrap();
-        PackageInstallSpecLua::from_lua(value, &lua).unwrap();
+        PackageInstallSpec::from_lua(value, &lua).unwrap();
     }
 
     #[test]
     fn test_package_install_spec_table_defaults() {
         let lua = Lua::new();
         let value = lua.load(r#"{ package = "inspect" }"#).eval().unwrap();
-        PackageInstallSpecLua::from_lua(value, &lua).unwrap();
+        PackageInstallSpec::from_lua(value, &lua).unwrap();
     }
 
     #[test]
@@ -515,14 +515,14 @@ type = "builtin"
             .load(r#"{ package = "say", entry_type = "invalid" }"#)
             .eval()
             .unwrap();
-        assert!(PackageInstallSpecLua::from_lua(value, &lua).is_err());
+        assert!(PackageInstallSpec::from_lua(value, &lua).is_err());
     }
 
     #[test]
     fn test_package_install_spec_invalid_package_req() {
         let lua = Lua::new();
         let value = lua.to_value("!!invalid").unwrap();
-        assert!(PackageInstallSpecLua::from_lua(value, &lua).is_err());
+        assert!(PackageInstallSpec::from_lua(value, &lua).is_err());
     }
 
     #[test]
@@ -532,7 +532,7 @@ type = "builtin"
             .load(r#"{ package = "say", build_behaviour = "invalid" }"#)
             .eval()
             .unwrap();
-        assert!(PackageInstallSpecLua::from_lua(value, &lua).is_err());
+        assert!(PackageInstallSpec::from_lua(value, &lua).is_err());
     }
 
     #[cfg(feature = "impure_tests")]
