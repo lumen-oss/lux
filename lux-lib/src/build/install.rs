@@ -208,7 +208,7 @@ async fn is_compatible_lua_script(
                 .await
                 .is_ok_and(|status| status.success())
         } else {
-            is_compatible_lua_script_fallback(file, lua, config).await
+            is_compatible_lua_script_fallback(file).await
         }
     } else {
         false
@@ -220,32 +220,20 @@ async fn is_compatible_lua_script(
 /// as it cannot load scripts for an incompatible Lua version.
 /// But it works for test dependencies like nlua.
 #[tracing::instrument(level = "trace")]
-async fn is_compatible_lua_script_fallback(
-    file: &Path,
-    lua_installation: &lua::Installation,
-    config: &Config,
-) -> bool {
+async fn is_compatible_lua_script_fallback(file: &Path) -> bool {
     if let Ok(file_content) = fs::tokio::read_to_string(&file).await {
         let file_content_without_comments = file_content
             .lines()
             .filter(|line| !line.trim_start().starts_with("#"))
             .collect_vec()
             .join("\n");
-        lua_installation
-            .lua_binary_or_config_override(config)
-            .is_some_and(|_| {
-                // Try to compile the content without executing it
-                ottavino::Lua::core()
-                    .try_enter(|ctx| {
-                        ottavino::Closure::load(
-                            ctx,
-                            None,
-                            file_content_without_comments.as_bytes(),
-                        )?;
-                        Ok(())
-                    })
-                    .is_ok()
+        // Try to compile the content without executing it
+        ottavino::Lua::core()
+            .try_enter(|ctx| {
+                ottavino::Closure::load(ctx, None, file_content_without_comments.as_bytes())?;
+                Ok(())
             })
+            .is_ok()
     } else {
         false
     }
