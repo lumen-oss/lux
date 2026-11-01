@@ -531,6 +531,9 @@ impl Project {
             | lua_dependency::Kind::Build(ref deps)
             | lua_dependency::Kind::Test(ref deps) => {
                 for dep in deps {
+                    if table.get(dep.to_string()).is_none() {
+                        return Err(PinError::PackageNotFound((*dep).clone()));
+                    }
                     let mut dep_item = table[dep.to_string()].clone();
                     match dep_item {
                         version @ Item::Value(_) => {
