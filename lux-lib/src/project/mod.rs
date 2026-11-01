@@ -239,13 +239,16 @@ impl Project {
             .map_err(|err| IntoLocalRockspecError::Rockspec(Box::new(err)))
     }
 
-    /// Returns this project's rockspec as a [`rockspec::lua::Remote`] whose source points at the
-    /// project's own directory, so it can be built like any other package.
-    pub fn local_remote_rockspec(&self) -> Result<rockspec::lua::Remote, IntoLocalRockspecError> {
+    /// Returns this project's rockspec for building it in place.
+    ///
+    /// The rockspec's effective source points at the project's own directory,
+    /// so it can be built like any other package.
+    /// Its generated rockspec uses the remote source when one can be generated.
+    pub fn build_rockspec(&self) -> Result<rockspec::lua::Remote, IntoLocalRockspecError> {
         self.toml()
             .into_local()
             .map_err(|err| IntoLocalRockspecError::TomlValidation(Box::new(err)))?
-            .to_local_rockspec()
+            .to_build_rockspec()
             .map_err(|err| IntoLocalRockspecError::Rockspec(Box::new(err)))
     }
 

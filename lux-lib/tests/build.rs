@@ -266,7 +266,7 @@ async fn test_build_local_project_no_source() {
     workspace_root.copy_from(&sample_project, &["**"]).unwrap();
 
     let workspace = Workspace::from_exact(&workspace_root).unwrap().unwrap();
-    let rockspec = workspace.members().first().local_remote_rockspec().unwrap();
+    let rockspec = workspace.members().first().build_rockspec().unwrap();
 
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
 
@@ -313,7 +313,7 @@ fn local_project_rockspec_keeps_lua_text() {
         .unwrap()
         .unwrap();
     let content = project
-        .local_remote_rockspec()
+        .build_rockspec()
         .unwrap()
         .to_lua_remote_rockspec_string()
         .unwrap();

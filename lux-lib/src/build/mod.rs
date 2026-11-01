@@ -753,6 +753,58 @@ build = {
     }
 
     #[tokio::test]
+    async fn installed_rockspec_has_remote_source() {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/no-source/");
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+
+        let source_url = "https://github.com/lumen-oss/luarocks-stub";
+        let lux_toml = project_root.path().join("lux.toml");
+        let content = format!(
+            "{}\n[source]\nurl = \"{source_url}\"\n",
+            std::fs::read_to_string(&lux_toml).unwrap()
+        );
+        std::fs::write(&lux_toml, content).unwrap();
+
+        let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
+        let tree_dir = assert_fs::TempDir::new().unwrap();
+        let config = config::Builder::new()
+            .unwrap()
+            .lua_version(lua_version)
+            .user_tree(Some(tree_dir.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config
+            .user_tree(config.lua_version().cloned().unwrap())
+            .unwrap();
+        let lua = lua::Installation::new_from_config(&config).await.unwrap();
+
+        let project = Project::from_exact(project_root.path()).unwrap().unwrap();
+        let rockspec = project.build_rockspec().unwrap();
+
+        let package = Build::new()
+            .rockspec(&rockspec)
+            .lua(&lua)
+            .tree(&tree)
+            .entry_type(EntryType::Entrypoint)
+            .config(&config)
+            .behaviour(BuildBehaviour::Force)
+            .build()
+            .await
+            .unwrap();
+
+        let installed =
+            std::fs::read_to_string(tree.layout_for(&package.spec).rockspec_path()).unwrap();
+        let installed = rockspec::lua::Remote::new(&installed).unwrap();
+
+        match &installed.source().current_platform().source_spec {
+            rockspec::source::Spec::Url(url) => assert_eq!(url.as_str(), source_url),
+            other => panic!("expected a URL source, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_install_conf_directory_target() {
         let rockspec = rockspec::lua::Remote::new(
             r#"

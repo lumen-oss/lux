@@ -123,7 +123,7 @@ fn discover_project(spec: &install::Spec) -> Result<Option<FoundPackage>, Error>
     Ok(match Project::from_exact(path)? {
         Some(project) if project.toml().package() == spec.package.name() => {
             Some(FoundPackage::from_project_root(
-                project.local_remote_rockspec()?,
+                project.build_rockspec()?,
                 project.root().to_path_buf(),
             ))
         }
