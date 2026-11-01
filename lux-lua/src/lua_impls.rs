@@ -275,15 +275,15 @@ impl IntoLua for LockedPackageIdLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConstraintLua(pub lockfile::Constraint);
+pub struct LockConstraint(pub lockfile::Constraint);
 
-impl Typed for ConstraintLua {
+impl Typed for LockConstraint {
     fn ty() -> Type {
         Type::string()
     }
 }
 
-impl IntoLua for ConstraintLua {
+impl IntoLua for LockConstraint {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
         match self.0 {
             lockfile::Constraint::Unconstrained => "*".into_lua(lua),
@@ -292,12 +292,12 @@ impl IntoLua for ConstraintLua {
     }
 }
 
-impl FromLua for ConstraintLua {
+impl FromLua for LockConstraint {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let s = String::from_lua(value, lua)?;
         match s.as_str() {
-            "*" => Ok(ConstraintLua(lockfile::Constraint::Unconstrained)),
-            _ => Ok(ConstraintLua(lockfile::Constraint::Constrained(
+            "*" => Ok(LockConstraint(lockfile::Constraint::Unconstrained)),
+            _ => Ok(LockConstraint(lockfile::Constraint::Constrained(
                 s.parse().into_lua_err()?,
             ))),
         }
@@ -740,15 +740,15 @@ impl IntoLua for SyncReportLua {
     }
 }
 
-pub struct PackageInstallSpecLua(pub install::Spec);
+pub struct PackageInstallSpec(pub install::Spec);
 
-impl Typed for PackageInstallSpecLua {
+impl Typed for PackageInstallSpec {
     fn ty() -> Type {
         Type::named("table")
     }
 }
 
-impl FromLua for PackageInstallSpecLua {
+impl FromLua for PackageInstallSpec {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         let input: PackageInstallSpecInput = lua.from_value(value)?;
         let (package_str, entry_type, pin, opt, build_behaviour) = match input {
@@ -773,7 +773,7 @@ impl FromLua for PackageInstallSpecLua {
             .opt(OptState::from(opt))
             .build_behaviour(build_behaviour.into())
             .build();
-        Ok(PackageInstallSpecLua(spec))
+        Ok(PackageInstallSpec(spec))
     }
 }
 
@@ -951,7 +951,7 @@ impl TypedUserData for LockedPackageLua {
         });
         methods.add_method("opt", |_, this, ()| Ok(OptStateLua(this.0.opt())));
         methods.add_method("constraint", |_, this, ()| {
-            Ok(ConstraintLua(this.0.constraint()))
+            Ok(LockConstraint(this.0.constraint()))
         });
         methods.add_method("hashes", |_, this, ()| {
             Ok(LockedPackageHashesLua(this.0.hashes().clone()))
@@ -3347,17 +3347,17 @@ impl mlua::UserData for ProjectLua {
 }
 
 #[derive(Clone)]
-pub struct DownloadedRockspecLua(pub download::Rockspec);
+pub struct DownloadedRockspec(pub download::Rockspec);
 
-impl Typed for DownloadedRockspecLua {
+impl Typed for DownloadedRockspec {
     fn ty() -> Type {
         Type::named("operations.download.Rockspec")
     }
 }
 
-impl_from_lua_userdata!(DownloadedRockspecLua);
+impl_from_lua_userdata!(DownloadedRockspec);
 
-impl TypedUserData for DownloadedRockspecLua {
+impl TypedUserData for DownloadedRockspec {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.add_method("rockspec", |_, this, ()| {
             Ok(RemoteLuaRockspecLua(this.0.rockspec.clone()))
@@ -3368,7 +3368,7 @@ impl TypedUserData for DownloadedRockspecLua {
     }
 }
 
-impl mlua::UserData for DownloadedRockspecLua {
+impl mlua::UserData for DownloadedRockspec {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         let mut wrapper = mlua_extras::typed::WrappedBuilder::new(fields);
         <Self as TypedUserData>::add_fields(&mut wrapper);
@@ -3388,7 +3388,7 @@ mod definitions_registry {
 
     use super::{
         BuildSpecLua, BustedTestSpecLua, CMakeBuildSpecLua, CommandBuildSpecLua,
-        CommandTestSpecLua, ConfigBuilderLua, ConfigLua, DownloadedRockspecLua, GitSourceLua,
+        CommandTestSpecLua, ConfigBuilderLua, ConfigLua, DownloadedRockspec, GitSourceLua,
         InstallSpecLua, LocalLuaRockspecLua, LocalProjectTomlLua, LockedPackageHashesLua,
         LockedPackageLua, LockfileGuardLua, LockfileReadOnlyLua, LockfileReadWriteLua,
         LuaDependencySpecLua, LuaScriptTestSpecLua, MakeBuildSpecLua, ModulePathsLua,
@@ -3452,7 +3452,7 @@ mod definitions_registry {
         "lockfile.ReadWrite" => LockfileReadWriteLua,
         "Project" => ProjectLua,
         "Workspace" => WorkspaceLua,
-        "operations.download.Rockspec" => DownloadedRockspecLua,
+        "operations.download.Rockspec" => DownloadedRockspec,
     }
 
     inventory::submit! {
