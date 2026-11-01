@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.53.1](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.53.0...lux-lsp-v0.53.1) `lux-lsp` - 2026-11-01
+
+### Other
+- updated the following local packages: lux-lib
+
+## [0.72.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.71.0...lux-lib-v0.72.0) `lux-lib` - 2026-11-01
+
+### Added
+- *(build)* encode project's source URL in workspace-tree rockspec
+
+### Performance
+- speed up git operations by shallow fetching ([#2187](https://github.com/lumen-oss/lux/pull/2187))
+
+## [0.53.1](https://github.com/lumen-oss/lux/compare/v0.53.0...v0.53.1) `lux-cli` - 2026-11-01
+
+### Other
+- updated the following local packages: lux-lib
+
 ## [0.71.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.70.2...lux-lib-v0.71.0) `lux-lib` - 2026-10-31
 
 ### Added
