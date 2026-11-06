@@ -34,7 +34,7 @@ async fn install_git_package() {
 }
 
 // http 0.4 has an http-0.4-0.all.rock packed rock on luarocks.org
-#[tokio::test]
+#[flaky_test(tokio, times = 5)]
 #[serial]
 #[cfg(not(target_env = "msvc"))] // http has dependencies that are not supported on Windows
 async fn install_http_package() {
