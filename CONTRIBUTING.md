@@ -29,6 +29,10 @@ as they may end up in our [generated changelog](./CHANGELOG.md).
 > Look at our commit history for some examples for conventional commit
 > prefixes and scopes we've used.
 
+## Code style
+
+See [docs/STYLEGUIDE.md](./docs/STYLEGUIDE.md) for module design and import style.
+
 ## CI
 
 Our CI checks are run using [`nix`](https://nixos.org/download.html#download-nix).
