@@ -14,6 +14,7 @@ use crate::{
     operations::unpack,
 };
 use bon::Builder;
+use bytes::Bytes;
 use git2::{build::RepoBuilder, FetchOptions};
 use miette::Diagnostic;
 use path_slash::PathExt;
@@ -63,6 +64,12 @@ pub enum Error {
     Git(#[from] git2::Error),
     #[error(transparent)]
     CC(#[from] cc::Error),
+    #[error("no Lua source mirrors are configured")]
+    #[diagnostic(help("add at least one URL to `lua_mirrors` in your Lux config."))]
+    NoLuaMirrors,
+    #[error("failed to construct a Lua source URL: {0}")]
+    #[diagnostic(help("check the `lua_mirrors` URLs in your Lux config."))]
+    Url(#[from] url::ParseError),
     #[error("failed to find cl.exe")]
     ClNotFound,
     #[error("expected `{name}` in the Luau build output")]
@@ -478,24 +485,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), Error> {
     };
 
     let file_name = format!("lua-{pkg_version}.tar.gz");
-
-    let source_url: Url = unsafe {
-        format!("https://www.lua.org/ftp/{file_name}")
-            .parse()
-            .unwrap_unchecked()
-    };
-
-    let response = args
-        .config
-        .https_client()?
-        .get(source_url.clone())
-        .send()
-        .instrument(tracing::info_span!("Downloading Lua"))
-        .await?
-        .error_for_status()?
-        .bytes()
-        .instrument(tracing::trace_span!("getting response body"))
-        .await?;
+    let (source_url, response) = download_source(&file_name, args.config).await?;
 
     let hash = response.hash().await?;
 
@@ -515,6 +505,37 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), Error> {
         do_build_lua_msvc(args, build_dir.path(), lua_version, pkg_version).await
     } else {
         do_build_lua_unix(args, build_dir.path(), lua_version, pkg_version).await
+    }
+}
+
+async fn download_source(file_name: &str, config: &Config) -> Result<(Url, Bytes), Error> {
+    let client = config.https_client()?;
+    let mut last_error = None;
+    for base in config.lua_mirrors() {
+        let url = base.join(file_name)?;
+        let response = client
+            .get(url.clone())
+            .send()
+            .instrument(tracing::info_span!("Downloading Lua"))
+            .await
+            .and_then(reqwest::Response::error_for_status);
+        match response {
+            Ok(response) => {
+                let bytes = response
+                    .bytes()
+                    .instrument(tracing::trace_span!("getting response body"))
+                    .await?;
+                return Ok((url, bytes));
+            }
+            Err(error) => {
+                tracing::warn!(message = format!("failed to download {url}: {error}").as_str());
+                last_error = Some(error.into());
+            }
+        }
+    }
+    match last_error {
+        Some(error) => Err(error),
+        None => Err(Error::NoLuaMirrors),
     }
 }
 

@@ -33,6 +33,10 @@ pub mod build;
 pub mod external_deps;
 
 const DEV_PATH: &str = "dev/";
+const DEFAULT_LUA_MIRRORS: [&str; 2] = [
+    "https://www.lua.org/ftp",
+    "https://www.tecgraf.puc-rio.br/lua/ftp",
+];
 const DEFAULT_USER_AGENT: &str = concat!("lux-lib/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Error, Debug, Diagnostic)]
@@ -54,6 +58,7 @@ pub struct Config {
     extra_wally_registries: Vec<Url>,
     namespace: Option<String>,
     lua_dir: Option<PathBuf>,
+    lua_mirrors: Vec<Url>,
     lua_version: Option<lua::Version>,
     user_tree: PathBuf,
     workspace_tree: Option<PathBuf>,
@@ -198,6 +203,11 @@ impl Config {
     /// The directory in which to install Lua{n} if not found
     pub fn lua_dir(&self) -> Option<&PathBuf> {
         self.lua_dir.as_ref()
+    }
+
+    /// The URLs from which to download Lua sources, in order of preference.
+    pub fn lua_mirrors(&self) -> &[Url] {
+        &self.lua_mirrors
     }
 
     // TODO(vhyrro): Remove `Version::from(&config)` and keep this only.
@@ -485,6 +495,15 @@ pub struct Builder {
     workspace_tree: Option<PathBuf>,
     /// The directory in which to install Lua if it is not found.
     lua_dir: Option<PathBuf>,
+    /// The URLs from which to download Lua sources, in order of preference.
+    /// Default: the official Lua FTP server, falling back to its PUC-Rio mirror.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_url_vec",
+        serialize_with = "serialize_url_vec"
+    )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+    lua_mirrors: Option<Vec<Url>>,
     /// The cache directory, e.g. for LuaRocks manifests.
     cache_dir: Option<PathBuf>,
     /// The data directory, in which the default user install tree resides.
@@ -616,6 +635,14 @@ impl Builder {
     pub fn lua_dir(self, lua_dir: Option<PathBuf>) -> Self {
         Self {
             lua_dir: lua_dir.or(self.lua_dir),
+            ..self
+        }
+    }
+
+    /// The URLs from which to download Lua sources.
+    pub fn lua_mirrors(self, lua_mirrors: Option<Vec<Url>>) -> Self {
+        Self {
+            lua_mirrors: lua_mirrors.or(self.lua_mirrors),
             ..self
         }
     }
@@ -877,6 +904,7 @@ impl Builder {
             user_tree: other.user_tree.or(self.user_tree),
             workspace_tree: other.workspace_tree.or(self.workspace_tree),
             lua_dir: other.lua_dir.or(self.lua_dir),
+            lua_mirrors: other.lua_mirrors.or(self.lua_mirrors),
             cache_dir: other.cache_dir.or(self.cache_dir),
             data_dir: other.data_dir.or(self.data_dir),
             vendor_dir: other.vendor_dir.or(self.vendor_dir),
@@ -922,6 +950,7 @@ impl Builder {
             extra_wally_registries: self.extra_wally_registries.unwrap_or_default(),
             namespace: self.namespace,
             lua_dir: self.lua_dir,
+            lua_mirrors: self.lua_mirrors.unwrap_or_else(default_lua_mirrors),
             lua_version,
             user_tree,
             workspace_tree: self.workspace_tree,
@@ -969,6 +998,7 @@ impl From<Config> for Builder {
             extra_wally_registries: Some(value.extra_wally_registries),
             namespace: value.namespace,
             lua_dir: value.lua_dir,
+            lua_mirrors: Some(value.lua_mirrors),
             lua_version: value.lua_version,
             user_tree: Some(value.user_tree),
             workspace_tree: value.workspace_tree,
@@ -1014,6 +1044,13 @@ fn default_variables() -> impl Iterator<Item = (String, String)> {
     .into_iter()
 }
 
+fn default_lua_mirrors() -> Vec<Url> {
+    DEFAULT_LUA_MIRRORS
+        .into_iter()
+        .map(|mirror| unsafe { Url::parse(mirror).unwrap_unchecked() })
+        .collect()
+}
+
 fn normalise_base_url(mut url: Url) -> Url {
     if !url.path().ends_with('/') {
         url.set_path(&format!("{}/", url.path()));
@@ -1025,6 +1062,11 @@ fn normalise_base_urls(mut config: Config) -> Config {
     config.server = normalise_base_url(config.server);
     config.extra_servers = config
         .extra_servers
+        .into_iter()
+        .map(normalise_base_url)
+        .collect();
+    config.lua_mirrors = config
+        .lua_mirrors
         .into_iter()
         .map(normalise_base_url)
         .collect();
@@ -1170,6 +1212,33 @@ mod tests {
         let rebuilt = Builder::from(config.clone()).build().unwrap();
         assert_eq!(rebuilt.server(), config.server());
         assert_eq!(rebuilt.extra_servers(), config.extra_servers());
+    }
+
+    #[test]
+    fn lua_mirrors_default_to_the_official_download_area_and_its_mirror() {
+        let config = Builder::default().build().unwrap();
+        assert_eq!(
+            config.lua_mirrors(),
+            [
+                Url::parse("https://www.lua.org/ftp/").unwrap(),
+                Url::parse("https://www.tecgraf.puc-rio.br/lua/ftp/").unwrap()
+            ]
+        );
+    }
+
+    #[test]
+    fn lua_mirrors_are_treated_as_base_urls() {
+        let config = Builder::default()
+            .lua_mirrors(Some(vec![Url::parse("https://example.com/lua").unwrap()]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            config.lua_mirrors()[0]
+                .join("lua-5.4.9.tar.gz")
+                .unwrap()
+                .as_str(),
+            "https://example.com/lua/lua-5.4.9.tar.gz"
+        );
     }
 
     #[test]
