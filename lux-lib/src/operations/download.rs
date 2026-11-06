@@ -283,7 +283,8 @@ async fn download_found_rock(
                 source,
                 url: format!("{}/{}", url, rockspec_name),
             })?;
-            let bytes = crate::reqwest::https_client(config)?
+            let bytes = config
+                .https_client()?
                 .get(url.clone())
                 .apply_access_token(config, &url)
                 .send()
@@ -565,15 +566,17 @@ where
     ),
 )]
 async fn download_impl(args: ArchiveDownload<'_>) -> Result<PackedRockBytes, SrcRockError> {
+    let config = args.config;
     let package = args.package;
     let ext = args.ext;
     let server_url = args.server_url;
     let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
     tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
     let url = server_url.join(&full_rock_name)?;
-    let response = crate::reqwest::https_client(args.config)?
+    let response = config
+        .https_client()?
         .get(url.clone())
-        .apply_access_token(args.config, &url)
+        .apply_access_token(config, &url)
         .send()
         .await?;
     let bytes = if response.status().is_success() {
@@ -583,9 +586,10 @@ async fn download_impl(args: ArchiveDownload<'_>) -> Result<PackedRockBytes, Src
             Some(ext) => {
                 let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
                 let url = server_url.join(&full_rock_name)?;
-                crate::reqwest::https_client(args.config)?
+                config
+                    .https_client()?
                     .get(url.clone())
-                    .apply_access_token(args.config, &url)
+                    .apply_access_token(config, &url)
                     .send()
                     .await?
                     .error_for_status()?

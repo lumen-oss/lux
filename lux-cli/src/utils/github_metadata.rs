@@ -80,7 +80,7 @@ pub async fn get_metadata_for(
             match (parsed_url.host(), parsed_url.owner()) {
                 // NOTE: Only github is supported for now.
                 (GITHUB_HOST, Some(owner)) => {
-                    let client = lux_lib::reqwest::https_client(config).into_diagnostic()?;
+                    let client = config.https_client().into_diagnostic()?;
                     let token = config.access_token(GITHUB_HOST);
 
                     fetch_metadata(client, GITHUB_API, owner, parsed_url.repo(), token)

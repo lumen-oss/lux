@@ -321,7 +321,7 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec
     let config = args.config;
     let package_db = args.package_db;
 
-    let client = crate::reqwest::https_client(config)?;
+    let client = config.https_client()?;
 
     check::tool::ensure_version(client, config.server()).await?;
     check::user::ensure(client, &api_key, config.server()).await?;
@@ -367,7 +367,7 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
     let protocol = SignatureProtocol::None;
     let config = args.config;
 
-    let client = crate::reqwest::https_client(config)?;
+    let client = config.https_client()?;
 
     check::tool::ensure_version(client, config.server()).await?;
     check::user::ensure(client, &api_key, config.server()).await?;

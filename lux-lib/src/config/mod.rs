@@ -4,10 +4,17 @@ use external_deps::ExternalDependencySearchConfig;
 use itertools::Itertools;
 
 use miette::Diagnostic;
+use reqwest::Client;
 use serde::{Deserialize, Serialize, Serializer};
 use std::ffi::OsStr;
 use std::path::Path;
-use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    env,
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 use thiserror::Error;
 use tokio::process::Command;
 use url::Url;
@@ -75,6 +82,9 @@ pub struct Config {
     wrap_bin_scripts: bool,
     package_types: remote::package::kind::FilterSpec,
     no_tfa: bool,
+
+    https_client_cache: OnceLock<Client>,
+    http_client_cache: OnceLock<Client>,
 }
 
 impl Config {
@@ -334,6 +344,43 @@ impl Config {
     /// The user agent to use when making web requests.
     pub fn user_agent(&self) -> &str {
         &self.user_agent
+    }
+
+    /// Returns a pre-configured HTTPS-only client.
+    pub fn https_client(&self) -> Result<&Client, reqwest::Error> {
+        self.cached_client(true)
+    }
+
+    /// Returns a pre-configured HTTP client.
+    /// Used in tests and to fetch sources, which may have HTTP URLs.
+    pub(crate) fn http_client(&self) -> Result<&Client, reqwest::Error> {
+        self.cached_client(false)
+    }
+
+    fn cached_client(&self, https_only: bool) -> Result<&Client, reqwest::Error> {
+        let cache = if https_only {
+            &self.https_client_cache
+        } else {
+            &self.http_client_cache
+        };
+        if let Some(client) = cache.get() {
+            return Ok(client);
+        }
+        let client = self.build_client(https_only)?;
+        Ok(cache.get_or_init(|| client))
+    }
+
+    fn build_client(&self, https_only: bool) -> Result<Client, reqwest::Error> {
+        let mut builder = Client::builder();
+        // Allow HTTP requests in tests to support mock HTTP servers
+        if https_only && !cfg!(test) {
+            builder = builder.https_only(true);
+        }
+        if !self.timeout().is_zero() {
+            let timeout = *self.timeout();
+            builder = builder.connect_timeout(timeout).read_timeout(timeout);
+        }
+        builder.user_agent(self.user_agent()).build()
     }
 
     /// Whether to generate a `.luarc.json` on build.
@@ -906,6 +953,8 @@ impl Builder {
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
             package_types: self.package_types.unwrap_or_default(),
             no_tfa: self.no_tfa.unwrap_or(false),
+            https_client_cache: OnceLock::new(),
+            http_client_cache: OnceLock::new(),
         }))
     }
 }
@@ -1029,6 +1078,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use httptest::{
+        matchers::request,
+        responders::{delay_and_then, status_code},
+        Expectation, Server,
+    };
+
     use super::*;
 
     #[tokio::test]
@@ -1045,6 +1102,28 @@ mod tests {
             String::from_utf8_lossy(&output.stdout).trim(),
             "hello world"
         );
+    }
+
+    #[tokio::test]
+    async fn configured_timeout_is_applied() {
+        let server = Server::run();
+        server.expect(
+            Expectation::matching(request::method_path("GET", "/"))
+                .respond_with(delay_and_then(Duration::from_secs(5), status_code(200))),
+        );
+        let config = Builder::new()
+            .unwrap()
+            .timeout(Some(Duration::from_millis(100)))
+            .build()
+            .unwrap();
+        let error = config
+            .http_client()
+            .unwrap()
+            .get(server.url_str("/"))
+            .send()
+            .await
+            .unwrap_err();
+        assert!(error.is_timeout());
     }
 
     #[tokio::test]

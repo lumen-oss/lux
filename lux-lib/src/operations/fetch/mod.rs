@@ -430,7 +430,8 @@ async fn fetch_src_impl<R: Rockspec>(
 
             // NOTE: We don't enforce HTTPS when fetching sources because some rockspecs
             // have HTTP URLs in `source.url`.
-            let request = crate::reqwest::http_client(config)?
+            let request = config
+                .http_client()?
                 .get(url.clone())
                 .apply_access_token(config, url);
             let request = wally::apply_content_headers(request, url);
