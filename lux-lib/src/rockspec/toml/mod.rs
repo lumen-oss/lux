@@ -2,7 +2,6 @@
 
 use crate::fs;
 use crate::git;
-use crate::git::shorthand::RemoteGitUrlShorthand;
 use crate::hash::HasIntegrity;
 use crate::lockfile::OptState;
 use crate::lockfile::PinnedState;
@@ -59,7 +58,7 @@ struct DependencyTableEntry {
     #[serde(default)]
     pin: Option<bool>,
     #[serde(default)]
-    git: Option<RemoteGitUrlShorthand>,
+    git: Option<git::remote::Shorthand>,
     #[serde(default)]
     path: Option<PathBuf>,
     #[serde(default)]
@@ -1251,7 +1250,7 @@ mod tests {
     use url::Url;
 
     use crate::{
-        git::{self, url::RemoteGitUrl},
+        git::{self},
         project::{Project, TOML_FILE_NAME},
         rockspec::Rockspec,
     };
@@ -1910,7 +1909,7 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &rockspec::source::Spec::Git { .. }));
         if let rockspec::source::Spec::Git(git::Source { url, git_ref }) = source_spec {
-            let expected_url: RemoteGitUrl =
+            let expected_url: git::remote::Url =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
             assert!(git_ref.is_some());
@@ -1930,7 +1929,7 @@ mod tests {
         let source_spec = &source.source_spec;
         assert!(matches!(source_spec, &rockspec::source::Spec::Git { .. }));
         if let rockspec::source::Spec::Git(git::Source { url, git_ref }) = source_spec {
-            let expected_url: RemoteGitUrl =
+            let expected_url: git::remote::Url =
                 "https://github.com/lumen-oss/lux.git".parse().unwrap();
             assert_eq!(url, &expected_url);
             assert_eq!(git_ref, &Some(git::Ref::Tag(tag_name.to_string())));

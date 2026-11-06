@@ -1,4 +1,4 @@
-use crate::{config::Config, fs, git::url::RemoteGitUrl};
+use crate::{config::Config, fs, git};
 use git2::{AutotagOption, Cred, FetchOptions, RemoteCallbacks, Repository};
 use itertools::Itertools;
 
@@ -9,7 +9,7 @@ pub(crate) enum SemVerTagOrSha {
 
 #[tracing::instrument(level = "trace")]
 pub(crate) fn latest_semver_tag_or_commit_sha(
-    url: &RemoteGitUrl,
+    url: &git::remote::Url,
     config: &Config,
 ) -> Result<SemVerTagOrSha, super::Error> {
     match latest_semver_tag(url, config)? {
@@ -23,7 +23,10 @@ pub(crate) fn latest_semver_tag_or_commit_sha(
 }
 
 #[tracing::instrument(level = "trace")]
-fn latest_semver_tag(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, super::Error> {
+fn latest_semver_tag(
+    url: &git::remote::Url,
+    config: &Config,
+) -> Result<Option<String>, super::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
 
     let url_str = url.to_string();
@@ -61,7 +64,7 @@ fn latest_semver_tag(url: &RemoteGitUrl, config: &Config) -> Result<Option<Strin
 }
 
 fn mk_credentials_callback(
-    url: &RemoteGitUrl,
+    url: &git::remote::Url,
     config: &Config,
 ) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<Cred, git2::Error> {
     let access_token = config.access_token(url.host()).map(|token| {
@@ -79,7 +82,10 @@ fn mk_credentials_callback(
     }
 }
 
-fn latest_commit_sha(url: &RemoteGitUrl, config: &Config) -> Result<Option<String>, super::Error> {
+fn latest_commit_sha(
+    url: &git::remote::Url,
+    config: &Config,
+) -> Result<Option<String>, super::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
     let url_str = url.to_string();
     let repo = Repository::init_bare(&temp_dir).map_err(super::Error::BareRepoInit)?;

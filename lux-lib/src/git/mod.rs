@@ -3,13 +3,12 @@ use std::fmt::Display;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::{fs, git::url::RemoteGitUrl, rockspec};
+use crate::{fs, git::remote::Url, rockspec};
 
-pub mod shorthand;
-pub mod url;
+pub mod remote;
 pub mod utils;
 
-impl rockspec::display::AsLuaValue for RemoteGitUrl {
+impl rockspec::display::AsLuaValue for Url {
     fn display_lua_value(&self) -> rockspec::display::LuaValue {
         rockspec::display::LuaValue::String(self.to_string())
     }
@@ -41,7 +40,7 @@ pub enum Ref {
 /// Specifies a source to be fetched from a git forge
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Source {
-    pub url: RemoteGitUrl,
+    pub url: Url,
     pub git_ref: Option<Ref>,
 }
 
