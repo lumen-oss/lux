@@ -119,6 +119,9 @@ pub enum EditError {
     #[error("unable to query latest version for '{0}'")]
     #[diagnostic(help("check your server config and ensure the package has been published"))]
     LatestVersionNotFound(package::Name),
+    #[error("package '{0}' not found in dependencies")]
+    #[diagnostic(help("only packages listed in the project manifest can be removed"))]
+    PackageNotFound(package::Name),
     #[error("expected field to be a value, but got '{0}'")]
     #[diagnostic(
         help("ensure your {TOML_FILE_NAME} matches the specification"),
@@ -408,6 +411,9 @@ impl Project {
             | dependency::Kind::Build(ref deps)
             | dependency::Kind::Test(ref deps) => {
                 for dep in deps {
+                    if table.get(dep.to_string()).is_none() {
+                        return Err(EditError::PackageNotFound((*dep).clone()));
+                    }
                     table[dep.to_string()] = Item::None;
                 }
             }
@@ -974,6 +980,29 @@ type = "builtin"
         // check again after reloading lux.toml
         let reloaded_project = Project::from_exact(&project_root).unwrap().unwrap();
         check(&reloaded_project);
+    }
+
+    #[tokio::test]
+    async fn test_remove_nonexistent_dependency_does_not_edit_toml() {
+        let sample_project = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-projects/dependencies/");
+        let project_root = assert_fs::TempDir::new().unwrap();
+        project_root.copy_from(&sample_project, &["**"]).unwrap();
+        let project_root: PathBuf = project_root.path().into();
+        let mut project = Project::from_exact(&project_root).unwrap().unwrap();
+        let toml_before = fs::sync::read_to_string(project.toml_path()).unwrap();
+
+        let transitive_dependency = "penlight".into();
+        let err = project
+            .remove(dependency::Kind::Regular(vec![&transitive_dependency]))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, EditError::PackageNotFound(_)));
+        assert_eq!(
+            fs::sync::read_to_string(project.toml_path()).unwrap(),
+            toml_before
+        );
     }
 
     #[tokio::test]
