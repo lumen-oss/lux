@@ -1,4 +1,5 @@
-use crate::lockfile::{PackageLock, ReadWrite, WorkspaceLockfile};
+use crate::lockfile::{PackageLock, ReadWrite};
+use crate::project;
 
 use super::{materialise::MaterialiseArtifacts, Artifacts};
 
@@ -28,7 +29,7 @@ impl LockfileHandle {
         )
     }
 
-    pub(crate) fn commit(&self, lockfile: &mut WorkspaceLockfile<ReadWrite>) {
+    pub(crate) fn commit(&self, lockfile: &mut project::Lockfile<ReadWrite>) {
         self.0.iter().for_each(|(section, lock)| {
             if let Some(lock) = lock {
                 lockfile.merge(lock, &section);

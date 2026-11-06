@@ -150,7 +150,7 @@ pub enum Error {
     GitJoin(#[from] tokio::task::JoinError),
     #[error("failed to parse git URL")]
     #[diagnostic(forward(0))]
-    GitUrlParse(#[from] git::url::Error),
+    GitUrlParse(#[from] git::remote::url::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Request(#[from] crate::reqwest::Error),

@@ -1,14 +1,12 @@
 use crate::package;
+use crate::project;
 use crate::remote;
 use std::io;
 
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    lockfile::{
-        LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite,
-        WorkspaceLockfile,
-    },
+    lockfile::{LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite},
     lua,
     operations::install,
     package::db::PackageDB,
@@ -214,7 +212,7 @@ async fn update_workspace(
 
 async fn update_dependency_tree(
     tree: Tree,
-    project_lockfile: &mut WorkspaceLockfile<ReadWrite>,
+    project_lockfile: &mut project::Lockfile<ReadWrite>,
     lock_type: LockedPackageLockType,
     package_db: PackageDB,
     config: &Config,

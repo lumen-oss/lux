@@ -5,8 +5,7 @@ use itertools::Itertools;
 use lux_lib::{
     config::Config,
     drivers::sync::{Sync, SyncMode, TargetSet},
-    git::shorthand::RemoteGitUrlShorthand,
-    lua,
+    git, lua,
     tree::Tree,
     workspace::Workspace,
 };
@@ -54,14 +53,14 @@ pub fn top_level_ignored_files(project: &Workspace) -> Vec<PathBuf> {
 #[derive(Debug, Clone)]
 pub enum PackageReqOrGitShorthand {
     PackageReq(package::Req),
-    GitShorthand(RemoteGitUrlShorthand),
+    GitShorthand(git::remote::Shorthand),
 }
 
 impl FromStr for PackageReqOrGitShorthand {
     type Err = miette::Report;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match RemoteGitUrlShorthand::parse_with_prefix(s) {
+        match git::remote::Shorthand::parse_with_prefix(s) {
             Ok(shorthand) => Ok(Self::GitShorthand(shorthand)),
             Err(_) => Ok(Self::PackageReq(package::Req::parse(s)?)),
         }

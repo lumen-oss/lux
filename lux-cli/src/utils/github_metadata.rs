@@ -1,7 +1,7 @@
 use git2::Repository;
 use lux_lib::config::access_tokens::AccessToken;
 use lux_lib::config::Config;
-use lux_lib::git::url::RemoteGitUrl;
+use lux_lib::git;
 use miette::{IntoDiagnostic, Result};
 use path_absolutize::Absolutize as _;
 use reqwest::header::{ACCEPT, AUTHORIZATION};
@@ -75,7 +75,7 @@ pub async fn get_metadata_for(
         .and_then(|remote| remote.url().map(str::to_owned).ok())
     {
         Some(url) => {
-            let parsed_url: RemoteGitUrl = url.parse().into_diagnostic()?;
+            let parsed_url: git::remote::Url = url.parse().into_diagnostic()?;
 
             match (parsed_url.host(), parsed_url.owner()) {
                 // NOTE: Only github is supported for now.
