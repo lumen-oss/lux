@@ -202,7 +202,7 @@ fn found_package(
 }
 
 async fn fetch_contents(url: &Url, config: &Config) -> Result<Bytes, Error> {
-    let request = crate::reqwest::http_client(config)?.get(url.clone());
+    let request = config.http_client()?.get(url.clone());
     let request = wally::apply_content_headers(request, url);
     let response = request.send().await?.error_for_status()?.bytes().await?;
     Ok(response)

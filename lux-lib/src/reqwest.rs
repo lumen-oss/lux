@@ -1,16 +1,11 @@
-use std::sync::OnceLock;
-
 use miette::Diagnostic;
-use reqwest::{header::AUTHORIZATION, Client, RequestBuilder};
+use reqwest::{header::AUTHORIZATION, RequestBuilder};
 use thiserror::Error;
 use url::Url;
 
 use crate::config::{access_tokens::Kind, Config};
 
 const SOURCEHUT_HOST: &str = "git.sr.ht";
-
-static HTTPS_CLIENT: OnceLock<Client> = OnceLock::new();
-static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
 /// An error that occurred while performing a web request.
 #[derive(Error, Debug, Diagnostic)]
@@ -79,39 +74,6 @@ impl RequestBuilderExt for reqwest::RequestBuilder {
     }
 }
 
-fn client(https_only: bool, config: &Config) -> Result<&Client, reqwest::Error> {
-    // Allow HTTP requests in tests to support mock HTTP servers
-    let enforce_https = https_only && !cfg!(test);
-
-    let cache = if enforce_https {
-        &HTTPS_CLIENT
-    } else {
-        &HTTP_CLIENT
-    };
-    if let Some(client) = cache.get() {
-        Ok(client)
-    } else {
-        let mut builder = Client::builder();
-        if enforce_https {
-            builder = builder.https_only(true);
-        }
-        let client = builder.user_agent(config.user_agent()).build()?;
-        // TODO: use get_or_try_init when available
-        Ok(cache.get_or_init(|| client))
-    }
-}
-
-/// Returns a pre-configured HTTPS-only client.
-pub fn https_client(config: &Config) -> Result<&Client, reqwest::Error> {
-    client(true, config)
-}
-
-/// Returns a pre-configured HTTP client.
-/// Used in tests and to fetch sources, which may be HTTP URLs.
-pub(crate) fn http_client(config: &Config) -> Result<&Client, reqwest::Error> {
-    client(false, config)
-}
-
 mod private {
     pub trait Sealed {}
     impl Sealed for reqwest::RequestBuilder {}
@@ -119,6 +81,8 @@ mod private {
 
 #[cfg(test)]
 mod tests {
+    use reqwest::Client;
+
     use httptest::{
         matchers::{contains, request},
         responders::status_code,

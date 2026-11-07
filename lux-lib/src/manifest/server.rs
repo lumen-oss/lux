@@ -142,10 +142,10 @@ async fn load_impl(manifest_version: &str, url: Url, config: &Config) -> Result<
     let cache = mk_manifest_cache(&url, config).await?;
 
     #[cfg(not(test))]
-    let client = crate::reqwest::https_client(config)?;
+    let client = config.https_client()?;
 
     #[cfg(test)]
-    let client = crate::reqwest::http_client(config)?;
+    let client = config.http_client()?;
 
     if let Ok(metadata) = fs::tokio::metadata(&cache).await {
         let last_modified_local: SystemTime = metadata.modified()?;
@@ -197,7 +197,7 @@ pub(crate) async fn fetch(server_url: &Url, config: &Config) -> Result<String, E
 )]
 async fn fetch_impl(url: Url, manifest_version: &str, config: &Config) -> Result<String, Error> {
     let cache = mk_manifest_cache(&url, config).await?;
-    let client = crate::reqwest::https_client(config)?;
+    let client = config.https_client()?;
     get_manifest(url, manifest_version, &cache, client, config).await
 }
 

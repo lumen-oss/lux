@@ -485,7 +485,9 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), Error> {
             .unwrap_unchecked()
     };
 
-    let response = crate::reqwest::https_client(args.config)?
+    let response = args
+        .config
+        .https_client()?
         .get(source_url.clone())
         .send()
         .instrument(tracing::info_span!("Downloading Lua"))
