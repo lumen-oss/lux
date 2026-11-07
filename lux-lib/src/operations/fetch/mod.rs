@@ -126,10 +126,11 @@ where
                         .await
                     {
                         Ok(metadata) => Ok(metadata),
-                        Err(fallback_err) => {
-                            tracing::error!("fallback .src.rock download failed: {fallback_err:?}");
-                            Err(err)
-                        }
+                        Err(fallback_err) => Err(Error::SourceAndFallback {
+                            package: package.to_string(),
+                            source: Box::new(err),
+                            related: vec![fallback_err],
+                        }),
                     }
                 }
                 rockspec::source::Spec::File(_) | rockspec::source::Spec::Wally(_) => Err(err),
@@ -160,6 +161,14 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SrcRock(#[from] src_rock::Error),
+    #[error("failed to fetch the source for {package}, and failed to fall back to a `.src.rock`")]
+    SourceAndFallback {
+        package: String,
+        #[source]
+        source: Box<Error>,
+        #[related]
+        related: Vec<src_rock::Error>,
+    },
     #[error("unable to remove the '.git' directory")]
     #[diagnostic(help(
         "check that no process is using the directory and you have write permissions."
