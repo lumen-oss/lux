@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.73.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.72.1...lux-lib-v0.73.0) `lux-lib` - 2026-11-07
+
+### Added
+- *(install-lua)* multiple (configurable) mirrors ([#2211](https://github.com/lumen-oss/lux/pull/2211))
+
+### Fixed
+- *(config)* [**breaking**] per-config HTTP clients honouring the timeout ([#2210](https://github.com/lumen-oss/lux/pull/2210))
+
 ## [0.72.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.72.0...lux-lib-v0.72.1) `lux-lib` - 2026-11-03
 
 ### Fixed
