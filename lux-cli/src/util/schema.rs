@@ -1,4 +1,5 @@
 use clap::ValueEnum;
+use lux_lib::schema;
 use miette::{IntoDiagnostic, Result};
 
 use crate::args::OutputFormat;
@@ -24,8 +25,8 @@ pub struct Schema {
 
 pub fn schema(cmd: Schema) -> Result<()> {
     let schema = match cmd.kind {
-        SchemaKind::LuxToml => lux_lib::schema::lux_toml_schema(),
-        SchemaKind::Config => lux_lib::schema::config_schema(),
+        SchemaKind::LuxToml => schema::lux_toml(),
+        SchemaKind::Config => schema::config(),
     };
     match cmd.output_format {
         OutputFormat::Json => {
@@ -34,7 +35,7 @@ pub fn schema(cmd: Schema) -> Result<()> {
                 serde_json::to_string_pretty(&schema).into_diagnostic()?
             )
         }
-        OutputFormat::Text => print!("{}", lux_lib::schema::to_markdown(&schema)),
+        OutputFormat::Text => print!("{}", schema::to_markdown(&schema)),
     }
     Ok(())
 }

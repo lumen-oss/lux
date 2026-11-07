@@ -17,7 +17,7 @@ pub async fn fetch_remote(data: UnpackRemote, config: Config) -> Result<()> {
     let destination = data
         .destination
         .unwrap_or_else(|| PathBuf::from(format!("{}-{}", rockspec.package(), rockspec.version())));
-    lux_lib::operations::FetchSrc::new(destination.clone().as_path(), &rockspec, &config)
+    operations::FetchSrc::new(destination.clone().as_path(), &rockspec, &config)
         .fetch()
         .await?;
 

@@ -2909,7 +2909,7 @@ impl TypedUserData for PackageDBLua {
             "Package to search for, e.g. 'foo' or 'foo >= 1.0.0'",
         );
         methods.add_async_method("search", |_, this, package_req: PackageReqLua| async move {
-            let _guard = lux_lib::lua::runtime().enter();
+            let _guard = lua::runtime().enter();
             let results: HashMap<String, Vec<String>> = this
                 .0
                 .search(&package_req.0)
@@ -2934,7 +2934,7 @@ impl TypedUserData for PackageDBLua {
         methods.add_async_method(
             "latest_match",
             |_, this, package_req: PackageReqLua| async move {
-                let _guard = lux_lib::lua::runtime().enter();
+                let _guard = lua::runtime().enter();
                 Ok(this
                     .0
                     .latest_match(&package_req.0, None)
@@ -3274,7 +3274,7 @@ impl TypedUserData for ProjectLua {
         methods.add_async_method_mut(
             "add",
             |_, mut this, (deps, config): (AddDependenciesLua, ConfigLua)| async move {
-                let _guard = lux_lib::lua::runtime().enter();
+                let _guard = lua::runtime().enter();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
                 project_add_dependencies(&mut this.0, deps.0, &package_db, &config.0).await
             },
@@ -3287,7 +3287,7 @@ impl TypedUserData for ProjectLua {
             |_,
              mut this,
              (deps, pinned): (LuaDependencyKindLua<PackageNameLua>, PinnedStateLua)| async move {
-                let _guard = lux_lib::lua::runtime().enter();
+                let _guard = lua::runtime().enter();
                 let deps = map_lua_dependency_type_names(deps.0);
                 this.0
                     .set_pinned_state(lua_dependency_type_as_ref(&deps), pinned.0)
@@ -3301,7 +3301,7 @@ impl TypedUserData for ProjectLua {
         methods.add_async_method_mut(
             "set_opt_state",
             |_, mut this, (deps, opt): (LuaDependencyKindLua<PackageNameLua>, OptStateLua)| async move {
-                let _guard = lux_lib::lua::runtime().enter();
+                let _guard = lua::runtime().enter();
                 let deps = map_lua_dependency_type_names(deps.0);
                 this.0
                     .set_opt_state(lua_dependency_type_as_ref(&deps), opt.0)
@@ -3314,7 +3314,7 @@ impl TypedUserData for ProjectLua {
         methods.add_async_method_mut(
             "remove",
             |_, mut this, deps: DependencyKindLua<PackageNameLua>| async move {
-                let _guard = lux_lib::lua::runtime().enter();
+                let _guard = lua::runtime().enter();
                 let deps = map_dependency_type_names(deps.0);
                 this.0.remove(deps.as_ref()).await.into_lua_err()
             },
