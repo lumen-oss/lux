@@ -3,11 +3,43 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 build_lua="$repo_root/lux-lib/src/operations/build_lua.rs"
-base_url="https://www.lua.org/ftp"
+mirrors=(
+    "https://www.lua.org/ftp"
+    "https://www.tecgraf.puc-rio.br/lua/ftp"
+)
 
-listing="$(curl -fsSL "$base_url/" | grep -oE 'lua-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' | sort -uV)"
+fetch_listing() {
+    local base listing
+    for base in "${mirrors[@]}"; do
+        if listing="$(
+            curl -fsSL "$base/" \
+                | grep -oE 'lua-[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz' \
+                | sort -uV
+        )" && [[ -n "$listing" ]]; then
+            printf '%s\n' "$listing"
+            return 0
+        fi
+    done
+    return 1
+}
 
-if [[ -z "$listing" ]]; then
+sha256_of() {
+    local tarball="$1"
+    local base hash
+    for base in "${mirrors[@]}"; do
+        if hash="$(
+            curl -fsSL "$base/$tarball" \
+                | openssl dgst -sha256 -binary \
+                | openssl base64 -A
+        )" && [[ -n "$hash" ]]; then
+            printf '%s\n' "sha256-$hash"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if ! listing="$(fetch_listing)"; then
     echo "could not fetch the Lua release listing" >&2
     exit 1
 fi
@@ -38,7 +70,10 @@ for code in $codes; do
         continue
     fi
 
-    hash="sha256-$(curl -fsSL "$base_url/$tarball" | openssl dgst -sha256 -binary | openssl base64 -A)"
+    if ! hash="$(sha256_of "$tarball")"; then
+        echo "could not download $tarball" >&2
+        exit 1
+    fi
 
     tmp="$(mktemp "${build_lua}.XXXXXX")"
     sed \
