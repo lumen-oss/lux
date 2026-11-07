@@ -310,6 +310,15 @@ impl<T> PerPlatform<T> {
         )
     }
 
+    pub(crate) fn has_override_for_current_platform(&self) -> bool {
+        let platform = target_identifier();
+        self.per_platform.contains_key(&platform)
+            || platform
+                .get_subsets()
+                .into_iter()
+                .any(|subset| self.per_platform.contains_key(&subset))
+    }
+
     pub(crate) fn map<U, F>(&self, cb: F) -> PerPlatform<U>
     where
         F: Fn(&T) -> U,
