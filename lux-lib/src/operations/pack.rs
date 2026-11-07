@@ -10,9 +10,12 @@ use crate::luarocks::rock_manifest::RockManifestLib;
 use crate::luarocks::rock_manifest::RockManifestLua;
 use crate::luarocks::rock_manifest::RockManifestRoot;
 use crate::project;
+use crate::rockspec;
+use crate::rockspec::Rockspec;
 use crate::target::c_dylib_extension;
 use crate::tree;
 use crate::tree::InstallTree;
+use crate::tree::RockLayout;
 use crate::tree::Tree;
 use bon::Builder;
 use clean_path::Clean;
@@ -68,6 +71,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Tree(#[from] tree::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Rockspec(#[from] rockspec::lua::Error),
     #[error("expected a `package.rockspec` in the package root.")]
     MissingRockspec,
 }
@@ -76,7 +82,13 @@ async fn do_pack(args: Pack) -> Result<PathBuf, Error> {
     let package = args.package;
     let tree = args.tree;
     let layout = tree.layout_for(&package.spec);
-    let suffix = if contains_dylib(&layout.lib) || contains_dylib(&layout.etc.join("parser")) {
+    if !layout.rockspec_path().is_file() {
+        return Err(Error::MissingRockspec);
+    }
+    let rockspec_content = fs::tokio::read_to_string(layout.rockspec_path()).await?;
+    let rockspec = rockspec::lua::Remote::new(&rockspec_content)?;
+    let binaries = package_binaries(&tree, &package)?;
+    let suffix = if is_platform_specific(&layout, &binaries, &rockspec) {
         format!("{}.rock", luarocks::current_platform_luarocks_identifier())
     } else {
         "all.rock".into()
@@ -106,28 +118,14 @@ async fn do_pack(args: Pack) -> Result<PathBuf, Error> {
     }
     // luarocks expects a <package>-<version>.rockspec,
     // so we copy it the package.rockspec to our temporary root directory and rename it
-    if !layout.rockspec_path().is_file() {
-        return Err(Error::MissingRockspec);
-    }
     let packed_rockspec_name = format!("{}-{}.rockspec", package.name(), package.version());
     let renamed_rockspec_entry = temp_root_dir.path().join(packed_rockspec_name);
     fs::tokio::copy(layout.rockspec_path(), &renamed_rockspec_entry).await?;
     let root_entries = add_rock_entries(&mut zip, temp_root_dir.path(), "".into())?;
     let mut bin_entries = HashMap::new();
-    let lockfile = tree.lockfile()?;
-    for relative_binary_path in lockfile
-        .binaries(&package.id())
-        .into_iter()
-        .flat_map(|binaries| binaries.iter())
-    {
-        if let Some(binary_name) = relative_binary_path.clean().file_name() {
-            let binary_path = tree.bin().join(binary_name);
-            if binary_path.is_file() {
-                let (path, digest) =
-                    add_rock_entry(&mut zip, binary_path, &tree.bin(), Path::new("bin"))?;
-                bin_entries.insert(path, digest);
-            }
-        }
+    for binary_path in binaries {
+        let (path, digest) = add_rock_entry(&mut zip, binary_path, &tree.bin(), Path::new("bin"))?;
+        bin_entries.insert(path, digest);
     }
     let rock_manifest = RockManifest {
         lua: RockManifestLua {
@@ -155,6 +153,51 @@ async fn do_pack(args: Pack) -> Result<PathBuf, Error> {
     zip.write_all(manifest_str.as_bytes())?;
     fs::tokio::rename(&temp_output_path, &output_path).await?;
     Ok(output_path)
+}
+
+fn package_binaries(tree: &Tree, package: &LockedPackage) -> Result<Vec<PathBuf>, Error> {
+    let lockfile = tree.lockfile()?;
+    Ok(lockfile
+        .binaries(&package.id())
+        .into_iter()
+        .flat_map(|binaries| binaries.iter())
+        .filter_map(|relative_path| {
+            let binary_path = tree.bin().join(relative_path.clean().file_name()?);
+            binary_path.is_file().then_some(binary_path)
+        })
+        .collect())
+}
+
+trait RockspecExt {
+    fn has_current_platform_override(&self) -> bool;
+}
+
+impl<T: Rockspec> RockspecExt for T {
+    fn has_current_platform_override(&self) -> bool {
+        self.build().has_override_for_current_platform()
+            || self.source().has_override_for_current_platform()
+            || self.test().has_override_for_current_platform()
+            || self.deploy().has_override_for_current_platform()
+            || self.dependencies().has_override_for_current_platform()
+            || self
+                .build_dependencies()
+                .has_override_for_current_platform()
+            || self
+                .external_dependencies()
+                .has_override_for_current_platform()
+            || self.test_dependencies().has_override_for_current_platform()
+    }
+}
+
+fn is_platform_specific(
+    layout: &RockLayout,
+    binaries: &[PathBuf],
+    rockspec: &impl Rockspec,
+) -> bool {
+    !binaries.is_empty()
+        || rockspec.has_current_platform_override()
+        || contains_dylib(&layout.lib)
+        || contains_dylib(&layout.etc.join("parser"))
 }
 
 fn contains_dylib(dir: &Path) -> bool {
@@ -388,5 +431,46 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn platform_specific_when_package_has_binaries() {
+        let temp = fs::tempfile::tempdir().unwrap();
+        let layout = RockLayout::new(temp.path().to_path_buf(), temp.path().join("bin"));
+        let rockspec = rockspec::lua::Remote::new(
+            r#"
+package = "foo"
+version = "1.0.0-1"
+source = { url = "git+https://example.com/foo" }
+"#,
+        )
+        .unwrap();
+
+        assert!(!is_platform_specific(&layout, &[], &rockspec));
+        assert!(is_platform_specific(
+            &layout,
+            &[PathBuf::from("tool")],
+            &rockspec
+        ));
+    }
+
+    #[test]
+    fn detects_current_platform_override_in_rockspec() {
+        let platform = rockspec::platform::Identifier::default();
+        let rockspec = rockspec::lua::Remote::new(&format!(
+            r#"
+package = "foo"
+version = "1.0.0-1"
+source = {{ url = "git+https://example.com/foo" }}
+build = {{
+   platforms = {{
+      {platform} = {{ type = "builtin" }},
+   }},
+}}
+"#
+        ))
+        .unwrap();
+
+        assert!(rockspec.has_current_platform_override());
     }
 }
