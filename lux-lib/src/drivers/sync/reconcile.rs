@@ -1,7 +1,6 @@
+use crate::project;
 use crate::{
-    lockfile::{
-        LockedPackage, LockedPackageLockType, Lockfile, ReadOnly, ReadWrite, WorkspaceLockfile,
-    },
+    lockfile::{LockedPackage, LockedPackageLockType, Lockfile, ReadOnly, ReadWrite},
     tree,
 };
 
@@ -29,7 +28,7 @@ impl SyncReport {
 /// Determines which packages are present in one lockfile but not the other, producing the
 /// packages to add (with their entry type) and the report of packages that must be removed.
 pub(crate) fn reconcile_locks(
-    workspace_lockfile: &WorkspaceLockfile<ReadWrite>,
+    workspace_lockfile: &project::Lockfile<ReadWrite>,
     dest_lockfile: &Lockfile<ReadOnly>,
     lock_type: &LockedPackageLockType,
 ) -> (Vec<(tree::EntryType, LockedPackage)>, SyncReport) {

@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::io::{self, Write};
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::{
     collections::HashMap,
     fs::File,
@@ -28,13 +27,15 @@ use crate::rockspec::RockBinaries;
 use crate::tree::{EntryType, InstallTree, Tree};
 
 pub mod constraint;
+mod guard;
 
 pub use constraint::Constraint;
+pub use guard::Guard;
 
 /// Bump this whenever an incompatible change is made to the lockfile format.
 /// Lockfiles with a different major version are rejected on load.
 const LOCKFILE_VERSION: u64 = 2;
-const LOCKFILE_VERSION_STR: &str = "2.0.0";
+pub(crate) const LOCKFILE_VERSION_STR: &str = "2.0.0";
 
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
 pub enum PinnedState {
@@ -587,7 +588,7 @@ pub(crate) struct PackageLock {
     rocks: BTreeMap<LockedPackageId, LockedPackage>,
 
     /// The entrypoints of the tree. Enforces one entrypoint per package name.
-    entrypoints: BTreeMap<package::Name, LockedPackageId>,
+    pub(crate) entrypoints: BTreeMap<package::Name, LockedPackageId>,
 }
 
 impl PackageLock {
@@ -622,11 +623,11 @@ impl PackageLock {
         );
     }
 
-    fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
+    pub(crate) fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
         self.rocks.get(id)
     }
 
-    fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.rocks.is_empty()
     }
 
@@ -634,7 +635,7 @@ impl PackageLock {
         &self.rocks
     }
 
-    fn is_entrypoint(&self, package: &LockedPackageId) -> bool {
+    pub(crate) fn is_entrypoint(&self, package: &LockedPackageId) -> bool {
         self.entrypoints.values().any(|id| id == package)
     }
 
@@ -643,14 +644,14 @@ impl PackageLock {
         self.entrypoints.get(name).and_then(|id| self.get(id))
     }
 
-    fn is_dependency(&self, package: &LockedPackageId) -> bool {
+    pub(crate) fn is_dependency(&self, package: &LockedPackageId) -> bool {
         self.rocks
             .values()
             .flat_map(|rock| rock.dependencies())
             .any(|dep_id| dep_id == package)
     }
 
-    fn list(&self) -> HashMap<package::Name, Vec<LockedPackage>> {
+    pub(crate) fn list(&self) -> HashMap<package::Name, Vec<LockedPackage>> {
         self.rocks()
             .values()
             .cloned()
@@ -658,11 +659,11 @@ impl PackageLock {
             .into_group_map()
     }
 
-    fn remove(&mut self, target: &LockedPackage) {
+    pub(crate) fn remove(&mut self, target: &LockedPackage) {
         self.remove_by_id(&target.id())
     }
 
-    fn remove_by_id(&mut self, target: &LockedPackageId) {
+    pub(crate) fn remove_by_id(&mut self, target: &LockedPackageId) {
         self.rocks.remove(target);
         self.entrypoints.retain(|_, id| id != target);
     }
@@ -696,7 +697,10 @@ impl PackageLock {
             .cloned()
     }
 
-    fn has_rock_with_equal_constraint(&self, req: &lua_dependency::Spec) -> Option<LockedPackage> {
+    pub(crate) fn has_rock_with_equal_constraint(
+        &self,
+        req: &lua_dependency::Spec,
+    ) -> Option<LockedPackage> {
         self.list()
             .get(req.name())
             .map(|packages| {
@@ -764,7 +768,7 @@ impl PackageLock {
     }
 
     /// Return all dependencies of a package, including itself
-    fn get_all_dependencies(&self, id: &LockedPackageId) -> HashSet<&LockedPackage> {
+    pub(crate) fn get_all_dependencies(&self, id: &LockedPackageId) -> HashSet<&LockedPackage> {
         let mut packages = HashSet::new();
         if let Some(local_pkg) = self.get(id) {
             packages.insert(local_pkg);
@@ -780,7 +784,7 @@ impl PackageLock {
 
     /// The set of all packages reachable from the entrypoints via the
     /// dependency graph.
-    fn reachable(&self) -> HashSet<&LockedPackage> {
+    pub(crate) fn reachable(&self) -> HashSet<&LockedPackage> {
         self.entrypoints
             .values()
             .flat_map(|id| self.get_all_dependencies(id))
@@ -808,22 +812,6 @@ pub enum LockedPackageLockType {
     Regular,
     Test,
     Build,
-}
-
-/// A lockfile for a Lua project
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WorkspaceLockfile<P: LockfilePermissions> {
-    #[serde(skip)]
-    filepath: PathBuf,
-    #[serde(skip)]
-    _marker: PhantomData<P>,
-    version: String,
-    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
-    dependencies: PackageLock,
-    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
-    test_dependencies: PackageLock,
-    #[serde(default, skip_serializing_if = "PackageLock::is_empty")]
-    build_dependencies: PackageLock,
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -1084,86 +1072,6 @@ impl<P: LockfilePermissions> Lockfile<P> {
     }
 }
 
-impl<P: LockfilePermissions> WorkspaceLockfile<P> {
-    pub(crate) fn rocks(
-        &self,
-        deps: &LockedPackageLockType,
-    ) -> &BTreeMap<LockedPackageId, LockedPackage> {
-        match deps {
-            LockedPackageLockType::Regular => self.dependencies.rocks(),
-            LockedPackageLockType::Test => self.test_dependencies.rocks(),
-            LockedPackageLockType::Build => self.build_dependencies.rocks(),
-        }
-    }
-
-    pub(crate) fn get(
-        &self,
-        id: &LockedPackageId,
-        deps: &LockedPackageLockType,
-    ) -> Option<&LockedPackage> {
-        match deps {
-            LockedPackageLockType::Regular => self.dependencies.get(id),
-            LockedPackageLockType::Test => self.test_dependencies.get(id),
-            LockedPackageLockType::Build => self.build_dependencies.get(id),
-        }
-    }
-
-    pub(crate) fn is_entrypoint(
-        &self,
-        package: &LockedPackageId,
-        deps: &LockedPackageLockType,
-    ) -> bool {
-        match deps {
-            LockedPackageLockType::Regular => self.dependencies.is_entrypoint(package),
-            LockedPackageLockType::Test => self.test_dependencies.is_entrypoint(package),
-            LockedPackageLockType::Build => self.build_dependencies.is_entrypoint(package),
-        }
-    }
-
-    pub(crate) fn package_sync_spec(
-        &self,
-        packages: &[lua_dependency::Spec],
-        deps: &LockedPackageLockType,
-        strategy: &SyncStrategy<'_>,
-    ) -> PackageSyncSpec {
-        match deps {
-            LockedPackageLockType::Regular => {
-                self.dependencies.package_sync_spec(packages, strategy)
-            }
-            LockedPackageLockType::Test => {
-                self.test_dependencies.package_sync_spec(packages, strategy)
-            }
-            LockedPackageLockType::Build => self
-                .build_dependencies
-                .package_sync_spec(packages, strategy),
-        }
-    }
-
-    pub(crate) fn local_pkg_lock(&self, deps: &LockedPackageLockType) -> &PackageLock {
-        match deps {
-            LockedPackageLockType::Regular => &self.dependencies,
-            LockedPackageLockType::Test => &self.test_dependencies,
-            LockedPackageLockType::Build => &self.build_dependencies,
-        }
-    }
-
-    pub(crate) fn local_pkg_locks(&self) -> Vec<PackageLock> {
-        vec![
-            self.dependencies.clone(),
-            self.test_dependencies.clone(),
-            self.build_dependencies.clone(),
-        ]
-    }
-
-    fn flush(&self) -> io::Result<()> {
-        let content = serde_json::to_string_pretty(&self)?;
-
-        fs::sync::write_atomic(&self.filepath, content).map_err(io::Error::other)?;
-
-        Ok(())
-    }
-}
-
 impl Lockfile<ReadOnly> {
     /// Create a new `Lockfile`, writing an empty file if none exists.
     #[tracing::instrument(level = "trace")]
@@ -1224,8 +1132,8 @@ remove the tree at '{}' and reinstall all packages it contained.",
 
     /// Creates a lockfile guard, flushing the lockfile automatically
     /// once the guard goes out of scope.
-    pub fn write_guard(self) -> LockfileGuard {
-        LockfileGuard(self.into_temporary())
+    pub fn write_guard(self) -> Guard {
+        Guard::new(self.into_temporary())
     }
 
     /// Converts the current lockfile into a writeable one, executes `cb` and flushes
@@ -1267,74 +1175,6 @@ remove the tree at '{}' and reinstall all packages it contained.",
     //
     //    Ok(result)
     //}
-}
-
-impl WorkspaceLockfile<ReadOnly> {
-    /// Create a new `ProjectLockfile`, writing an empty file if none exists.
-    #[tracing::instrument(level = "trace")]
-    pub fn new(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, Error> {
-        // Ensure that the lockfile exists
-        match File::options().create_new(true).write(true).open(&filepath) {
-            Ok(mut file) => {
-                let empty_lockfile: WorkspaceLockfile<ReadOnly> = WorkspaceLockfile {
-                    filepath: filepath.clone(),
-                    _marker: PhantomData,
-                    version: LOCKFILE_VERSION_STR.into(),
-                    dependencies: PackageLock::default(),
-                    test_dependencies: PackageLock::default(),
-                    build_dependencies: PackageLock::default(),
-                };
-                let json_str = serde_json::to_string(&empty_lockfile).map_err(Error::WriteJson)?;
-                write!(file, "{json_str}").map_err(|source| fs::Error::Write {
-                    path: filepath.to_path_buf(),
-                    source,
-                })?;
-            }
-            Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
-            Err(source) => {
-                return Err(Error::Fs(fs::Error::FileOpen {
-                    path: filepath.to_path_buf(),
-                    source,
-                }));
-            }
-        }
-
-        Self::load(filepath)
-    }
-
-    /// Load a `ProjectLockfile`, failing if none exists.
-    #[tracing::instrument(level = "trace")]
-    pub fn load(filepath: PathBuf) -> Result<WorkspaceLockfile<ReadOnly>, Error> {
-        let content = fs::sync::read_to_string(&filepath)?;
-        let mut lockfile: WorkspaceLockfile<ReadOnly> = load_lockfile(
-            &content,
-            &filepath,
-            "this lockfile was created by an incompatible version of Lux.
-remove the `lux.lock` and run `lx sync` to regenerate it.",
-        )?;
-
-        lockfile.filepath = filepath;
-
-        Ok(lockfile)
-    }
-
-    /// Creates a temporary, writeable project lockfile which can never flush.
-    fn into_temporary(self) -> WorkspaceLockfile<ReadWrite> {
-        WorkspaceLockfile::<ReadWrite> {
-            _marker: PhantomData,
-            filepath: self.filepath,
-            version: self.version,
-            dependencies: self.dependencies,
-            test_dependencies: self.test_dependencies,
-            build_dependencies: self.build_dependencies,
-        }
-    }
-
-    /// Creates a project lockfile guard, flushing the lockfile automatically
-    /// once the guard goes out of scope.
-    pub fn write_guard(self) -> ProjectLockfileGuard {
-        ProjectLockfileGuard(self.into_temporary())
-    }
 }
 
 impl Lockfile<ReadWrite> {
@@ -1421,124 +1261,7 @@ impl Lockfile<ReadWrite> {
     // TODO: `fn entrypoints() -> Vec<LockedRock>`
 }
 
-impl WorkspaceLockfile<ReadWrite> {
-    pub(crate) fn remove(&mut self, target: &LockedPackage, deps: &LockedPackageLockType) {
-        match deps {
-            LockedPackageLockType::Regular => self.dependencies.remove(target),
-            LockedPackageLockType::Test => self.test_dependencies.remove(target),
-            LockedPackageLockType::Build => self.build_dependencies.remove(target),
-        }
-    }
-
-    pub(crate) fn sync(&mut self, lock: &PackageLock, deps: &LockedPackageLockType) {
-        match deps {
-            LockedPackageLockType::Regular => {
-                self.dependencies = lock.clone();
-            }
-            LockedPackageLockType::Test => {
-                self.test_dependencies = lock.clone();
-            }
-            LockedPackageLockType::Build => {
-                self.build_dependencies = lock.clone();
-            }
-        }
-    }
-
-    pub(crate) fn merge(&mut self, lock: &PackageLock, deps: &LockedPackageLockType) {
-        match deps {
-            LockedPackageLockType::Regular => self.dependencies.merge(lock),
-            LockedPackageLockType::Test => self.test_dependencies.merge(lock),
-            LockedPackageLockType::Build => self.build_dependencies.merge(lock),
-        }
-    }
-}
-
-/// Flushes a lockfile automatically when it goes out of scope
-pub struct LockfileGuard(Lockfile<ReadWrite>);
-
-pub struct ProjectLockfileGuard(WorkspaceLockfile<ReadWrite>);
-
-impl Serialize for LockfileGuard {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-impl Serialize for ProjectLockfileGuard {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for LockfileGuard {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(LockfileGuard(Lockfile::<ReadWrite>::deserialize(
-            deserializer,
-        )?))
-    }
-}
-
-impl<'de> Deserialize<'de> for ProjectLockfileGuard {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(ProjectLockfileGuard(
-            WorkspaceLockfile::<ReadWrite>::deserialize(deserializer)?,
-        ))
-    }
-}
-
-impl Deref for LockfileGuard {
-    type Target = Lockfile<ReadWrite>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Deref for ProjectLockfileGuard {
-    type Target = WorkspaceLockfile<ReadWrite>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for LockfileGuard {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for ProjectLockfileGuard {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Drop for LockfileGuard {
-    fn drop(&mut self) {
-        let _ = self.flush();
-    }
-}
-
-impl Drop for ProjectLockfileGuard {
-    fn drop(&mut self) {
-        let _ = self.flush();
-    }
-}
-
-fn load_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, Error>
+pub(super) fn load_lockfile<T>(content: &str, lockfile: &Path, help: &str) -> Result<T, Error>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -2037,25 +1760,5 @@ mod tests {
             load_lockfile::<Lockfile<ReadOnly>>(lockfile, Path::new("lux.lock"), ""),
             Err(Error::ConflictingEntrypoints { .. })
         ));
-    }
-
-    #[test]
-    fn migrate_v1_workspace_lockfile() {
-        let sample = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test/lockfile-v1/workspace.lock");
-
-        let temp = assert_fs::TempDir::new().unwrap();
-        let lockfile_path = temp.path().join("lux.lock");
-        std::fs::copy(&sample, &lockfile_path).unwrap();
-
-        let lockfile = WorkspaceLockfile::load(lockfile_path.clone()).unwrap();
-
-        let on_disk: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&lockfile_path).unwrap()).unwrap();
-        assert_eq!(on_disk["version"], "1.0.0");
-        assert!(on_disk["dependencies"]["entrypoints"].is_array());
-
-        assert_eq!(lockfile.version, "2.0.0");
-        assert_eq!(lockfile.dependencies.entrypoints.len(), 3);
     }
 }

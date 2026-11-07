@@ -21,10 +21,10 @@ use lux_lib::{
     build::BuildBehaviour,
     config::{self, Config},
     drivers::sync::SyncReport,
-    git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl},
+    git::{self},
     lockfile::{
-        self, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile, LockfileGuard,
-        OptState, PinnedState, ReadOnly, ReadWrite,
+        self, Guard, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile, OptState,
+        PinnedState, ReadOnly, ReadWrite,
     },
     lua,
     operations::{self, download, install},
@@ -1519,9 +1519,9 @@ fn parse_lua_dependency_spec_table(table: &LuaTable) -> LuaResult<lua_dependency
 
     let source = if let Some(git) = git {
         let shorthand = git
-            .parse::<RemoteGitUrlShorthand>()
+            .parse::<git::remote::Shorthand>()
             .map_err(|err| LuaError::DeserializeError(err.to_string()))?;
-        let url: RemoteGitUrl = shorthand.into();
+        let url: git::remote::Url = shorthand.into();
         Some(rockspec::source::Spec::Git(git::Source {
             url,
             git_ref: rev.map(git::Ref::Tag),
@@ -1550,7 +1550,7 @@ impl FromLua for AddDependenciesLua {
 #[derive(Clone, Debug)]
 pub enum AddDependencyLua {
     Req(package::Req),
-    GitShorthand(RemoteGitUrlShorthand),
+    GitShorthand(git::remote::Shorthand),
     Spec(lua_dependency::Spec),
 }
 
@@ -1578,10 +1578,10 @@ impl FromLua for AddDependencyLua {
         }
 
         let s = String::from_lua(value, lua)?;
-        if let Ok(shorthand) = RemoteGitUrlShorthand::parse_with_prefix(&s) {
+        if let Ok(shorthand) = git::remote::Shorthand::parse_with_prefix(&s) {
             return Ok(Self::GitShorthand(shorthand));
         }
-        if let Ok(shorthand) = s.parse::<RemoteGitUrlShorthand>() {
+        if let Ok(shorthand) = s.parse::<git::remote::Shorthand>() {
             return Ok(Self::GitShorthand(shorthand));
         }
         s.parse::<package::Req>()
@@ -3026,7 +3026,7 @@ impl mlua::UserData for LockfileReadOnlyLua {
     }
 }
 
-pub struct LockfileGuardLua(pub LockfileGuard);
+pub struct LockfileGuardLua(pub Guard);
 
 impl Typed for LockfileGuardLua {
     fn ty() -> Type {
@@ -3599,7 +3599,7 @@ fn split_add_deps(
     deps: Vec<AddDependencyLua>,
 ) -> LuaResult<(
     Vec<package::Req>,
-    Vec<RemoteGitUrlShorthand>,
+    Vec<git::remote::Shorthand>,
     AddDependencyFlags,
 )> {
     let mut packages = Vec::new();

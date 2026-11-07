@@ -15,11 +15,14 @@ use crate::{fs, lockfile::OptState};
 use crate::lockfile::PinnedState;
 use crate::{
     config::Config,
-    git::{self, shorthand::RemoteGitUrlShorthand, url::RemoteGitUrl, utils::SemVerTagOrSha},
+    git::{self, utils::SemVerTagOrSha},
     lua,
     package::db::PackageDB,
     rockspec::{self, dependency, lua_dependency, LuaVersionCompatibility},
 };
+
+pub mod lockfile;
+pub use lockfile::Lockfile;
 
 /// The file name of a project manifest.
 pub const TOML_FILE_NAME: &str = "lux.toml";
@@ -133,7 +136,7 @@ pub enum EditError {
     ExpectedString(Box<toml_edit::Value>),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    GitUrlShorthandParse(#[from] git::shorthand::Error),
+    GitUrlShorthandParse(#[from] git::remote::shorthand::Error),
 }
 
 #[derive(Error, Debug, Diagnostic)]
@@ -344,7 +347,7 @@ impl Project {
 
     pub async fn add_git(
         &mut self,
-        dependencies: lua_dependency::Kind<&RemoteGitUrlShorthand>,
+        dependencies: lua_dependency::Kind<&git::remote::Shorthand>,
         config: &Config,
     ) -> Result<(), EditError> {
         let mut project_toml =
@@ -362,7 +365,7 @@ impl Project {
             | lua_dependency::Kind::Build(urls)
             | lua_dependency::Kind::Test(urls) => {
                 for url in urls {
-                    let git_url: RemoteGitUrl = url.clone().into();
+                    let git_url: git::remote::Url = url.clone().into();
                     let mut dep_entry = toml_edit::table();
                     match git::utils::latest_semver_tag_or_commit_sha(&git_url, config)? {
                         SemVerTagOrSha::SemVerTag(tag) => {
@@ -674,7 +677,7 @@ async fn upgrade_dependency(
     Ok(())
 }
 
-fn git_url_from_item(git_item: &Item) -> Result<RemoteGitUrlShorthand, EditError> {
+fn git_url_from_item(git_item: &Item) -> Result<git::remote::Shorthand, EditError> {
     let git_value = git_item
         .clone()
         .into_value()
@@ -686,7 +689,7 @@ fn git_url_from_item(git_item: &Item) -> Result<RemoteGitUrlShorthand, EditError
 }
 
 fn resolve_git_latest(
-    url: RemoteGitUrlShorthand,
+    url: git::remote::Shorthand,
     config: &Config,
 ) -> Result<SemVerTagOrSha, EditError> {
     Ok(git::utils::latest_semver_tag_or_commit_sha(
@@ -736,7 +739,6 @@ fn prepare_dependency_tables(project_toml: &mut DocumentMut) {
     }
 }
 
-// TODO: More project-based test
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
