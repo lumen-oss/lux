@@ -117,7 +117,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
         Some(PackageOrRockspec::Package(package_req)) => {
             let user_tree = config.user_tree(lua_version.clone())?;
             match user_tree.match_rocks(&package_req)? {
-                lux_lib::tree::RockMatches::NotFound(_) => {
+                tree::RockMatches::NotFound(_) => {
                     let temp_dir = tempdir().into_diagnostic()?;
                     let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
@@ -139,7 +139,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                         .await?;
                     Ok(vec![rock_path])
                 }
-                lux_lib::tree::RockMatches::Single(local_package_id) => {
+                tree::RockMatches::Single(local_package_id) => {
                     let lockfile = user_tree.lockfile()?;
                     let package = lockfile.get(&local_package_id).ok_or_else(|| {
                         miette!("package is installed, but was not found in the lockfile")
@@ -149,7 +149,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                         .await?;
                     Ok(vec![rock_path])
                 }
-                lux_lib::tree::RockMatches::Many(vec) => {
+                tree::RockMatches::Many(vec) => {
                     let local_package_id = vec.first();
                     let lockfile = user_tree.lockfile()?;
                     let package = lockfile.get(local_package_id).ok_or_else(|| {

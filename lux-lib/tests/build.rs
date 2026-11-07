@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
+use lux_lib::project::Project;
 use lux_lib::rockspec;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
@@ -309,9 +310,7 @@ fn local_project_rockspec_keeps_lua_text() {
     let project_root = TempDir::new().unwrap();
     project_root.copy_from(&sample_project, &["**"]).unwrap();
 
-    let project = lux_lib::project::Project::from_exact(project_root.path())
-        .unwrap()
-        .unwrap();
+    let project = Project::from_exact(project_root.path()).unwrap().unwrap();
     let content = project
         .build_rockspec()
         .unwrap()

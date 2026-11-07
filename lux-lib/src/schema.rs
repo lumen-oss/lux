@@ -5,7 +5,7 @@ use crate::config;
 use crate::rockspec;
 
 /// The JSON Schema for the Lux `config.toml` file.
-pub fn config_schema() -> schemars::Schema {
+pub fn config() -> schemars::Schema {
     let mut schema = schema_for!(config::Builder);
     schema.insert("title".to_string(), "config.toml".into());
     schema.insert(
@@ -18,7 +18,7 @@ pub fn config_schema() -> schemars::Schema {
 }
 
 /// The JSON Schema for the Lux `lux.toml` project manifest.
-pub fn lux_toml_schema() -> schemars::Schema {
+pub fn lux_toml() -> schemars::Schema {
     let mut schema = schema_for!(rockspec::toml::Partial);
     schema.insert("title".to_string(), "lux.toml".into());
     schema.insert(

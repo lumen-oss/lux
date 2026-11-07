@@ -1,11 +1,11 @@
-use lux_lib::{config::Config, workspace::Workspace};
+use lux_lib::{config::Config, operations, workspace::Workspace};
 use miette::Result;
 
 /// Generate a lockfile for the current project without installing its dependencies.
 pub async fn generate_lockfile(config: Config) -> Result<()> {
     let workspace = Workspace::current_or_err()?;
 
-    lux_lib::operations::GenerateLockfile::new(&config, &workspace)
+    operations::GenerateLockfile::new(&config, &workspace)
         .generate()
         .await?;
 
