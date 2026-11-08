@@ -67,6 +67,16 @@ pub enum Error {
     #[error("no Lua source mirrors are configured")]
     #[diagnostic(help("add at least one URL to `lua_mirrors` in your Lux config."))]
     NoLuaMirrors,
+    #[error("could not download the Lua sources from any configured mirror")]
+    #[diagnostic(help(
+        "check your network connection, or configure additional `lua_mirrors` in your Lux config."
+    ))]
+    SourceMirrors {
+        #[source]
+        source: crate::reqwest::Error,
+        #[related]
+        related: Vec<crate::reqwest::Error>,
+    },
     #[error("failed to construct a Lua source URL: {0}")]
     #[diagnostic(help("check the `lua_mirrors` URLs in your Lux config."))]
     Url(#[from] url::ParseError),
@@ -510,7 +520,7 @@ async fn do_build_lua(args: BuildLua<'_>) -> Result<(), Error> {
 
 async fn download_source(file_name: &str, config: &Config) -> Result<(Url, Bytes), Error> {
     let client = config.https_client()?;
-    let mut last_error = None;
+    let mut errors = Vec::new();
     for base in config.lua_mirrors() {
         let url = base.join(file_name)?;
         let response = client
@@ -527,15 +537,19 @@ async fn download_source(file_name: &str, config: &Config) -> Result<(Url, Bytes
                     .await?;
                 return Ok((url, bytes));
             }
-            Err(error) => {
-                tracing::warn!(message = format!("failed to download {url}: {error}").as_str());
-                last_error = Some(error.into());
+            Err(err) => {
+                tracing::warn!(message = format!("failed to download {url}: {err}").as_str());
+                errors.push(crate::reqwest::Error::from(err));
             }
         }
     }
-    match last_error {
-        Some(error) => Err(error),
+    let mut errors = errors.into_iter();
+    match errors.next() {
         None => Err(Error::NoLuaMirrors),
+        Some(source) => Err(Error::SourceMirrors {
+            source,
+            related: errors.collect(),
+        }),
     }
 }
 
