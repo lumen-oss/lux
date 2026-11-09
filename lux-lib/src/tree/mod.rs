@@ -6,7 +6,13 @@ use crate::{
     lua, path,
     variables::{GetVariableError, HasVariables},
 };
-use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -89,7 +95,6 @@ pub struct RockLayout {
     /// The `bin` directory, containing executables.
     /// Can be substituted in a rockspec's `build.build_variables` and `build.install_variables`
     /// using `$(BINDIR)`.
-    /// This points to a global binary path at the root of the current tree by default.
     pub bin: PathBuf,
     /// The `etc/conf` directory, containing configuration files.
     /// Can be substituted in a rockspec's `build.build_variables` and `build.install_variables`
@@ -102,11 +107,12 @@ pub struct RockLayout {
 }
 
 impl RockLayout {
-    /// Create the standard install layout rooted at `root`, with binaries in `bin`.
-    pub fn new(root: PathBuf, bin: PathBuf) -> Self {
+    /// Create the standard install layout rooted at `root`.
+    pub fn new(root: PathBuf) -> Self {
         let etc = root.join("etc");
         let lib = root.join("lib");
         let src = root.join("src");
+        let bin = root.join("bin");
         let conf = etc.join("conf");
         let doc = etc.join("doc");
         Self {
@@ -242,6 +248,33 @@ impl Tree {
     }
 }
 
+fn link_binaries(src: &Path, dest: &Path) -> Result<(), Error> {
+    link_binaries_inner(src, dest, true)
+}
+
+fn link_binaries_inner(src: &Path, dest: &Path, top_level: bool) -> Result<(), Error> {
+    if !src.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::sync::read_dir(src)? {
+        let entry = entry?;
+        if top_level && entry.file_name() == OsStr::new("unwrapped") {
+            continue;
+        }
+
+        let path = entry.path();
+        let target = dest.join(entry.file_name());
+        if entry.file_type().map_err(Error::Io)?.is_dir() {
+            link_binaries_inner(&path, &target, false)?;
+        } else {
+            fs::sync::link_file(&path, &target)?;
+        }
+    }
+
+    Ok(())
+}
+
 impl InstallTree for Tree {
     fn version(&self) -> &lua::Version {
         &self.version
@@ -257,11 +290,14 @@ impl InstallTree for Tree {
         fs::sync::create_dir_all(&layout.lib)?;
         fs::sync::create_dir_all(&layout.src)?;
         fs::sync::create_dir_all(&layout.etc)?;
+        fs::sync::create_dir_all(&layout.bin)?;
 
         Ok(())
     }
 
     fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
+        link_binaries(&self.layout_for(&package.spec).bin, &self.bin())?;
+
         if let Some(custom_layout) = &self.entrypoint_layout {
             if entry_type.is_entrypoint() || custom_layout.layout_dependencies() {
                 custom_layout.apply_layout(self, &package.spec)?;
@@ -288,16 +324,14 @@ impl InstallTree for Tree {
             .into_iter()
             .flat_map(|binaries| binaries.iter())
         {
-            if let Some(binary_file_name) = relative_binary_path.file_name() {
-                let binary_path = self.bin().join(binary_file_name);
-                if binary_path.is_file() {
-                    fs::sync::remove_file(binary_path)?;
-                }
+            let binary_path = self.bin().join(relative_binary_path);
+            if binary_path.symlink_metadata().is_ok() {
+                fs::sync::remove_file(binary_path)?;
+            }
 
-                let unwrapped_binary_path = self.unwrapped_bin().join(binary_file_name);
-                if unwrapped_binary_path.is_file() {
-                    fs::sync::remove_file(unwrapped_binary_path)?;
-                }
+            let unwrapped_binary_path = self.unwrapped_bin().join(relative_binary_path);
+            if unwrapped_binary_path.symlink_metadata().is_ok() {
+                fs::sync::remove_file(unwrapped_binary_path)?;
             }
         }
 
@@ -313,15 +347,13 @@ impl InstallTree for Tree {
     }
 
     fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
-        RockLayout::new(
-            self.root().join(format!(
-                "{}-{}@{}",
-                package.id(),
-                package.name(),
-                package.version()
-            )),
-            self.bin(),
-        )
+        let root = self.root().join(format!(
+            "{}-{}@{}",
+            package.id(),
+            package.name(),
+            package.version()
+        ));
+        RockLayout::new(root)
     }
 
     fn bin(&self) -> PathBuf {
@@ -459,7 +491,7 @@ mod tests {
         assert_eq!(
             tree.layout_for(&package.spec),
             RockLayout {
-                bin: tree_path.join("5.1/bin"),
+                bin: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1/bin")),
                 root: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1")),
                 etc: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1/etc")),
                 lib: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1/lib")),

@@ -234,7 +234,6 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     package: &LockedPackageSpec,
     lua: &lua::Installation,
     build_dir: &Path,
-    entry_type: &EntryType,
     config: &Config,
 ) -> Result<(), Error> {
     let install_spec = &rockspec.build().current_platform().install;
@@ -268,7 +267,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
             fs::make_writable(&resolved_target).await?;
         }
     }
-    if entry_type.is_entrypoint() {
+    {
         let span = tracing::info_span!("Installing binaries");
         let _enter = span.enter();
         let deploy_spec = rockspec.deploy().current_platform();
@@ -277,6 +276,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
                 &build_dir.join(source),
                 target,
                 tree,
+                &layout,
                 lua,
                 deploy_spec,
                 config,
@@ -410,16 +410,7 @@ where
         .write_guard()
         .set_binaries(&package, binaries);
 
-    install(
-        rockspec,
-        tree,
-        &package.spec,
-        lua,
-        &build_dir,
-        &entry_type,
-        config,
-    )
-    .await?;
+    install(rockspec, tree, &package.spec, lua, &build_dir, config).await?;
 
     for directory in rockspec
         .build()
@@ -597,6 +588,7 @@ mod tests {
         )
         .await
         .unwrap();
+        tree.finalize(&package, EntryType::Entrypoint).unwrap();
         let foo_dir = src_dir.join("foo");
         assert!(foo_dir.is_dir());
         let foo_init = foo_dir.join("init.lua");
@@ -620,7 +612,7 @@ mod tests {
             .child(lua_version.to_string())
             .child("bin")
             .child("hello");
-        bin_file.assert(predicate::path::is_file());
+        bin_file.assert(predicate::path::is_file().follow_links(true));
         bin_file.assert(predicate::str::contains("#!/usr/bin/env bash"));
         bin_file.assert(predicate::str::contains("echo \"Hello\""));
     }
@@ -668,18 +660,10 @@ deploy = { wrap_bin_scripts = false }
         crate::fs::tokio::write(build_dir.path().join("mytool"), "#!/bin/sh\necho hi\n")
             .await
             .unwrap();
-        install(
-            &rockspec,
-            &tree,
-            &package,
-            &lua,
-            build_dir.path(),
-            &EntryType::Entrypoint,
-            &config,
-        )
-        .await
-        .unwrap();
-        assert!(tree.bin().join("mytool").is_executable());
+        install(&rockspec, &tree, &package, &lua, build_dir.path(), &config)
+            .await
+            .unwrap();
+        assert!(tree.layout_for(&package).bin.join("mytool").is_executable());
     }
 
     #[tokio::test]
@@ -852,17 +836,9 @@ build = {
                 .await
                 .unwrap();
         }
-        install(
-            &rockspec,
-            &tree,
-            &package,
-            &lua,
-            build_dir.path(),
-            &EntryType::Entrypoint,
-            &config,
-        )
-        .await
-        .unwrap();
+        install(&rockspec, &tree, &package, &lua, build_dir.path(), &config)
+            .await
+            .unwrap();
         let layout = tree.layout_for(&package);
         assert!(layout.etc.join("shell.nix").is_file());
         assert!(layout.conf.join("plain.conf").is_file());

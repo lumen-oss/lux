@@ -17,7 +17,7 @@ use crate::{
     fs, lua,
     path::{self, Paths},
     rockspec,
-    tree::InstallTree,
+    tree::{InstallTree, RockLayout},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -85,20 +85,23 @@ pub(crate) async fn binary(
     source: &Path,
     target: &str,
     tree: &impl InstallTree,
+    layout: &RockLayout,
     lua: &lua::Installation,
     deploy: &rockspec::deploy::Spec,
     config: &Config,
-) -> Result<PathBuf, Error> where
-{
-    fs::tokio::create_dir_all(&tree.bin()).await?;
+) -> Result<PathBuf, Error> {
+    fs::tokio::create_dir_all(&layout.bin).await?;
     let paths = Paths::new(tree)?;
     let script = if config.wrap_bin_scripts()
         && deploy.wrap_bin_scripts
         && is_compatible_lua_script(source, lua, &paths, config).await
     {
-        wrapped_binary(source, target, tree, lua, config).await?
+        wrapped_binary(source, target, &layout.bin, lua, config).await?
     } else {
-        let target = tree.bin().join(target);
+        let target = layout.bin.join(target);
+        if let Some(parent) = target.parent() {
+            fs::tokio::create_dir_all(parent).await?;
+        }
         fs::tokio::copy(source, &target).await?;
         target
     };
@@ -109,24 +112,27 @@ pub(crate) async fn binary(
     Ok(script)
 }
 
-#[tracing::instrument("Installing wrapped binary", level = "trace", skip(tree))]
+#[tracing::instrument("Installing wrapped binary", level = "trace", skip(bin_dir))]
 async fn wrapped_binary(
     source: &Path,
     target: &str,
-    tree: &impl InstallTree,
+    bin_dir: &Path,
     lua: &lua::Installation,
     config: &Config,
 ) -> Result<PathBuf, Error> {
-    let unwrapped_bin_dir = tree.unwrapped_bin();
+    let unwrapped_bin_dir = bin_dir.join("unwrapped");
     fs::tokio::create_dir_all(&unwrapped_bin_dir).await?;
     let unwrapped_bin = unwrapped_bin_dir.join(target);
     fs::tokio::copy(source, &unwrapped_bin).await?;
     fs::make_writable(&unwrapped_bin).await?;
 
     #[cfg(target_family = "unix")]
-    let target = tree.bin().join(target);
+    let target = bin_dir.join(target);
     #[cfg(target_family = "windows")]
-    let target = tree.bin().join(format!("{}.bat", target));
+    let target = bin_dir.join(format!("{}.bat", target));
+    if let Some(parent) = target.parent() {
+        fs::tokio::create_dir_all(parent).await?;
+    }
 
     let lua_bin = lua.lua_binary_or_config_override(config).ok_or({
         let bin_name = config
@@ -307,7 +313,7 @@ mod tests {
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_valid");
         let script_name = "test_script";
-        let script_path = wrapped_binary(&valid_script, script_name, &tree, &lua, &config)
+        let script_path = wrapped_binary(&valid_script, script_name, &tree.bin(), &lua, &config)
             .await
             .unwrap();
 

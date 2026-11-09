@@ -132,7 +132,7 @@ where
                     lua: unpack_dir.path().join("lua"),
                     bin: unpack_dir.path().join("bin"),
                 };
-                install_rock_manifest(sources, &layout, &self.tree.bin()).await?;
+                install_rock_manifest(sources, &layout, &layout.bin).await?;
                 // rename <name>-<version>.rockspec
                 let rockspec_path =
                     layout

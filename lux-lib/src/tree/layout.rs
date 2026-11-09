@@ -42,13 +42,18 @@ impl CustomRockLayout for NvimLayout {
         fs::sync::create_dir_all(&custom_dir)?;
 
         let layout = tree.layout_for(package);
-        try_create_symlink(&layout.src, &custom_dir.join("lua"))?;
-        try_create_symlink(&layout.lib, &custom_dir.join("lib"))?;
+        fs::sync::link_dir(&layout.src, &custom_dir.join("lua"))?;
+        fs::sync::link_dir(&layout.lib, &custom_dir.join("lib"))?;
 
         if layout.etc.is_dir() {
             for entry in fs::sync::read_dir(&layout.etc)? {
                 let entry = entry?;
-                try_create_symlink(&entry.path(), &custom_dir.join(entry.file_name()))?;
+                let target = custom_dir.join(entry.file_name());
+                if entry.path().is_dir() {
+                    fs::sync::link_dir(&entry.path(), &target)?;
+                } else {
+                    fs::sync::link_file(&entry.path(), &target)?;
+                }
             }
         }
 
@@ -172,33 +177,6 @@ impl CustomRockLayout for RojoLayout {
     fn layout_dependencies(&self) -> bool {
         true
     }
-}
-
-fn try_create_symlink(target: &Path, link: &Path) -> fs::Result<()> {
-    if link.symlink_metadata().is_ok() {
-        return Ok(());
-    }
-
-    let relative = pathdiff::diff_paths(
-        target,
-        link.parent()
-            .ok_or_else(|| unreachable!("missing parent directory"))?,
-    )
-    .ok_or_else(|| {
-        fs::Error::Other(format!(
-            "failed to compute relative path for symlink from {} to {}",
-            link.display(),
-            target.display()
-        ))
-    })?;
-
-    #[cfg(unix)]
-    fs::unix::symlink(relative, link)?;
-
-    #[cfg(windows)]
-    fs::windows::symlink_dir(relative, link)?;
-
-    Ok(())
 }
 
 #[cfg(test)]

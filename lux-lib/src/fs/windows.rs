@@ -13,3 +13,17 @@ pub(crate) fn symlink_dir(
         source,
     })
 }
+
+/// Wrapped [`std::os::windows::fs::symlink_file`].
+pub(crate) fn symlink_file(
+    target: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+) -> Result<(), super::Error> {
+    let target = target.as_ref();
+    let link = link.as_ref();
+    std::os::windows::fs::symlink_file(target, link).map_err(|source| super::Error::Symlink {
+        target: target.to_path_buf(),
+        link: link.to_path_buf(),
+        source,
+    })
+}

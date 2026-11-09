@@ -90,7 +90,7 @@ async fn install<R: Rockspec, T: InstallTree>(
 ) -> Result<BuildInfo, Error> {
     let layout = tree.layout_for(package);
     let lua_version = rockspec.lua_version_matches(config)?;
-    fs::tokio::create_dir_all(tree.bin()).await?;
+    fs::tokio::create_dir_all(&layout.bin).await?;
     let lua_version = lua_version.version_compatibility_str();
     let package_dir = luarocks_tree
         .join("lib")
@@ -104,7 +104,7 @@ async fn install<R: Rockspec, T: InstallTree>(
         lua: luarocks_tree.join("share").join("lua").join(&lua_version),
         bin: luarocks_tree.join("bin"),
     };
-    install_rock_manifest(sources, &layout, &tree.bin()).await?;
+    install_rock_manifest(sources, &layout, &layout.bin).await?;
     Ok(BuildInfo::default())
 }
 
@@ -221,7 +221,7 @@ rock_manifest = {
             .join("test_luarocks_backend")
             .join("init.lua")
             .is_file());
-        assert!(tree.bin().join("tool").is_file());
+        assert!(layout.bin.join("tool").is_file());
         assert!(layout.doc.join("README.md").is_file());
         assert!(layout.conf.join("config.toml").is_file());
         assert!(layout.etc.join("plugin").join("foo.lua").is_file());

@@ -1,5 +1,6 @@
 use std::{
     fs::{self, DirEntry},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -79,6 +80,102 @@ pub(crate) fn hard_link(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<
         to: to.to_path_buf(),
         source,
     })
+}
+
+pub(crate) fn link_file(
+    target: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+) -> Result<(), super::Error> {
+    let target = absolute(target)?;
+    let link = absolute(link)?;
+    prepare_link(&link)?;
+    let relative = relative_target(&target, &link);
+
+    match symlink_file(&relative, &link) {
+        Ok(()) => Ok(()),
+        Err(symlink) => match hard_link(&target, &link) {
+            Ok(()) => Ok(()),
+            Err(hard_link) => Err(super::Error::Link {
+                target,
+                link,
+                symlink: Box::new(symlink),
+                hard_link: Box::new(hard_link),
+            }),
+        },
+    }
+}
+
+pub(crate) fn link_dir(
+    target: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+) -> Result<(), super::Error> {
+    let target = absolute(target)?;
+    let link = absolute(link)?;
+    prepare_link(&link)?;
+    let relative = relative_target(&target, &link);
+    symlink_dir(&relative, &link)
+}
+
+fn relative_target(target: &Path, link: &Path) -> PathBuf {
+    link.parent()
+        .and_then(|parent| pathdiff::diff_paths(target, parent))
+        .unwrap_or_else(|| target.to_path_buf())
+}
+
+fn prepare_link(link: &Path) -> Result<(), super::Error> {
+    if let Some(parent) = link.parent() {
+        create_dir_all(parent)?;
+    }
+
+    match fs::symlink_metadata(link) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+            Err(super::Error::Other(format!(
+                "cannot replace directory '{}' with a link",
+                link.display()
+            )))
+        }
+        Ok(_) => remove_link(link),
+        Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(super::Error::Metadata {
+            path: link.to_path_buf(),
+            source,
+        }),
+    }
+}
+
+#[cfg(unix)]
+fn remove_link(link: &Path) -> Result<(), super::Error> {
+    remove_file(link)
+}
+
+#[cfg(windows)]
+fn remove_link(link: &Path) -> Result<(), super::Error> {
+    fs::remove_dir(link)
+        .or_else(|_| fs::remove_file(link))
+        .map_err(|source| super::Error::RemoveFile {
+            path: link.to_path_buf(),
+            source,
+        })
+}
+
+#[cfg(unix)]
+fn symlink_file(target: &Path, link: &Path) -> Result<(), super::Error> {
+    super::unix::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn symlink_file(target: &Path, link: &Path) -> Result<(), super::Error> {
+    super::windows::symlink_file(target, link)
+}
+
+#[cfg(unix)]
+fn symlink_dir(target: &Path, link: &Path) -> Result<(), super::Error> {
+    super::unix::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn symlink_dir(target: &Path, link: &Path) -> Result<(), super::Error> {
+    super::windows::symlink_dir(target, link)
 }
 
 /// Recursively hard link the contents of a directory into `dest`.
@@ -171,4 +268,52 @@ pub(crate) fn absolute(path: impl AsRef<Path>) -> Result<PathBuf, super::Error> 
         path: path.to_path_buf(),
         source,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_fs::prelude::*;
+
+    use super::*;
+
+    #[test]
+    fn link_file_replaces_existing_link() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let first = temp.child("first");
+        let second = temp.child("second");
+        let link = temp.child("link");
+        first.write_str("first").unwrap();
+        second.write_str("second").unwrap();
+
+        link_file(first.path(), link.path()).unwrap();
+        assert_eq!(read_to_string(link.path()).unwrap(), "first");
+
+        link_file(second.path(), link.path()).unwrap();
+        assert_eq!(read_to_string(link.path()).unwrap(), "second");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn link_dir_replaces_existing_link() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let first = temp.child("first");
+        let second = temp.child("second");
+        let link = temp.child("link");
+        first.create_dir_all().unwrap();
+        second.create_dir_all().unwrap();
+        first.child("first.txt").write_str("first").unwrap();
+        second.child("second.txt").write_str("second").unwrap();
+
+        link_dir(first.path(), link.path()).unwrap();
+        assert_eq!(
+            read_to_string(link.child("first.txt").path()).unwrap(),
+            "first"
+        );
+
+        link_dir(second.path(), link.path()).unwrap();
+        assert_eq!(
+            read_to_string(link.child("second.txt").path()).unwrap(),
+            "second"
+        );
+    }
 }
