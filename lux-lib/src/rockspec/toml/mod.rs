@@ -908,7 +908,7 @@ type = "builtin"
                 .to_lua_remote_rockspec_string()
                 .unwrap()
         };
-        assert!(rockspec("").contains("rockspec_format = \"3.0\""));
+        assert!(rockspec("").contains("rockspec_format = \"3.1\""));
         assert!(
             rockspec("[build_dependencies]\ntl = \">=0.24\"").contains("rockspec_format = \"3.2\"")
         );

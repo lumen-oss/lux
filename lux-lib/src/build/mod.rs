@@ -41,6 +41,7 @@ pub mod treesitter_parser;
 
 pub(crate) mod backend;
 pub(crate) mod cargo;
+pub(crate) mod dependency;
 pub(crate) use builtin::autodetect_modules;
 
 pub mod external_dependency;
@@ -385,6 +386,13 @@ where
         })
         .try_collect::<_, HashMap<_, _>, _>()?;
 
+    let format = rockspec.format().clone().unwrap_or(rockspec::Format::_1_0);
+    let dependency_layouts = if format >= rockspec::Format::_3_1 {
+        dependency::Layouts::new(&package.spec, lua, tree, config)?
+    } else {
+        dependency::Layouts::default()
+    };
+
     let output = run_build(
         rockspec,
         RunBuildArgs::new()
@@ -397,6 +405,7 @@ where
             .tree(tree)
             .build_dir(&build_dir)
             .build_dependencies(rockspec.build_dependencies().current_platform())
+            .dependency_layouts(&dependency_layouts)
             .build(),
     )
     .await?;
@@ -579,6 +588,7 @@ mod tests {
         );
         tree.prepare(&package.spec).unwrap();
         let src_dir = tree.layout_for(&package.spec).src;
+        let dependency_layouts = dependency::Layouts::default();
         run_build(
             &rockspec,
             RunBuildArgs::new()
@@ -591,6 +601,7 @@ mod tests {
                 .tree(&tree)
                 .build_dir(&build_dir)
                 .build_dependencies(rockspec.build_dependencies().current_platform())
+                .dependency_layouts(&dependency_layouts)
                 .build(),
         )
         .await

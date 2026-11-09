@@ -11,7 +11,10 @@ use tracing::{info_span, Instrument};
 use which::which;
 
 use crate::{
-    build::backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
+    build::{
+        backend::{self, BuildBackend, BuildInfo, RunBuildArgs},
+        dependency,
+    },
     config::Config,
     lua,
     path::{self, Paths},
@@ -91,105 +94,109 @@ impl BuildBackend for rockspec::build::backend::Command {
         let tree = args.tree;
         let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
+        let dependency_layouts = args.dependency_layouts;
 
         let build_tree = tree.build_tree(config)?;
         let build_paths = Paths::new(&build_tree)?;
 
+        let runner = Runner {
+            output_paths: &layout,
+            lua,
+            external_dependencies,
+            dependency_layouts,
+            config,
+            build_dir,
+            build_paths: &build_paths,
+        };
+
         if let Some(build_command) = &self.build_command {
-            run_command(
-                build_command,
-                &layout,
-                lua,
-                external_dependencies,
-                config,
-                build_dir,
-                &build_paths,
-            )
-            .await?;
+            runner.run(build_command).await?;
         }
         if !no_install {
             if let Some(install_command) = &self.install_command {
-                run_command(
-                    install_command,
-                    &layout,
-                    lua,
-                    external_dependencies,
-                    config,
-                    build_dir,
-                    &build_paths,
-                )
-                .await?;
+                runner.run(install_command).await?;
             }
         }
         Ok(BuildInfo::default())
     }
 }
 
-#[tracing::instrument(level = "trace", skip(config, output_paths))]
-async fn run_command(
-    command: &str,
-    output_paths: &RockLayout,
-    lua: &lua::Installation,
-    external_dependencies: &HashMap<String, ExternalDependencyInfo>,
-    config: &Config,
-    build_dir: &Path,
-    build_paths: &Paths,
-) -> Result<(), Error> {
-    let lua_path = build_paths.package_path_prepended().joined();
-    let lua_cpath = build_paths.package_cpath_prepended().joined();
-    let bin_path = build_paths.path_prepended().joined();
-    let substituted_cmd =
-        backend::substitute_variables(command, output_paths, lua, external_dependencies, config)?;
+struct Runner<'a> {
+    output_paths: &'a RockLayout,
+    lua: &'a lua::Installation,
+    external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,
+    dependency_layouts: &'a dependency::Layouts,
+    config: &'a Config,
+    build_dir: &'a Path,
+    build_paths: &'a Paths,
+}
 
-    if substituted_cmd.is_empty() {
-        return Err(Error::EmptyCommand);
-    }
+impl Runner<'_> {
+    #[tracing::instrument(level = "trace", skip(self))]
+    async fn run(&self, command: &str) -> Result<(), Error> {
+        let lua_path = self.build_paths.package_path_prepended().joined();
+        let lua_cpath = self.build_paths.package_cpath_prepended().joined();
+        let bin_path = self.build_paths.path_prepended().joined();
+        let substituted_cmd = backend::substitute_variables(
+            command,
+            self.output_paths,
+            self.lua,
+            self.external_dependencies,
+            self.dependency_layouts,
+            self.config,
+        )?;
 
-    #[cfg(target_env = "msvc")]
-    let (shell, shell_arg) = (which("cmd.exe")?, "/C");
-    #[cfg(not(target_env = "msvc"))]
-    let (shell, shell_arg) = (which("sh")?, "-c");
-
-    match config
-        .wrapped_command(shell, [shell_arg, &substituted_cmd])
-        .current_dir(build_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .env("PATH", &bin_path)
-        .env("LUA_PATH", &lua_path)
-        .env("LUA_CPATH", &lua_cpath)
-        .spawn()
-    {
-        Err(err) => {
-            return Err(Error::Io {
-                err,
-                command: substituted_cmd,
-            });
+        if substituted_cmd.is_empty() {
+            return Err(Error::EmptyCommand);
         }
-        Ok(child) => match child
-            .wait_with_output()
-            .instrument(info_span!(
-                "Running build command",
-                command = substituted_cmd
-            ))
-            .await
+
+        #[cfg(target_env = "msvc")]
+        let (shell, shell_arg) = (which("cmd.exe")?, "/C");
+        #[cfg(not(target_env = "msvc"))]
+        let (shell, shell_arg) = (which("sh")?, "-c");
+
+        match self
+            .config
+            .wrapped_command(shell, [shell_arg, &substituted_cmd])
+            .current_dir(self.build_dir)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .env("PATH", &bin_path)
+            .env("LUA_PATH", &lua_path)
+            .env("LUA_CPATH", &lua_cpath)
+            .spawn()
         {
-            Ok(output) if output.status.success() => trace_output(&output),
-            Ok(output) => {
-                return Err(Error::CommandFailure {
-                    command: substituted_cmd,
-                    status: output.status,
-                    stdout: String::from_utf8_lossy(&output.stdout).into(),
-                    stderr: String::from_utf8_lossy(&output.stderr).into(),
-                });
-            }
             Err(err) => {
                 return Err(Error::Io {
                     err,
                     command: substituted_cmd,
                 });
             }
-        },
+            Ok(child) => match child
+                .wait_with_output()
+                .instrument(info_span!(
+                    "Running build command",
+                    command = substituted_cmd
+                ))
+                .await
+            {
+                Ok(output) if output.status.success() => trace_output(&output),
+                Ok(output) => {
+                    return Err(Error::CommandFailure {
+                        command: substituted_cmd,
+                        status: output.status,
+                        stdout: String::from_utf8_lossy(&output.stdout).into(),
+                        stderr: String::from_utf8_lossy(&output.stderr).into(),
+                    });
+                }
+                Err(err) => {
+                    return Err(Error::Io {
+                        err,
+                        command: substituted_cmd,
+                    });
+                }
+            },
+        }
+        Ok(())
     }
-    Ok(())
 }

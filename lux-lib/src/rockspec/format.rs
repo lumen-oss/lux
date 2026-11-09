@@ -9,7 +9,7 @@ use thiserror::Error;
 #[error("invalid rockspec format")]
 pub struct InvalidRockspecFormat(String);
 
-#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum Format {
     #[serde(rename = "1.0")]
@@ -17,9 +17,9 @@ pub enum Format {
     #[serde(rename = "2.0")]
     _2_0,
     #[serde(rename = "3.0")]
-    #[default]
     _3_0,
     #[serde(rename = "3.1")]
+    #[default]
     _3_1,
     #[serde(rename = "3.2")]
     _3_2,

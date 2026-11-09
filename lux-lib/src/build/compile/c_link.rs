@@ -76,74 +76,93 @@ luaopen_{exported_name}
     Ok(def_file)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn artifacts(
-    build: &mut cc::Build,
-    lua: &lua::Installation,
-    external_dependencies: &HashMap<String, ExternalDependencyInfo>,
-    target_file_name: &str,
+#[derive(bon::Builder)]
+#[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
+pub(crate) struct Linker<'a> {
+    cc_build: &'a cc::Build,
+    lua: &'a lua::Installation,
+    external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,
+    target_file_name: &'a str,
     libdir_args: Vec<String>,
     library_args: Vec<String>,
-    target_module: &rockspec::build::backend::Module,
-    target_parent_dir: &Path,
+    target_module: &'a rockspec::build::backend::Module,
+    target_parent_dir: &'a Path,
     objects: Vec<PathBuf>,
-    config: &Config,
-) -> Result<(), Error> {
-    let output_path =
-        std::path::absolute(target_parent_dir.join(target_file_name)).map_err(Error::Io)?;
-    let compiler = build.try_get_compiler()?;
-    // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
-    // the current working directory.
-    // See https://github.com/lumen-oss/lux/issues/1106
-    let temp_work_dir = fs::tempfile::tempdir()?;
-    let is_msvc = compiler.is_like_msvc();
-    let cmd = build.try_get_compiler()?.to_command();
-    let mut cmd: tokio::process::Command = cmd.into();
-    cmd.current_dir(temp_work_dir.path());
-    let output = if is_msvc {
-        let def_file = mk_def_file(temp_work_dir.path(), target_file_name, target_module)?;
-        cmd.args(&objects).arg("/LD");
-        add_variable_if_set(config, "LDFLAGS", &mut cmd);
-        cmd.arg("/link")
-            .arg("/NOIMPLIB")
-            .arg("/NOEXP")
-            .arg(format!("/DEF:{}", def_file.display()))
-            .arg(format!("/OUT:{}", output_path.display()))
-            .args(lua_lib_link_args(lua, &compiler))
-            .args(
-                external_dependencies
-                    .values()
-                    .flat_map(|dep| dep.lib_link_args(&compiler)),
-            )
-            .args(libdir_args)
-            .args(library_args)
-            .output()
-            .await?
-    } else {
-        add_variable_if_set(config, "LIBFLAG", &mut cmd);
-        add_variable_if_set(config, "LDFLAGS", &mut cmd);
-        cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
-            .args(lua_lib_link_args(lua, &build.try_get_compiler()?))
-            .args(
-                external_dependencies
-                    .values()
-                    .flat_map(|dep| dep.lib_link_args(&compiler)),
-            )
-            .args(&objects)
-            .args(libdir_args)
-            .args(library_args)
-            .output()
-            .await?
-    };
-    crate::build::command::trace_output(&output);
-    validate_output(&output)?;
+    config: &'a Config,
+}
 
-    if output_path.exists() {
-        Ok(())
-    } else {
-        Err(Error::LibOutputNotCreated(
-            output_path.to_slash_lossy().to_string(),
-        ))
+impl<'a, State> LinkerBuilder<'a, State>
+where
+    State: linker_builder::State + linker_builder::IsComplete,
+{
+    pub(crate) async fn link(self) -> Result<(), Error> {
+        let linker = self._build();
+        let output_path =
+            std::path::absolute(linker.target_parent_dir.join(linker.target_file_name))
+                .map_err(Error::Io)?;
+        let compiler = linker.cc_build.try_get_compiler()?;
+        // Linking from within a temp directory makes sure the linker doesn't create any build artifacts in
+        // the current working directory.
+        // See https://github.com/lumen-oss/lux/issues/1106
+        let temp_work_dir = fs::tempfile::tempdir()?;
+        let is_msvc = compiler.is_like_msvc();
+        let cmd = linker.cc_build.try_get_compiler()?.to_command();
+        let mut cmd: tokio::process::Command = cmd.into();
+        cmd.current_dir(temp_work_dir.path());
+        let output = if is_msvc {
+            let def_file = mk_def_file(
+                temp_work_dir.path(),
+                linker.target_file_name,
+                linker.target_module,
+            )?;
+            cmd.args(&linker.objects).arg("/LD");
+            add_variable_if_set(linker.config, "LDFLAGS", &mut cmd);
+            cmd.arg("/link")
+                .arg("/NOIMPLIB")
+                .arg("/NOEXP")
+                .arg(format!("/DEF:{}", def_file.display()))
+                .arg(format!("/OUT:{}", output_path.display()))
+                .args(lua_lib_link_args(linker.lua, &compiler))
+                .args(
+                    linker
+                        .external_dependencies
+                        .values()
+                        .flat_map(|dep| dep.lib_link_args(&compiler)),
+                )
+                .args(&linker.libdir_args)
+                .args(&linker.library_args)
+                .output()
+                .await?
+        } else {
+            add_variable_if_set(linker.config, "LIBFLAG", &mut cmd);
+            add_variable_if_set(linker.config, "LDFLAGS", &mut cmd);
+            cmd.args(vec!["-o".into(), output_path.to_string_lossy().to_string()])
+                .args(lua_lib_link_args(
+                    linker.lua,
+                    &linker.cc_build.try_get_compiler()?,
+                ))
+                .args(
+                    linker
+                        .external_dependencies
+                        .values()
+                        .flat_map(|dep| dep.lib_link_args(&compiler)),
+                )
+                .args(&linker.objects)
+                .args(&linker.libdir_args)
+                .args(&linker.library_args)
+                .output()
+                .await?
+        };
+        crate::build::command::trace_output(&output);
+        validate_output(&output)?;
+
+        if output_path.exists() {
+            Ok(())
+        } else {
+            Err(Error::LibOutputNotCreated(
+                output_path.to_slash_lossy().to_string(),
+            ))
+        }
     }
 }
 
