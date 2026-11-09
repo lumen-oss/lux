@@ -106,6 +106,21 @@ impl Local {
         )
     }
 
+    pub(crate) fn generated_rockspec_format(&self) -> rockspec::Format {
+        self.rockspec_format.clone().unwrap_or_else(|| {
+            if self
+                .build_dependencies
+                .current_platform()
+                .iter()
+                .any(|dep| dep.name().to_string() == "tl")
+            {
+                rockspec::Format::_3_2
+            } else {
+                rockspec::Format::default()
+            }
+        })
+    }
+
     fn render_rockspec(
         &self,
         version: &package::Version,
@@ -116,9 +131,7 @@ impl Local {
 rockspec_format = "{}"
 package = "{}"
 version = "{}""#,
-            self.rockspec_format
-                .as_ref()
-                .unwrap_or(&rockspec::Format::default()),
+            self.generated_rockspec_format(),
             self.package,
             version
         );

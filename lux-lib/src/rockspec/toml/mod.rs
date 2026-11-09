@@ -230,7 +230,7 @@ fn build_spec_with_autodetected_modules(
         return spec.clone();
     }
     let detected = match autodetect_modules(project_root, Default::default()) {
-        Ok(modules) => modules
+        Ok((modules, _)) => modules
             .into_iter()
             .filter_map(|(module, spec)| match spec {
                 rockspec::build::backend::ModuleSpec::SourcePath(path)
@@ -881,6 +881,37 @@ mod tests {
             .unwrap()
             .into_remote(None)
             .unwrap();
+    }
+
+    #[test]
+    fn generated_rockspec_format_follows_teal_build_dependency() {
+        let rockspec = |build_dependencies: &str| {
+            let content = format!(
+                r#"
+package = "test-package"
+version = "1.0.0"
+lua = ">=5.1"
+
+[source]
+url = "git+https://example.com/owner/repo.git"
+tag = "v0.1.0"
+
+[build]
+type = "builtin"
+{build_dependencies}
+"#
+            );
+            Partial::new(TOML_FILE_NAME, &content, PathBuf::default())
+                .unwrap()
+                .into_remote(None)
+                .unwrap()
+                .to_lua_remote_rockspec_string()
+                .unwrap()
+        };
+        assert!(rockspec("").contains("rockspec_format = \"3.0\""));
+        assert!(
+            rockspec("[build_dependencies]\ntl = \">=0.24\"").contains("rockspec_format = \"3.2\"")
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 pub mod c_files;
 pub mod c_link;
 pub mod c_modules;
+pub mod teal;
 
 use std::path::PathBuf;
 

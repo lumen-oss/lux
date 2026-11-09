@@ -26,6 +26,7 @@ pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
     pub(crate) config: &'a Config,
     pub(crate) tree: &'a T,
     pub(crate) build_dir: &'a Path,
+    pub(crate) build_dependencies: &'a [rockspec::lua_dependency::Spec],
 }
 
 pub(crate) trait BuildBackend {

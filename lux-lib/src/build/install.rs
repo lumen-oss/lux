@@ -71,6 +71,22 @@ pub(crate) fn lua_module(
     Ok(())
 }
 
+pub(crate) fn sources(
+    build_dir: &Path,
+    target_dir: &Path,
+    files: &[PathBuf],
+) -> Result<(), fs::Error> {
+    for file in files {
+        let target = target_dir.join(file.components().skip(1).collect::<PathBuf>());
+        if let Some(parent) = target.parent() {
+            fs::sync::create_dir_all(parent)?;
+        }
+        fs::sync::copy(build_dir.join(file), &target)?;
+        fs::make_writable_sync(&target)?;
+    }
+    Ok(())
+}
+
 /// Returns the file path of the installed binary
 #[tracing::instrument(
     name = "Installing binary",
