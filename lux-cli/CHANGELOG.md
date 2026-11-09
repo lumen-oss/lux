@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.0](https://github.com/lumen-oss/lux/compare/v0.53.3...v0.54.0) `lux-cli` - 2026-11-09
+
+### Fixed
+- *(config)* [**breaking**] per-config HTTP clients honouring the timeout ([#2210](https://github.com/lumen-oss/lux/pull/2210))
+
 ## [0.53.3](https://github.com/lumen-oss/lux/compare/v0.53.2...v0.53.3) `lux-cli` - 2026-11-03
 
 ### Other
