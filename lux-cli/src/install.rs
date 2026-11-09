@@ -7,6 +7,7 @@ use lux_lib::{
     lockfile::PinnedState,
     lua, operations,
     package::db::PackageDB,
+    transaction::Transaction,
     workspace::{self, Workspace},
 };
 
@@ -59,13 +60,15 @@ async fn install_from_path(
     let lua_version = project.lua_version(&config)?;
     let tree = config.user_tree(lua_version)?;
 
+    let transaction = Transaction::new(&tree)?;
     operations::InstallProject::new()
         .project(project)
         .config(&config)
-        .tree(&tree)
+        .target(&transaction)
         .workspace(&workspace)
         .build()
         .await?;
+    transaction.commit()?;
 
     Ok(())
 }
@@ -79,11 +82,13 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
     let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree, &config)?;
 
     // TODO(vhyrro): If the tree doesn't exist then error out.
-    InstallPackages::new(&config, &tree)
+    let transaction = Transaction::new(&tree)?;
+    InstallPackages::new(&config, &transaction)
         .packages(packages)
         .package_db(PackageDB::from_config(&config).await?)
         .install()
         .await?;
+    transaction.commit()?;
 
     Ok(())
 }

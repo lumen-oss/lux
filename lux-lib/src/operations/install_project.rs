@@ -14,7 +14,7 @@ use crate::{
     pipeline::discover::FoundPackage,
     project::{self, IntoLocalRockspecError, Project},
     rockspec::Rockspec,
-    tree::{self, InstallTree},
+    tree::{self, Installable},
     workspace::{self, Workspace},
 };
 
@@ -66,13 +66,13 @@ impl From<build::Error> for Error {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallProject<'a, T>
 where
-    T: InstallTree,
+    T: Installable,
 {
     project: &'a Project,
 
     config: &'a Config,
 
-    tree: &'a T,
+    target: &'a T,
 
     #[builder(default = BuildBehaviour::Force)]
     behaviour: BuildBehaviour,
@@ -82,7 +82,7 @@ where
 }
 
 impl<
-        T: InstallTree + Sync + Send,
+        T: Installable + Sync + Send,
         State: install_project_builder::State + install_project_builder::IsComplete,
     > InstallProjectBuilder<'_, T, State>
 {
@@ -92,7 +92,7 @@ impl<
         let args = self._build();
         let config = args.config;
         let project = args.project;
-        let tree = args.tree;
+        let tree = args.target;
 
         let rockspec = project.build_rockspec()?;
         let name = rockspec.package().clone();

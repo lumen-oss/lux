@@ -10,6 +10,7 @@ use lux_lib::{
     lua, operations,
     operations::install,
     package::db::PackageDB,
+    transaction::Transaction,
     tree::{self, InstallTree, RockMatches},
 };
 
@@ -91,11 +92,13 @@ multiple packages satisfying your version requirements were found:
         .partition(|pkg_id| lockfile.is_dependency(pkg_id));
 
     if dependencies.is_empty() {
+        let transaction = Transaction::new(&tree)?;
         operations::Uninstall::new()
-            .config(&config)
+            .target(&transaction)
             .packages(entrypoints)
             .remove()
             .await?;
+        transaction.commit()?;
     } else {
         let package_names = dependencies
             .iter()
@@ -127,8 +130,9 @@ Reinstall?
                 .into_diagnostic()
                 .map_err(|_| miette!("error prompting for reinstall"))?
         {
+            let transaction = Transaction::new(&tree)?;
             operations::Uninstall::new()
-                .config(&config)
+                .target(&transaction)
                 .packages(entrypoints)
                 .remove()
                 .await?;
@@ -149,15 +153,16 @@ Reinstall?
                 })
                 .collect_vec();
             operations::Uninstall::new()
-                .config(&config)
+                .target(&transaction)
                 .packages(dependencies)
                 .remove()
                 .await?;
-            InstallPackages::new(&config, &tree)
+            InstallPackages::new(&config, &transaction)
                 .package_db(PackageDB::from_config(&config).await?)
                 .packages(reinstall_specs)
                 .install()
                 .await?;
+            transaction.commit()?;
         } else {
             return Err(miette!("operation cancelled"));
         }
@@ -176,11 +181,13 @@ Reinstall?
         if dangling_rocks.is_empty() {
             has_dangling_rocks = false
         } else {
+            let transaction = Transaction::new(&tree)?;
             operations::Uninstall::new()
-                .config(&config)
+                .target(&transaction)
                 .packages(dangling_rocks)
                 .remove()
                 .await?;
+            transaction.commit()?;
         }
     }
 

@@ -116,6 +116,65 @@ pub(crate) fn link_dir(
     symlink_dir(&relative, &link)
 }
 
+pub(crate) fn replace_symlink(
+    target: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+) -> Result<(), super::Error> {
+    let target = absolute(target)?;
+    let link = absolute(link)?;
+    if let Some(parent) = link.parent() {
+        create_dir_all(parent)?;
+    }
+
+    let file_name = link
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_default();
+    let temp = link.with_file_name(format!(".{file_name}.tmp"));
+    remove_path(&temp)?;
+
+    let relative = relative_target(&target, &temp);
+    symlink_dir(&relative, &temp)?;
+
+    #[cfg(unix)]
+    {
+        rename(&temp, &link)?;
+    }
+    #[cfg(windows)]
+    {
+        if link.symlink_metadata().is_ok() {
+            remove_link(&link)?;
+        }
+        rename(&temp, &link)?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), super::Error> {
+    let from = from.as_ref();
+    let to = to.as_ref();
+    fs::rename(from, to).map_err(|source| super::Error::Rename {
+        from: from.to_path_buf(),
+        to: to.to_path_buf(),
+        source,
+    })
+}
+
+pub(crate) fn remove_path(path: impl AsRef<Path>) -> Result<(), super::Error> {
+    let path = path.as_ref();
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => remove_link(path),
+        Ok(metadata) if metadata.is_dir() => remove_dir_all(path),
+        Ok(_) => remove_file(path),
+        Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(super::Error::Metadata {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
 fn relative_target(target: &Path, link: &Path) -> PathBuf {
     link.parent()
         .and_then(|parent| pathdiff::diff_paths(target, parent))
@@ -192,6 +251,15 @@ pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), super::Error> 
         }
     }
     Ok(())
+}
+
+/// Wrapped [`fs::create_dir`].
+pub(crate) fn create_dir(path: impl AsRef<Path>) -> Result<(), super::Error> {
+    let path = path.as_ref();
+    fs::create_dir(path).map_err(|source| super::Error::CreateDir {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// Wrapped [`fs::create_dir_all`].
@@ -290,6 +358,31 @@ mod tests {
 
         link_file(second.path(), link.path()).unwrap();
         assert_eq!(read_to_string(link.path()).unwrap(), "second");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_symlink_swaps_target() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let first = temp.child("first");
+        let second = temp.child("second");
+        let link = temp.child("link");
+        first.create_dir_all().unwrap();
+        second.create_dir_all().unwrap();
+        first.child("first.txt").write_str("first").unwrap();
+        second.child("second.txt").write_str("second").unwrap();
+
+        replace_symlink(first.path(), link.path()).unwrap();
+        assert_eq!(
+            read_to_string(link.child("first.txt").path()).unwrap(),
+            "first"
+        );
+
+        replace_symlink(second.path(), link.path()).unwrap();
+        assert_eq!(
+            read_to_string(link.child("second.txt").path()).unwrap(),
+            "second"
+        );
     }
 
     #[cfg(unix)]

@@ -10,7 +10,7 @@ use lux_lib::{
     operations::{self, install},
     package::db::PackageDB,
     rockspec,
-    tree::EntryType,
+    tree::{EntryType, Transaction},
 };
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -76,13 +76,15 @@ async fn install_and_use(package: package::Req, module_name: &str) {
     let tree = config
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
-    let installed = InstallPackages::new(&config, &tree)
+    let transaction = Transaction::new(&tree).unwrap();
+    let installed = InstallPackages::new(&config, &transaction)
         .package(install_spec)
         .package_db(PackageDB::from_config(&config).await.unwrap())
         .install()
         .await
         .unwrap()
         .0;
+    transaction.commit().unwrap();
     assert!(!installed.is_empty());
 
     operations::Exec::new("lua", None, &config)
@@ -130,12 +132,14 @@ async fn test_install(install_spec: install::Spec) {
     let tree = config
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
-    let installed = InstallPackages::new(&config, &tree)
+    let transaction = Transaction::new(&tree).unwrap();
+    let installed = InstallPackages::new(&config, &transaction)
         .package(install_spec)
         .package_db(PackageDB::from_config(&config).await.unwrap())
         .install()
         .await
         .unwrap()
         .0;
+    transaction.commit().unwrap();
     assert!(!installed.is_empty());
 }

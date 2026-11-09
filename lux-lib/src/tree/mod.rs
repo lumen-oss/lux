@@ -1,4 +1,5 @@
 use crate::package;
+use crate::store::{Entry, Store};
 use crate::{
     config::Config,
     fs,
@@ -11,16 +12,19 @@ use std::{
     ffi::OsStr,
     io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use itertools::Itertools;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 mod dist;
+pub mod install;
 mod layout;
 mod list;
+pub mod staging;
 
 pub use dist::*;
 pub use layout::*;
@@ -37,7 +41,7 @@ const LOCKFILE_NAME: &str = "lux.lock";
 /// - /rocks/<lua-version>/<rock>/lib - shared libraries (.so files)
 /// - /rocks/<lua-version>/<rock>/src - library code for the rock
 /// - /bin - binary files produced by various rocks
-pub trait InstallTree {
+pub trait InstallTree: Send + Sync {
     /// The Lua version for which to install packages.
     fn version(&self) -> &lua::Version;
     /// The root directory of the tree
@@ -61,7 +65,7 @@ pub trait InstallTree {
     /// Find installed rocks that match the given [`package::Req`].
     fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error>;
     /// Create the standard directories (src, lib, etc.) for a package.
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error>;
+    fn prepare(&self, package: &LockedPackage) -> Result<(), Error>;
     /// Apply the custom layout once a package has been fully installed.
     ///
     /// For entrypoints, this creates the symlinks for the custom layout, if one is configured.
@@ -74,6 +78,14 @@ pub trait InstallTree {
     /// For entrypoints, this also applies the custom layout, if one is configured.
     fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error>;
 }
+
+pub trait Stageable: InstallTree {
+    fn stage(&self) -> Result<StagingTree, Error>;
+    fn commit_stage(&self, staging: &StagingTree) -> Result<(), Error>;
+    fn abort_stage(&self, staging: &StagingTree);
+}
+
+pub trait Installable: InstallTree {}
 
 /// The standard install layout for a rock.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -132,22 +144,6 @@ impl RockLayout {
     }
 }
 
-/// A Lux install tree that supports multiple versions of the same dependency,
-/// with packages addressed by their [`LockedPackageId`]
-#[derive(Clone, Debug)]
-pub struct Tree {
-    /// The Lua version of the tree.
-    version: lua::Version,
-    /// The parent of this tree's root directory.
-    root_parent: PathBuf,
-    /// The root of this tree's test dependency tree.
-    test_tree_dir: PathBuf,
-    /// The root of this tree's build dependency tree.
-    build_tree_dir: PathBuf,
-    /// The custom layout to apply to entrypoint packages, if any.
-    entrypoint_layout: Option<Arc<dyn CustomRockLayout>>,
-}
-
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error(transparent)]
@@ -157,7 +153,12 @@ pub enum Error {
     #[diagnostic(transparent)]
     Lockfile(#[from] lockfile::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
+    FlushLockfile(#[from] lockfile::FlushLockfileError),
+    #[error(transparent)]
     Io(#[from] io::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl HasVariables for RockLayout {
@@ -182,39 +183,339 @@ impl Tree {
         version: lua::Version,
         config: &Config,
     ) -> Result<Self, Error> {
+        fs::sync::create_dir_all(&root)?;
+        fs::sync::write(root.join(".gitignore"), "*")?;
+
         let version_dir = root.join(version.to_string());
-        let test_tree_dir = version_dir.join("test_dependencies");
-        let build_tree_dir = version_dir.join("build_dependencies");
-        Self::new_with_paths(root, test_tree_dir, build_tree_dir, version, config)
+        if version_dir.is_dir() && !version_dir.is_symlink() {
+            move_legacy_tree(
+                &version_dir.join("build_dependencies"),
+                &TreeKind::Build.base(&root),
+                &version,
+            )?;
+            move_legacy_tree(
+                &version_dir.join("test_dependencies"),
+                &TreeKind::Test.base(&root),
+                &version,
+            )?;
+        }
+
+        let store = Arc::new(Store::new(root.join("store").join(version.to_string())));
+        Self::open(store, version, root, TreeKind::Regular, config)
     }
 
-    fn new_with_paths(
+    pub(crate) fn new_flat(
         root: PathBuf,
-        test_tree_dir: PathBuf,
-        build_tree_dir: PathBuf,
         version: lua::Version,
         config: &Config,
     ) -> Result<Self, Error> {
-        let path_with_version = root.join(version.to_string());
-
-        // Ensure that the root and the version directory exist.
-        fs::sync::create_dir_all(&path_with_version)?;
-
-        // In case the tree is in a git repository, we tell git to ignore it.
-        let gitignore_file = root.join(".gitignore");
-        fs::sync::write(&gitignore_file, "*")?;
-
-        // Ensure that the bin directory exists.
-        let bin_dir = path_with_version.join("bin");
-        fs::sync::create_dir_all(&bin_dir)?;
-
+        fs::sync::create_dir_all(&root)?;
+        fs::sync::write(root.join(".gitignore"), "*")?;
+        let root = root.join(version.to_string());
+        fs::sync::create_dir_all(root.join("bin"))?;
+        let store = Arc::new(Store::new(root.join("store").join(version.to_string())));
         Ok(Self {
-            root_parent: root,
-            version,
-            test_tree_dir,
-            build_tree_dir,
-            entrypoint_layout: config.entrypoint_layout().cloned(),
+            slot: TreeSlot {
+                version,
+                tree_root: root.clone(),
+                root,
+                base: PathBuf::new(),
+                kind: TreeKind::Regular,
+                store,
+                entrypoint_layout: config.entrypoint_layout().cloned(),
+                pending: Arc::new(Mutex::new(HashMap::new())),
+            },
         })
+    }
+
+    fn open(
+        store: Arc<Store>,
+        version: lua::Version,
+        tree_root: PathBuf,
+        kind: TreeKind,
+        config: &Config,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            slot: TreeSlot::open(store, version, tree_root, kind, config)?,
+        })
+    }
+
+    pub(crate) fn from_slot(slot: TreeSlot) -> Self {
+        Self { slot }
+    }
+
+    /// The currently active tree view.
+    pub fn current(&self) -> &TreeSlot {
+        &self.slot
+    }
+
+    fn staging(&self) -> Result<StagingTree, Error> {
+        self.slot.staging()
+    }
+
+    fn commit(&self, staging: &StagingTree) -> Result<(), Error> {
+        let slot = &staging.slot;
+        if slot.base != self.slot.base
+            || slot.kind != self.slot.kind
+            || slot.version != self.slot.version
+        {
+            return Err(Error::Other(
+                "cannot commit a slot into a different tree".into(),
+            ));
+        }
+
+        let previous = std::fs::read_link(&self.slot.root).ok();
+        if let Err(error) = fs::sync::replace_symlink(&slot.root, &self.slot.root) {
+            self.abort(staging);
+            return Err(error.into());
+        }
+
+        if let Some(previous) = previous {
+            let previous = self.slot.base.join(previous);
+            if previous != slot.root && slot_name_is_staging(&previous) {
+                let _ = fs::sync::remove_dir_all(previous);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn abort(&self, staging: &StagingTree) {
+        let slot = &staging.slot;
+        if slot.base == self.slot.base
+            && slot.kind == self.slot.kind
+            && slot.version == self.slot.version
+            && slot_name_is_staging(&slot.root)
+        {
+            let _ = fs::sync::remove_dir_all(&slot.root);
+        }
+    }
+
+    pub fn match_rocks_and<F>(&self, req: &package::Req, filter: F) -> Result<RockMatches, Error>
+    where
+        F: Fn(&LockedPackage) -> bool,
+    {
+        self.slot.match_rocks_and(req, filter)
+    }
+
+    pub(crate) fn build_tree_base(&self) -> PathBuf {
+        TreeKind::Build.base(&self.slot.tree_root)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum TreeKind {
+    Regular,
+    Build,
+    Test,
+}
+
+impl TreeKind {
+    fn base(self, tree_root: &Path) -> PathBuf {
+        match self {
+            Self::Regular => tree_root.to_path_buf(),
+            Self::Build => tree_root.join("build_dependencies"),
+            Self::Test => tree_root.join("test_dependencies"),
+        }
+    }
+
+    fn pointer(self, tree_root: &Path, version: &lua::Version) -> PathBuf {
+        self.base(tree_root).join(version.to_string())
+    }
+}
+
+/// A stable handle to an install tree.
+///
+/// The tree's root is a symlink to a concrete [`TreeSlot`]. Installing into a
+/// staging slot and swapping the pointer makes a set of changes atomic.
+#[derive(Clone, Debug)]
+pub struct Tree {
+    slot: TreeSlot,
+}
+
+/// A concrete tree view. All filesystem writes for a tree target one of these.
+#[derive(Clone, Debug)]
+pub struct TreeSlot {
+    version: lua::Version,
+    tree_root: PathBuf,
+    root: PathBuf,
+    base: PathBuf,
+    kind: TreeKind,
+    store: Arc<Store>,
+    entrypoint_layout: Option<Arc<dyn CustomRockLayout>>,
+    pending: Arc<Mutex<HashMap<LockedPackageId, Entry>>>,
+}
+
+/// A transactional tree view that can be committed into a [`Tree`].
+#[derive(Clone, Debug)]
+pub struct StagingTree {
+    slot: TreeSlot,
+}
+
+impl TreeSlot {
+    fn open(
+        store: Arc<Store>,
+        version: lua::Version,
+        tree_root: PathBuf,
+        kind: TreeKind,
+        config: &Config,
+    ) -> Result<Self, Error> {
+        let base = kind.base(&tree_root);
+        fs::sync::create_dir_all(&base)?;
+        let root = kind.pointer(&tree_root, &version);
+
+        match root.symlink_metadata() {
+            Ok(metadata) if metadata.file_type().is_symlink() && root.is_dir() => {}
+            Ok(metadata) if metadata.is_dir() => {
+                let legacy = available_tree_dir(&base, format!("legacy:{kind:?}:{version}"));
+                fs::sync::rename(&root, &legacy)?;
+                fs::sync::replace_symlink(&legacy, &root)?;
+            }
+            Ok(_) => {
+                fs::sync::remove_path(&root)?;
+                Self::create_empty(&base, &version, kind, &root)?;
+            }
+            Err(source) if source.kind() == io::ErrorKind::NotFound => {
+                Self::create_empty(&base, &version, kind, &root)?;
+            }
+            Err(source) => {
+                return Err(fs::Error::Metadata { path: root, source }.into());
+            }
+        }
+
+        fs::sync::create_dir_all(root.join("bin"))?;
+        Ok(Self {
+            version,
+            tree_root,
+            root,
+            base,
+            kind,
+            store,
+            entrypoint_layout: config.entrypoint_layout().cloned(),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+        })
+    }
+
+    fn create_empty(
+        base: &Path,
+        version: &lua::Version,
+        kind: TreeKind,
+        pointer: &Path,
+    ) -> Result<(), Error> {
+        let root = allocate_tree_dir(base, format!("{kind:?}:{version}:empty"))?;
+        fs::sync::create_dir_all(root.join("bin"))?;
+        fs::sync::replace_symlink(&root, pointer)?;
+        Ok(())
+    }
+
+    fn staging(&self) -> Result<StagingTree, Error> {
+        let mut seed = format!("{:?}:{}:", self.kind, self.version).into_bytes();
+        if let Ok(lockfile) = fs::sync::read_to_string(self.lockfile_path()) {
+            seed.extend(lockfile.bytes());
+        }
+        let root = allocate_tree_dir(&self.base, seed)?;
+        fs::sync::create_dir_all(root.join("bin"))?;
+
+        let slot = Self {
+            version: self.version.clone(),
+            tree_root: self.tree_root.clone(),
+            root: root.clone(),
+            base: self.base.clone(),
+            kind: self.kind,
+            store: self.store.clone(),
+            entrypoint_layout: self.entrypoint_layout.clone(),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+        };
+
+        let lockfile_path = self.lockfile_path();
+        if lockfile_path.is_file() {
+            fs::sync::copy(&lockfile_path, slot.lockfile_path())?;
+        }
+
+        let lockfile = self.lockfile()?;
+        for package in lockfile.rocks().values() {
+            let current = self.view_layout_for(&package.spec).root;
+            let target = slot.view_layout_for(&package.spec).root;
+
+            match current.symlink_metadata() {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    let link =
+                        std::fs::read_link(&current).map_err(|source| fs::Error::Metadata {
+                            path: current.clone(),
+                            source,
+                        })?;
+                    let link = if link.is_absolute() {
+                        link
+                    } else {
+                        current.parent().unwrap_or(Path::new(".")).join(link)
+                    };
+                    if link.exists() {
+                        fs::sync::link_dir(&link, &target)?;
+                    }
+                }
+                Ok(metadata) if metadata.is_dir() => {
+                    let entry = self.store.adopt(package, &current)?;
+                    if let Err(error) = fs::sync::link_dir(entry.path(), &current) {
+                        let _ = fs::sync::rename(entry.path(), &current);
+                        return Err(error.into());
+                    }
+                    if let Err(error) = fs::sync::link_dir(entry.path(), &target) {
+                        let _ = fs::sync::remove_file(&current);
+                        let _ = fs::sync::rename(entry.path(), &current);
+                        return Err(error.into());
+                    }
+                }
+                Ok(_) => {}
+                Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+                Err(source) => {
+                    return Err(fs::Error::Metadata {
+                        path: current,
+                        source,
+                    }
+                    .into());
+                }
+            }
+        }
+
+        slot.rebuild_views()?;
+        Ok(StagingTree { slot })
+    }
+
+    fn rebuild_views(&self) -> Result<(), Error> {
+        let lockfile = self.lockfile()?;
+        for (id, package) in lockfile.rocks() {
+            if self.view_layout_for(&package.spec).root.is_dir() {
+                self.finalize(package, lockfile.entry_type(id))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn link_entry(&self, entry: &Entry) -> Result<(), Error> {
+        let target = self.view_layout_for(entry.package()).root;
+        if target
+            .symlink_metadata()
+            .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
+        {
+            fs::sync::remove_dir_all(&target)?;
+        }
+        Ok(fs::sync::link_dir(entry.path(), &target)?)
+    }
+
+    fn view_layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
+        RockLayout::new(self.root.join(format!(
+            "{}-{}@{}",
+            package.id(),
+            package.name(),
+            package.version()
+        )))
+    }
+
+    fn pending_entry(&self, id: &LockedPackageId) -> Option<Entry> {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .remove(id)
     }
 
     pub fn match_rocks_and<F>(&self, req: &package::Req, filter: F) -> Result<RockMatches, Error>
@@ -248,6 +549,66 @@ impl Tree {
     }
 }
 
+fn move_legacy_tree(from: &Path, to: &Path, version: &lua::Version) -> Result<(), Error> {
+    if !from.is_dir() || from.is_symlink() {
+        return Ok(());
+    }
+
+    if !to.exists() {
+        fs::sync::rename(from, to)?;
+        return Ok(());
+    }
+
+    let from = from.join(version.to_string());
+    let to = to.join(version.to_string());
+    if from.is_dir() && !to.exists() {
+        fs::sync::rename(from, to)?;
+    }
+    Ok(())
+}
+
+fn allocate_tree_dir(base: &Path, seed: impl AsRef<[u8]>) -> Result<PathBuf, Error> {
+    let hash = hex::encode(Sha256::digest(seed.as_ref()));
+    for suffix in 0.. {
+        let name = if suffix == 0 {
+            format!(".tree-{hash}")
+        } else {
+            format!(".tree-{hash}-{suffix}")
+        };
+        let path = base.join(name);
+        match fs::sync::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(fs::Error::CreateDir { source, .. })
+                if source.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    unreachable!()
+}
+
+fn available_tree_dir(base: &Path, seed: impl AsRef<[u8]>) -> PathBuf {
+    let hash = hex::encode(Sha256::digest(seed.as_ref()));
+    for suffix in 0.. {
+        let name = if suffix == 0 {
+            format!(".tree-{hash}")
+        } else {
+            format!(".tree-{hash}-{suffix}")
+        };
+        let path = base.join(name);
+        if path.symlink_metadata().is_err() {
+            return path;
+        }
+    }
+
+    unreachable!()
+}
+
+fn slot_name_is_staging(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with(".tree-"))
+}
+
 fn link_binaries(src: &Path, dest: &Path) -> Result<(), Error> {
     link_binaries_inner(src, dest, true)
 }
@@ -268,7 +629,8 @@ fn link_binaries_inner(src: &Path, dest: &Path, top_level: bool) -> Result<(), E
         if entry.file_type().map_err(Error::Io)?.is_dir() {
             link_binaries_inner(&path, &target, false)?;
         } else {
-            fs::sync::link_file(&path, &target)?;
+            let path = std::fs::canonicalize(&path).unwrap_or(path);
+            fs::sync::link_file(path, &target)?;
         }
     }
 
@@ -277,26 +639,240 @@ fn link_binaries_inner(src: &Path, dest: &Path, top_level: bool) -> Result<(), E
 
 impl InstallTree for Tree {
     fn version(&self) -> &lua::Version {
+        self.slot.version()
+    }
+
+    fn root(&self) -> PathBuf {
+        self.slot.root()
+    }
+
+    fn bin(&self) -> PathBuf {
+        self.slot.bin()
+    }
+
+    fn unwrapped_bin(&self) -> PathBuf {
+        self.slot.unwrapped_bin()
+    }
+
+    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
+        self.slot.layout_for(package)
+    }
+
+    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error> {
+        self.slot.lockfile()
+    }
+
+    fn lockfile_path(&self) -> PathBuf {
+        self.slot.lockfile_path()
+    }
+
+    fn build_tree(&self, config: &Config) -> Result<Tree, Error> {
+        self.slot.build_tree(config)
+    }
+
+    fn test_tree(&self, config: &Config) -> Result<Tree, Error> {
+        self.slot.test_tree(config)
+    }
+
+    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, Error> {
+        self.slot.list()
+    }
+
+    fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error> {
+        self.slot.match_rocks(req)
+    }
+
+    fn prepare(&self, package: &LockedPackage) -> Result<(), Error> {
+        self.slot.prepare(package)
+    }
+
+    fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
+        self.slot.finalize(package, entry_type)
+    }
+
+    fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
+        self.slot.cleanup(package, entry_type)
+    }
+}
+
+impl Stageable for Tree {
+    fn stage(&self) -> Result<StagingTree, Error> {
+        self.staging()
+    }
+
+    fn commit_stage(&self, staging: &StagingTree) -> Result<(), Error> {
+        self.commit(staging)
+    }
+
+    fn abort_stage(&self, staging: &StagingTree) {
+        self.abort(staging)
+    }
+}
+
+impl Installable for StagingTree {}
+
+impl InstallTree for StagingTree {
+    fn version(&self) -> &lua::Version {
+        self.slot.version()
+    }
+
+    fn root(&self) -> PathBuf {
+        self.slot.root()
+    }
+
+    fn bin(&self) -> PathBuf {
+        self.slot.bin()
+    }
+
+    fn unwrapped_bin(&self) -> PathBuf {
+        self.slot.unwrapped_bin()
+    }
+
+    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
+        self.slot.layout_for(package)
+    }
+
+    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error> {
+        self.slot.lockfile()
+    }
+
+    fn lockfile_path(&self) -> PathBuf {
+        self.slot.lockfile_path()
+    }
+
+    fn build_tree(&self, config: &Config) -> Result<Tree, Error> {
+        self.slot.build_tree(config)
+    }
+
+    fn test_tree(&self, config: &Config) -> Result<Tree, Error> {
+        self.slot.test_tree(config)
+    }
+
+    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, Error> {
+        self.slot.list()
+    }
+
+    fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error> {
+        self.slot.match_rocks(req)
+    }
+
+    fn prepare(&self, package: &LockedPackage) -> Result<(), Error> {
+        self.slot.prepare(package)
+    }
+
+    fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
+        self.slot.finalize(package, entry_type)
+    }
+
+    fn cleanup(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
+        self.slot.cleanup(package, entry_type)
+    }
+}
+
+impl TreeSlot {
+    fn version(&self) -> &lua::Version {
         &self.version
     }
 
     fn root(&self) -> PathBuf {
-        self.root_parent.join(self.version.to_string())
+        self.root.clone()
     }
 
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error> {
-        let layout = self.layout_for(package);
-        fs::sync::create_dir_all(&layout.root)?;
-        fs::sync::create_dir_all(&layout.lib)?;
-        fs::sync::create_dir_all(&layout.src)?;
-        fs::sync::create_dir_all(&layout.etc)?;
-        fs::sync::create_dir_all(&layout.bin)?;
+    fn bin(&self) -> PathBuf {
+        self.root.join("bin")
+    }
 
+    fn unwrapped_bin(&self) -> PathBuf {
+        self.bin().join("unwrapped")
+    }
+
+    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
+        if let Some(entry) = self
+            .pending
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .get(&package.id())
+        {
+            entry.layout()
+        } else {
+            self.view_layout_for(package)
+        }
+    }
+
+    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error> {
+        Ok(Lockfile::new(self.lockfile_path())?)
+    }
+
+    fn lockfile_path(&self) -> PathBuf {
+        self.root.join(LOCKFILE_NAME)
+    }
+
+    fn build_tree(&self, config: &Config) -> Result<Tree, Error> {
+        match self.kind {
+            TreeKind::Build => Ok(Tree::from_slot(self.clone())),
+            _ => Tree::open(
+                self.store.clone(),
+                self.version.clone(),
+                self.tree_root.clone(),
+                TreeKind::Build,
+                config,
+            ),
+        }
+    }
+
+    fn test_tree(&self, config: &Config) -> Result<Tree, Error> {
+        match self.kind {
+            TreeKind::Test => Ok(Tree::from_slot(self.clone())),
+            _ => Tree::open(
+                self.store.clone(),
+                self.version.clone(),
+                self.tree_root.clone(),
+                TreeKind::Test,
+                config,
+            ),
+        }
+    }
+
+    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, Error> {
+        Ok(self.lockfile()?.list())
+    }
+
+    fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error> {
+        let found_packages = self.lockfile()?.find_rocks(req);
+        Ok(match NonEmpty::try_from(found_packages) {
+            Ok(found_packages) => {
+                if found_packages.len() == 1 {
+                    RockMatches::Single(found_packages.last().clone())
+                } else {
+                    RockMatches::Many(found_packages)
+                }
+            }
+            Err(_) => RockMatches::NotFound(req.clone()),
+        })
+    }
+
+    fn prepare(&self, package: &LockedPackage) -> Result<(), Error> {
+        let mut pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if pending.contains_key(&package.id()) {
+            return Ok(());
+        }
+
+        let entry = self.store.entry(package)?;
+        entry.prepare()?;
+        pending.insert(package.id(), entry);
         Ok(())
     }
 
     fn finalize(&self, package: &LockedPackage, entry_type: EntryType) -> Result<(), Error> {
-        link_binaries(&self.layout_for(&package.spec).bin, &self.bin())?;
+        if let Some(entry) = self.pending_entry(&package.id()) {
+            self.link_entry(&entry)?;
+        }
+
+        let layout = self.view_layout_for(&package.spec);
+        link_binaries(&layout.bin, &self.bin())?;
 
         if let Some(custom_layout) = &self.entrypoint_layout {
             if entry_type.is_entrypoint() || custom_layout.layout_dependencies() {
@@ -314,9 +890,12 @@ impl InstallTree for Tree {
             }
         }
 
-        let layout = self.layout_for(&package.spec);
-        fs::sync::remove_dir_all(&layout.etc)?;
-        fs::sync::remove_dir_all(&layout.root)?;
+        if let Some(entry) = self.pending_entry(&package.id()) {
+            let _ = fs::sync::remove_dir_all(entry.path());
+        }
+
+        let layout = self.view_layout_for(&package.spec);
+        fs::sync::remove_path(&layout.root)?;
 
         let lockfile = self.lockfile()?;
         for relative_binary_path in lockfile
@@ -336,74 +915,6 @@ impl InstallTree for Tree {
         }
 
         Ok(())
-    }
-
-    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error> {
-        Ok(Lockfile::new(self.lockfile_path())?)
-    }
-
-    fn lockfile_path(&self) -> PathBuf {
-        self.root().join(LOCKFILE_NAME)
-    }
-
-    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
-        let root = self.root().join(format!(
-            "{}-{}@{}",
-            package.id(),
-            package.name(),
-            package.version()
-        ));
-        RockLayout::new(root)
-    }
-
-    fn bin(&self) -> PathBuf {
-        self.root().join("bin")
-    }
-
-    fn unwrapped_bin(&self) -> PathBuf {
-        self.bin().join("unwrapped")
-    }
-
-    fn test_tree(&self, config: &Config) -> Result<Self, Error> {
-        let test_tree_dir = self.test_tree_dir.clone();
-        let build_tree_dir = self.build_tree_dir.clone();
-        Self::new_with_paths(
-            test_tree_dir.clone(),
-            test_tree_dir,
-            build_tree_dir,
-            self.version.clone(),
-            config,
-        )
-    }
-
-    fn build_tree(&self, config: &Config) -> Result<Self, Error> {
-        let test_tree_dir = self.test_tree_dir.clone();
-        let build_tree_dir = self.build_tree_dir.clone();
-        Self::new_with_paths(
-            build_tree_dir.clone(),
-            test_tree_dir,
-            build_tree_dir,
-            self.version.clone(),
-            config,
-        )
-    }
-
-    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, Error> {
-        Ok(self.lockfile()?.list())
-    }
-
-    fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error> {
-        let found_packages = self.lockfile()?.find_rocks(req);
-        Ok(match NonEmpty::try_from(found_packages) {
-            Ok(found_packages) => {
-                if found_packages.len() == 1 {
-                    RockMatches::Single(found_packages.last().clone())
-                } else {
-                    RockMatches::Many(found_packages)
-                }
-            }
-            Err(_) => RockMatches::NotFound(req.clone()),
-        })
     }
 }
 
@@ -445,9 +956,10 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::{
-        config,
+        config, fs,
         lockfile::{self, LockedPackage, LockedPackageHashes},
         lua,
+        transaction::Transaction,
         tree::{InstallTree, RockLayout},
         variables,
     };
@@ -486,7 +998,6 @@ mod tests {
         );
 
         let id = package.id();
-        tree.prepare(&package.spec).unwrap();
 
         assert_eq!(
             tree.layout_for(&package.spec),
@@ -500,6 +1011,119 @@ mod tests {
                 doc: tree_path.join(format!("5.1/{id}-neorg@8.0.0-1/etc/doc")),
             }
         );
+    }
+
+    #[test]
+    fn staging_commit_replaces_pointer() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let config = config::Builder::new()
+            .unwrap()
+            .user_tree(Some(temp.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let pointer = tree.root();
+        let previous = std::fs::read_link(&pointer).unwrap();
+
+        let transaction = Transaction::new(&tree).unwrap();
+        fs::sync::write(transaction.root().join("marker"), "marker").unwrap();
+        transaction.commit().unwrap();
+
+        let current = std::fs::read_link(&pointer).unwrap();
+        let current = pointer.parent().unwrap().join(current);
+        assert!(current.join("marker").is_file());
+        assert!(!pointer.parent().unwrap().join(previous).exists());
+    }
+
+    #[test]
+    fn staged_binaries_link_to_the_store() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let config = config::Builder::new()
+            .unwrap()
+            .user_tree(Some(temp.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let package = LockedPackage::from(
+            &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
+            lockfile::Constraint::Unconstrained,
+            remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+
+        let transaction = Transaction::new(&tree).unwrap();
+        transaction.prepare(&package).unwrap();
+        let layout = transaction.layout_for(&package.spec);
+        fs::sync::write(layout.bin.join("tool"), "tool").unwrap();
+        transaction
+            .finalize(&package, crate::tree::EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
+
+        let binary = tree.bin().join("tool");
+        assert!(binary.is_file());
+        let resolved = std::fs::canonicalize(binary).unwrap();
+        assert!(resolved.starts_with(std::fs::canonicalize(temp.path()).unwrap().join("store")));
+    }
+
+    #[test]
+    fn legacy_build_tree_migration_is_per_lua_version() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let root = temp.path();
+        let base = root.join("build_dependencies");
+        fs::sync::create_dir_all(base.join("5.1")).unwrap();
+
+        let from = root.join("5.2/build_dependencies");
+        fs::sync::create_dir_all(from.join("5.2")).unwrap();
+        fs::sync::write(from.join("5.2/marker"), "marker").unwrap();
+
+        super::move_legacy_tree(&from, &base, &lua::Version::Lua52).unwrap();
+
+        assert!(base.join("5.1").is_dir());
+        assert!(base.join("5.2/marker").is_file());
+    }
+
+    #[test]
+    fn staging_adopts_and_links_existing_packages() {
+        let tree_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree");
+        let temp = assert_fs::TempDir::new().unwrap();
+        temp.copy_from(&tree_path, &["**"]).unwrap();
+
+        let config = config::Builder::new()
+            .unwrap()
+            .user_tree(Some(temp.to_path_buf()))
+            .build()
+            .unwrap();
+        let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let lockfile = tree.lockfile().unwrap();
+        let package = lockfile
+            .rocks()
+            .values()
+            .find(|package| tree.layout_for(&package.spec).root.is_dir())
+            .cloned()
+            .unwrap();
+        let current = tree.layout_for(&package.spec).root;
+        assert!(!current.is_symlink());
+
+        let transaction = Transaction::new(&tree).unwrap();
+        assert!(current.is_symlink());
+        assert!(current.is_dir());
+        assert!(transaction.layout_for(&package.spec).root.is_symlink());
+        assert!(transaction.layout_for(&package.spec).root.is_dir());
+        let staging_root = transaction.root();
+
+        drop(transaction);
+        assert!(current.is_dir());
+        assert!(!staging_root.exists());
     }
 
     #[test]

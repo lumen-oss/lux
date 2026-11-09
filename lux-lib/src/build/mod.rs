@@ -367,7 +367,7 @@ where
 
     // TODO(vhyrro): When we implement transactionality make this a Drop guard
     // or something else.
-    tree.prepare(&package.spec)?;
+    tree.prepare(&package)?;
     let layout = tree.layout_for(&package.spec);
 
     let rock_source = rockspec.source().current_platform();
@@ -571,7 +571,7 @@ mod tests {
                     .unwrap(),
             },
         );
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         let src_dir = tree.layout_for(&package.spec).src;
         run_build(
             &rockspec,
@@ -656,7 +656,20 @@ deploy = { wrap_bin_scripts = false }
             &PinnedState::default(),
             &OptState::default(),
         );
-        tree.prepare(&package).unwrap();
+        let locked = LockedPackage::new(
+            package.clone(),
+            remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        tree.prepare(&locked).unwrap();
         crate::fs::tokio::write(build_dir.path().join("mytool"), "#!/bin/sh\necho hi\n")
             .await
             .unwrap();
@@ -830,7 +843,20 @@ build = {
             &PinnedState::default(),
             &OptState::default(),
         );
-        tree.prepare(&package).unwrap();
+        let locked = LockedPackage::new(
+            package.clone(),
+            remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        tree.prepare(&locked).unwrap();
         for file in ["shell.nix", "plain.conf"] {
             crate::fs::tokio::write(build_dir.path().join(file), "return {}")
                 .await

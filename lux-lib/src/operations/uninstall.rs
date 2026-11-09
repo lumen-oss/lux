@@ -2,20 +2,15 @@ use std::io;
 
 use crate::fs;
 use crate::lockfile::{FlushLockfileError, LockedPackage, LockedPackageId};
-use crate::lua;
-use crate::tree::{self, EntryType, InstallTree};
-use crate::{config::Config, tree::Tree};
+use crate::tree::{self, EntryType, Installable};
 use bon::Builder;
-use futures::StreamExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
-use tracing::Instrument;
+
 #[derive(Error, Debug, Diagnostic)]
 #[error(transparent)]
 pub enum Error {
-    #[diagnostic(transparent)]
-    LuaVersion(#[from] lua::version::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
@@ -29,15 +24,18 @@ pub enum Error {
 
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct Uninstall<'a> {
+pub struct Uninstall<'a, T>
+where
+    T: Installable,
+{
     #[builder(field)]
     packages: Vec<LockedPackageId>,
-    config: &'a Config,
-    tree: Option<Tree>,
+    target: &'a T,
 }
 
-impl<'a, State> UninstallBuilder<'a, State>
+impl<'a, T, State> UninstallBuilder<'a, T, State>
 where
+    T: Installable,
     State: uninstall_builder::State,
 {
     /// Add packages to remove.
@@ -57,27 +55,23 @@ where
     }
 }
 
-impl<'a, State> UninstallBuilder<'a, State>
+impl<T, State> UninstallBuilder<'_, T, State>
 where
+    T: Installable,
     State: uninstall_builder::State + uninstall_builder::IsComplete,
 {
     /// Remove the packages.
     pub async fn remove(self) -> Result<Vec<LockedPackageId>, Error> {
         let args = self._build();
-        let tree = args.tree.unwrap_or(
-            args.config
-                .user_tree(lua::Version::from(args.config)?.clone())?,
-        );
-        remove(args.packages, tree, args.config).await
+        remove(args.packages, args.target)
     }
 }
 
 // TODO: Remove dependencies recursively too!
-async fn remove(
-    package_ids: Vec<LockedPackageId>,
-    tree: Tree,
-    config: &Config,
-) -> Result<Vec<LockedPackageId>, Error> {
+fn remove<T>(package_ids: Vec<LockedPackageId>, tree: &T) -> Result<Vec<LockedPackageId>, Error>
+where
+    T: Installable,
+{
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids
@@ -89,16 +83,9 @@ async fn remove(
         })
         .collect_vec();
 
-    futures::stream::iter(packages.into_iter().map(|(package, entry_type)| {
-        let tree = tree.clone();
-        tokio::spawn(
-            remove_package(package, tree, entry_type)
-                .instrument(tracing::trace_span!("remove_worker")),
-        )
-    }))
-    .buffered(config.max_jobs())
-    .collect::<Vec<_>>()
-    .await;
+    for (package, entry_type) in packages {
+        remove_package(&package, tree, entry_type)?;
+    }
 
     lockfile.map_then_flush(|lockfile| {
         package_ids
@@ -120,11 +107,10 @@ async fn remove(
         version = package.version().to_string(),
     ),
 )]
-async fn remove_package(
-    package: LockedPackage,
-    tree: Tree,
-    entry_type: EntryType,
-) -> Result<(), Error> {
-    tree.cleanup(&package, entry_type)?;
+fn remove_package<T>(package: &LockedPackage, tree: &T, entry_type: EntryType) -> Result<(), Error>
+where
+    T: Installable,
+{
+    tree.cleanup(package, entry_type)?;
     Ok(())
 }

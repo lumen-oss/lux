@@ -124,7 +124,7 @@ where
                 let cursor = Cursor::new(self.rock_bytes);
                 let mut zip = zip::ZipArchive::new(cursor)?;
                 zip.extract(&unpack_dir)?;
-                self.tree.prepare(&package.spec)?;
+                self.tree.prepare(&package)?;
                 let layout = self.tree.layout_for(&package.spec);
                 let sources = RockManifestSources {
                     root: unpack_dir.path().to_path_buf(),
@@ -437,12 +437,14 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         );
 
         // let's make sure our own pack/unpack implementation roundtrips correctly
+        let transaction = tree::Transaction::new(&tree).unwrap();
         operations::Uninstall::new()
-            .config(&config)
+            .tree(&transaction)
             .package(local_package.id())
             .remove()
             .await
             .unwrap();
+        transaction.commit().unwrap();
         let content = std::fs::read(&packed_rock).unwrap();
         let rock_bytes = Bytes::copy_from_slice(&content);
         let cursor = Cursor::new(rock_bytes.clone());

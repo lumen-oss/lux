@@ -1,17 +1,21 @@
 use crate::{
     fs,
     lockfile::{LockedPackageSpec, OptState},
-    tree::{InstallTree, Tree},
+    tree::TreeSlot,
 };
 use std::path::{Path, PathBuf};
+
+fn resolve_layout_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
 
 /// A custom layout for installed packages, applied in addition to the standard tree layout.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
     /// Arrange the package's files where external tools expect them.
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    fn apply_layout(&self, tree: &TreeSlot, package: &LockedPackageSpec) -> fs::Result<()>;
 
     /// Remove the files arranged by [`Self::apply_layout`].
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    fn remove_layout(&self, tree: &TreeSlot, package: &LockedPackageSpec) -> fs::Result<()>;
 
     /// Whether the layout applies to dependency packages, not just entrypoints.
     fn layout_dependencies(&self) -> bool {
@@ -24,7 +28,7 @@ pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
 pub struct NvimLayout;
 
 impl NvimLayout {
-    fn target_for(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn target_for(tree: &TreeSlot, package: &LockedPackageSpec) -> PathBuf {
         let subdir = match package.opt() {
             OptState::Required => "start",
             OptState::Optional => "opt",
@@ -37,22 +41,23 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &TreeSlot, package: &LockedPackageSpec) -> fs::Result<()> {
         let custom_dir = Self::target_for(tree, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
         let layout = tree.layout_for(package);
-        fs::sync::link_dir(&layout.src, &custom_dir.join("lua"))?;
-        fs::sync::link_dir(&layout.lib, &custom_dir.join("lib"))?;
+        fs::sync::link_dir(resolve_layout_path(&layout.src), &custom_dir.join("lua"))?;
+        fs::sync::link_dir(resolve_layout_path(&layout.lib), &custom_dir.join("lib"))?;
 
         if layout.etc.is_dir() {
             for entry in fs::sync::read_dir(&layout.etc)? {
                 let entry = entry?;
                 let target = custom_dir.join(entry.file_name());
-                if entry.path().is_dir() {
-                    fs::sync::link_dir(&entry.path(), &target)?;
+                let path = resolve_layout_path(&entry.path());
+                if path.is_dir() {
+                    fs::sync::link_dir(&path, &target)?;
                 } else {
-                    fs::sync::link_file(&entry.path(), &target)?;
+                    fs::sync::link_file(&path, &target)?;
                 }
             }
         }
@@ -60,7 +65,7 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &TreeSlot, package: &LockedPackageSpec) -> fs::Result<()> {
         let target = Self::target_for(tree, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
@@ -77,7 +82,7 @@ impl CustomRockLayout for NvimLayout {
 pub struct RojoLayout;
 
 impl RojoLayout {
-    fn packages_dir(tree: &Tree) -> PathBuf {
+    fn packages_dir(tree: &TreeSlot) -> PathBuf {
         let root = tree.root();
         root.parent()
             .and_then(Path::parent)
@@ -85,7 +90,7 @@ impl RojoLayout {
             .join("Packages")
     }
 
-    fn index_dir(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn index_dir(tree: &TreeSlot, package: &LockedPackageSpec) -> PathBuf {
         Self::packages_dir(tree).join(format!(
             "_Index/{}@{}",
             package.name(),
@@ -93,17 +98,17 @@ impl RojoLayout {
         ))
     }
 
-    fn content_dir(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn content_dir(tree: &TreeSlot, package: &LockedPackageSpec) -> PathBuf {
         Self::index_dir(tree, package).join(package.name().to_string())
     }
 
-    fn stub_path(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn stub_path(tree: &TreeSlot, package: &LockedPackageSpec) -> PathBuf {
         Self::packages_dir(tree).join(format!("{}.lua", package.name()))
     }
 }
 
 impl CustomRockLayout for RojoLayout {
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &TreeSlot, package: &LockedPackageSpec) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -156,7 +161,7 @@ impl CustomRockLayout for RojoLayout {
         Ok(())
     }
 
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &TreeSlot, package: &LockedPackageSpec) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -235,7 +240,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         tree.finalize(&package, EntryType::Entrypoint).unwrap();
 
         let custom_dir = tree_path
@@ -252,7 +257,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
 
         let etc = tree.layout_for(&package.spec).etc;
         std::fs::create_dir_all(etc.join("plugin")).unwrap();
@@ -271,7 +276,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         tree.finalize(&package, EntryType::DependencyOnly).unwrap();
 
         let custom_dir = tree_path
@@ -285,7 +290,7 @@ mod tests {
         let (_temp, tree_path, tree) = sample_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         tree.finalize(&package, EntryType::Entrypoint).unwrap();
         let custom_dir = tree_path
             .join("5.1/site/pack/lux/start")
@@ -313,7 +318,7 @@ mod tests {
         let (temp, tree) = luau_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         let src = tree.layout_for(&package.spec).src;
         std::fs::write(src.join("neorg.luau"), "return {}\n").unwrap();
 
@@ -334,7 +339,7 @@ mod tests {
         let (temp, tree) = luau_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         let src = tree.layout_for(&package.spec).src;
         std::fs::write(src.join("neorg.lua"), "return {}\n").unwrap();
 
@@ -350,7 +355,7 @@ mod tests {
         let (temp, tree) = luau_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         let src = tree.layout_for(&package.spec).src;
         std::fs::write(src.join("init.luau"), "return {}\n").unwrap();
 
@@ -374,7 +379,7 @@ mod tests {
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         tree.finalize(&package, EntryType::Entrypoint).unwrap();
 
         assert!(!temp.path().join("Packages").exists());
@@ -385,7 +390,7 @@ mod tests {
         let (temp, tree) = luau_tree();
         let package = sample_package();
 
-        tree.prepare(&package.spec).unwrap();
+        tree.prepare(&package).unwrap();
         let src = tree.layout_for(&package.spec).src;
         std::fs::write(src.join("init.luau"), "return {}\n").unwrap();
         tree.finalize(&package, EntryType::Entrypoint).unwrap();

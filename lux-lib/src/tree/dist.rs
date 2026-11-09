@@ -1,7 +1,7 @@
 use crate::package;
 use std::{collections::HashMap, io, path::PathBuf};
 
-use super::{EntryType, InstallTree, RockLayout, Tree};
+use super::{EntryType, InstallTree, Installable, RockLayout, Tree};
 use crate::{
     config::Config,
     fs,
@@ -39,10 +39,7 @@ impl FlatDistTree {
         version: lua::Version,
         config: &Config,
     ) -> Result<Self, super::Error> {
-        let version_dir = root.join(version.to_string());
-        let test_tree_dir = version_dir.join("test_dependencies");
-        let build_tree_dir = version_dir.join("build_dependencies");
-        let tree = Tree::new_with_paths(root, test_tree_dir, build_tree_dir, version, config)?;
+        let tree = Tree::new_flat(root, version, config)?;
         Ok(Self(tree))
     }
 
@@ -67,7 +64,7 @@ impl FlatDistTree {
 
 impl Drop for FlatDistTree {
     fn drop(&mut self) {
-        let build_tree_dir = &self.0.build_tree_dir;
+        let build_tree_dir = self.0.build_tree_base();
         if build_tree_dir.is_dir() {
             let _ = fs::sync::remove_dir_all(build_tree_dir);
         }
@@ -85,6 +82,8 @@ impl Drop for FlatDistTree {
         }
     }
 }
+
+impl Installable for FlatDistTree {}
 
 impl InstallTree for FlatDistTree {
     fn version(&self) -> &lua::Version {
@@ -107,13 +106,21 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), super::Error> {
-        self.guard_no_conflicting_package(package)
+    fn prepare(&self, package: &LockedPackage) -> Result<(), super::Error> {
+        self.guard_no_conflicting_package(&package.spec)
             .map_err(super::Error::Io)?;
-        let layout = self.layout_for(package);
+        let layout = self.layout_for(&package.spec);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
         fs::sync::create_dir_all(&layout.src)?;
+        Ok(())
+    }
+
+    fn finalize(
+        &self,
+        _package: &LockedPackage,
+        _entry_type: EntryType,
+    ) -> Result<(), super::Error> {
         Ok(())
     }
 

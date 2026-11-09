@@ -1,5 +1,6 @@
 pub mod build_lua;
 pub mod build_workspace;
+pub mod cleanup;
 pub mod dist;
 pub mod download;
 pub mod exec;
@@ -23,6 +24,7 @@ pub mod vendor;
 
 pub use build_lua::BuildLua;
 pub use build_workspace::BuildWorkspace;
+pub use cleanup::Cleanup;
 pub use download::Download;
 pub use exec::Exec;
 pub use fetch::FetchSrc;

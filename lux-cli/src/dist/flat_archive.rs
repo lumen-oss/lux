@@ -151,7 +151,7 @@ async fn install_project(
     let pkg = operations::InstallProject::new()
         .project(project)
         .config(config)
-        .tree(&tree)
+        .target(&tree)
         .build()
         .await?;
     Ok((pkg, tree))

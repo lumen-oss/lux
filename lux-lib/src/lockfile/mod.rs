@@ -24,7 +24,7 @@ use crate::fs;
 use crate::remote;
 use crate::rockspec::lua_dependency;
 use crate::rockspec::RockBinaries;
-use crate::tree::{EntryType, InstallTree, Tree};
+use crate::tree::{EntryType, InstallTree};
 
 pub mod constraint;
 mod guard;
@@ -916,7 +916,7 @@ pub(crate) enum SyncStrategy<'a> {
     LockfileOnly,
     /// In addition to checking lockfile constraints, verify that each
     /// package's installation directory exists in the given tree.
-    EnsureInstalled(&'a Tree),
+    EnsureInstalled(&'a dyn InstallTree),
 }
 
 impl<P: LockfilePermissions> Lockfile<P> {

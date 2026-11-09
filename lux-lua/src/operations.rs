@@ -14,6 +14,7 @@ use lux_lib::{
     operations::{self, pin},
     package::db::PackageDB,
     rockspec::dependency,
+    transaction::Transaction,
     tree::{RockMatches, Tree},
 };
 use mlua::prelude::*;
@@ -87,13 +88,19 @@ impl TypedUserData for OperationsModule {
                 let _runtime = lua::runtime().enter();
                 let specs = packages.into_iter().map(|p| p.0).collect();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
-                InstallPackages::new(&config.0, &tree.0)
+                let transaction = Transaction::new(&tree.0).into_lua_err()?;
+                let packages = InstallPackages::new(&config.0, &transaction)
                     .package_db(package_db)
                     .packages(specs)
                     .install()
                     .await
-                    .into_lua_err()
-                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
+                    .into_lua_err()?
+                    .0;
+                transaction.commit().into_lua_err()?;
+                Ok(packages
+                    .into_iter()
+                    .map(LockedPackageLua)
+                    .collect::<Vec<_>>())
             },
         );
 
@@ -106,14 +113,25 @@ impl TypedUserData for OperationsModule {
             |_, (packages, tree, config): (Vec<LockedPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
-                operations::Uninstall::new()
-                    .config(&config.0)
+                let tree = match tree {
+                    Some(tree) => tree.0,
+                    None => {
+                        let version = lua::Version::from(&config.0).into_lua_err()?;
+                        config.0.user_tree(version.clone()).into_lua_err()?
+                    }
+                };
+                let transaction = Transaction::new(&tree).into_lua_err()?;
+                let ids = operations::Uninstall::new()
+                    .target(&transaction)
                     .packages(ids)
-                    .maybe_tree(tree.map(|tree| tree.0))
                     .remove()
                     .await
-                    .into_lua_err()
-                    .map(|ids| ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
+                    .into_lua_err()?;
+                transaction.commit().into_lua_err()?;
+                Ok(ids
+                    .into_iter()
+                    .map(LockedPackageIdLua)
+                    .collect::<Vec<_>>())
             },
         );
 
@@ -226,14 +244,15 @@ impl TypedUserData for OperationsModule {
                     .await
                     .into_lua_err()?;
 
-                operations::Uninstall::new()
-                    .config(&config.0)
-                    .tree(tree)
+                let transaction = Transaction::new(&tree).into_lua_err()?;
+                let ids = operations::Uninstall::new()
+                    .target(&transaction)
                     .packages(ids_to_remove)
                     .remove()
                     .await
-                    .into_lua_err()
-                    .map(|ids| ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
+                    .into_lua_err()?;
+                transaction.commit().into_lua_err()?;
+                Ok(ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
             },
         );
 
@@ -304,15 +323,17 @@ impl TypedUserData for OperationsModule {
             "dist_bin",
             |_, (project, tree, output, config): (ProjectLua, TreeLua, String, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
-                operations::dist::ProjectBin::new()
+                let transaction = Transaction::new(&tree.0).into_lua_err()?;
+                let path = operations::dist::ProjectBin::new()
                     .project(&project.0)
-                    .tree(&tree.0)
+                    .target(&transaction)
                     .output(PathBuf::from(output))
                     .config(&config.0)
                     .compile()
                     .await
-                    .into_lua_err()
-                    .map(|path| path.to_slash_lossy().to_string())
+                    .into_lua_err()?;
+                transaction.commit().into_lua_err()?;
+                Ok(path.to_slash_lossy().to_string())
             },
         );
 

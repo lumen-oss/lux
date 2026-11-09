@@ -14,6 +14,7 @@ use lux_lib::{
     package::db::PackageDB,
     pipeline::build_local::Build,
     rockspec::Rockspec as _,
+    transaction::Transaction,
     tree::{self, InstallTree},
     workspace::Workspace,
 };
@@ -121,7 +122,8 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let temp_dir = tempdir().into_diagnostic()?;
                     let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
-                    let packages = InstallPackages::new(&temp_config, &tree)
+                    let transaction = Transaction::new(&tree)?;
+                    let packages = InstallPackages::new(&temp_config, &transaction)
                         .package(
                             install::Spec::new(package_req, tree::EntryType::Entrypoint)
                                 .build_behaviour(BuildBehaviour::Force)
@@ -131,6 +133,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                         .install()
                         .await?
                         .0;
+                    transaction.commit()?;
                     let package = packages
                         .first()
                         .ok_or_else(|| miette!("no packages installed"))?;

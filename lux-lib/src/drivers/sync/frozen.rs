@@ -1,4 +1,5 @@
 use crate::package;
+use crate::transaction::Transaction;
 use std::io;
 
 use crate::operations::{self, uninstall};
@@ -21,7 +22,7 @@ use crate::{
     pipeline::resolve::luarocks_build_backend_name,
     project,
     rockspec::{self, lua_dependency, Rockspec},
-    tree::{self, InstallTree},
+    tree::{self, InstallTree, Installable},
     workspace::{self, TreeError, Workspace},
 };
 use bon::Builder;
@@ -195,15 +196,17 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
         LockedPackageLockType::Build => args.workspace.build_tree(args.config)?,
     };
     fs::sync::create_dir_all(tree.root())?;
+    let transaction = Transaction::new(&tree)?;
+    let staging = transaction.staging();
 
     let mut workspace_lockfile = args.workspace.lockfile()?.write_guard();
-    let dest_lockfile = tree.lockfile()?;
+    let dest_lockfile = staging.lockfile()?;
 
     let packages = SyncPackages::new(args, lock_type).gather()?;
     let strategy = if args.fast.unwrap_or(false) {
         SyncStrategy::LockfileOnly
     } else {
-        SyncStrategy::EnsureInstalled(&tree)
+        SyncStrategy::EnsureInstalled(staging)
     };
     let package_sync_spec = workspace_lockfile.package_sync_spec(&packages, lock_type, &strategy);
 
@@ -226,23 +229,22 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
         .added
         .extend(to_add.iter().map(|(_, pkg)| pkg).cloned());
 
-    InstallPackages::new(args.config, &tree)
+    InstallPackages::new(args.config, staging)
         .package_db(package_db)
         .packages(packages_to_install)
         .install()
         .await?;
 
     // Read the destination lockfile after installing
-    let install_tree_lockfile = tree.lockfile()?;
+    let install_tree_lockfile = staging.lockfile()?;
 
     validate_integrity(args, &to_add, &install_tree_lockfile)?;
 
     let packages_to_remove = report.removed.iter().map(|pkg| pkg.id()).collect_vec();
 
     operations::Uninstall::new()
-        .config(args.config)
+        .target(staging)
         .packages(packages_to_remove)
-        .tree(tree.clone())
         .remove()
         .await?;
 
@@ -266,7 +268,7 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
 
     install_missing_packages(
         args,
-        &tree,
+        staging,
         &mut workspace_lockfile,
         lock_type,
         &package_sync_spec,
@@ -274,6 +276,7 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
     )
     .await?;
 
+    transaction.commit()?;
     Ok(report)
 }
 
@@ -401,7 +404,7 @@ async fn install_missing_packages<T>(
     report: &mut SyncReport,
 ) -> Result<(), Error>
 where
-    T: InstallTree + Clone + Send + std::marker::Sync + 'static,
+    T: Installable,
 {
     if package_sync_spec.to_add.is_empty() {
         return Ok(());

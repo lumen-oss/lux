@@ -18,7 +18,7 @@ use crate::{
     project::Project,
     rockspec::Rockspec,
     target::c_dylib_extension,
-    tree::{self, InstallTree},
+    tree::{self, InstallTree, Installable},
 };
 
 /// Compile a Lux project and all its dependencies into a single
@@ -33,7 +33,7 @@ use crate::{
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct ProjectBin<'a, T>
 where
-    T: InstallTree,
+    T: Installable,
 {
     /// The project to compile.
     project: &'a Project,
@@ -41,7 +41,7 @@ where
     config: &'a Config,
 
     /// Tree in which to install the project before compiling.
-    tree: &'a T,
+    target: &'a T,
 
     /// Destination path for the compiled binary.
     /// Defaults to `<cwd>/<package>[.exe]`.
@@ -94,7 +94,7 @@ impl From<install_project::Error> for Error {
 
 impl<T, State> ProjectBinBuilder<'_, T, State>
 where
-    T: InstallTree + Sync + Send + Clone + 'static,
+    T: Installable,
     State: project_bin_builder::State + project_bin_builder::IsComplete,
 {
     pub async fn compile(self) -> Result<PathBuf, Error> {
@@ -115,16 +115,16 @@ struct InstalledFiles {
 
 async fn do_dist_project_bin<T>(args: ProjectBin<'_, T>) -> Result<PathBuf, Error>
 where
-    T: InstallTree + Sync + Send + Clone + 'static,
+    T: Installable,
 {
     let package = InstallProject::new()
         .project(args.project)
         .config(args.config)
-        .tree(args.tree)
+        .target(args.target)
         .build()
         .await?;
 
-    let files = collect_installed_files(args.tree)?;
+    let files = collect_installed_files(args.target)?;
 
     let project_toml = args.project.toml().into_local()?;
     let pkg_name = project_toml.package().to_string();
@@ -154,7 +154,7 @@ where
         std::env::current_dir()?.join(output)
     };
 
-    let lib_root = args.tree.layout_for(&package.spec).lib;
+    let lib_root = args.target.layout_for(&package.spec).lib;
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
 
     let work_dir = fs::tempfile::tempdir()?;
@@ -590,7 +590,7 @@ mod tests {
         let tree = FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(package::Spec::new("foo".into(), "1.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_a.spec).unwrap();
+        tree.prepare(&pkg_a).unwrap();
         let layout_a = tree.layout_for(&pkg_a.spec);
         staging
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
@@ -601,7 +601,7 @@ mod tests {
             .unwrap();
 
         let pkg_b = mk_dummy_package(package::Spec::new("bar".into(), "2.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_b.spec).unwrap();
+        tree.prepare(&pkg_b).unwrap();
         let layout_b = tree.layout_for(&pkg_b.spec);
         staging
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())

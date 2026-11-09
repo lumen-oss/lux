@@ -1,5 +1,6 @@
 pub use self::reconcile::SyncReport;
 use crate::package;
+use crate::transaction::Transaction;
 use bon::Builder;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
@@ -141,10 +142,18 @@ where
 {
     pub async fn sync(self) -> Result<SyncReport, Error> {
         let args = self._build();
-        match args.mode {
+        let report = match args.mode {
             SyncMode::Open => sync_open(&args).await,
             SyncMode::Frozen => sync_frozen(&args).await,
-        }
+        }?;
+
+        let tree = args.workspace.tree(args.config)?;
+        operations::Cleanup::new()
+            .config(args.config)
+            .tree(&tree)
+            .cleanup()?;
+
+        Ok(report)
     }
 }
 
@@ -153,6 +162,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
     let workspace = args.workspace;
 
     let tree = workspace.tree(config)?;
+    let transaction = Transaction::new(&tree)?;
     let build_tree = tree.build_tree(config)?;
 
     let regular = gather_dependencies(
@@ -201,7 +211,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
 
     let package_db = PackageDB::open(config, workspace).await?;
 
-    let mut install = InstallPackages::new(config, &tree)
+    let mut install = InstallPackages::new(config, &transaction)
         .packages(regular)
         .build_packages(build)
         .package_db(package_db);
@@ -234,7 +244,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
                 operations::InstallProject::new()
                     .project(project)
                     .config(config)
-                    .tree(&tree)
+                    .target(&transaction)
                     .behaviour(args.behaviour)
                     .workspace(workspace)
                     .build()
@@ -242,6 +252,8 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
             );
         }
     }
+
+    transaction.commit()?;
 
     if !args.no_lock {
         operations::GenLuaRc::new()

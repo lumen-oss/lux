@@ -1,6 +1,7 @@
 use crate::package;
 use crate::project;
 use crate::remote;
+use crate::transaction::Transaction;
 use std::io;
 
 use crate::{
@@ -281,12 +282,13 @@ async fn update(
     if updatable.is_empty() {
         Ok(Vec::new())
     } else {
+        let transaction = Transaction::new(tree)?;
         Uninstall::new()
-            .config(config)
+            .target(&transaction)
             .packages(updatable.iter().map(|(package, _)| package.id()))
             .remove()
             .await?;
-        let (updated_packages, _lockfile) = InstallPackages::new(config, tree)
+        let (updated_packages, _lockfile) = InstallPackages::new(config, &transaction)
             .packages(
                 updatable
                     .iter()
@@ -296,6 +298,7 @@ async fn update(
             .package_db(package_db)
             .install()
             .await?;
+        transaction.commit()?;
         Ok(updated_packages)
     }
 }

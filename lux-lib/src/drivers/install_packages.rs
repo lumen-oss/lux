@@ -1,4 +1,5 @@
 use crate::package;
+use crate::transaction::Transaction;
 use std::{collections::HashMap, io};
 
 use bon::Builder;
@@ -17,7 +18,7 @@ use crate::{
     lua,
     luarocks::installation,
     package::db::PackageDB,
-    tree::{self, InstallTree},
+    tree::{self, InstallTree, Installable},
     workspace::TreeError,
 };
 
@@ -38,7 +39,7 @@ use crate::operations::install;
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallPackages<'a, T>
 where
-    T: InstallTree + Send + Sync,
+    T: Installable,
 {
     #[builder(start_fn)]
     config: &'a Config,
@@ -55,7 +56,7 @@ where
 
 impl<'a, T, State> InstallPackagesBuilder<'a, T, State>
 where
-    T: InstallTree + Send + Sync,
+    T: Installable,
     State: install_packages_builder::State,
 {
     pub fn packages(mut self, packages: Vec<install::Spec>) -> Self {
@@ -82,7 +83,7 @@ where
 impl<T, State> InstallPackagesBuilder<'_, T, State>
 where
     State: install_packages_builder::State + install_packages_builder::IsComplete,
-    T: InstallTree + Send + Sync,
+    T: Installable,
 {
     pub async fn install(self) -> Result<(Vec<LockedPackage>, LockfileHandle), Error> {
         let args = self._build();
@@ -106,7 +107,7 @@ async fn install_packages<T>(
     install: InstallPackages<'_, T>,
 ) -> Result<(Vec<LockedPackage>, LockfileHandle), Error>
 where
-    T: InstallTree + Send + Sync,
+    T: Installable,
 {
     let package_db = install.package_db;
 
@@ -131,7 +132,18 @@ where
 
     let lockfile = tree.lockfile()?;
     let build_tree = tree.build_tree(config)?;
-    let build_lockfile = build_tree.lockfile()?;
+    let build_transaction = Transaction::new(&build_tree)?;
+    let build_lockfile = build_transaction.lockfile()?;
+
+    let test_tree = if install.test_packages.is_some() {
+        Some(tree.test_tree(config)?)
+    } else {
+        None
+    };
+    let test_lockfile = match &test_tree {
+        Some(test_tree) => Some(test_tree.lockfile()?),
+        None => None,
+    };
 
     let mut installed: HashMap<LockedPackageLockType, Vec<LockedPackage>> = HashMap::new();
     installed.insert(
@@ -142,15 +154,10 @@ where
         LockedPackageLockType::Build,
         build_lockfile.rocks().values().cloned().collect_vec(),
     );
-    if install.test_packages.is_some() {
+    if let Some(test_lockfile) = &test_lockfile {
         installed.insert(
             LockedPackageLockType::Test,
-            tree.test_tree(config)?
-                .lockfile()?
-                .rocks()
-                .values()
-                .cloned()
-                .collect_vec(),
+            test_lockfile.rocks().values().cloned().collect_vec(),
         );
     }
 
@@ -208,8 +215,6 @@ where
         return Err(Error::ConflictingEntrypoints(unforced_conflicts.join("\n")));
     }
 
-    // FIXME(vhyrro): non-transactional. If an error occurs this removes the conflicting package
-    // without installing the substitute. Implement transactions at some point.
     let conflicting_entrypoints = conflicting_entrypoints.into_values().collect_vec();
     for package in &conflicting_entrypoints {
         tree.cleanup(package, tree::EntryType::Entrypoint)?;
@@ -221,20 +226,23 @@ where
         .collect();
 
     // Build dependencies first, then the packages themselves.
-    let built_build_deps = PipelineBuild::new(config, &build_tree)
+    let built_build_deps = PipelineBuild::new(config, &build_transaction)
         .packages(build_packages)
         .build()
         .await?;
+    build_transaction.commit()?;
     let built = PipelineBuild::new(config, tree)
         .packages(regular_packages)
         .build()
         .await?;
     if let Some(test_packages) = artifacts.test {
-        let test_tree = tree.test_tree(config)?;
-        PipelineBuild::new(config, &test_tree)
+        let test_tree = test_tree.as_ref().ok_or(Error::MissingTestTree)?;
+        let test_transaction = Transaction::new(test_tree)?;
+        PipelineBuild::new(config, &test_transaction)
             .packages(test_packages.into_values().collect_vec())
             .build()
             .await?;
+        test_transaction.commit()?;
     }
 
     let mut installed_packages: HashMap<LockedPackageId, LockedPackage> = lockfile
@@ -306,6 +314,8 @@ pub enum Error {
         "only a single entrypoint per package is allowed.\nif you would like to replace the existing entrypoints, retry with `--force` to overwrite the existing entrypoint"
     ))]
     ConflictingEntrypoints(String),
+    #[error("test packages were requested without a test tree")]
+    MissingTestTree,
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolve(#[from] resolve::Error),

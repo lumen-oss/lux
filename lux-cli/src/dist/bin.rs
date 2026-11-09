@@ -53,7 +53,7 @@ pub async fn bin(data: Bin, config: Config) -> Result<()> {
     let out = operations::dist::ProjectBin::new()
         .project(project)
         .config(&config)
-        .tree(&tree)
+        .target(&tree)
         .maybe_output(data.output)
         .compile()
         .await

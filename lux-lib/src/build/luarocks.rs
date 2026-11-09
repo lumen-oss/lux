@@ -118,7 +118,9 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{self, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{
+            self, LockedPackage, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState,
+        },
         lua,
         rockspec::Rockspec,
         tree::InstallTree,
@@ -163,7 +165,20 @@ build = { type = "test-custom" }
             &PinnedState::default(),
             &OptState::default(),
         );
-        tree.prepare(&package).unwrap();
+        let locked = LockedPackage::new(
+            package.clone(),
+            crate::remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        tree.prepare(&locked).unwrap();
 
         let luarocks_tree = TempDir::new().unwrap();
         let package_dir = luarocks_tree

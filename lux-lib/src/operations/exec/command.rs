@@ -6,6 +6,7 @@ use crate::{
     operations::install,
     package,
     package::db::PackageDB,
+    transaction::Transaction,
     tree::{self, InstallTree},
 };
 use miette::Diagnostic;
@@ -42,10 +43,12 @@ pub(super) async fn install(command: &str, config: &Config) -> Result<(), Error>
     let install_spec = install::Spec::new(package, tree::EntryType::Entrypoint)
         .build_behaviour(BuildBehaviour::Force)
         .build();
-    InstallPackages::new(config, &tree)
+    let transaction = Transaction::new(&tree)?;
+    InstallPackages::new(config, &transaction)
         .package(install_spec)
         .package_db(PackageDB::from_config(config).await?)
         .install()
         .await?;
+    transaction.commit()?;
     Ok(())
 }

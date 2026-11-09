@@ -15,7 +15,7 @@ use crate::{
     pipeline::discover::FoundPackage,
     rockspec,
     rockspec::{LuaVersionCompatibility, Rockspec},
-    tree::{self, InstallTree},
+    tree::{self, Installable},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -63,7 +63,7 @@ impl From<build::Error> for Error {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallRockspec<'a, T>
 where
-    T: InstallTree,
+    T: Installable,
 {
     rockspec: rockspec::lua::Remote,
 
@@ -71,11 +71,11 @@ where
 
     config: &'a Config,
 
-    tree: &'a T,
+    target: &'a T,
 }
 
 impl<
-        T: InstallTree + Sync + Send + Clone + 'static,
+        T: Installable + Sync + Send,
         State: install_rockspec_builder::State + install_rockspec_builder::IsComplete,
     > InstallRockspecBuilder<'_, T, State>
 {
@@ -84,7 +84,7 @@ impl<
         let rockspec = args.rockspec;
         let pin = args.pin;
         let config = args.config;
-        let tree = args.tree;
+        let tree = args.target;
 
         rockspec.lua_version_matches(config)?;
 
