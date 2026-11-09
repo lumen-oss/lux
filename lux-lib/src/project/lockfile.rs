@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     fs,
     lockfile::{
-        load_lockfile, Error, LockedPackage, LockedPackageId, LockedPackageLockType,
-        LockfilePermissions, PackageLock, PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy,
-        LOCKFILE_VERSION_STR,
+        load_lockfile, Error, FlushLockfileError, LockedPackage, LockedPackageId,
+        LockedPackageLockType, LockfilePermissions, PackageLock, PackageSyncSpec, ReadOnly,
+        ReadWrite, SyncStrategy, LOCKFILE_VERSION_STR,
     },
     rockspec::lua_dependency,
 };
@@ -164,8 +164,8 @@ remove the `lux.lock` and run `lx sync` to regenerate it.",
         Ok(lockfile)
     }
 
-    /// Creates a temporary, writeable project lockfile which can never flush.
-    fn into_temporary(self) -> Lockfile<ReadWrite> {
+    /// Creates a temporary, writeable project lockfile which does not flush on drop.
+    pub(crate) fn into_temporary(self) -> Lockfile<ReadWrite> {
         Lockfile::<ReadWrite> {
             _marker: PhantomData,
             filepath: self.filepath,
@@ -184,6 +184,13 @@ remove the `lux.lock` and run `lx sync` to regenerate it.",
 }
 
 impl Lockfile<ReadWrite> {
+    /// Writes the lockfile to disk.
+    pub(crate) fn write(self) -> Result<(), FlushLockfileError> {
+        let filepath = self.filepath.clone();
+        self.flush()
+            .map_err(|source| FlushLockfileError::new(filepath, source))
+    }
+
     pub(crate) fn remove(&mut self, target: &LockedPackage, deps: &LockedPackageLockType) {
         match deps {
             LockedPackageLockType::Regular => self.dependencies.remove(target),
@@ -260,6 +267,52 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+
+    #[test]
+    fn temporary_lockfile_is_not_flushed_until_written() {
+        use crate::{
+            lockfile::{Constraint, LockedPackageHashes},
+            package, remote,
+            tree::EntryType,
+        };
+
+        let temp = assert_fs::TempDir::new().unwrap();
+        let path = temp.path().join("lux.lock");
+        let lockfile = Lockfile::new(path.clone()).unwrap();
+
+        let package = LockedPackage::from(
+            &package::Spec::parse("neorg".into(), "8.0.0-1".into()).unwrap(),
+            Constraint::Unconstrained,
+            remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        let lock =
+            PackageLock::from_packages(std::iter::once((package, EntryType::DependencyOnly)));
+
+        let mut temporary = lockfile.into_temporary();
+        temporary.sync(&lock, &LockedPackageLockType::Regular);
+        assert!(Lockfile::load(path.clone())
+            .unwrap()
+            .rocks(&LockedPackageLockType::Regular)
+            .is_empty());
+
+        temporary.write().unwrap();
+        assert_eq!(
+            Lockfile::load(path)
+                .unwrap()
+                .rocks(&LockedPackageLockType::Regular)
+                .len(),
+            1
+        );
+    }
 
     #[test]
     fn migrate_v1_workspace_lockfile() {

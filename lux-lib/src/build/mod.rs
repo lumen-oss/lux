@@ -4,10 +4,13 @@ use crate::lockfile::{self, RemotePackageSourceUrl};
 use crate::operations::{fetch, unpack};
 use crate::project;
 use crate::rockspec::Rockspec;
-use crate::tree::{self, EntryType, InstallTree};
+use crate::tree::{self, EntryType, InstallSession, InstallView};
 use bon::Builder;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::fs::DirEntry;
 use std::path::PathBuf;
 use std::{io, path::Path};
@@ -48,6 +51,28 @@ pub(crate) mod cargo;
 pub(crate) use builtin::autodetect_modules;
 
 pub mod external_dependency;
+
+const ID_PREFIX: &[u8] = b"v1\0";
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Id(String);
+
+impl Id {
+    pub(crate) fn from_package(package: &LockedPackage) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(ID_PREFIX);
+        hasher.update(package.id().to_string());
+        hasher.update(package.hashes().rockspec.to_hex().1);
+        hasher.update(package.hashes().source.to_hex().1);
+        Self(hex::encode(hasher.finalize()))
+    }
+}
+
+impl Display for Id {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 #[derive(Debug)]
 pub(crate) enum RemotePackageSourceSpec {
@@ -173,7 +198,7 @@ pub enum BuildBehaviour {
 }
 
 #[tracing::instrument(level = "trace", skip_all)]
-async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
+async fn run_build<R: Rockspec + HasIntegrity, T: InstallView + Sync>(
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
 ) -> Result<BuildInfo, Error> {
@@ -228,7 +253,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(level = "trace", skip(rockspec, tree, config))]
-async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
+async fn install<R: Rockspec + HasIntegrity, T: InstallView>(
     rockspec: &R,
     tree: &T,
     package: &LockedPackageSpec,
@@ -318,7 +343,7 @@ async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
 // TODO(vhyrro): break apart deployment into a separate step (once we implement transactions)
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct Deploy<'a, R: Rockspec + HasIntegrity, T: InstallTree + Sync> {
+pub(crate) struct Deploy<'a, R: Rockspec + HasIntegrity, T: InstallSession + Sync> {
     #[builder(start_fn)]
     rockspec: &'a R,
     #[builder(start_fn)]
@@ -334,7 +359,7 @@ pub(crate) struct Deploy<'a, R: Rockspec + HasIntegrity, T: InstallTree + Sync> 
 impl<R, T, State> DeployBuilder<'_, R, T, State>
 where
     R: Rockspec + HasIntegrity,
-    T: InstallTree + Sync,
+    T: InstallSession + Sync,
     State: deploy_builder::State + deploy_builder::IsComplete,
 {
     pub(crate) async fn deploy(self) -> Result<LockedPackage, Error> {
@@ -346,7 +371,7 @@ where
 async fn do_deploy<R, T>(deploy: Deploy<'_, R, T>) -> Result<LockedPackage, Error>
 where
     R: Rockspec + HasIntegrity,
-    T: InstallTree + Sync,
+    T: InstallSession + Sync,
 {
     let Deploy {
         rockspec,
@@ -365,9 +390,15 @@ where
         }
     }
 
+    if !matches!(behaviour, BuildBehaviour::Force) {
+        if let Some(existing) = tree.reuse_complete(&package, entry_type)? {
+            return Ok(existing);
+        }
+    }
+
     // TODO(vhyrro): When we implement transactionality make this a Drop guard
     // or something else.
-    tree.prepare(&package.spec)?;
+    tree.prepare(&package)?;
     let layout = tree.layout_for(&package.spec);
 
     let rock_source = rockspec.source().current_platform();
@@ -531,10 +562,7 @@ mod tests {
         project::Project,
     };
     #[cfg(feature = "impure_tests")]
-    use crate::{
-        operations::{self, download},
-        tree::Tree,
-    };
+    use crate::{operations::download, tree::Tree};
 
     #[tokio::test]
     async fn test_builtin_build() {
@@ -553,6 +581,8 @@ mod tests {
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let lua_version = config.lua_version().unwrap_or(&lua::Version::Lua51);
         let lua = lua::Installation::new(lua_version, &config).await.unwrap();
         let project = Project::from_exact(&project_root).unwrap().unwrap();
@@ -571,8 +601,7 @@ mod tests {
                     .unwrap(),
             },
         );
-        tree.prepare(&package.spec).unwrap();
-        let src_dir = tree.layout_for(&package.spec).src;
+        transaction.prepare(&package).unwrap();
         run_build(
             &rockspec,
             RunBuildArgs::new()
@@ -582,13 +611,16 @@ mod tests {
                 .external_dependencies(&HashMap::default())
                 .deploy(rockspec.deploy().current_platform())
                 .config(&config)
-                .tree(&tree)
+                .tree(&transaction)
                 .build_dir(&build_dir)
                 .build(),
         )
         .await
         .unwrap();
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        let src_dir = transaction.layout_for(&package.spec).src;
         let foo_dir = src_dir.join("foo");
         assert!(foo_dir.is_dir());
         let foo_init = foo_dir.join("init.lua");
@@ -608,13 +640,11 @@ mod tests {
         assert!(std::fs::read_to_string(&foo_bar_baz)
             .unwrap()
             .contains("return true"));
-        let bin_file = tree_dir
-            .child(lua_version.to_string())
-            .child("bin")
-            .child("hello");
-        bin_file.assert(predicate::path::is_file().follow_links(true));
-        bin_file.assert(predicate::str::contains("#!/usr/bin/env bash"));
-        bin_file.assert(predicate::str::contains("echo \"Hello\""));
+        let bin_file = transaction.bin().join("hello");
+        assert!(bin_file.is_file());
+        let bin_contents = std::fs::read_to_string(&bin_file).unwrap();
+        assert!(bin_contents.contains("#!/usr/bin/env bash"));
+        assert!(bin_contents.contains("echo \"Hello\""));
     }
 
     #[cfg(unix)]
@@ -647,6 +677,8 @@ deploy = { wrap_bin_scripts = false }
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
@@ -656,14 +688,38 @@ deploy = { wrap_bin_scripts = false }
             &PinnedState::default(),
             &OptState::default(),
         );
-        tree.prepare(&package).unwrap();
+        let locked = LockedPackage::new(
+            package.clone(),
+            remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        transaction.prepare(&locked).unwrap();
         crate::fs::tokio::write(build_dir.path().join("mytool"), "#!/bin/sh\necho hi\n")
             .await
             .unwrap();
-        install(&rockspec, &tree, &package, &lua, build_dir.path(), &config)
-            .await
-            .unwrap();
-        assert!(tree.layout_for(&package).bin.join("mytool").is_executable());
+        install(
+            &rockspec,
+            &transaction,
+            &package,
+            &lua,
+            build_dir.path(),
+            &config,
+        )
+        .await
+        .unwrap();
+        assert!(transaction
+            .layout_for(&package)
+            .bin
+            .join("mytool")
+            .is_executable());
     }
 
     #[tokio::test]
@@ -678,6 +734,8 @@ deploy = { wrap_bin_scripts = false }
             .unwrap();
         let lua = lua::Installation::new_from_config(&config).await.unwrap();
         let tree = config.user_tree(lua.version.clone()).unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
 
         let rockspec_content = r#"
 package = "git-src-rock"
@@ -709,31 +767,50 @@ build = {
             zip.finish().unwrap();
         }
         let bytes = Bytes::from(archive.into_inner());
-
-        let package = Build::new()
-            .rockspec(&rockspec)
-            .lua(&lua)
-            .tree(&tree)
-            .entry_type(EntryType::Entrypoint)
-            .config(&config)
-            .behaviour(BuildBehaviour::Force)
-            .source_spec(RemotePackageSourceSpec::SrcRock(SrcRockSource {
-                bytes,
+        let source_spec = || {
+            RemotePackageSourceSpec::SrcRock(SrcRockSource {
+                bytes: bytes.clone(),
                 source_url: RemotePackageSourceUrl::Url {
                     url: "https://example.org/git-src-rock-1.0.0-1.src.rock"
                         .parse()
                         .unwrap(),
                 },
-            }))
+            })
+        };
+
+        let package = Build::new()
+            .rockspec(&rockspec)
+            .lua(&lua)
+            .tree(&transaction)
+            .entry_type(EntryType::Entrypoint)
+            .config(&config)
+            .behaviour(BuildBehaviour::Force)
+            .source_spec(source_spec())
             .build()
             .await
             .unwrap();
 
-        assert!(tree
+        let built_file = transaction
             .layout_for(package.spec())
             .src
-            .join("git_src_rock.lua")
-            .is_file());
+            .join("git_src_rock.lua");
+        assert!(built_file.is_file());
+
+        std::fs::remove_file(&built_file).unwrap();
+
+        Build::new()
+            .rockspec(&rockspec)
+            .lua(&lua)
+            .tree(&transaction)
+            .entry_type(EntryType::Entrypoint)
+            .config(&config)
+            .behaviour(BuildBehaviour::Force)
+            .source_spec(source_spec())
+            .build()
+            .await
+            .unwrap();
+
+        assert!(built_file.is_file());
     }
 
     #[tokio::test]
@@ -762,6 +839,8 @@ build = {
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
         let project = Project::from_exact(project_root.path()).unwrap().unwrap();
@@ -770,7 +849,7 @@ build = {
         let package = Build::new()
             .rockspec(&rockspec)
             .lua(&lua)
-            .tree(&tree)
+            .tree(&transaction)
             .entry_type(EntryType::Entrypoint)
             .config(&config)
             .behaviour(BuildBehaviour::Force)
@@ -779,7 +858,7 @@ build = {
             .unwrap();
 
         let installed =
-            std::fs::read_to_string(tree.layout_for(&package.spec).rockspec_path()).unwrap();
+            std::fs::read_to_string(transaction.layout_for(&package.spec).rockspec_path()).unwrap();
         let installed = rockspec::lua::Remote::new(&installed).unwrap();
 
         match &installed.source().current_platform().source_spec {
@@ -821,6 +900,8 @@ build = {
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
@@ -830,16 +911,36 @@ build = {
             &PinnedState::default(),
             &OptState::default(),
         );
-        tree.prepare(&package).unwrap();
+        let locked = LockedPackage::new(
+            package.clone(),
+            remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        transaction.prepare(&locked).unwrap();
         for file in ["shell.nix", "plain.conf"] {
             crate::fs::tokio::write(build_dir.path().join(file), "return {}")
                 .await
                 .unwrap();
         }
-        install(&rockspec, &tree, &package, &lua, build_dir.path(), &config)
-            .await
-            .unwrap();
-        let layout = tree.layout_for(&package);
+        install(
+            &rockspec,
+            &transaction,
+            &package,
+            &lua,
+            build_dir.path(),
+            &config,
+        )
+        .await
+        .unwrap();
+        let layout = transaction.layout_for(&package);
         assert!(layout.etc.join("shell.nix").is_file());
         assert!(layout.conf.join("plain.conf").is_file());
     }
@@ -889,10 +990,11 @@ build = {
         };
         let rockspec = download::unpack_rockspec(&rock).await.unwrap();
         let lua = lua::Installation::new_from_config(config).await.unwrap();
+        let regular = tree.regular();
         Build::new()
             .rockspec(&rockspec)
             .lua(&lua)
-            .tree(tree)
+            .tree(&regular)
             .entry_type(entry_type)
             .config(config)
             .behaviour(behaviour)
@@ -918,6 +1020,7 @@ build = {
 
         let package =
             build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        let regular = tree.regular();
 
         assert_eq!(
             package.hashes().source,
@@ -931,7 +1034,7 @@ build = {
             package.hashes().source,
             luatest_src_rock_bytes().hash().await.unwrap()
         );
-        assert!(tree.bin().join("luatest").is_file());
+        assert!(regular.bin().join("luatest").is_file());
     }
 
     #[cfg(feature = "impure_tests")]
@@ -973,12 +1076,13 @@ build = {
 
         let package =
             build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
-        let bin = tree.bin().join("luatest");
+        let regular = tree.regular();
+        let bin = regular.bin().join("luatest");
         assert!(bin.is_file());
 
         // Simulate a committed install
         {
-            let mut lockfile = tree.lockfile().unwrap().write_guard();
+            let mut lockfile = regular.lockfile().unwrap().write_guard();
             lockfile.add_entrypoint(&package);
         }
 

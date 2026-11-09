@@ -91,11 +91,12 @@ pub async fn set_pinned_state(data: ChangePin, config: Config, pin: PinnedState)
         }
         None => {
             let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
+            let regular = tree.regular();
 
             for package in &data.package_req {
-                match tree.match_rocks_and(package, |package| pin != package.pinned())? {
+                match regular.match_rocks_and(package, |package| pin != package.pinned())? {
                     RockMatches::Single(rock) => {
-                        pin::set_state(&rock, &tree, pin)?;
+                        pin::set_state(&rock, &regular, pin)?;
                     }
                     RockMatches::Many(_) => {
                         return Err(miette!(

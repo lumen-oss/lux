@@ -1,5 +1,6 @@
 pub use self::reconcile::SyncReport;
 use crate::package;
+use crate::transaction::Transaction;
 use bon::Builder;
 use miette::Diagnostic;
 use nonempty::NonEmpty;
@@ -11,13 +12,16 @@ pub(crate) mod reconcile;
 use crate::{
     build::BuildBehaviour,
     config::Config,
-    drivers::{InstallPackages, InstallPackagesError},
-    lockfile::LockedPackageLockType,
+    drivers::{
+        BuildDependencies, InstallBuildDependencies, InstallPackages, InstallPackagesError,
+        InstallTestPackages,
+    },
+    lockfile::{FlushLockfileError, LockedPackageLockType},
     operations::install,
     operations::{self, gen_luarc, gen_luaurc, install_project},
     package::db::PackageDB,
     rockspec::{self, Rockspec},
-    tree::{self, EntryType, InstallTree},
+    tree::{self, EntryType},
     workspace::{self, TreeError, Workspace},
 };
 
@@ -66,6 +70,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Workspace(#[from] workspace::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FlushLockfile(#[from] FlushLockfileError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     WorkspaceTree(#[from] TreeError),
@@ -141,10 +148,15 @@ where
 {
     pub async fn sync(self) -> Result<SyncReport, Error> {
         let args = self._build();
-        match args.mode {
+        let report = match args.mode {
             SyncMode::Open => sync_open(&args).await,
             SyncMode::Frozen => sync_frozen(&args).await,
-        }
+        }?;
+
+        let tree = args.workspace.tree(args.config)?;
+        operations::Cleanup::new().tree(&tree).cleanup()?;
+
+        Ok(report)
     }
 }
 
@@ -153,7 +165,9 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
     let workspace = args.workspace;
 
     let tree = workspace.tree(config)?;
-    let build_tree = tree.build_tree(config)?;
+    let regular_tree = tree.regular();
+    let build_tree = tree.build()?;
+    let test_tree = tree.test()?;
 
     let regular = gather_dependencies(
         workspace,
@@ -161,7 +175,11 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
         &workspace.member_names()?,
     )?
     .into_iter()
-    .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
+    .filter(|spec| {
+        !regular_tree
+            .match_rocks_and(&spec.package, |package| regular_tree.is_installed(package))
+            .is_ok_and(|m| m.is_found())
+    })
     .map(|spec| install::Spec {
         build_behaviour: BuildBehaviour::Force,
         ..spec
@@ -172,7 +190,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
         .into_iter()
         .filter(|spec| {
             !build_tree
-                .match_rocks(&spec.package)
+                .match_rocks_and(&spec.package, |package| build_tree.is_installed(package))
                 .is_ok_and(|m| m.is_found())
         })
         .map(|spec| install::Spec {
@@ -181,13 +199,12 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
         })
         .collect::<Vec<_>>();
 
-    let test_tree = tree.test_tree(config)?;
     let test = if args.targets.test {
         gather_dependencies(workspace, DependencyKind::Test, &args.targets.members)?
             .into_iter()
             .filter(|spec| {
                 !test_tree
-                    .match_rocks(&spec.package)
+                    .match_rocks_and(&spec.package, |package| test_tree.is_installed(package))
                     .is_ok_and(|m| m.is_found())
             })
             .map(|spec| install::Spec {
@@ -201,26 +218,50 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
 
     let package_db = PackageDB::open(config, workspace).await?;
 
-    let mut install = InstallPackages::new(config, &tree)
-        .packages(regular)
+    let build_transaction = Transaction::new(&tree, &build_tree)?;
+    let BuildDependencies {
+        lockfile: build_lockfile,
+        token: build_token,
+        ..
+    } = InstallBuildDependencies::new(config, &build_transaction)
+        .packages(regular.iter().chain(test.iter()).cloned().collect())
         .build_packages(build)
-        .package_db(package_db);
+        .package_db(package_db.clone())
+        .install()
+        .await?;
+    build_transaction.commit()?;
+
+    let transaction = Transaction::new(&tree, &regular_tree)?;
+    let (mut added, regular_lockfile) = InstallPackages::new(config, &transaction)
+        .packages(regular)
+        .package_db(package_db.clone())
+        .install(&build_token)
+        .await?;
+
     if !test.is_empty() {
-        install = install.test_packages(test);
+        let test_transaction = Transaction::new(&tree, &test_tree)?;
+        InstallTestPackages::new(config, &test_transaction)
+            .packages(test)
+            .package_db(package_db)
+            .install(&build_token)
+            .await?;
+        test_transaction.commit()?;
     }
 
-    let (mut added, lockfile) = install.install().await?;
-
-    if !args.no_lock {
-        let mut workspace_lockfile = workspace.lockfile()?.write_guard();
-        lockfile.commit(&mut workspace_lockfile);
+    let workspace_lockfile = if args.no_lock {
+        None
+    } else {
+        let mut lockfile = workspace.lockfile()?.into_temporary();
+        build_lockfile.commit(&mut lockfile);
+        regular_lockfile.commit(&mut lockfile);
         if args.targets.test {
-            workspace_lockfile.sync(
+            lockfile.sync(
                 test_tree.lockfile()?.local_pkg_lock(),
                 &LockedPackageLockType::Test,
             );
         }
-    }
+        Some(lockfile)
+    };
 
     if !args.only_deps {
         let projects = args
@@ -230,17 +271,37 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
             .map(|name| workspace.select_member(name))
             .collect::<Result<Vec<_>, _>>()?;
         for project in projects {
-            added.push(
-                operations::InstallProject::new()
-                    .project(project)
-                    .config(config)
-                    .tree(&tree)
-                    .behaviour(args.behaviour)
-                    .workspace(workspace)
-                    .build()
-                    .await?,
-            );
+            let installed = match &workspace_lockfile {
+                Some(lockfile) => {
+                    operations::InstallProject::new()
+                        .project(project)
+                        .config(config)
+                        .target(&transaction)
+                        .behaviour(args.behaviour)
+                        .workspace(workspace)
+                        .locked_packages(lockfile.local_pkg_locks())
+                        .build()
+                        .await?
+                }
+                None => {
+                    operations::InstallProject::new()
+                        .project(project)
+                        .config(config)
+                        .target(&transaction)
+                        .behaviour(args.behaviour)
+                        .workspace(workspace)
+                        .build()
+                        .await?
+                }
+            };
+            added.push(installed);
         }
+    }
+
+    transaction.commit()?;
+
+    if let Some(workspace_lockfile) = workspace_lockfile {
+        workspace_lockfile.write()?;
     }
 
     if !args.no_lock {
@@ -343,7 +404,7 @@ mod tests {
     use assert_fs::prelude::{FileWriteStr, PathChild, PathCopy};
 
     use crate::{
-        config, lockfile::LockedPackageLockType, lua, package::db::PackageDB, tree::InstallTree,
+        config, lockfile::LockedPackageLockType, lua, package::db::PackageDB, tree::InstallView,
         workspace::Workspace,
     };
 
@@ -415,9 +476,10 @@ mod tests {
             .sync()
             .await
             .unwrap();
-        let tree = workspace.tree(&config).unwrap();
+        let regular = workspace.tree(&config).unwrap().regular();
         assert_eq!(
-            tree.lockfile()
+            regular
+                .lockfile()
                 .unwrap()
                 .entrypoint(&name)
                 .unwrap()
@@ -440,7 +502,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        std::fs::remove_dir_all(tree.root()).unwrap();
+        std::fs::remove_dir_all(regular.root()).unwrap();
 
         let workspace = Workspace::from_exact(temp.path()).unwrap().unwrap();
         Sync::new(&workspace, &config)
@@ -450,9 +512,10 @@ mod tests {
             .sync()
             .await
             .unwrap();
-        let tree = workspace.tree(&config).unwrap();
+        let regular = workspace.tree(&config).unwrap().regular();
         assert_eq!(
-            tree.lockfile()
+            regular
+                .lockfile()
                 .unwrap()
                 .entrypoint(&name)
                 .unwrap()
@@ -496,8 +559,8 @@ mod tests {
             .sync()
             .await
             .unwrap();
-        let tree = workspace.tree(&config).unwrap();
-        let installed = tree
+        let regular = workspace.tree(&config).unwrap().regular();
+        let installed = regular
             .lockfile()
             .unwrap()
             .entrypoint(&name)
@@ -548,9 +611,10 @@ mod tests {
             .sync()
             .await
             .unwrap();
-        let tree = workspace.tree(&config).unwrap();
+        let regular = workspace.tree(&config).unwrap().regular();
         assert_eq!(
-            tree.lockfile()
+            regular
+                .lockfile()
                 .unwrap()
                 .entrypoint(&name)
                 .unwrap()
@@ -582,9 +646,10 @@ mod tests {
             .sync()
             .await
             .unwrap();
-        let tree = workspace.tree(&config).unwrap();
+        let regular = workspace.tree(&config).unwrap().regular();
         assert_eq!(
-            tree.lockfile()
+            regular
+                .lockfile()
                 .unwrap()
                 .entrypoint(&name)
                 .unwrap()

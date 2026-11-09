@@ -16,7 +16,8 @@ use crate::{
     config::Config,
     fs, lua,
     pipeline::build_local::Build,
-    tree::{self, InstallTree, RockMatches, Tree},
+    transaction::Transaction,
+    tree::{self, RockMatches, Slot as TreeSlot, Tree},
     workspace::LUX_DIR_NAME,
 };
 
@@ -98,31 +99,35 @@ impl From<build::Error> for Error {
 
 /// Returns the `src` directory of tiniest installed in the given tree,
 /// installing it first if necessary.
-pub(crate) async fn ensure_installed(tree: &Tree, config: &Config) -> Result<PathBuf, Error> {
+pub(crate) async fn ensure_installed(
+    tree: &Tree,
+    slot: &TreeSlot,
+    config: &Config,
+) -> Result<PathBuf, Error> {
     let tiniest =
         unsafe { package::Req::new_unchecked("tiniest".into(), Some(TINIEST_VERSION.into())) };
-    if let Some(src_dir) = find_installed_src(tree, &tiniest)? {
+    if let Some(src_dir) = find_installed_src(slot, &tiniest)? {
         return Ok(src_dir);
     }
     let lua = lua::Installation::new(&lua::Version::Luau, config).await?;
     let rockspec = rockspec::lua::Remote::new(&tiniest_rockspec()).unwrap_or_else(|err| {
         unreachable!("failed to parse the embedded tiniest rockspec: {err:?}")
     });
+    let transaction = Transaction::new(tree, slot)?;
     let package = Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
         .behaviour(BuildBehaviour::Force)
         .build()
         .await?;
-    let mut lockfile = tree.lockfile()?.write_guard();
-    lockfile.add_entrypoint(&package);
-    Ok(tree.layout_for(package.spec()).src)
+    transaction.commit_with_entrypoint(&package)?;
+    Ok(slot.layout_for(package.spec()).src)
 }
 
-fn find_installed_src(tree: &Tree, req: &package::Req) -> Result<Option<PathBuf>, tree::Error> {
+fn find_installed_src(tree: &TreeSlot, req: &package::Req) -> Result<Option<PathBuf>, tree::Error> {
     let packages = match tree.match_rocks(req)? {
         RockMatches::NotFound(_) => return Ok(None),
         RockMatches::Single(id) => vec![id],

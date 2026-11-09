@@ -3,7 +3,7 @@ use crate::build::{cargo, command, install};
 use crate::config::{build, Config};
 use crate::fs;
 use crate::rockspec;
-use crate::tree::InstallTree;
+use crate::tree::InstallView;
 use miette::Diagnostic;
 use path_slash::PathBufExt;
 use std::io;
@@ -52,7 +52,7 @@ impl BuildBackend for rockspec::build::backend::RustBinary {
     #[tracing::instrument(name = "rust_binary::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
-        T: InstallTree,
+        T: InstallView,
     {
         let config = args.config;
         let build_dir = args.build_dir;

@@ -14,7 +14,7 @@ use crate::{
         compile::{c_files, c_modules},
     },
     fs, rockspec,
-    tree::{self, InstallTree},
+    tree::{self, InstallView},
 };
 
 #[cfg(not(feature = "luau-transpile"))]
@@ -72,7 +72,7 @@ impl BuildBackend for rockspec::build::backend::Builtin {
     #[tracing::instrument(name = "builtin::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
-        T: InstallTree + Sync,
+        T: InstallView + Sync,
     {
         let package = args.package;
         let lua = args.lua;

@@ -7,7 +7,7 @@ use lux_lib::{
     config::Config,
     lockfile::{OptState, PinnedState},
     operations::install,
-    tree::{self, InstallTree, Tree},
+    tree::{self, Slot as TreeSlot},
 };
 use miette::Result;
 
@@ -15,7 +15,7 @@ pub fn apply_build_behaviour(
     package_reqs: Vec<package::Req>,
     pin: PinnedState,
     force: bool,
-    tree: &Tree,
+    tree: &TreeSlot,
     config: &Config,
 ) -> Result<Vec<install::Spec>> {
     let lockfile = tree.lockfile()?;

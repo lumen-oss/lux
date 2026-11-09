@@ -14,9 +14,8 @@ use crate::rockspec;
 use crate::rockspec::Rockspec;
 use crate::target::c_dylib_extension;
 use crate::tree;
-use crate::tree::InstallTree;
 use crate::tree::RockLayout;
-use crate::tree::Tree;
+use crate::tree::Slot as TreeSlot;
 use bon::Builder;
 use clean_path::Clean;
 use itertools::Itertools;
@@ -45,7 +44,7 @@ pub struct Pack {
     #[builder(start_fn)]
     dest_dir: PathBuf,
     #[builder(start_fn)]
-    tree: Tree,
+    tree: TreeSlot,
     #[builder(start_fn)]
     package: LockedPackage,
 }
@@ -155,7 +154,7 @@ async fn do_pack(args: Pack) -> Result<PathBuf, Error> {
     Ok(output_path)
 }
 
-fn package_binaries(tree: &Tree, package: &LockedPackage) -> Result<Vec<PathBuf>, Error> {
+fn package_binaries(tree: &TreeSlot, package: &LockedPackage) -> Result<Vec<PathBuf>, Error> {
     let lockfile = tree.lockfile()?;
     Ok(lockfile
         .binaries(&package.id())

@@ -15,7 +15,7 @@ use crate::{
         install_binary_rock::{self, BinaryRockInstall},
     },
     rockspec::Rockspec,
-    tree::{self, InstallTree},
+    tree::{self, InstallSession},
 };
 
 use super::materialise::{MaterialisedPackage, PackageSource};
@@ -48,7 +48,7 @@ impl From<luarocks::installation::Error> for Error {
 /// over how a package should be built.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub(crate) struct Build<'a, T: InstallTree + Send + Sync> {
+pub(crate) struct Build<'a, T: InstallSession + Send + Sync> {
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     #[builder(start_fn)]
@@ -59,7 +59,7 @@ pub(crate) struct Build<'a, T: InstallTree + Send + Sync> {
 
 impl<T, State> BuildBuilder<'_, T, State>
 where
-    T: InstallTree + Send + Sync,
+    T: InstallSession + Send + Sync,
     State: build_builder::State,
 {
     pub(crate) fn packages(mut self, packages: Vec<MaterialisedPackage>) -> Self {
@@ -70,11 +70,12 @@ where
 
 impl<T, State> BuildBuilder<'_, T, State>
 where
-    T: InstallTree + Send + Sync,
+    T: InstallSession + Send + Sync,
     State: build_builder::State + build_builder::IsComplete,
 {
     pub(crate) async fn build(self) -> Result<Vec<LockedPackage>, Error> {
         let args = self._build();
+        let destination = args.tree;
         let lua = lua::Installation::new_from_config(args.config).await?;
 
         let needs_luarocks = args.packages.iter().any(|package| {
@@ -84,7 +85,7 @@ where
             )
         });
         if needs_luarocks {
-            luarocks::Installation::new(args.config, args.tree.build_tree(args.config)?)?
+            luarocks::Installation::new(args.config, destination)?
                 .ensure_installed(&lua)
                 .await?;
         }
@@ -104,7 +105,7 @@ where
             let is_entrypoint = entry_type.is_entrypoint();
 
             let pkg = match artifact {
-                PackageSource::SourceDir(path) => Deploy::new(&rockspec, args.tree)
+                PackageSource::SourceDir(path) => Deploy::new(&rockspec, destination)
                     .package(package)
                     .lua(&lua)
                     .source_root(&path)
@@ -126,7 +127,7 @@ where
                     package.source().clone(),
                     entry_type,
                     args.config,
-                    args.tree,
+                    destination,
                 )
                 .behaviour(package_behaviour)
                 .install()
@@ -139,7 +140,7 @@ where
             // Record the installed package in the tree lockfile so that its paths are visible to
             // the packages built after it (e.g. LuaRocks build backends), as well as future builds.
             {
-                let mut lockfile = args.tree.lockfile()?.write_guard();
+                let mut lockfile = destination.lockfile()?.write_guard();
                 if is_entrypoint {
                     lockfile.add_entrypoint(&pkg);
                 } else {

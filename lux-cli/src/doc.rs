@@ -7,7 +7,7 @@ use lux_lib::{
     config::Config,
     lockfile::{LockedPackage, OptState, PinnedState},
     rockspec::Rockspec,
-    tree::{InstallTree, RockMatches, Tree},
+    tree::{RockMatches, Slot as TreeSlot},
 };
 use miette::{miette, Context, IntoDiagnostic, Result};
 use std::io::Read;
@@ -55,10 +55,11 @@ fn package_label(pkg: &LockedPackage) -> String {
 
 pub async fn doc(args: Doc, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
+    let regular = tree.regular();
     let package_req = match &args.package {
         Some(package_req) => package_req.clone(),
         None => {
-            let candidates = tree
+            let candidates = regular
                 .list()?
                 .into_values()
                 .flatten()
@@ -93,8 +94,8 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
             package::Req::parse(&selected)?
         }
     };
-    let lockfile = tree.lockfile()?;
-    let package_id = match tree.match_rocks(&package_req)? {
+    let lockfile = regular.lockfile()?;
+    let package_id = match regular.match_rocks(&package_req)? {
         RockMatches::NotFound(package_req) => {
             Err(miette!("no package matching {package_req} found"))
         }
@@ -134,13 +135,13 @@ pub async fn doc(args: Doc, config: Config) -> Result<()> {
         .ok_or_else(|| miette!("package is installed, but not found in the lockfile"))?
         .clone();
     if args.online {
-        open_homepage(pkg, &tree).await
+        open_homepage(pkg, &regular).await
     } else {
-        open_local_docs(pkg, &tree, &config).await
+        open_local_docs(pkg, &regular, &config).await
     }
 }
 
-async fn open_homepage(pkg: LockedPackage, tree: &Tree) -> Result<()> {
+async fn open_homepage(pkg: LockedPackage, tree: &TreeSlot) -> Result<()> {
     let homepage = match get_homepage(&pkg, tree)? {
         Some(homepage) => Ok(homepage),
         None => Err(miette!(
@@ -152,7 +153,7 @@ async fn open_homepage(pkg: LockedPackage, tree: &Tree) -> Result<()> {
     Ok(())
 }
 
-fn get_homepage(pkg: &LockedPackage, tree: &Tree) -> Result<Option<Url>> {
+fn get_homepage(pkg: &LockedPackage, tree: &TreeSlot) -> Result<Option<Url>> {
     let rockspec_content =
         std::fs::read_to_string(tree.layout_for(pkg.spec()).rockspec_path()).into_diagnostic()?;
     let rockspec = rockspec::lua::Remote::new(&rockspec_content)?;
@@ -182,7 +183,7 @@ fn open_doc_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn open_local_docs(pkg: LockedPackage, tree: &Tree, config: &Config) -> Result<()> {
+async fn open_local_docs(pkg: LockedPackage, tree: &TreeSlot, config: &Config) -> Result<()> {
     let doc_dir = tree.layout_for(pkg.spec()).doc;
     let files: Vec<PathBuf> = WalkDir::new(&doc_dir)
         .into_iter()

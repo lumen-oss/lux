@@ -1,5 +1,5 @@
 use clap::Args;
-use lux_lib::{config::Config, lua, path::Paths, tree::InstallTree};
+use lux_lib::{config::Config, lua, path::Paths};
 
 use miette::{miette, IntoDiagnostic, Result};
 use which::which;
@@ -37,15 +37,16 @@ exit the current shell if you would like to enter a new one."#,
     }
 
     let tree = current_workspace_or_user_tree(&config)?;
+    let regular = tree.regular();
 
     let path = if data.build {
-        let build_tree_path = tree.build_tree(&config)?;
-        Paths::new(&build_tree_path)?
+        let build_tree = tree.build()?;
+        Paths::new(&build_tree)?
     } else {
-        let mut path = Paths::new(&tree)?;
+        let mut path = Paths::new(&regular)?;
         if data.test {
-            let test_tree_path = tree.test_tree(&config)?;
-            let test_path = Paths::new(&test_tree_path)?;
+            let test_tree = tree.test()?;
+            let test_path = Paths::new(&test_tree)?;
             path.prepend(&test_path);
         }
         path
@@ -78,7 +79,7 @@ exit the current shell if you would like to enter a new one."#,
 
     let lua_init = if data.no_loader {
         None
-    } else if tree.version().lux_lib_dir().is_none() {
+    } else if regular.version().lux_lib_dir().is_none() {
         tracing::warn!(
             r#"lux-lua library not found.
 Cannot use the `lux.loader`.
@@ -89,7 +90,7 @@ To suppress this warning, set the `--no-loader` option."#
         Some(path.init())
     };
 
-    let lua_version = tree.version();
+    let lua_version = regular.version();
 
     let mut bin_path = path.path_prepended();
 
@@ -100,7 +101,7 @@ To suppress this warning, set the `--no-loader` option."#
 
     let mut shell_cmd = Command::new(&shell);
     shell_cmd.env("PATH", bin_path.joined());
-    if tree.version() != &lua::Version::Luau {
+    if regular.version() != &lua::Version::Luau {
         shell_cmd
             .env("LUA_PATH", lua_path.joined())
             .env("LUA_CPATH", lua_cpath.joined())

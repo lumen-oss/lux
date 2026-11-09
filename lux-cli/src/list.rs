@@ -6,7 +6,6 @@ use lux_lib::{
     config::Config,
     lockfile::{LockedPackageId, PinnedState},
     lua,
-    tree::InstallTree,
 };
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
@@ -30,8 +29,9 @@ pub struct ListCmd {
 /// List rocks that are installed in the user tree
 pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
     let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
-    let lockfile = tree.lockfile()?;
-    let mut available_rocks = tree.list()?;
+    let regular = tree.regular();
+    let lockfile = regular.lockfile()?;
+    let mut available_rocks = regular.list()?;
     if list_data.orphans {
         let reachable: HashSet<LockedPackageId> = lockfile
             .reachable_rocks()

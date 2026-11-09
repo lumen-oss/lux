@@ -17,7 +17,6 @@ use crate::fs;
 use crate::operations::build_lua;
 use crate::package;
 use crate::rockspec;
-use crate::tree::InstallTree;
 use crate::variables::GetVariableError;
 use crate::{config::Config, variables::HasVariables};
 use crate::{path, target};
@@ -270,8 +269,6 @@ impl Installation {
     fn root_dir(version: &Version, config: &Config) -> PathBuf {
         if let Some(lua_dir) = config.lua_dir() {
             return lua_dir.clone();
-        } else if let Ok(tree) = config.user_tree(version.clone()) {
-            return tree.root().join(".lua");
         }
         config.data_dir().join(".lua").join(version.to_string())
     }

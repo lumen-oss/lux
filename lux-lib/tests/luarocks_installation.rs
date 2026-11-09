@@ -22,9 +22,16 @@ async fn luarocks_make() {
         .build()
         .unwrap();
     let tree = config.user_tree(lua_version.unwrap()).unwrap();
-    let luarocks = luarocks::Installation::new(&config, tree).unwrap();
+    #[cfg(target_family = "unix")]
+    let build_slot = tree.build().unwrap();
+    let luarocks = luarocks::Installation::new(&config, &tree).unwrap();
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
     luarocks.ensure_installed(&lua).await.unwrap();
+    #[cfg(target_family = "unix")]
+    {
+        let req = lux_lib::package::Req::parse("luarocks").unwrap();
+        assert!(build_slot.match_rocks(&req).unwrap().is_found());
+    }
     let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources/test/sample-projects/no-build-spec/");
     let rockspec_path = project_root.join("foo-1.0.0-1.rockspec");
@@ -70,9 +77,8 @@ build = { type = "none", install = { bin = { foo = "foo.lua" } } }
         .unwrap();
 
         let dest_dir = TempDir::new().unwrap();
-        let luarocks =
-            luarocks::Installation::new(&config, config.user_tree(lua_version.clone()).unwrap())
-                .unwrap();
+        let tree = config.user_tree(lua_version.clone()).unwrap();
+        let luarocks = luarocks::Installation::new(&config, &tree).unwrap();
         luarocks
             .make(&rockspec_path, build_dir.path(), dest_dir.path(), &lua)
             .await

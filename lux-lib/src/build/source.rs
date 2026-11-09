@@ -9,7 +9,7 @@ use crate::{
     build::backend::{BuildBackend, BuildInfo, RunBuildArgs},
     project::{TomlDeError, TOML_FILE_NAME},
     rockspec::Rockspec,
-    tree::InstallTree,
+    tree::InstallView,
 };
 use miette::Diagnostic;
 use thiserror::Error;
@@ -65,7 +65,7 @@ Use a pre-built rock or a different build backend."#
 #[tracing::instrument(name = "source::build", skip_all, level = "debug")]
 pub(crate) async fn build<T>(args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Error>
 where
-    T: InstallTree + Sync,
+    T: InstallView + Sync,
 {
     let package = args.package;
     let tree = args.tree;

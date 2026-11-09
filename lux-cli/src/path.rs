@@ -3,7 +3,6 @@ use lux_lib::{
     config::Config,
     lua,
     path::{BinPath, PackagePath, Paths},
-    tree::InstallTree,
 };
 use miette::{miette, Result};
 use strum_macros::{Display, EnumString, VariantNames};
@@ -93,12 +92,13 @@ impl PathCmd {
 
 pub async fn path(path_data: Path, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
+    let regular = tree.regular();
     let cmd = path_data.cmd.unwrap_or_default();
     let prepend = path_data.prepend;
-    if tree.version() == &lua::Version::Luau {
+    if regular.version() == &lua::Version::Luau {
         return match cmd {
             PathCmd::Full(args) => {
-                let paths = Paths::new(&tree)?;
+                let paths = Paths::new(&regular)?;
                 let mut result = String::new();
                 if !args.no_bin {
                     let path = mk_bin_path(&paths, prepend)?;
@@ -111,7 +111,7 @@ pub async fn path(path_data: Path, config: Config) -> Result<()> {
                 Ok(())
             }
             PathCmd::Bin => {
-                let paths = Paths::new(&tree)?;
+                let paths = Paths::new(&regular)?;
                 println!("{}", mk_bin_path(&paths, prepend)?);
                 Ok(())
             }
@@ -122,12 +122,12 @@ pub async fn path(path_data: Path, config: Config) -> Result<()> {
             )),
         };
     }
-    let paths = Paths::new(&tree)?;
+    let paths = Paths::new(&regular)?;
     match cmd {
         PathCmd::Full(args) => {
             let mut result = String::new();
             let no_loader = args.no_loader || {
-                if tree.version().lux_lib_dir().is_none() {
+                if regular.version().lux_lib_dir().is_none() {
                     tracing::warn!(
                         r#"lux-lua library not found.
 Cannot use the `lux.loader`.

@@ -5,7 +5,6 @@ use assert_fs::prelude::PathCopy;
 use assert_fs::TempDir;
 use flaky_test::flaky_test;
 use lux_lib::operations;
-use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{config, lua};
 
@@ -39,7 +38,12 @@ async fn test_build_multi_workspace_local_dependencies() {
         .await
         .unwrap();
 
-    let lockfile = workspace.tree(&config).unwrap().lockfile().unwrap();
+    let lockfile = workspace
+        .tree(&config)
+        .unwrap()
+        .regular()
+        .lockfile()
+        .unwrap();
 
     let foo = lockfile
         .entrypoint(&package::Name::new("foo".into()))

@@ -6,7 +6,6 @@ use flaky_test::flaky_test;
 use lux_lib::project::Project;
 use lux_lib::rockspec;
 use lux_lib::rockspec::Rockspec;
-use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
 use lux_lib::{build::BuildBehaviour::Force, config, lua, pipeline::build_local::Build, tree};
 use tokio::runtime::Builder;
@@ -42,11 +41,13 @@ async fn builtin_build() {
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -81,11 +82,13 @@ async fn make_build() {
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -135,11 +138,13 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -176,11 +181,13 @@ async fn treesitter_parser_build() {
     let tree = config
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     let package = Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -188,7 +195,7 @@ async fn treesitter_parser_build() {
         .await
         .unwrap();
 
-    let etc = tree.layout_for(package.spec()).etc;
+    let etc = regular.layout_for(package.spec()).etc;
 
     let folds_query = etc.join("queries").join("rust").join("folds.scm");
     assert!(folds_query.is_file());
@@ -222,11 +229,13 @@ async fn treesitter_parser_build_source_queries() {
     let tree = config
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     let package = Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -234,7 +243,7 @@ async fn treesitter_parser_build_source_queries() {
         .await
         .unwrap();
 
-    let etc = tree.layout_for(package.spec()).etc;
+    let etc = regular.layout_for(package.spec()).etc;
 
     let highlights_query = etc.join("queries").join("tmux").join("highlights.scm");
     assert!(highlights_query.is_file());
@@ -278,13 +287,15 @@ async fn test_build_local_project_no_source() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let package = Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -292,7 +303,7 @@ async fn test_build_local_project_no_source() {
         .await
         .unwrap();
 
-    let layout = tree.layout_for(package.spec());
+    let layout = regular.layout_for(package.spec());
     let conf_file = layout.conf.join("foo").join("bar.toml");
     assert!(conf_file.is_file());
 
@@ -339,13 +350,15 @@ async fn test_build_local_project_only_src() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let pkg = Build::new()
         .rockspec(&project_toml)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -353,7 +366,7 @@ async fn test_build_local_project_only_src() {
         .await
         .unwrap();
 
-    let src = tree.layout_for(pkg.spec()).src;
+    let src = regular.layout_for(pkg.spec()).src;
     assert!(src.is_dir());
     assert!(src.join("main.lua").is_file());
     assert!(src.join("foo.lua").is_file());
@@ -394,20 +407,23 @@ fn test_build_multiple_treesitter_parsers() {
         let tree = config
             .user_tree(lua::Version::from(&config).unwrap().clone())
             .unwrap();
+        let regular = tree.regular();
 
         let config = config.clone();
-        let tree = tree.clone();
+        let regular = regular.clone();
         let rockspec = rockspec.clone();
 
         handles.push(
             runtime.spawn(
                 async move {
+                    let transaction =
+                        lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
                     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
                     Build::new()
                         .rockspec(&rockspec)
                         .lua(&lua)
-                        .tree(&tree)
+                        .tree(&transaction)
                         .entry_type(tree::EntryType::Entrypoint)
                         .config(&config)
                         .behaviour(Force)
@@ -442,13 +458,15 @@ async fn build_project_with_git_dependency() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     Build::new()
         .rockspec(&project_toml)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -476,13 +494,15 @@ async fn test_multiline_command_build() {
         .unwrap();
 
     let tree = workspace.tree(&config).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let package = Build::new()
         .rockspec(&project_toml)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(BuildBehaviour::Force)
@@ -490,7 +510,7 @@ async fn test_multiline_command_build() {
         .await
         .unwrap();
 
-    let success_dir = tree.layout_for(package.spec()).src.join("success");
+    let success_dir = regular.layout_for(package.spec()).src.join("success");
     assert!(success_dir.is_dir());
 }
 
@@ -519,11 +539,13 @@ async fn builtin_build_install_include() {
     let lua = lua::Installation::new_from_config(&config).await.unwrap();
 
     let tree = config.user_tree(lua.version.clone()).unwrap();
+    let regular = tree.regular();
+    let transaction = lux_lib::transaction::Transaction::new(&tree, &regular).unwrap();
 
     Build::new()
         .rockspec(&rockspec)
         .lua(&lua)
-        .tree(&tree)
+        .tree(&transaction)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
         .behaviour(Force)
@@ -531,13 +553,14 @@ async fn builtin_build_install_include() {
         .await
         .unwrap();
 
-    let install_path = dir.path().join(lua_version.unwrap().to_string());
+    let install_path = dir
+        .path()
+        .join("dependencies")
+        .join(lua_version.unwrap().to_string());
     let mut install_dir_entries = tokio::fs::read_dir(install_path).await.unwrap();
     let mut luyoga_path = None;
     while let Some(entry) = install_dir_entries.next_entry().await.unwrap() {
-        if entry.file_type().await.unwrap().is_dir()
-            && entry.file_name().into_string().unwrap().contains("luyoga")
-        {
+        if entry.path().is_dir() && entry.file_name().into_string().unwrap().contains("luyoga") {
             luyoga_path = Some(entry.path());
         }
     }

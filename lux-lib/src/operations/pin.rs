@@ -4,7 +4,7 @@ use std::io;
 use crate::{
     fs,
     lockfile::{FlushLockfileError, LockedPackageId, PinnedState},
-    tree::{self, InstallTree, Tree},
+    tree::{self, Slot as TreeSlot},
 };
 use fs_extra::dir::CopyOptions;
 use itertools::Itertools;
@@ -47,7 +47,11 @@ pub enum Error {
     Fs(#[from] fs::Error),
 }
 
-pub fn set_state(package_id: &LockedPackageId, tree: &Tree, pin: PinnedState) -> Result<(), Error> {
+pub fn set_state(
+    package_id: &LockedPackageId,
+    tree: &TreeSlot,
+    pin: PinnedState,
+) -> Result<(), Error> {
     let lockfile = tree.lockfile()?;
     let package = lockfile
         .get(package_id)

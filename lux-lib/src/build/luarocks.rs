@@ -5,7 +5,7 @@ use crate::rockspec;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
 use crate::tree;
-use crate::tree::InstallTree;
+use crate::tree::InstallView;
 use std::path::Path;
 
 use crate::{
@@ -49,7 +49,7 @@ pub enum Error {
     level = "info"
     fields(backend = build_backend_name),
 )]
-pub(crate) async fn build<R: Rockspec, T: InstallTree>(
+pub(crate) async fn build<R: Rockspec, T: InstallView>(
     build_backend_name: &str,
     rockspec: &R,
     args: RunBuildArgs<'_, T>,
@@ -58,7 +58,7 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
     let lua = args.lua;
     let config = args.config;
     let build_dir = args.build_dir;
-    let tree = args.tree;
+    let destination = args.tree;
 
     let rockspec_temp_dir = tempdir()?;
     let rockspec_file = rockspec_temp_dir.path().join(format!(
@@ -73,22 +73,22 @@ pub(crate) async fn build<R: Rockspec, T: InstallTree>(
             .map_err(|err| Error::Rockspec(Box::new(err)))?,
     )
     .await?;
-    let luarocks = luarocks::Installation::new(config, tree.build_tree(config)?)?;
+    let luarocks = luarocks::Installation::new(config, destination)?;
     let luarocks_tree = tempdir()?;
     luarocks
         .make(&rockspec_file, build_dir, luarocks_tree.path(), lua)
         .await?;
-    install(rockspec, luarocks_tree.path(), tree, package, config).await
+    install(rockspec, luarocks_tree.path(), destination, package, config).await
 }
 
-async fn install<R: Rockspec, T: InstallTree>(
+async fn install<R: Rockspec, T: InstallView>(
     rockspec: &R,
     luarocks_tree: &Path,
-    tree: &T,
+    destination: &T,
     package: &LockedPackageSpec,
     config: &Config,
 ) -> Result<BuildInfo, Error> {
-    let layout = tree.layout_for(package);
+    let layout = destination.layout_for(package);
     let lua_version = rockspec.lua_version_matches(config)?;
     fs::tokio::create_dir_all(&layout.bin).await?;
     let lua_version = lua_version.version_compatibility_str();
@@ -110,6 +110,7 @@ async fn install<R: Rockspec, T: InstallTree>(
 
 #[cfg(test)]
 mod tests {
+    use crate::tree::InstallSession;
     use std::path::Path;
 
     use crate::rockspec;
@@ -118,10 +119,12 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{self, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{
+            self, LockedPackage, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState,
+        },
         lua,
         rockspec::Rockspec,
-        tree::InstallTree,
+        tree::InstallView,
     };
 
     use super::install;
@@ -154,6 +157,8 @@ build = { type = "test-custom" }
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let package = LockedPackageSpec::new(
             rockspec.package(),
             rockspec.version(),
@@ -163,7 +168,20 @@ build = { type = "test-custom" }
             &PinnedState::default(),
             &OptState::default(),
         );
-        tree.prepare(&package).unwrap();
+        let locked = LockedPackage::new(
+            package.clone(),
+            crate::remote::package::Source::Test,
+            None,
+            LockedPackageHashes {
+                rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+                source: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
+                    .parse()
+                    .unwrap(),
+            },
+        );
+        transaction.prepare(&locked).unwrap();
 
         let luarocks_tree = TempDir::new().unwrap();
         let package_dir = luarocks_tree
@@ -210,11 +228,17 @@ rock_manifest = {
         );
         write_file(&package_dir, "unlisted.txt", "not in the manifest");
 
-        install(&rockspec, luarocks_tree.path(), &tree, &package, &config)
-            .await
-            .unwrap();
+        install(
+            &rockspec,
+            luarocks_tree.path(),
+            &transaction,
+            &package,
+            &config,
+        )
+        .await
+        .unwrap();
 
-        let layout = tree.layout_for(&package);
+        let layout = transaction.layout_for(&package);
         assert!(layout.lib.join("test_luarocks_backend.so").is_file());
         assert!(layout
             .src

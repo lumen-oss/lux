@@ -5,12 +5,9 @@ use thiserror::Error;
 
 pub mod exec;
 
-use crate::{build, config::Config, fs, lua, operations::unpack, tree::InstallTree};
+use crate::{build, config::Config, fs, lua, operations::unpack};
 
-#[cfg(target_family = "unix")]
-use crate::tree::{self, Tree};
-#[cfg(target_family = "windows")]
-use crate::tree::{self, Tree};
+use crate::tree::{self, InstallView, Slot as TreeSlot};
 
 #[cfg(target_family = "unix")]
 use crate::pipeline::build_local::Build;
@@ -68,18 +65,20 @@ impl From<build::Error> for Error {
     }
 }
 
-pub struct Installation {
-    tree: Tree,
+pub struct Installation<'a, T: InstallView> {
+    destination: &'a T,
+    slot: TreeSlot,
     config: Config,
 }
 
-impl Installation {
-    pub fn new(config: &Config, tree: Tree) -> Result<Self, Error> {
-        let luarocks_installation = Self {
-            tree,
+impl<'a, T: InstallView> Installation<'a, T> {
+    pub fn new(config: &Config, destination: &'a T) -> Result<Self, Error> {
+        let slot = destination.build_slot()?;
+        Ok(Self {
+            destination,
+            slot,
             config: config.clone(),
-        };
-        Ok(luarocks_installation)
+        })
     }
 
     #[cfg(target_family = "unix")]
@@ -87,26 +86,29 @@ impl Installation {
     pub async fn ensure_installed(&self, lua: &lua::Installation) -> Result<(), Error> {
         use crate::{package, rockspec};
 
-        let mut lockfile = self.tree.lockfile()?.write_guard();
-
         let luarocks_req = unsafe {
             package::Req::new_unchecked("luarocks".into(), Some(LUAROCKS_VERSION.into()))
         };
 
-        if !self.tree.match_rocks(&luarocks_req)?.is_found() {
+        if !self
+            .slot
+            .match_rocks_and(&luarocks_req, |package| self.slot.is_installed(package))?
+            .is_found()
+        {
             let rockspec =
                 unsafe { rockspec::lua::Remote::new(LUAROCKS_ROCKSPEC).unwrap_unchecked() };
+            let transaction = self.destination.build_transaction()?;
             let pkg = Build::new()
                 .rockspec(&rockspec)
                 .lua(lua)
-                .tree(&self.tree)
+                .tree(&transaction)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&self.config)
                 .behaviour(build::BuildBehaviour::Ignore)
                 .constraint(luarocks_req.version_req().clone().into())
                 .build()
                 .await?;
-            lockfile.add_entrypoint(&pkg);
+            transaction.commit_with_entrypoint(&pkg)?;
         }
         Ok(())
     }
@@ -143,7 +145,7 @@ impl Installation {
         )
         .await?;
         let luarocks_exe = unpack_dir.path().join(file_name).join(LUAROCKS_EXE);
-        fs::tokio::copy(luarocks_exe, &self.tree.bin().join(LUAROCKS_EXE)).await?;
+        fs::tokio::copy(luarocks_exe, &self.slot.bin().join(LUAROCKS_EXE)).await?;
 
         Ok(())
     }

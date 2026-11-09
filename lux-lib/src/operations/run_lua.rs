@@ -4,7 +4,7 @@
 
 use bon::Builder;
 
-use crate::{config::Config, lua, tree::InstallTree};
+use crate::{config::Config, lua};
 
 use std::{
     io,
@@ -18,8 +18,7 @@ use tokio::process::Command;
 
 use crate::{
     path::{self, LuaEnvironment, Paths},
-    tree,
-    tree::Tree,
+    tree::{self, Tree},
 };
 
 #[derive(Error, Debug, Diagnostic)]
@@ -69,10 +68,11 @@ where
 {
     pub async fn run_lua(self) -> Result<(), Error> {
         let args = self._build();
-        let mut paths = Paths::for_environment(args.tree, args.config, args.environment)?;
+        let regular = args.tree.regular();
+        let mut paths = Paths::for_environment(&regular, args.config, args.environment)?;
 
         if args.prepend_test_paths.unwrap_or(false) {
-            let test_tree_path = args.tree.test_tree(args.config)?;
+            let test_tree_path = args.tree.test()?;
 
             let test_path = Paths::new(&test_tree_path)?;
 
@@ -80,7 +80,7 @@ where
         }
 
         if args.prepend_build_paths.unwrap_or(false) {
-            let build_tree_path = args.tree.build_tree(args.config)?;
+            let build_tree_path = args.tree.build()?;
 
             let build_path = Paths::new(&build_tree_path)?;
 
@@ -89,11 +89,11 @@ where
 
         let lua_cmd: PathBuf = args.lua_cmd.try_into()?;
 
-        let loader_init = if args.tree.version().is_luau() || args.disable_loader.unwrap_or(false) {
+        let loader_init = if regular.version().is_luau() || args.disable_loader.unwrap_or(false) {
             "".to_string()
         } else {
             let is_lux_lua_available = detect_lux_lua(&lua_cmd, &paths, args.environment).await;
-            if !is_lux_lua_available && args.tree.version().lux_lib_dir().is_none() {
+            if !is_lux_lua_available && regular.version().lux_lib_dir().is_none() {
                 tracing::warn!("lux-lua library not found.\nCannot use the `lux.loader`.\nTo suppress this warning, set the `--no-loader` option.");
                 "".to_string()
             } else {

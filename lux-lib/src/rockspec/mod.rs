@@ -1,13 +1,14 @@
 use crate::package;
 use std::{
     collections::HashMap,
-    ops::{Deref, DerefMut},
-    path::PathBuf,
+    ops::Deref,
+    path::{Component, PathBuf},
 };
 
+use clean_path::Clean;
 use itertools::Itertools;
 use miette::Diagnostic;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 pub mod build;
 pub mod dependency;
@@ -90,15 +91,13 @@ pub trait Rockspec {
 
     /// Shorthand to extract the binaries that are part of the rockspec.
     fn binaries(&self) -> RockBinaries {
-        RockBinaries(
-            self.build()
-                .current_platform()
-                .install
-                .bin
-                .keys()
-                .map_into()
-                .collect(),
-        )
+        self.build()
+            .current_platform()
+            .install
+            .bin
+            .keys()
+            .map_into()
+            .collect()
     }
 
     /// Converts the rockspec to a string that can be uploaded to a luarocks server.
@@ -183,8 +182,55 @@ impl<T: Rockspec> LuaVersionCompatibility for T {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialOrd, Ord, Hash, PartialEq, Eq)]
+#[derive(Debug, Default, Serialize, Clone, PartialOrd, Ord, Hash, PartialEq, Eq)]
 pub struct RockBinaries(Vec<PathBuf>);
+
+impl RockBinaries {
+    pub fn push(&mut self, path: PathBuf) {
+        if let Some(path) = normalize_binary_path(path) {
+            self.0.push(path);
+        }
+    }
+}
+
+impl Extend<PathBuf> for RockBinaries {
+    fn extend<T: IntoIterator<Item = PathBuf>>(&mut self, iter: T) {
+        for path in iter {
+            self.push(path);
+        }
+    }
+}
+
+impl FromIterator<PathBuf> for RockBinaries {
+    fn from_iter<T: IntoIterator<Item = PathBuf>>(iter: T) -> Self {
+        let mut binaries = Self::default();
+        binaries.extend(iter);
+        binaries
+    }
+}
+
+impl<'de> Deserialize<'de> for RockBinaries {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Vec::<PathBuf>::deserialize(deserializer).map(Self::from_iter)
+    }
+}
+
+fn normalize_binary_path(path: PathBuf) -> Option<PathBuf> {
+    let cleaned = path.clean();
+    if cleaned.is_absolute()
+        || cleaned.as_os_str().is_empty()
+        || !cleaned
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+    {
+        return None;
+    }
+
+    Some(cleaned)
+}
 
 impl Deref for RockBinaries {
     type Target = Vec<PathBuf>;
@@ -194,8 +240,28 @@ impl Deref for RockBinaries {
     }
 }
 
-impl DerefMut for RockBinaries {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+#[cfg(test)]
+mod rock_binaries_tests {
+    use super::RockBinaries;
+    use std::path::PathBuf;
+
+    #[test]
+    fn rejects_absolute_and_escaping_paths() {
+        let mut binaries = RockBinaries::default();
+        binaries.extend([
+            PathBuf::from("./bin/tool"),
+            PathBuf::from("nested/../tool"),
+            PathBuf::from("../escape"),
+            PathBuf::from("/absolute"),
+        ]);
+
+        assert_eq!(
+            binaries.0,
+            vec![PathBuf::from("bin/tool"), PathBuf::from("tool")]
+        );
+
+        let deserialized: RockBinaries =
+            serde_json::from_str(r#"["../escape","/absolute","bin/tool"]"#).unwrap();
+        assert_eq!(deserialized.0, vec![PathBuf::from("bin/tool")]);
     }
 }

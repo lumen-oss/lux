@@ -14,7 +14,6 @@ use crate::{
     lua,
     operations::run_lua::{self, RunLua},
     path::{self, LuaEnvironment, Paths},
-    tree::InstallTree,
     workspace::{self, TreeError, Workspace},
 };
 
@@ -190,11 +189,12 @@ async fn run_with_command(
     environment: LuaEnvironment,
 ) -> Result<(), Error> {
     let tree = workspace.tree(config)?;
-    let paths = Paths::for_environment(&tree, config, environment)?;
+    let regular = tree.regular();
+    let paths = Paths::for_environment(&regular, config, environment)?;
 
-    let lua_init = if tree.version().is_luau() || disable_loader {
+    let lua_init = if regular.version().is_luau() || disable_loader {
         None
-    } else if tree.version().lux_lib_dir().is_none() {
+    } else if regular.version().lux_lib_dir().is_none() {
         tracing::warn!("lux-lua library not found.\n    Cannot use the `lux.loader`.\n    To suppress this warning, set the `--no-loader` option.");
         None
     } else {

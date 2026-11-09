@@ -8,7 +8,7 @@ use crate::{
     lua,
     operations::build_workspace,
     path::{self, Paths},
-    tree::{self, InstallTree},
+    tree::{self},
     workspace::{TreeError, Workspace},
 };
 use bon::Builder;
@@ -131,10 +131,11 @@ async fn exec(run: Exec<'_>) -> Result<(), Error> {
     };
 
     let user_tree = run.config.user_tree(lua_version.clone())?;
+    let regular = user_tree.regular();
 
     let paths = if let Some(project) = run.workspace {
-        let workspace_paths = Paths::new(&project.tree(run.config)?)?;
-        match Paths::new(&user_tree) {
+        let workspace_paths = Paths::new(&project.tree(run.config)?.regular())?;
+        match Paths::new(&regular) {
             Ok(mut user_paths) => {
                 user_paths.prepend(&workspace_paths);
                 user_paths
@@ -142,16 +143,16 @@ async fn exec(run: Exec<'_>) -> Result<(), Error> {
             Err(err) => {
                 tracing::warn!(
                     "failed to load the user tree at '{}': {err}",
-                    user_tree.root().display()
+                    regular.root().display()
                 );
                 workspace_paths
             }
         }
     } else {
-        Paths::new(&user_tree)?
+        Paths::new(&regular)?
     };
 
-    let lua_init = if user_tree.version().is_luau() || run.disable_loader.unwrap_or(false) {
+    let lua_init = if regular.version().is_luau() || run.disable_loader.unwrap_or(false) {
         None
     } else if lua_version.lux_lib_dir().is_none() {
         tracing::warn!(

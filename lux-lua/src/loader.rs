@@ -338,11 +338,13 @@ mod tests {
 
     fn setup_tree() -> (TempDir, Lua) {
         let tree = TempDir::new().unwrap();
-        tree.child("5.1")
+        tree.child("dependencies")
+            .child("5.1")
             .child("lux.lock")
             .write_str(&lockfile())
             .unwrap();
-        tree.child("5.1")
+        tree.child("dependencies")
+            .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
             .child("foo.lua")
@@ -357,6 +359,7 @@ mod tests {
     fn set_package_path(tree: &TempDir, lua: &Lua) {
         let src_dir = tree
             .path()
+            .join("dependencies")
             .join("5.1")
             .join(format!("{FOO_HASH}-foo@1.0.0-1"))
             .join("src");
@@ -383,6 +386,7 @@ mod tests {
 
         let lib_dir = tree
             .path()
+            .join("dependencies")
             .join("5.1")
             .join(format!("{FOO_HASH}-foo@1.0.0-1"))
             .join("lib");
@@ -400,11 +404,13 @@ mod tests {
     #[test]
     fn test_load_module_returning_function() {
         let tree = TempDir::new().unwrap();
-        tree.child("5.1")
+        tree.child("dependencies")
+            .child("5.1")
             .child("lux.lock")
             .write_str(&lockfile())
             .unwrap();
-        tree.child("5.1")
+        tree.child("dependencies")
+            .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
             .child("foo.lua")
@@ -422,11 +428,13 @@ mod tests {
     #[test]
     fn test_load_nested_module() {
         let tree = TempDir::new().unwrap();
-        tree.child("5.1")
+        tree.child("dependencies")
+            .child("5.1")
             .child("lux.lock")
             .write_str(&lockfile())
             .unwrap();
-        tree.child("5.1")
+        tree.child("dependencies")
+            .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
             .child("foo")
@@ -445,7 +453,12 @@ mod tests {
     #[cfg(all(target_os = "linux", feature = "impure_tests"))]
     #[tokio::test]
     async fn test_load_c_module_from_built_project() {
-        use lux_lib::{config, lua, operations, path::Paths, project::Project, tree::InstallTree};
+        use lux_lib::{
+            config, lua, operations,
+            path::Paths,
+            project::Project,
+            tree::{InstallView, Transaction},
+        };
 
         let sample = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../lux-lib/resources/test/sample-projects/c-src/");
@@ -459,13 +472,16 @@ mod tests {
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let regular = tree.regular();
+        let transaction = Transaction::new(&tree, &regular).unwrap();
         operations::InstallProject::new()
             .project(&project)
             .config(&config)
-            .tree(&tree)
+            .target(&transaction)
             .build()
             .await
             .unwrap();
+        transaction.commit().unwrap();
 
         let lua = unsafe {
             // Required to load C modules
@@ -486,11 +502,13 @@ mod tests {
     fn test_load_from_workspace_tree() {
         let tree = TempDir::new().unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("lux.lock")
             .write_str(&workspace_lockfile())
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
@@ -500,6 +518,7 @@ mod tests {
 
         let entrypoint = tree
             .child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{MAIN_HASH}-main@1.0.0-1"))
             .child("src")
@@ -518,11 +537,13 @@ mod tests {
     fn test_load_from_symlinked_entrypoint_layout() {
         let tree = TempDir::new().unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("lux.lock")
             .write_str(&workspace_lockfile())
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
@@ -531,6 +552,7 @@ mod tests {
             .unwrap();
         let main_src = tree
             .child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{MAIN_HASH}-main@1.0.0-1"))
             .child("src");
@@ -541,6 +563,7 @@ mod tests {
 
         let link_dir = tree
             .child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("site")
             .child("pack")
@@ -563,6 +586,7 @@ mod tests {
     fn test_load_module_name_differs_from_package_name() {
         let tree = TempDir::new().unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("lux.lock")
             .write_str(&format!(
@@ -594,6 +618,7 @@ mod tests {
             ))
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{FOO_HASH}-tool.nvim@1.0.0-1"))
             .child("src")
@@ -602,6 +627,7 @@ mod tests {
             .unwrap();
         let entrypoint = tree
             .child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{MAIN_HASH}-main@1.0.0-1"))
             .child("src")
@@ -619,12 +645,14 @@ mod tests {
     fn test_load_nested_module_from_workspace_tree() {
         let tree = TempDir::new().unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("lux.lock")
             .write_str(&workspace_lockfile())
             .unwrap();
         let main = tree
             .child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{MAIN_HASH}-main@1.0.0-1"));
         main.child("src")
@@ -651,6 +679,7 @@ mod tests {
     fn test_load_dependency_from_tail_call() {
         let tree = TempDir::new().unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("lux.lock")
             .write_str(&format!(
@@ -691,13 +720,18 @@ mod tests {
 }}"#
             ))
             .unwrap();
-        let outer = tree.child("tree").child("5.1").child("ccccc-outer@1.0.0-1");
+        let outer = tree
+            .child("tree")
+            .child("dependencies")
+            .child("5.1")
+            .child("ccccc-outer@1.0.0-1");
         outer
             .child("src")
             .child("outer.lua")
             .write_str("local _ = require('main')\n")
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{MAIN_HASH}-main@1.0.0-1"))
             .child("src")
@@ -705,6 +739,7 @@ mod tests {
             .write_str("return require('foo')\n") // tail call
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
@@ -728,11 +763,13 @@ mod tests {
             .write_str(r#"{"version":"2.0.0","dependencies":{"rocks":{},"entrypoints":{}}}"#)
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child("lux.lock")
             .write_str(&lockfile())
             .unwrap();
         tree.child("tree")
+            .child("dependencies")
             .child("5.1")
             .child(format!("{FOO_HASH}-foo@1.0.0-1"))
             .child("src")
@@ -749,6 +786,7 @@ mod tests {
         let src_dir = tree
             .path()
             .join("tree")
+            .join("dependencies")
             .join("5.1")
             .join(format!("{FOO_HASH}-foo@1.0.0-1"))
             .join("src");

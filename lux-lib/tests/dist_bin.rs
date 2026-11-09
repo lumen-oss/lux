@@ -35,7 +35,7 @@ async fn test_dist_bin_from_lua_source_compiles_and_runs() {
         .unwrap();
 
     let staging = TempDir::new().unwrap();
-    let tree = FlatDistTree::new(
+    let flat_tree = FlatDistTree::new(
         staging.to_path_buf(),
         config.lua_version().cloned().unwrap(),
         &config,
@@ -52,7 +52,7 @@ async fn test_dist_bin_from_lua_source_compiles_and_runs() {
     ProjectBin::new()
         .project(&project)
         .config(&config)
-        .tree(&tree)
+        .tree(&flat_tree)
         .output(binary.clone())
         .compile()
         .await

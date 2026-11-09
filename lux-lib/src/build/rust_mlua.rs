@@ -5,7 +5,7 @@ use crate::fs;
 use crate::lua;
 use crate::rockspec;
 use crate::target::c_dylib_extension;
-use crate::tree::InstallTree;
+use crate::tree::InstallView;
 use itertools::Itertools;
 use miette::Diagnostic;
 use std::collections::HashMap;
@@ -43,7 +43,7 @@ impl BuildBackend for rockspec::build::backend::RustMlua {
     #[tracing::instrument(name = "rust_mlua::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
-        T: InstallTree,
+        T: InstallView,
     {
         let package = args.package;
         let config = args.config;

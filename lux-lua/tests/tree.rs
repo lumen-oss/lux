@@ -17,8 +17,8 @@ async fn tree_userdata() {
         .lua_version(lua_version)
         .build()
         .unwrap();
-    let t = config.user_tree(lua::Version::Lua51).unwrap();
-    let tree = TreeLua(t).into_lua(&lua).unwrap();
+    let t = TreeLua::regular(config.user_tree(lua::Version::Lua51).unwrap());
+    let tree = t.into_lua(&lua).unwrap();
     lua.globals().set("tree", tree).unwrap();
 
     lua.load(

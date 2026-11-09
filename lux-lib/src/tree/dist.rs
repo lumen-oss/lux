@@ -1,12 +1,12 @@
-use crate::package;
-use std::{collections::HashMap, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
-use super::{EntryType, InstallTree, RockLayout, Tree};
+use super::{InstallSession, InstallView, RockLayout, Slot, Tree};
 use crate::{
     config::Config,
     fs,
-    lockfile::{LockedPackage, LockedPackageSpec, Lockfile, ReadOnly},
-    lua,
+    lockfile::{LockedPackage, LockedPackageSpec},
+    lua, package,
+    transaction::Transaction,
 };
 use miette::{Diagnostic, Result};
 use thiserror::Error;
@@ -30,8 +30,10 @@ struct ConflictingPackageError {
 /// When dropped, tries to remove all build artifacts that are not meant to be distributed,
 /// as well as the `etc` directory (failing silently if any artifacts cannot be removed).
 /// Unlike a regular Lux tree, **conflicting packages are not supported.**
-#[derive(Clone, Debug)]
-pub struct FlatDistTree(Tree);
+#[derive(Debug)]
+pub struct FlatDistTree {
+    tree: Tree,
+}
 
 impl FlatDistTree {
     pub fn new(
@@ -39,15 +41,12 @@ impl FlatDistTree {
         version: lua::Version,
         config: &Config,
     ) -> Result<Self, super::Error> {
-        let version_dir = root.join(version.to_string());
-        let test_tree_dir = version_dir.join("test_dependencies");
-        let build_tree_dir = version_dir.join("build_dependencies");
-        let tree = Tree::new_with_paths(root, test_tree_dir, build_tree_dir, version, config)?;
-        Ok(Self(tree))
+        let tree = Tree::new_flat(root, version, config)?;
+        Ok(Self { tree })
     }
 
     fn guard_no_conflicting_package(&self, package: &LockedPackageSpec) -> Result<(), io::Error> {
-        let lockfile = self.lockfile().map_err(io::Error::other)?;
+        let lockfile = self.tree.regular().lockfile().map_err(io::Error::other)?;
         match lockfile.has_rock(&package.clone().into_package_req(), None) {
             Some(existing_package) => {
                 if existing_package.version() == package.version() {
@@ -67,85 +66,53 @@ impl FlatDistTree {
 
 impl Drop for FlatDistTree {
     fn drop(&mut self) {
-        let build_tree_dir = &self.0.build_tree_dir;
+        let build_tree_dir = self.tree.build_base();
         if build_tree_dir.is_dir() {
             let _ = fs::sync::remove_dir_all(build_tree_dir);
         }
-        let package_rockspec = self.root().join("package.rockspec");
+        let root = self.tree.regular().root();
+        let package_rockspec = root.join("package.rockspec");
         if package_rockspec.is_file() {
             let _ = fs::sync::remove_file(&package_rockspec);
         }
-        let lockfile = self.lockfile_path();
+        let lockfile = self.tree.regular().lockfile_path();
         if lockfile.is_file() {
             let _ = fs::sync::remove_file(&lockfile);
         }
-        let etc_dir = self.root().join("etc");
+        let etc_dir = root.join("etc");
         if etc_dir.is_dir() {
             let _ = fs::sync::remove_dir_all(etc_dir);
         }
     }
 }
 
-impl InstallTree for FlatDistTree {
-    fn version(&self) -> &lua::Version {
-        self.0.version()
+impl InstallView for FlatDistTree {
+    fn slot(&self) -> &Slot {
+        self.tree.regular()
     }
 
-    fn root(&self) -> PathBuf {
-        self.0.root()
+    fn build_slot(&self) -> Result<Slot, super::Error> {
+        self.tree.build()
+    }
+
+    fn build_transaction(&self) -> Result<Transaction<'_>, super::Error> {
+        let slot = self.tree.build()?;
+        Transaction::new(&self.tree, &slot)
     }
 
     fn layout_for(&self, _package: &LockedPackageSpec) -> RockLayout {
-        RockLayout::new(self.0.root())
+        RockLayout::new(self.tree.regular().root())
     }
+}
 
-    fn bin(&self) -> PathBuf {
-        self.0.bin()
-    }
-
-    fn unwrapped_bin(&self) -> PathBuf {
-        self.0.unwrapped_bin()
-    }
-
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), super::Error> {
-        self.guard_no_conflicting_package(package)
+impl InstallSession for FlatDistTree {
+    fn prepare(&self, package: &LockedPackage) -> Result<(), super::Error> {
+        self.guard_no_conflicting_package(&package.spec)
             .map_err(super::Error::Io)?;
-        let layout = self.layout_for(package);
+        let layout = self.layout_for(&package.spec);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
         fs::sync::create_dir_all(&layout.src)?;
         Ok(())
-    }
-
-    fn cleanup(
-        &self,
-        _package: &LockedPackage,
-        _entry_type: EntryType,
-    ) -> Result<(), super::Error> {
-        unreachable!("dist trees do not undergo cleanup for packages")
-    }
-
-    fn lockfile(&self) -> Result<Lockfile<ReadOnly>, super::Error> {
-        self.0.lockfile()
-    }
-
-    fn lockfile_path(&self) -> PathBuf {
-        self.0.lockfile_path()
-    }
-
-    fn build_tree(&self, config: &Config) -> Result<Tree, super::Error> {
-        self.0.build_tree(config)
-    }
-
-    fn test_tree(&self, config: &Config) -> Result<Tree, super::Error> {
-        self.0.test_tree(config)
-    }
-
-    fn list(&self) -> Result<HashMap<package::Name, Vec<LockedPackage>>, super::Error> {
-        self.0.list()
-    }
-
-    fn match_rocks(&self, req: &crate::package::Req) -> Result<super::RockMatches, super::Error> {
-        self.0.match_rocks(req)
     }
 }

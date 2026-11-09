@@ -9,7 +9,7 @@ use crate::{
     lockfile::{self, LockedPackage, LockedPackageSpec, OptState, PinnedState},
     lua,
     rockspec::{LuaVersionCompatibility, Rockspec},
-    tree::{EntryType, InstallTree},
+    tree::{EntryType, InstallSession},
 };
 
 use super::materialise::fetch_and_hash_source;
@@ -18,7 +18,7 @@ use super::materialise::fetch_and_hash_source;
 /// over how a local package should be built.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
-pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
+pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallSession> {
     rockspec: &'a R,
     tree: &'a T,
     entry_type: EntryType,
@@ -41,7 +41,7 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     source: Option<remote::package::Source>,
 }
 
-impl<R: Rockspec + HasIntegrity, T: InstallTree + Sync, State> BuildBuilder<'_, R, T, State>
+impl<R: Rockspec + HasIntegrity, T: InstallSession + Sync, State> BuildBuilder<'_, R, T, State>
 where
     State: build_builder::State + build_builder::IsComplete,
 {
@@ -60,7 +60,7 @@ where
 async fn do_build<R, T>(build: Build<'_, R, T>) -> Result<LockedPackage, build::Error>
 where
     R: Rockspec + HasIntegrity,
-    T: InstallTree + Sync,
+    T: InstallSession + Sync,
 {
     let rockspec = build.rockspec;
     let lua = build.lua;

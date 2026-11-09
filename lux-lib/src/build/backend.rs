@@ -11,13 +11,13 @@ use crate::{
     config::Config,
     lockfile::LockedPackageSpec,
     lua, rockspec,
-    tree::{InstallTree, RockLayout},
+    tree::{InstallView, RockLayout},
     variables::{self, Environment},
 };
 
 #[derive(Builder)]
 #[builder(start_fn(name = "new"))]
-pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
+pub(crate) struct RunBuildArgs<'a, T: InstallView> {
     pub(crate) package: &'a LockedPackageSpec,
     pub(crate) no_install: bool,
     pub(crate) lua: &'a lua::Installation,
@@ -31,7 +31,7 @@ pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
 pub(crate) trait BuildBackend {
     type Err: std::error::Error;
 
-    fn run<T: InstallTree + Sync>(
+    fn run<T: InstallView + Sync>(
         self,
         args: RunBuildArgs<'_, T>,
     ) -> impl Future<Output = Result<BuildInfo, Self::Err>> + Send;

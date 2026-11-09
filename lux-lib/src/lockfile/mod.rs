@@ -24,7 +24,7 @@ use crate::fs;
 use crate::remote;
 use crate::rockspec::lua_dependency;
 use crate::rockspec::RockBinaries;
-use crate::tree::{EntryType, InstallTree, Tree};
+use crate::tree::{EntryType, InstallView};
 
 pub mod constraint;
 mod guard;
@@ -725,7 +725,7 @@ impl PackageLock {
     ) -> PackageSyncSpec {
         let pkg_dir_exists = |pkg: &LockedPackage| match strategy {
             SyncStrategy::LockfileOnly => true,
-            SyncStrategy::EnsureInstalled(tree) => tree.layout_for(pkg.spec()).root.is_dir(),
+            SyncStrategy::EnsureInstalled(tree) => tree.is_installed(pkg),
         };
 
         let entrypoints_to_keep: HashSet<LockedPackage> = self
@@ -903,6 +903,12 @@ pub struct FlushLockfileError {
     source: io::Error,
 }
 
+impl FlushLockfileError {
+    pub(crate) fn new(filepath: PathBuf, source: io::Error) -> Self {
+        Self { filepath, source }
+    }
+}
+
 /// A specification for syncing a list of packages with a lockfile
 #[derive(Debug, Default)]
 pub(crate) struct PackageSyncSpec {
@@ -916,7 +922,7 @@ pub(crate) enum SyncStrategy<'a> {
     LockfileOnly,
     /// In addition to checking lockfile constraints, verify that each
     /// package's installation directory exists in the given tree.
-    EnsureInstalled(&'a Tree),
+    EnsureInstalled(&'a dyn InstallView),
 }
 
 impl<P: LockfilePermissions> Lockfile<P> {
@@ -1421,39 +1427,59 @@ mod tests {
     use super::*;
     use std::{fs::remove_file, path::PathBuf};
 
-    use assert_fs::fixture::PathCopy;
+    use assert_fs::fixture::{PathChild, PathCopy};
     use insta::{assert_json_snapshot, sorted_redaction};
 
-    use crate::{config, lua};
+    use crate::{config, lua, tree};
 
-    #[test]
-    fn parse_lockfile() {
-        let temp = assert_fs::TempDir::new().unwrap();
-        temp.copy_from(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree"),
-            &["**"],
-        )
-        .unwrap();
-
+    fn sample_tree_ctx(temp: &assert_fs::TempDir) -> (tree::Tree, tree::Slot) {
         let config = config::Builder::new()
             .unwrap()
             .user_tree(Some(temp.to_path_buf()))
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let slot = tree.regular().clone();
+        temp.child("dependencies/5.1")
+            .copy_from(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("resources/test/sample-tree/dependencies/5.1"),
+                &["**"],
+            )
+            .unwrap();
+        (tree, slot)
+    }
+
+    fn sample_tree(temp: &assert_fs::TempDir) -> tree::Slot {
+        sample_tree_ctx(temp).1
+    }
+
+    #[test]
+    fn parse_lockfile() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let tree = sample_tree(&temp);
         let lockfile = tree.lockfile().unwrap();
 
         assert_json_snapshot!(lockfile, { ".**" => sorted_redaction() });
     }
 
     #[test]
-    fn add_rocks() {
+    fn lockfile_with_removed_builds_field_still_loads() {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp.copy_from(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree"),
-            &["**"],
+        let path = temp.path().join("lux.lock");
+        std::fs::write(
+            &path,
+            r#"{"version":"2.0.0","builds":{},"rocks":{},"entrypoints":{}}"#,
         )
         .unwrap();
+
+        Lockfile::<ReadOnly>::load(path).unwrap();
+    }
+
+    #[test]
+    fn add_rocks() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let tree = sample_tree(&temp);
 
         let mock_hashes = LockedPackageHashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
@@ -1464,12 +1490,6 @@ mod tests {
                 .unwrap(),
         };
 
-        let config = config::Builder::new()
-            .unwrap()
-            .user_tree(Some(temp.to_path_buf()))
-            .build()
-            .unwrap();
-        let tree = config.user_tree(lua::Version::Lua51).unwrap();
         let mut lockfile = tree.lockfile().unwrap().write_guard();
 
         let test_package = package::Spec::parse("test1".to_string(), "0.1.0".to_string()).unwrap();
@@ -1499,27 +1519,17 @@ mod tests {
 
     #[test]
     fn parse_nonexistent_lockfile() {
-        let tree_path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree");
-
         let temp = assert_fs::TempDir::new().unwrap();
-        temp.copy_from(&tree_path, &["**"]).unwrap();
+        let tree = sample_tree(&temp);
 
-        remove_file(temp.join("5.1/lux.lock")).unwrap();
-
-        let config = config::Builder::new()
-            .unwrap()
-            .user_tree(Some(temp.to_path_buf()))
-            .build()
-            .unwrap();
-        let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        remove_file(tree.root().join("lux.lock")).unwrap();
 
         let _ = tree.lockfile().unwrap().write_guard(); // Try to create the lockfile but don't actually do anything with it.
     }
 
     fn get_test_lockfile() -> Lockfile<ReadOnly> {
         let sample_tree = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources/test/sample-tree/5.1/lux.lock");
+            .join("resources/test/sample-tree/dependencies/5.1/lux.lock");
         Lockfile::new(sample_tree).unwrap()
     }
 
@@ -1655,19 +1665,9 @@ mod tests {
     #[test]
     fn test_sync_spec_ensure_installed() {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp.copy_from(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree"),
-            &["**"],
-        )
-        .unwrap();
-
-        let config = config::Builder::new()
-            .unwrap()
-            .user_tree(Some(temp.to_path_buf()))
-            .build()
-            .unwrap();
-        let tree = config.user_tree(lua::Version::Lua51).unwrap();
-        let lockfile = tree.lockfile().unwrap();
+        let (tree_ctx, slot) = sample_tree_ctx(&temp);
+        let lockfile = slot.lockfile().unwrap();
+        let transaction = crate::transaction::Transaction::new(&tree_ctx, &slot).unwrap();
 
         let packages: Vec<lua_dependency::Spec> = vec![
             package::Req::parse("neorg@8.8.1-1").unwrap().into(),
@@ -1680,7 +1680,7 @@ mod tests {
         // Since lua-cjson is not present in the tree, it should get put into `to_add`
         let sync_spec = lockfile
             .lock
-            .package_sync_spec(&packages, &SyncStrategy::EnsureInstalled(&tree));
+            .package_sync_spec(&packages, &SyncStrategy::EnsureInstalled(&transaction));
 
         assert!(!sync_spec
             .to_add

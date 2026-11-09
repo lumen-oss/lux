@@ -18,8 +18,8 @@ use crate::{
     fs,
     hash::HasIntegrity,
     lockfile::{
-        LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
-        RemotePackageSourceUrl,
+        LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageLockType,
+        LockedPackageSpec, RemotePackageSourceUrl,
     },
     operations::{self, fetch, unpack},
     rockspec::Rockspec,
@@ -75,6 +75,7 @@ pub(crate) struct Materialise<'a> {
     #[builder(start_fn)]
     pub(crate) config: &'a Config,
     pub(crate) resolved: ResolvedArtifacts,
+    pub(crate) section: Option<LockedPackageLockType>,
 }
 
 impl<State> MaterialiseBuilder<'_, State>
@@ -84,19 +85,30 @@ where
     pub(crate) async fn materialise(self) -> Result<MaterialiseArtifacts, Error> {
         let args = self._build();
         let config = args.config;
+        let selected_section = args.section;
+
+        let selected = |section: LockedPackageLockType| match selected_section {
+            Some(selected) => selected == section,
+            None => true,
+        };
 
         let artifacts: MaterialiseArtifacts = args
             .resolved
             .iter()
+            .filter(|(section, _)| selected(*section))
             .map(|(section, packages)| (section, packages.map(|_| HashMap::new())))
             .collect();
 
-        let jobs = args.resolved.into_iter().flat_map(|(section, packages)| {
-            packages
-                .into_iter()
-                .flatten()
-                .map(move |(id, package)| (section, id, package))
-        });
+        let jobs = args
+            .resolved
+            .into_iter()
+            .filter(|(section, _)| selected(*section))
+            .flat_map(|(section, packages)| {
+                packages
+                    .into_iter()
+                    .flatten()
+                    .map(move |(id, package)| (section, id, package))
+            });
 
         futures::stream::iter(jobs)
             .map(|(section, id, package)| async move {

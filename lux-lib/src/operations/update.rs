@@ -1,6 +1,7 @@
 use crate::package;
 use crate::project;
 use crate::remote;
+use crate::transaction::Transaction;
 use std::io;
 
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
     operations::install,
     package::db::PackageDB,
     package::RockConstraintUnsatisfied,
-    tree::{self, InstallTree, Tree},
+    tree::{self, Slot as TreeSlot},
     workspace::{self, TreeError, Workspace},
 };
 use bon::Builder;
@@ -22,7 +23,9 @@ use thiserror::Error;
 use crate::operations::uninstall::{self, Uninstall};
 
 use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
-use crate::drivers::{InstallPackages, InstallPackagesError};
+use crate::drivers::{
+    InstallBuildDependencies, InstallPackages, InstallPackagesError, InstallTestPackages,
+};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum Error {
@@ -156,7 +159,9 @@ async fn update_workspace(
     args: Update<'_>,
     package_db: PackageDB,
 ) -> Result<Vec<LockedPackage>, Error> {
-    let tree = workspace.tree(args.config)?;
+    let workspace_tree = workspace.tree(args.config)?;
+    let regular = workspace_tree.regular();
+    let build_tree = workspace_tree.build()?;
 
     let sync_report = Sync::new(&workspace, args.config)
         .mode(SyncMode::Frozen)
@@ -168,7 +173,8 @@ async fn update_workspace(
     let mut project_lockfile = workspace.lockfile()?.write_guard();
 
     let updated_dependencies = update_dependency_tree(
-        tree,
+        &workspace_tree,
+        regular,
         &mut project_lockfile,
         LockedPackageLockType::Regular,
         package_db.clone(),
@@ -177,10 +183,11 @@ async fn update_workspace(
     )
     .await?;
 
-    let test_tree = workspace.test_tree(args.config)?;
+    let test_tree = workspace_tree.test()?;
 
     let updated_test_dependencies = update_dependency_tree(
-        test_tree,
+        &workspace_tree,
+        &test_tree,
         &mut project_lockfile,
         LockedPackageLockType::Test,
         package_db.clone(),
@@ -189,10 +196,9 @@ async fn update_workspace(
     )
     .await?;
 
-    let build_tree = workspace.build_tree(args.config)?;
-
     let updated_build_dependencies = update_dependency_tree(
-        build_tree,
+        &workspace_tree,
+        &build_tree,
         &mut project_lockfile,
         LockedPackageLockType::Build,
         package_db,
@@ -211,21 +217,31 @@ async fn update_workspace(
 }
 
 async fn update_dependency_tree(
-    tree: Tree,
+    tree: &tree::Tree,
+    slot: &TreeSlot,
     project_lockfile: &mut project::Lockfile<ReadWrite>,
     lock_type: LockedPackageLockType,
     package_db: PackageDB,
     config: &Config,
     packages: &Option<Vec<package::Req>>,
 ) -> Result<Vec<LockedPackage>, Error> {
-    let lockfile = tree.lockfile()?;
+    let lockfile = slot.lockfile()?;
     let dependencies = updatable_packages(&lockfile)
         .into_iter()
         .filter(|pkg| is_included(pkg, packages))
         .collect_vec();
-    let updated_dependencies = update(dependencies, package_db, &tree, &lockfile, config).await?;
+    let updated_dependencies = update(
+        dependencies,
+        package_db,
+        tree,
+        slot,
+        &lockfile,
+        config,
+        lock_type,
+    )
+    .await?;
     if !updated_dependencies.is_empty() {
-        let updated_lockfile = tree.lockfile()?;
+        let updated_lockfile = slot.lockfile()?;
         project_lockfile.sync(updated_lockfile.local_pkg_lock(), &lock_type);
     }
     Ok(updated_dependencies)
@@ -250,20 +266,32 @@ async fn update_install_tree(
     let tree = args
         .config
         .user_tree(lua::Version::from(args.config)?.clone())?;
-    let lockfile = tree.lockfile()?;
+    let regular = tree.regular();
+    let lockfile = regular.lockfile()?;
     let packages = updatable_packages(&lockfile)
         .into_iter()
         .filter(|pkg| is_included(pkg, &args.packages))
         .collect_vec();
-    update(packages, package_db, &tree, &lockfile, args.config).await
+    update(
+        packages,
+        package_db,
+        &tree,
+        &regular,
+        &lockfile,
+        args.config,
+        LockedPackageLockType::Regular,
+    )
+    .await
 }
 
 async fn update(
     packages: Vec<(LockedPackage, package::Req)>,
     package_db: PackageDB,
-    tree: &Tree,
+    tree: &tree::Tree,
+    slot: &TreeSlot,
     lockfile: &Lockfile<ReadOnly>,
     config: &Config,
+    lock_type: LockedPackageLockType,
 ) -> Result<Vec<LockedPackage>, Error> {
     let mut updatable = Vec::new();
     for (package, constraint) in packages.clone() {
@@ -281,22 +309,63 @@ async fn update(
     if updatable.is_empty() {
         Ok(Vec::new())
     } else {
-        Uninstall::new()
-            .config(config)
-            .packages(updatable.iter().map(|(package, _)| package.id()))
-            .remove()
-            .await?;
-        let (updated_packages, _lockfile) = InstallPackages::new(config, tree)
-            .packages(
-                updatable
-                    .iter()
-                    .map(|updatable| mk_install_spec(updatable, lockfile))
-                    .collect(),
-            )
-            .package_db(package_db)
-            .install()
-            .await?;
-        Ok(updated_packages)
+        let install_specs = updatable
+            .iter()
+            .map(|updatable| mk_install_spec(updatable, lockfile))
+            .collect_vec();
+
+        match lock_type {
+            LockedPackageLockType::Build => {
+                let transaction = Transaction::new(tree, slot)?;
+                Uninstall::new()
+                    .target(&transaction)
+                    .packages(updatable.iter().map(|(package, _)| package.id()))
+                    .remove()
+                    .await?;
+                let updated_packages = InstallBuildDependencies::new(config, &transaction)
+                    .build_packages(install_specs)
+                    .package_db(package_db)
+                    .install()
+                    .await?
+                    .packages;
+                transaction.commit()?;
+                Ok(updated_packages)
+            }
+            LockedPackageLockType::Regular | LockedPackageLockType::Test => {
+                let build_tree = tree.build()?;
+                let build_transaction = Transaction::new(tree, &build_tree)?;
+                let build_dependencies = InstallBuildDependencies::new(config, &build_transaction)
+                    .packages(install_specs.clone())
+                    .package_db(package_db.clone())
+                    .install()
+                    .await?;
+                build_transaction.commit()?;
+
+                let transaction = Transaction::new(tree, slot)?;
+                Uninstall::new()
+                    .target(&transaction)
+                    .packages(updatable.iter().map(|(package, _)| package.id()))
+                    .remove()
+                    .await?;
+                let updated_packages = if let LockedPackageLockType::Regular = lock_type {
+                    InstallPackages::new(config, &transaction)
+                        .packages(install_specs)
+                        .package_db(package_db)
+                        .install(&build_dependencies.token)
+                        .await?
+                        .0
+                } else {
+                    InstallTestPackages::new(config, &transaction)
+                        .packages(install_specs)
+                        .package_db(package_db)
+                        .install(&build_dependencies.token)
+                        .await?
+                        .0
+                };
+                transaction.commit()?;
+                Ok(updated_packages)
+            }
+        }
     }
 }
 

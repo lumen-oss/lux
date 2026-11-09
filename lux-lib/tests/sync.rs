@@ -3,7 +3,7 @@ use flaky_test::flaky_test;
 use lux_lib::{
     config,
     drivers::sync::{Sync, SyncMode, TargetSet},
-    tree::{InstallTree, RockMatches},
+    tree::RockMatches,
     workspace::Workspace,
 };
 use std::path::PathBuf;
@@ -37,7 +37,7 @@ async fn sync_test_dependencies_empty_project() {
         assert_eq!(lockfile_content_before_sync, lockfile_content_after_sync);
     }
 
-    let test_tree = workspace.tree(&config).unwrap().test_tree(&config).unwrap();
+    let test_tree = workspace.tree(&config).unwrap().test().unwrap();
 
     assert!(matches!(
         test_tree

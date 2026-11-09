@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::fs;
 use crate::lockfile::LockedPackageLockType;
-use crate::tree::InstallTree;
 use crate::workspace;
 use crate::workspace::TreeError;
 use crate::workspace::Workspace;
@@ -82,12 +81,13 @@ async fn do_generate_luarc(args: GenLuaRc<'_>) -> Result<(), Error> {
         .await
         .unwrap_or_else(|_| "{}".into());
 
-    let dependency_tree = workspace.tree(config)?;
+    let workspace_tree = workspace.tree(config)?;
+    let regular = workspace_tree.regular();
     let dependency_dirs = lockfile
         .local_pkg_lock(&LockedPackageLockType::Regular)
         .rocks()
         .values()
-        .map(|dependency| dependency_tree.layout_for(&dependency.spec))
+        .map(|dependency| regular.layout_for(&dependency.spec))
         .flat_map(|layout| [layout.src, layout.lib])
         .filter(|dir| is_non_empty_dir(dir))
         .filter_map(|dependency_dir| diff_paths(dependency_dir, workspace.root()));
@@ -151,10 +151,10 @@ mod tests {
                         "library": []
                     }
                 }"#,
-                vec![".lux/5.1/my-lib".into()],
+                vec![".lux/dependencies/5.1/my-lib".into()],
                 r#"{
                     "workspace": {
-                        "library": [".lux/5.1/my-lib"]
+                        "library": [".lux/dependencies/5.1/my-lib"]
                     }
                 }"#,
             ),
@@ -166,11 +166,14 @@ mod tests {
                         "library": []
                     }
                 }"#,
-                vec![".lux/5.1/lib-A".into(), ".lux/5.1/lib-B".into()],
+                vec![
+                    ".lux/dependencies/5.1/lib-A".into(),
+                    ".lux/dependencies/5.1/lib-B".into(),
+                ],
                 r#"{
                     "any-other-field": true,
                     "workspace": {
-                        "library": [".lux/5.1/lib-A", ".lux/5.1/lib-B"]
+                        "library": [".lux/dependencies/5.1/lib-A", ".lux/dependencies/5.1/lib-B"]
                     }
                 }"#,
             ),
@@ -178,13 +181,13 @@ mod tests {
                 "Removes not present libs, without removing others", // 📝 Description
                 r#"{
                     "workspace": {
-                        "library": [".lux/5.1/lib-A", ".lux/5.4/lib-B"]
+                        "library": [".lux/dependencies/5.1/lib-A", ".lux/dependencies/5.4/lib-B"]
                     }
                 }"#,
-                vec![".lux/5.1/lib-C".into()],
+                vec![".lux/dependencies/5.1/lib-C".into()],
                 r#"{
                     "workspace": {
-                        "library": [".lux/5.1/lib-C"]
+                        "library": [".lux/dependencies/5.1/lib-C"]
                     }
                 }"#,
             ),

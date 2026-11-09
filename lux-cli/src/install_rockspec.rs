@@ -8,6 +8,7 @@ use lux_lib::{
     lockfile::PinnedState,
     operations::{self},
     rockspec::LuaVersionCompatibility,
+    transaction::Transaction,
 };
 
 use miette::{IntoDiagnostic, Result};
@@ -41,14 +42,17 @@ pub async fn install_rockspec(data: InstallRockspec, config: Config) -> Result<(
 
     let lua_version = rockspec.lua_version_matches(&config)?;
     let tree = config.user_tree(lua_version)?;
+    let regular = tree.regular();
 
+    let transaction = Transaction::new(&tree, &regular)?;
     operations::InstallRockspec::new()
         .rockspec(rockspec)
         .pin(pin)
         .config(&config)
-        .tree(&tree)
+        .target(&transaction)
         .install()
         .await?;
+    transaction.commit()?;
 
     Ok(())
 }

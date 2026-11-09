@@ -3,10 +3,11 @@ use std::path::PathBuf;
 
 use lux_lib::{
     config::Config,
-    drivers::InstallPackages,
+    drivers::{InstallBuildDependencies, InstallPackages},
     lockfile::PinnedState,
     lua, operations,
     package::db::PackageDB,
+    transaction::Transaction,
     workspace::{self, Workspace},
 };
 
@@ -58,14 +59,17 @@ async fn install_from_path(
 
     let lua_version = project.lua_version(&config)?;
     let tree = config.user_tree(lua_version)?;
+    let regular = tree.regular();
 
+    let transaction = Transaction::new(&tree, &regular)?;
     operations::InstallProject::new()
         .project(project)
         .config(&config)
-        .tree(&tree)
+        .target(&transaction)
         .workspace(&workspace)
         .build()
         .await?;
+    transaction.commit()?;
 
     Ok(())
 }
@@ -75,15 +79,28 @@ async fn install_remote(data: Install, config: Config) -> Result<()> {
 
     let lua_version = lua::Version::from(&config)?.clone();
     let tree = config.user_tree(lua_version)?;
+    let build_tree = tree.build()?;
+    let regular = tree.regular();
 
-    let packages = apply_build_behaviour(data.package_req, pin, data.force, &tree, &config)?;
+    let packages = apply_build_behaviour(data.package_req, pin, data.force, &regular, &config)?;
 
     // TODO(vhyrro): If the tree doesn't exist then error out.
-    InstallPackages::new(&config, &tree)
-        .packages(packages)
-        .package_db(PackageDB::from_config(&config).await?)
+    let package_db = PackageDB::from_config(&config).await?;
+    let build_transaction = Transaction::new(&tree, &build_tree)?;
+    let build_dependencies = InstallBuildDependencies::new(&config, &build_transaction)
+        .packages(packages.clone())
+        .package_db(package_db.clone())
         .install()
         .await?;
+    build_transaction.commit()?;
+
+    let transaction = Transaction::new(&tree, &regular)?;
+    InstallPackages::new(&config, &transaction)
+        .packages(packages)
+        .package_db(package_db)
+        .install(&build_dependencies.token)
+        .await?;
+    transaction.commit()?;
 
     Ok(())
 }

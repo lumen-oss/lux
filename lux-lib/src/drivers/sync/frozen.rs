@@ -1,11 +1,15 @@
 use crate::package;
+use crate::transaction::Transaction;
 use std::io;
 
 use crate::operations::{self, uninstall};
 
 use super::reconcile::{reconcile_locks, SyncReport};
 
-use crate::drivers::{InstallPackages, InstallPackagesError};
+use crate::drivers::{
+    BuildDependencies, InstallBuildDependencies, InstallPackages, InstallPackagesError,
+    InstallTestPackages,
+};
 use crate::{
     build::BuildBehaviour,
     config::Config,
@@ -21,7 +25,7 @@ use crate::{
     pipeline::resolve::luarocks_build_backend_name,
     project,
     rockspec::{self, lua_dependency, Rockspec},
-    tree::{self, InstallTree},
+    tree::{self, InstallSession, InstallView},
     workspace::{self, TreeError, Workspace},
 };
 use bon::Builder;
@@ -80,10 +84,12 @@ where
         // or in `args.extra_packages`.
         // To prevent loss of transitive build dependencies, we resolve them, and
         // add them to `args.extra_packages` before syncing the workspace's build dependencies.
-        let lockfile = args.workspace.tree(args.config)?.lockfile()?;
+        let regular_tree_ctx = args.workspace.tree(args.config)?;
+        let regular_tree = regular_tree_ctx.regular();
         let test_tree = args.workspace.test_tree(args.config)?;
-        let test_build_lockfile = test_tree.build_tree(args.config)?.lockfile()?;
-        let build_lockfile = args.workspace.build_tree(args.config)?.lockfile()?;
+        let build_tree = args.workspace.build_tree(args.config)?;
+        let lockfile = regular_tree.lockfile()?;
+        let build_lockfile = build_tree.lockfile()?;
         let transitive_build_dependencies = lockfile
             .local_pkg_lock()
             .rocks()
@@ -97,7 +103,7 @@ where
                     .rocks()
                     .values()
                     .flat_map(|rock| rock.build_dependencies())
-                    .filter_map(|dep_id| test_build_lockfile.get(dep_id)),
+                    .filter_map(|dep_id| build_lockfile.get(dep_id)),
             )
             .map(|pkg| pkg.spec().as_package_req())
             .collect_vec();
@@ -189,21 +195,26 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
     // stdout calls, therefore gag all standard output during sync.
     let _stdout_gag = gag::Gag::stdout();
 
-    let tree = match lock_type {
-        LockedPackageLockType::Regular => args.workspace.tree(args.config)?,
-        LockedPackageLockType::Test => args.workspace.test_tree(args.config)?,
-        LockedPackageLockType::Build => args.workspace.build_tree(args.config)?,
+    let workspace_tree = args.workspace.tree(args.config)?;
+    let regular_tree = workspace_tree.regular();
+    let test_tree = workspace_tree.test()?;
+    let build_tree = workspace_tree.build()?;
+    let slot = match lock_type {
+        LockedPackageLockType::Regular => regular_tree,
+        LockedPackageLockType::Test => &test_tree,
+        LockedPackageLockType::Build => &build_tree,
     };
-    fs::sync::create_dir_all(tree.root())?;
+    fs::sync::create_dir_all(slot.root())?;
+    let transaction = Transaction::new(&workspace_tree, slot)?;
 
-    let mut workspace_lockfile = args.workspace.lockfile()?.write_guard();
-    let dest_lockfile = tree.lockfile()?;
+    let mut workspace_lockfile = args.workspace.lockfile()?.into_temporary();
+    let dest_lockfile = transaction.lockfile()?;
 
     let packages = SyncPackages::new(args, lock_type).gather()?;
     let strategy = if args.fast.unwrap_or(false) {
         SyncStrategy::LockfileOnly
     } else {
-        SyncStrategy::EnsureInstalled(&tree)
+        SyncStrategy::EnsureInstalled(&transaction)
     };
     let package_sync_spec = workspace_lockfile.package_sync_spec(&packages, lock_type, &strategy);
 
@@ -212,7 +223,7 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
         .iter()
         .for_each(|pkg| workspace_lockfile.remove(pkg, lock_type));
 
-    let package_db = workspace_lockfile.local_pkg_locks().into();
+    let package_db: PackageDB = workspace_lockfile.local_pkg_locks().into();
 
     let (to_add, mut report) = reconcile_locks(&workspace_lockfile, &dest_lockfile, lock_type);
     // The workspace's projects are not dependencies, so they must never be reported as added
@@ -226,23 +237,26 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
         .added
         .extend(to_add.iter().map(|(_, pkg)| pkg).cloned());
 
-    InstallPackages::new(args.config, &tree)
-        .package_db(package_db)
-        .packages(packages_to_install)
-        .install()
-        .await?;
+    install_synced_packages(
+        args,
+        &transaction,
+        &mut workspace_lockfile,
+        *lock_type,
+        packages_to_install,
+        package_db,
+    )
+    .await?;
 
     // Read the destination lockfile after installing
-    let install_tree_lockfile = tree.lockfile()?;
+    let install_tree_lockfile = transaction.lockfile()?;
 
     validate_integrity(args, &to_add, &install_tree_lockfile)?;
 
     let packages_to_remove = report.removed.iter().map(|pkg| pkg.id()).collect_vec();
 
     operations::Uninstall::new()
-        .config(args.config)
+        .target(&transaction)
         .packages(packages_to_remove)
-        .tree(tree.clone())
         .remove()
         .await?;
 
@@ -266,7 +280,7 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
 
     install_missing_packages(
         args,
-        &tree,
+        &transaction,
         &mut workspace_lockfile,
         lock_type,
         &package_sync_spec,
@@ -274,7 +288,66 @@ async fn do_sync(args: &Sync<'_>, lock_type: &LockedPackageLockType) -> Result<S
     )
     .await?;
 
+    transaction.commit()?;
+    workspace_lockfile.write()?;
     Ok(report)
+}
+
+async fn install_synced_packages<T>(
+    args: &Sync<'_>,
+    tree: &T,
+    workspace_lockfile: &mut project::Lockfile<ReadWrite>,
+    lock_type: LockedPackageLockType,
+    packages: Vec<install::Spec>,
+    package_db: PackageDB,
+) -> Result<Vec<LockedPackage>, Error>
+where
+    T: InstallSession,
+{
+    if packages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    if lock_type == LockedPackageLockType::Build {
+        return Ok(InstallBuildDependencies::new(args.config, tree)
+            .build_packages(packages)
+            .package_db(package_db)
+            .install()
+            .await?
+            .packages);
+    }
+
+    let workspace_tree = args.workspace.tree(args.config)?;
+    let build_tree = workspace_tree.build()?;
+    let build_transaction = Transaction::new(&workspace_tree, &build_tree)?;
+    let BuildDependencies {
+        lockfile: build_lockfile,
+        token: build_token,
+        ..
+    } = InstallBuildDependencies::new(args.config, &build_transaction)
+        .packages(packages.clone())
+        .package_db(package_db.clone())
+        .install()
+        .await?;
+    build_transaction.commit()?;
+    build_lockfile.commit(workspace_lockfile);
+
+    let installed = if lock_type == LockedPackageLockType::Regular {
+        InstallPackages::new(args.config, tree)
+            .package_db(package_db)
+            .packages(packages)
+            .install(&build_token)
+            .await?
+            .0
+    } else {
+        InstallTestPackages::new(args.config, tree)
+            .package_db(package_db)
+            .packages(packages)
+            .install(&build_token)
+            .await?
+            .0
+    };
+    Ok(installed)
 }
 
 /// Collects the packages which must be synchronised for a given lockfile type:
@@ -401,13 +474,13 @@ async fn install_missing_packages<T>(
     report: &mut SyncReport,
 ) -> Result<(), Error>
 where
-    T: InstallTree + Clone + Send + std::marker::Sync + 'static,
+    T: InstallSession,
 {
     if package_sync_spec.to_add.is_empty() {
         return Ok(());
     }
 
-    let missing_packages = package_sync_spec
+    let missing_packages: Vec<install::Spec> = package_sync_spec
         .to_add
         .iter()
         .map(|dep| {
@@ -421,12 +494,17 @@ where
         .unique()
         .collect();
 
-    let added = InstallPackages::new(args.config, tree)
-        .package_db(PackageDB::from_config(args.config).await?)
-        .packages(missing_packages)
-        .install()
-        .await?
-        .0;
+    let package_db = PackageDB::from_config(args.config).await?;
+
+    let added = install_synced_packages(
+        args,
+        tree,
+        workspace_lockfile,
+        *lock_type,
+        missing_packages,
+        package_db,
+    )
+    .await?;
 
     report.added.extend(added);
 

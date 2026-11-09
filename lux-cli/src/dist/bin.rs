@@ -48,12 +48,12 @@ pub async fn bin(data: Bin, config: Config) -> Result<()> {
     if lua_version == lua::Version::Luau {
         return Err(miette!("Lux cannot distribute binaries for Luau projects"));
     }
-    let tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, &config)?;
+    let flat_tree = FlatDistTree::new(staging_dir.path().to_path_buf(), lua_version, &config)?;
 
     let out = operations::dist::ProjectBin::new()
         .project(project)
         .config(&config)
-        .tree(&tree)
+        .target(&flat_tree)
         .maybe_output(data.output)
         .compile()
         .await

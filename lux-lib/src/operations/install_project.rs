@@ -6,15 +6,15 @@ use thiserror::Error;
 use crate::{
     build::{self, BuildBehaviour},
     config::Config,
-    drivers::{InstallPackages, InstallPackagesError},
+    drivers::{InstallBuildDependencies, InstallPackages, InstallPackagesError},
     hash::HasIntegrity,
-    lockfile::LockedPackage,
+    lockfile::{self, LockedPackage},
     operations::install,
     package::db::PackageDB,
     pipeline::discover::FoundPackage,
     project::{self, IntoLocalRockspecError, Project},
     rockspec::Rockspec,
-    tree::{self, InstallTree},
+    tree::{self, InstallSession},
     workspace::{self, Workspace},
 };
 
@@ -59,30 +59,34 @@ impl From<build::Error> for Error {
     }
 }
 
-/// Installs a project into a [`Tree`].
+/// Installs a project into a [`Slot`](tree::Slot).
 /// Typically, you will want to use [`crate::operations::BuildWorkspace`].
 /// Useful for installing a project and its dependencies outside of a workspace tree.
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallProject<'a, T>
 where
-    T: InstallTree,
+    T: InstallSession,
 {
     project: &'a Project,
 
     config: &'a Config,
 
-    tree: &'a T,
+    target: &'a T,
 
     #[builder(default = BuildBehaviour::Force)]
     behaviour: BuildBehaviour,
 
     /// Workspace whose lockfile is preferred during dependency resolution.
     workspace: Option<&'a Workspace>,
+
+    /// Locked packages to prefer during dependency resolution.
+    #[builder(setters(vis = "pub(crate)"))]
+    locked_packages: Option<Vec<lockfile::PackageLock>>,
 }
 
 impl<
-        T: InstallTree + Sync + Send,
+        T: InstallSession + Sync + Send,
         State: install_project_builder::State + install_project_builder::IsComplete,
     > InstallProjectBuilder<'_, T, State>
 {
@@ -92,17 +96,18 @@ impl<
         let args = self._build();
         let config = args.config;
         let project = args.project;
-        let tree = args.tree;
+        let destination = args.target;
 
         let rockspec = project.build_rockspec()?;
         let name = rockspec.package().clone();
 
         let behaviour = if matches!(args.behaviour, BuildBehaviour::Ignore) {
-            match tree.lockfile()?.entrypoint(&name) {
+            match destination.lockfile()?.entrypoint(&name) {
                 Some(existing) => {
                     let source_hash = project.root().hash().await.map_err(Error::Hash)?;
                     if existing.version() == rockspec.version()
                         && existing.hashes().source == source_hash
+                        && destination.is_installed(existing)
                     {
                         return Ok(existing.clone());
                     }
@@ -115,11 +120,14 @@ impl<
         };
 
         let root = FoundPackage::from_project_root(rockspec, project.root().to_path_buf());
-        let package_db = match args.workspace {
+        let mut package_db = match args.workspace {
             Some(workspace) => PackageDB::open(config, workspace).await?,
             None => PackageDB::from_config(config).await?,
+        };
+        if let Some(locked_packages) = args.locked_packages {
+            package_db = package_db.with_locks(locked_packages);
         }
-        .with_local(vec![root]);
+        let package_db = package_db.with_local(vec![root]);
 
         let install_spec = install::Spec::new(
             package::Req::from(name.clone()),
@@ -128,10 +136,18 @@ impl<
         .build_behaviour(behaviour)
         .build();
 
-        InstallPackages::new(config, tree)
-            .package_db(package_db)
-            .package(install_spec)
+        let build_transaction = destination.build_transaction()?;
+        let build_dependencies = InstallBuildDependencies::new(config, &build_transaction)
+            .package(install_spec.clone())
+            .package_db(package_db.clone())
             .install()
+            .await?;
+        build_transaction.commit()?;
+
+        InstallPackages::new(config, destination)
+            .package(install_spec)
+            .package_db(package_db)
+            .install(&build_dependencies.token)
             .await?
             .0
             .into_iter()

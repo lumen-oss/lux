@@ -32,7 +32,7 @@ use lux_lib::{
     project::Project,
     rockspec,
     rockspec::{dependency, lua_dependency, Rockspec},
-    tree::{EntryType, InstallTree, NvimLayout, RockLayout, RockMatches, Tree},
+    tree::{EntryType, InstallView, NvimLayout, RockLayout, RockMatches, Slot as TreeSlot, Tree},
     workspace::Workspace,
 };
 
@@ -1059,7 +1059,22 @@ impl mlua::UserData for NvimLayoutLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct TreeLua(pub Tree);
+pub struct TreeLua {
+    pub(crate) tree: Tree,
+    pub(crate) slot: TreeSlot,
+}
+
+impl TreeLua {
+    pub fn regular(tree: Tree) -> Self {
+        let slot = tree.regular();
+        Self { tree, slot }
+    }
+
+    pub fn test(tree: Tree) -> Result<Self, lux_lib::tree::Error> {
+        let slot = tree.test()?;
+        Ok(Self { tree, slot })
+    }
+}
 
 impl Typed for TreeLua {
     fn ty() -> Type {
@@ -1073,13 +1088,13 @@ impl TypedUserData for TreeLua {
     fn add_methods<M: TypedDataMethods<Self>>(methods: &mut M) {
         methods.document("The root directory of the tree");
         methods.add_method("root", |_, this, ()| {
-            Ok(this.0.root().to_slash_lossy().into_owned())
+            Ok(this.slot.root().to_slash_lossy().into_owned())
         });
         methods.document("The root directory of a package in this tree");
         methods.param("package", "");
         methods.add_method("root_for", |_, this, package: LockedPackageLua| {
             Ok(this
-                .0
+                .slot
                 .layout_for(package.0.spec())
                 .root
                 .to_slash_lossy()
@@ -1087,24 +1102,24 @@ impl TypedUserData for TreeLua {
         });
         methods.document("Where wrapped package binaries are installed");
         methods.add_method("bin", |_, this, ()| {
-            Ok(this.0.bin().to_slash_lossy().into_owned())
+            Ok(this.slot.bin().to_slash_lossy().into_owned())
         });
         methods.document("Get the `RockLayout` for an installed package.");
         methods.param("package", "");
         methods.add_method("rock_layout", |_, this, package: LockedPackageLua| {
-            Ok(RockLayoutLua(this.0.layout_for(package.0.spec())))
+            Ok(RockLayoutLua(this.slot.layout_for(package.0.spec())))
         });
         methods.document("Find installed rocks that match the given `Req`");
         methods.param("req", "");
         methods.add_method("match_rocks", |lua, this, req: PackageReqLua| {
-            this.0
+            this.slot
                 .match_rocks(&req.0)
                 .map(|m| RockMatchesLua(m).into_lua(lua))
                 .map_err(|err| LuaError::RuntimeError(err.to_string()))?
         });
         methods.document("Create a `LockfileReadOnly` for this tree.");
         methods.add_method("lockfile", |_, this, ()| {
-            this.0.lockfile().map(LockfileReadOnlyLua).into_lua_err()
+            this.slot.lockfile().map(LockfileReadOnlyLua).into_lua_err()
         });
     }
     fn add_documentation<F: mlua_extras::typed::TypedDataDocumentation<Self>>(docs: &mut F) {
@@ -1177,7 +1192,10 @@ If installing packages for a project, use `project:tree(config)` instead"#,
         );
         methods.param("lua_version", "");
         methods.add_method("user_tree", |_, this, lua_version: LuaVersionLua| {
-            this.0.user_tree(lua_version.0).map(TreeLua).into_lua_err()
+            this.0
+                .user_tree(lua_version.0)
+                .map(TreeLua::regular)
+                .into_lua_err()
         });
 
         methods.document(r#"The detached workspace tree root."#);
@@ -3174,12 +3192,15 @@ impl TypedUserData for WorkspaceLua {
 
         methods.param("config", "Lux config");
         methods.add_method("tree", |_, this, config: ConfigLua| {
-            this.0.tree(&config.0).map(TreeLua).into_lua_err()
+            this.0.tree(&config.0).map(TreeLua::regular).into_lua_err()
         });
 
         methods.param("config", "Lux config");
         methods.add_method("test_tree", |_, this, config: ConfigLua| {
-            this.0.test_tree(&config.0).map(TreeLua).into_lua_err()
+            this.0
+                .tree(&config.0)
+                .and_then(|tree| TreeLua::test(tree).map_err(Into::into))
+                .into_lua_err()
         });
 
         methods.param("config", "Lux config");
@@ -4134,10 +4155,14 @@ type = "builtin"
     #[test]
     fn lua_api_test_tree_rock_layout_lua() {
         let (tree, lua) = setup_lua();
-        let version_dir = tree.path().join("5.1");
-        std::fs::create_dir_all(&version_dir).unwrap();
+        let config = config::Builder::new()
+            .unwrap()
+            .user_tree(Some(tree.path().to_path_buf()))
+            .build()
+            .unwrap();
+        let tree_slot = config.user_tree(lua::Version::Lua51).unwrap().regular();
         std::fs::write(
-            version_dir.join("lux.lock"),
+            tree_slot.lockfile_path(),
             r#"{
   "version": "2.0.0",
   "rocks": {

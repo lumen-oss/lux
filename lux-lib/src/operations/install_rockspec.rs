@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     build::{self, BuildBehaviour},
     config::Config,
-    drivers::{InstallPackages, InstallPackagesError},
+    drivers::{InstallBuildDependencies, InstallPackages, InstallPackagesError},
     lockfile::{LockedPackage, OptState, PinnedState},
     lua,
     luarocks::installation,
@@ -15,7 +15,7 @@ use crate::{
     pipeline::discover::FoundPackage,
     rockspec,
     rockspec::{LuaVersionCompatibility, Rockspec},
-    tree::{self, InstallTree},
+    tree::{self, InstallSession},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -58,12 +58,12 @@ impl From<build::Error> for Error {
     }
 }
 
-/// Installs a Lua RockSpec into a [`Tree`].
+/// Installs a Lua RockSpec into a [`Slot`](tree::Slot).
 #[derive(Builder)]
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct InstallRockspec<'a, T>
 where
-    T: InstallTree,
+    T: InstallSession,
 {
     rockspec: rockspec::lua::Remote,
 
@@ -71,11 +71,11 @@ where
 
     config: &'a Config,
 
-    tree: &'a T,
+    target: &'a T,
 }
 
 impl<
-        T: InstallTree + Sync + Send + Clone + 'static,
+        T: InstallSession + Sync + Send,
         State: install_rockspec_builder::State + install_rockspec_builder::IsComplete,
     > InstallRockspecBuilder<'_, T, State>
 {
@@ -84,7 +84,7 @@ impl<
         let rockspec = args.rockspec;
         let pin = args.pin;
         let config = args.config;
-        let tree = args.tree;
+        let destination = args.target;
 
         rockspec.lua_version_matches(config)?;
 
@@ -101,10 +101,18 @@ impl<
         .opt(OptState::Required)
         .build();
 
-        InstallPackages::new(config, tree)
-            .package_db(package_db)
-            .package(install_spec)
+        let build_transaction = destination.build_transaction()?;
+        let build_dependencies = InstallBuildDependencies::new(config, &build_transaction)
+            .package(install_spec.clone())
+            .package_db(package_db.clone())
             .install()
+            .await?;
+        build_transaction.commit()?;
+
+        InstallPackages::new(config, destination)
+            .package(install_spec)
+            .package_db(package_db)
+            .install(&build_dependencies.token)
             .await?
             .0
             .into_iter()

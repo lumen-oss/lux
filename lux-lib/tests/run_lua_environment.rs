@@ -3,8 +3,8 @@
 use assert_fs::prelude::*;
 use lux_lib::{
     config, lua,
+    operations::run_lua::{self, RunLua},
     path::LuaEnvironment,
-    run_lua::{self, RunLua},
 };
 use serial_test::serial;
 use which::which;

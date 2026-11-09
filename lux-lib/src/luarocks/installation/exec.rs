@@ -9,7 +9,6 @@ use super::{Installation, LUAROCKS_EXE};
 use crate::{
     build, fs, lua,
     path::{self, Paths},
-    tree::InstallTree,
     variables,
 };
 
@@ -56,7 +55,7 @@ stderr:
     LuauUnsupported,
 }
 
-impl Installation {
+impl<T: crate::tree::InstallView> Installation<'_, T> {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn make(
         self,
@@ -80,7 +79,7 @@ impl Installation {
     }
 
     async fn exec(self, args: Vec<&str>, cwd: &Path, lua: &lua::Installation) -> Result<(), Error> {
-        let luarocks_paths = Paths::new(&self.tree)?;
+        let luarocks_paths = Paths::new(&self.slot)?;
         // Ensure a pure environment so we can do parallel builds
         let temp_dir = fs::tempfile::tempdir()?;
         let lua_version_str = match lua.version {
@@ -109,7 +108,7 @@ variables = {{
             variables::substitute(&[lua, &self.config], &luarocks_config_content)?;
         let luarocks_config = temp_dir.path().join("luarocks-config.lua");
         fs::sync::write(luarocks_config.clone(), luarocks_config_content)?;
-        let luarocks_bin = self.tree.bin().join(LUAROCKS_EXE);
+        let luarocks_bin = self.slot.bin().join(LUAROCKS_EXE);
         if !luarocks_bin.is_file() {
             return Err(Error::LuarocksBinNotFound(luarocks_bin));
         }

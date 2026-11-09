@@ -8,13 +8,14 @@ use itertools::Itertools;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    drivers::InstallPackages,
+    drivers::{InstallBuildDependencies, InstallPackages},
     lua,
     operations::{self, install},
     package::db::PackageDB,
     pipeline::build_local::Build,
     rockspec::Rockspec as _,
-    tree::{self, InstallTree},
+    transaction::Transaction,
+    tree::{self},
     workspace::Workspace,
 };
 use miette::{miette, IntoDiagnostic, Result};
@@ -95,8 +96,8 @@ async fn pack_workspace(
 
     let mut rock_paths = Vec::new();
     for package in packages {
-        let tree = workspace.tree(config)?;
-        let rock_path = operations::Pack::new(dest_dir.to_path_buf(), tree, package)
+        let regular = workspace.tree(config)?.regular().clone();
+        let rock_path = operations::Pack::new(dest_dir.to_path_buf(), regular, package)
             .pack()
             .await?;
         rock_paths.push(rock_path);
@@ -116,50 +117,67 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
         }
         Some(PackageOrRockspec::Package(package_req)) => {
             let user_tree = config.user_tree(lua_version.clone())?;
-            match user_tree.match_rocks(&package_req)? {
+            let regular_tree = user_tree.regular();
+            match regular_tree.match_rocks(&package_req)? {
                 tree::RockMatches::NotFound(_) => {
                     let temp_dir = tempdir().into_diagnostic()?;
                     let temp_config = config.with_tree(temp_dir.path().to_path_buf());
                     let tree = temp_config.user_tree(lua_version.clone())?;
-                    let packages = InstallPackages::new(&temp_config, &tree)
-                        .package(
-                            install::Spec::new(package_req, tree::EntryType::Entrypoint)
-                                .build_behaviour(BuildBehaviour::Force)
-                                .build(),
-                        )
-                        .package_db(PackageDB::from_config(&temp_config).await?)
-                        .install()
+                    let build_tree = tree.build()?;
+                    let regular = tree.regular();
+                    let package_db = PackageDB::from_config(&temp_config).await?;
+                    let install_spec = install::Spec::new(package_req, tree::EntryType::Entrypoint)
+                        .build_behaviour(BuildBehaviour::Force)
+                        .build();
+                    let build_transaction = Transaction::new(&tree, &build_tree)?;
+                    let build_dependencies =
+                        InstallBuildDependencies::new(&temp_config, &build_transaction)
+                            .package(install_spec.clone())
+                            .package_db(package_db.clone())
+                            .install()
+                            .await?;
+                    build_transaction.commit()?;
+
+                    let transaction = Transaction::new(&tree, &regular)?;
+                    let packages = InstallPackages::new(&temp_config, &transaction)
+                        .package(install_spec)
+                        .package_db(package_db)
+                        .install(&build_dependencies.token)
                         .await?
                         .0;
+                    transaction.commit()?;
                     let package = packages
                         .first()
                         .ok_or_else(|| miette!("no packages installed"))?;
-                    let rock_path = operations::Pack::new(dest_dir, tree, package.clone())
-                        .pack()
-                        .await?;
+                    let rock_path =
+                        operations::Pack::new(dest_dir, regular.clone(), package.clone())
+                            .pack()
+                            .await?;
                     Ok(vec![rock_path])
                 }
                 tree::RockMatches::Single(local_package_id) => {
-                    let lockfile = user_tree.lockfile()?;
+                    let lockfile = regular_tree.lockfile()?;
                     let package = lockfile.get(&local_package_id).ok_or_else(|| {
                         miette!("package is installed, but was not found in the lockfile")
                     })?;
-                    let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
-                        .pack()
-                        .await?;
+                    let rock_path =
+                        operations::Pack::new(dest_dir, regular_tree.clone(), package.clone())
+                            .pack()
+                            .await?;
                     Ok(vec![rock_path])
                 }
                 tree::RockMatches::Many(vec) => {
                     let local_package_id = vec.first();
-                    let lockfile = user_tree.lockfile()?;
+                    let lockfile = regular_tree.lockfile()?;
                     let package = lockfile.get(local_package_id).ok_or_else(|| {
                         miette!(
                             "multiple package installations found, but not found in the lockfile"
                         )
                     })?;
-                    let rock_path = operations::Pack::new(dest_dir, user_tree, package.clone())
-                        .pack()
-                        .await?;
+                    let rock_path =
+                        operations::Pack::new(dest_dir, regular_tree.clone(), package.clone())
+                            .pack()
+                            .await?;
                     Ok(vec![rock_path])
                 }
             }
@@ -183,16 +201,19 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
             let config = config.with_tree(temp_dir.path().to_path_buf());
             let lua = lua::Installation::new(&lua_version, &config).await?;
             let tree = config.user_tree(lua_version)?;
+            let regular = tree.regular();
+            let transaction = Transaction::new(&tree, &regular)?;
             let package = Build::new()
                 .rockspec(&rockspec)
                 .lua(&lua)
-                .tree(&tree)
+                .tree(&transaction)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&config)
                 .behaviour(BuildBehaviour::Force)
                 .build()
                 .await?;
-            let rock_path = operations::Pack::new(dest_dir, tree, package)
+            transaction.commit()?;
+            let rock_path = operations::Pack::new(dest_dir, regular.clone(), package)
                 .pack()
                 .await?;
             Ok(vec![rock_path])

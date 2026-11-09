@@ -1,17 +1,27 @@
 use crate::{
     fs,
     lockfile::{LockedPackageSpec, OptState},
-    tree::{InstallTree, Tree},
+    tree::{Slot as TreeSlot, Tree},
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// A custom layout for installed packages, applied in addition to the standard tree layout.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
     /// Arrange the package's files where external tools expect them.
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    fn apply_layout(
+        &self,
+        tree: &Tree,
+        slot: &TreeSlot,
+        package: &LockedPackageSpec,
+    ) -> fs::Result<()>;
 
     /// Remove the files arranged by [`Self::apply_layout`].
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    fn remove_layout(
+        &self,
+        tree: &Tree,
+        slot: &TreeSlot,
+        package: &LockedPackageSpec,
+    ) -> fs::Result<()>;
 
     /// Whether the layout applies to dependency packages, not just entrypoints.
     fn layout_dependencies(&self) -> bool {
@@ -24,12 +34,12 @@ pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
 pub struct NvimLayout;
 
 impl NvimLayout {
-    fn target_for(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn target_for(slot: &TreeSlot, package: &LockedPackageSpec) -> PathBuf {
         let subdir = match package.opt() {
             OptState::Required => "start",
             OptState::Optional => "opt",
         };
-        tree.root()
+        slot.root()
             .join("site/pack/lux")
             .join(subdir)
             .join(package.name().to_string())
@@ -37,22 +47,28 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
-        let custom_dir = Self::target_for(tree, package);
+    fn apply_layout(
+        &self,
+        _tree: &Tree,
+        slot: &TreeSlot,
+        package: &LockedPackageSpec,
+    ) -> fs::Result<()> {
+        let layout = slot.layout_for(package);
+        let custom_dir = Self::target_for(slot, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
-        let layout = tree.layout_for(package);
-        fs::sync::link_dir(&layout.src, &custom_dir.join("lua"))?;
-        fs::sync::link_dir(&layout.lib, &custom_dir.join("lib"))?;
+        fs::sync::link_dir(fs::sync::canonicalize(&layout.src)?, custom_dir.join("lua"))?;
+        fs::sync::link_dir(fs::sync::canonicalize(&layout.lib)?, custom_dir.join("lib"))?;
 
         if layout.etc.is_dir() {
             for entry in fs::sync::read_dir(&layout.etc)? {
                 let entry = entry?;
                 let target = custom_dir.join(entry.file_name());
-                if entry.path().is_dir() {
-                    fs::sync::link_dir(&entry.path(), &target)?;
+                let path = fs::sync::canonicalize(entry.path())?;
+                if path.is_dir() {
+                    fs::sync::link_dir(&path, &target)?;
                 } else {
-                    fs::sync::link_file(&entry.path(), &target)?;
+                    fs::sync::link_file(&path, &target)?;
                 }
             }
         }
@@ -60,8 +76,13 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
-        let target = Self::target_for(tree, package);
+    fn remove_layout(
+        &self,
+        _tree: &Tree,
+        slot: &TreeSlot,
+        package: &LockedPackageSpec,
+    ) -> fs::Result<()> {
+        let target = Self::target_for(slot, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
             fs::sync::remove_dir_all(target)?;
@@ -78,10 +99,9 @@ pub struct RojoLayout;
 
 impl RojoLayout {
     fn packages_dir(tree: &Tree) -> PathBuf {
-        let root = tree.root();
-        root.parent()
-            .and_then(Path::parent)
-            .unwrap_or_else(|| unreachable!("tree root is two levels below the workspace root"))
+        tree.root()
+            .parent()
+            .unwrap_or_else(|| unreachable!("tree root has no parent"))
             .join("Packages")
     }
 
@@ -103,14 +123,19 @@ impl RojoLayout {
 }
 
 impl CustomRockLayout for RojoLayout {
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(
+        &self,
+        tree: &Tree,
+        slot: &TreeSlot,
+        package: &LockedPackageSpec,
+    ) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
 
         // NOTE: Rojo does not follow symlinks (https://github.com/rojo-rbx/rojo/issues/392),
         // so we hard link the package sources.
-        let layout = tree.layout_for(package);
+        let layout = slot.layout_for(package);
         let content_dir = Self::content_dir(tree, package);
         if content_dir.is_dir() {
             fs::sync::remove_dir_all(&content_dir)?;
@@ -156,7 +181,12 @@ impl CustomRockLayout for RojoLayout {
         Ok(())
     }
 
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(
+        &self,
+        tree: &Tree,
+        _slot: &TreeSlot,
+        package: &LockedPackageSpec,
+    ) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -183,14 +213,17 @@ impl CustomRockLayout for RojoLayout {
 mod tests {
     use crate::package;
     use crate::remote;
-    use assert_fs::prelude::PathCopy;
+    use assert_fs::prelude::{PathChild, PathCopy};
     use std::path::PathBuf;
 
     use crate::{
         config,
         lockfile::{self, LockedPackage, LockedPackageHashes},
         lua,
-        tree::{EntryType, InstallTree, NvimLayout, RojoLayout},
+        transaction::Transaction,
+        tree::{
+            EntryType, InstallSession, InstallView, NvimLayout, RojoLayout, Slot as TreeSlot, Tree,
+        },
     };
 
     fn mock_hashes() -> LockedPackageHashes {
@@ -204,20 +237,24 @@ mod tests {
         }
     }
 
-    fn sample_tree() -> (assert_fs::TempDir, PathBuf, crate::tree::Tree) {
-        let tree_path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree");
+    fn sample_tree() -> (assert_fs::TempDir, Tree, TreeSlot) {
         let temp = assert_fs::TempDir::new().unwrap();
-        temp.copy_from(&tree_path, &["**"]).unwrap();
-        let tree_path = temp.to_path_buf();
         let config = config::Builder::new()
             .unwrap()
-            .user_tree(Some(tree_path.clone()))
+            .user_tree(Some(temp.to_path_buf()))
             .entrypoint_layout(NvimLayout)
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
-        (temp, tree_path, tree)
+        let slot = tree.regular().clone();
+        temp.child("dependencies/5.1")
+            .copy_from(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("resources/test/sample-tree/dependencies/5.1"),
+                &["**"],
+            )
+            .unwrap();
+        (temp, tree, slot)
     }
 
     fn sample_package() -> LockedPackage {
@@ -232,14 +269,19 @@ mod tests {
 
     #[test]
     fn nvim_layout_creates_symlinks_for_entrypoints() {
-        let (_temp, tree_path, tree) = sample_tree();
+        let (_temp, tree, slot) = sample_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction.prepare(&package).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
 
-        let custom_dir = tree_path
-            .join("5.1/site/pack/lux/start")
+        let custom_dir = slot
+            .root()
+            .join("site/pack/lux/start")
             .join(package.name().to_string());
         assert!(custom_dir.join("lua").symlink_metadata().is_ok());
         assert!(custom_dir.join("lib").symlink_metadata().is_ok());
@@ -249,54 +291,71 @@ mod tests {
 
     #[test]
     fn nvim_layout_links_etc_entries_after_finalize() {
-        let (_temp, tree_path, tree) = sample_tree();
+        let (_temp, tree, slot) = sample_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
+        transaction.prepare(&package).unwrap();
 
-        let etc = tree.layout_for(&package.spec).etc;
+        let etc = transaction.layout_for(&package.spec).etc;
         std::fs::create_dir_all(etc.join("plugin")).unwrap();
         std::fs::write(etc.join("plugin/foo.vim"), "lua _G.foo = 1\n").unwrap();
 
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
 
-        let custom_dir = tree_path
-            .join("5.1/site/pack/lux/start")
+        let custom_dir = slot
+            .root()
+            .join("site/pack/lux/start")
             .join(package.name().to_string());
         assert!(custom_dir.join("plugin").symlink_metadata().is_ok());
     }
 
     #[test]
     fn nvim_layout_skips_dependencies() {
-        let (_temp, tree_path, tree) = sample_tree();
+        let (_temp, tree, slot) = sample_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        tree.finalize(&package, EntryType::DependencyOnly).unwrap();
+        transaction.prepare(&package).unwrap();
+        transaction
+            .finalize(&package, EntryType::DependencyOnly)
+            .unwrap();
+        transaction.commit().unwrap();
 
-        let custom_dir = tree_path
-            .join("5.1/site/pack/lux/start")
+        let custom_dir = slot
+            .root()
+            .join("site/pack/lux/start")
             .join(package.name().to_string());
         assert!(!custom_dir.exists());
     }
 
     #[test]
     fn nvim_layout_removes_symlinks() {
-        let (_temp, tree_path, tree) = sample_tree();
+        let (_temp, tree, slot) = sample_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
-        let custom_dir = tree_path
-            .join("5.1/site/pack/lux/start")
+        transaction.prepare(&package).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
+        let custom_dir = slot
+            .root()
+            .join("site/pack/lux/start")
             .join(package.name().to_string());
         assert!(custom_dir.exists());
 
-        tree.cleanup(&package, EntryType::Entrypoint).unwrap();
+        let cleanup = Transaction::new(&tree, &slot).unwrap();
+        cleanup.cleanup(&package, EntryType::Entrypoint).unwrap();
+        cleanup.commit().unwrap();
         assert!(!custom_dir.exists());
     }
 
-    fn luau_tree() -> (assert_fs::TempDir, crate::tree::Tree) {
+    fn luau_tree() -> (assert_fs::TempDir, Tree, TreeSlot) {
         let temp = assert_fs::TempDir::new().unwrap();
         let config = config::Builder::new()
             .unwrap()
@@ -305,19 +364,24 @@ mod tests {
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Luau).unwrap();
-        (temp, tree)
+        let slot = tree.regular().clone();
+        (temp, tree, slot)
     }
 
     #[test]
     fn rojo_layout_renames_entrypoint_and_writes_stub() {
-        let (temp, tree) = luau_tree();
+        let (temp, tree, slot) = luau_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        let src = tree.layout_for(&package.spec).src;
+        transaction.prepare(&package).unwrap();
+        let src = transaction.layout_for(&package.spec).src;
         std::fs::write(src.join("neorg.luau"), "return {}\n").unwrap();
 
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
 
         let packages = temp.path().join("Packages");
         let content = packages.join("_Index/neorg@8.0.0/neorg");
@@ -331,14 +395,18 @@ mod tests {
 
     #[test]
     fn rojo_layout_handles_lua_entrypoint() {
-        let (temp, tree) = luau_tree();
+        let (temp, tree, slot) = luau_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        let src = tree.layout_for(&package.spec).src;
+        transaction.prepare(&package).unwrap();
+        let src = transaction.layout_for(&package.spec).src;
         std::fs::write(src.join("neorg.lua"), "return {}\n").unwrap();
 
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
 
         let content = temp.path().join("Packages/_Index/neorg@8.0.0/neorg");
         assert!(content.join("init.lua").is_file());
@@ -347,14 +415,18 @@ mod tests {
 
     #[test]
     fn rojo_layout_applies_to_dependencies() {
-        let (temp, tree) = luau_tree();
+        let (temp, tree, slot) = luau_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        let src = tree.layout_for(&package.spec).src;
+        transaction.prepare(&package).unwrap();
+        let src = transaction.layout_for(&package.spec).src;
         std::fs::write(src.join("init.luau"), "return {}\n").unwrap();
 
-        tree.finalize(&package, EntryType::DependencyOnly).unwrap();
+        transaction
+            .finalize(&package, EntryType::DependencyOnly)
+            .unwrap();
+        transaction.commit().unwrap();
 
         assert!(temp
             .path()
@@ -372,28 +444,39 @@ mod tests {
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let slot = tree.regular().clone();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction.prepare(&package).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
 
         assert!(!temp.path().join("Packages").exists());
     }
 
     #[test]
     fn rojo_layout_removes_artifacts() {
-        let (temp, tree) = luau_tree();
+        let (temp, tree, slot) = luau_tree();
         let package = sample_package();
+        let transaction = Transaction::new(&tree, &slot).unwrap();
 
-        tree.prepare(&package.spec).unwrap();
-        let src = tree.layout_for(&package.spec).src;
+        transaction.prepare(&package).unwrap();
+        let src = transaction.layout_for(&package.spec).src;
         std::fs::write(src.join("init.luau"), "return {}\n").unwrap();
-        tree.finalize(&package, EntryType::Entrypoint).unwrap();
+        transaction
+            .finalize(&package, EntryType::Entrypoint)
+            .unwrap();
+        transaction.commit().unwrap();
 
         let packages = temp.path().join("Packages");
         assert!(packages.join("neorg.lua").is_file());
 
-        tree.cleanup(&package, EntryType::Entrypoint).unwrap();
+        let cleanup = Transaction::new(&tree, &slot).unwrap();
+        cleanup.cleanup(&package, EntryType::Entrypoint).unwrap();
+        cleanup.commit().unwrap();
         assert!(!packages.join("neorg.lua").exists());
         assert!(!packages.join("_Index/neorg@8.0.0").exists());
     }

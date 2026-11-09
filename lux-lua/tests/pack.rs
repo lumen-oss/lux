@@ -52,7 +52,7 @@ url = "https://github.com/lumen-oss/luarocks-stub"
         .build()
         .unwrap();
     let workspace = Workspace::from_exact(workspace_root).unwrap().unwrap();
-    let tree = workspace.tree(&config).unwrap();
+    let regular = workspace.tree(&config).unwrap().regular();
     let temp_dir = TempDir::new().unwrap();
     let dest_dir = temp_dir.to_path_buf();
 
@@ -65,7 +65,7 @@ url = "https://github.com/lumen-oss/luarocks-stub"
         .first()
         .cloned()
         .unwrap();
-    let archive_path = operations::Pack::new(dest_dir, tree, package)
+    let archive_path = operations::Pack::new(dest_dir, regular, package)
         .pack()
         .await
         .unwrap();

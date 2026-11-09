@@ -29,6 +29,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
             config.user_tree(lua_version)?
         }
     };
+    let regular = tree.regular();
 
     let package_db = PackageDB::from_config(&config).await?;
 
@@ -36,7 +37,7 @@ pub async fn outdated(outdated_data: Outdated, config: Config) -> Result<()> {
     // However, this should also take into account dependency constraints made by other rocks.
     // This will naturally occur with lockfiles and should be accounted for directly in the
     // `has_update` function.
-    let rock_list = tree.as_rock_list()?;
+    let rock_list = regular.as_rock_list()?;
     let rock_list = {
         let mut rocks = Vec::new();
         for rock in rock_list.iter() {

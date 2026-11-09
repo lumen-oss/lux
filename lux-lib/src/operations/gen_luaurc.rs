@@ -3,7 +3,6 @@ use crate::{
     fs,
     lockfile::LockedPackageLockType,
     lua,
-    tree::InstallTree,
     workspace::{self, TreeError, Workspace, LUX_DIR_NAME},
 };
 use bon::Builder;
@@ -63,8 +62,9 @@ struct LuauRc {
 
 async fn do_generate_luau_rc(args: GenLuauRc<'_>) -> Result<(), Error> {
     let workspace = args.workspace;
-    let tree = workspace.tree(args.config)?;
-    if tree.version() != &lua::Version::Luau {
+    let workspace_tree = workspace.tree(args.config)?;
+    let regular = workspace_tree.regular();
+    if regular.version() != &lua::Version::Luau {
         return Ok(());
     }
     let lockfile = workspace.lockfile()?;
@@ -77,7 +77,7 @@ async fn do_generate_luau_rc(args: GenLuauRc<'_>) -> Result<(), Error> {
     let test_tree = workspace.test_tree(args.config)?;
     let mut aliases = BTreeMap::new();
     for (lock_type, tree) in [
-        (LockedPackageLockType::Regular, Some(&tree)),
+        (LockedPackageLockType::Regular, Some(regular)),
         (LockedPackageLockType::Test, Some(&test_tree)),
     ] {
         let Some(tree) = tree else {
@@ -135,10 +135,13 @@ mod tests {
             (
                 "empty previous content, adding single alias",
                 "{}",
-                BTreeMap::from([("my-lib".into(), "./.lux/luau/lib-1.0.0/my-lib/src".into())]),
+                BTreeMap::from([(
+                    "my-lib".into(),
+                    "./.lux/dependencies/luau/lib-1.0.0/my-lib/src".into(),
+                )]),
                 r#"{
                     "aliases": {
-                        "my-lib": "./.lux/luau/lib-1.0.0/my-lib/src"
+                        "my-lib": "./.lux/dependencies/luau/lib-1.0.0/my-lib/src"
                     }
                 }"#,
             ),
@@ -147,15 +150,15 @@ mod tests {
                 r#"{
                     "language": { "type": "luau" },
                     "aliases": {
-                        "old": ".lux/luau/old/src",
+                        "old": ".lux/dependencies/luau/old/src",
                         "user-alias": "../shared"
                     }
                 }"#,
-                BTreeMap::from([("new-lib".into(), "./.lux/luau/new/src".into())]),
+                BTreeMap::from([("new-lib".into(), "./.lux/dependencies/luau/new/src".into())]),
                 r#"{
                     "language": { "type": "luau" },
                     "aliases": {
-                        "new-lib": "./.lux/luau/new/src",
+                        "new-lib": "./.lux/dependencies/luau/new/src",
                         "user-alias": "../shared"
                     }
                 }"#,

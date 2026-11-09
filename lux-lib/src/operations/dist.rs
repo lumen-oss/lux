@@ -18,7 +18,7 @@ use crate::{
     project::Project,
     rockspec::Rockspec,
     target::c_dylib_extension,
-    tree::{self, InstallTree},
+    tree::{self, InstallSession, InstallView},
 };
 
 /// Compile a Lux project and all its dependencies into a single
@@ -33,7 +33,7 @@ use crate::{
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct ProjectBin<'a, T>
 where
-    T: InstallTree,
+    T: InstallSession,
 {
     /// The project to compile.
     project: &'a Project,
@@ -41,7 +41,7 @@ where
     config: &'a Config,
 
     /// Tree in which to install the project before compiling.
-    tree: &'a T,
+    target: &'a T,
 
     /// Destination path for the compiled binary.
     /// Defaults to `<cwd>/<package>[.exe]`.
@@ -94,7 +94,7 @@ impl From<install_project::Error> for Error {
 
 impl<T, State> ProjectBinBuilder<'_, T, State>
 where
-    T: InstallTree + Sync + Send + Clone + 'static,
+    T: InstallSession,
     State: project_bin_builder::State + project_bin_builder::IsComplete,
 {
     pub async fn compile(self) -> Result<PathBuf, Error> {
@@ -115,16 +115,16 @@ struct InstalledFiles {
 
 async fn do_dist_project_bin<T>(args: ProjectBin<'_, T>) -> Result<PathBuf, Error>
 where
-    T: InstallTree + Sync + Send + Clone + 'static,
+    T: InstallSession,
 {
     let package = InstallProject::new()
         .project(args.project)
         .config(args.config)
-        .tree(args.tree)
+        .target(args.target)
         .build()
         .await?;
 
-    let files = collect_installed_files(args.tree)?;
+    let files = collect_installed_files(args.target)?;
 
     let project_toml = args.project.toml().into_local()?;
     let pkg_name = project_toml.package().to_string();
@@ -154,7 +154,7 @@ where
         std::env::current_dir()?.join(output)
     };
 
-    let lib_root = args.tree.layout_for(&package.spec).lib;
+    let lib_root = args.target.layout_for(&package.spec).lib;
     let c_src = generate_c_source(&entrypoint_module, &files, &lib_root).await?;
 
     let work_dir = fs::tempfile::tempdir()?;
@@ -167,7 +167,7 @@ where
 }
 
 #[allow(clippy::result_large_err)]
-fn collect_installed_files(tree: &impl InstallTree) -> Result<InstalledFiles, Error> {
+fn collect_installed_files(tree: &impl InstallView) -> Result<InstalledFiles, Error> {
     let mut lua_sources = Vec::new();
     let mut native_modules = Vec::new();
     let c_dylib_ext = c_dylib_extension();
@@ -587,11 +587,12 @@ mod tests {
             .lua_version(Some(lua::Version::Lua51))
             .build()
             .unwrap();
-        let tree = FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
+        let flat_tree =
+            FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
 
         let pkg_a = mk_dummy_package(package::Spec::new("foo".into(), "1.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_a.spec).unwrap();
-        let layout_a = tree.layout_for(&pkg_a.spec);
+        flat_tree.prepare(&pkg_a).unwrap();
+        let layout_a = flat_tree.layout_for(&pkg_a.spec);
         staging
             .child(layout_a.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
@@ -601,8 +602,8 @@ mod tests {
             .unwrap();
 
         let pkg_b = mk_dummy_package(package::Spec::new("bar".into(), "2.0.0-1".parse().unwrap()));
-        tree.prepare(&pkg_b.spec).unwrap();
-        let layout_b = tree.layout_for(&pkg_b.spec);
+        flat_tree.prepare(&pkg_b).unwrap();
+        let layout_b = flat_tree.layout_for(&pkg_b.spec);
         staging
             .child(layout_b.src.strip_prefix(staging.path()).unwrap())
             .create_dir_all()
@@ -622,14 +623,15 @@ mod tests {
         .unwrap();
 
         {
-            let lockfile = tree.lockfile().unwrap();
+            let lockfile = flat_tree.lockfile().unwrap();
             let mut lockfile = lockfile.write_guard();
             lockfile.add_entrypoint(&pkg_a);
             lockfile.add_entrypoint(&pkg_b);
         }
 
-        let tree = FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
-        let files = collect_installed_files(&tree).unwrap();
+        let flat_tree =
+            FlatDistTree::new(staging.to_path_buf(), lua::Version::Lua51, &config).unwrap();
+        let files = collect_installed_files(&flat_tree).unwrap();
 
         assert_eq!(files.src.len(), 2);
         assert!(files
@@ -659,7 +661,7 @@ mod tests {
             .unwrap();
 
         let staging = TempDir::new().unwrap();
-        let tree = FlatDistTree::new(
+        let flat_tree = FlatDistTree::new(
             staging.to_path_buf(),
             config.lua_version().cloned().unwrap(),
             &config,
@@ -669,12 +671,12 @@ mod tests {
         InstallProject::new()
             .project(&project)
             .config(&config)
-            .tree(&tree)
+            .target(&flat_tree)
             .build()
             .await
             .unwrap();
 
-        let files = collect_installed_files(&tree).unwrap();
+        let files = collect_installed_files(&flat_tree).unwrap();
 
         let module_keys: Vec<&str> = files.src.iter().map(|(m, _)| m.as_str()).collect();
 
@@ -716,7 +718,7 @@ mod tests {
             .unwrap();
 
         let staging = TempDir::new().unwrap();
-        let tree = FlatDistTree::new(
+        let flat_tree = FlatDistTree::new(
             staging.to_path_buf(),
             config.lua_version().cloned().unwrap(),
             &config,
@@ -733,7 +735,7 @@ mod tests {
         ProjectBin::new()
             .project(&project)
             .config(&config)
-            .tree(&tree)
+            .target(&flat_tree)
             .output(binary.clone())
             .compile()
             .await

@@ -48,7 +48,7 @@ fn add_dependency_parses_packages_and_git_shorthands() {
 fn lockfile_exposes_entrypoints_and_metadata() {
     let lockfile = Lockfile::load(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../lux-lib/resources/test/sample-tree/5.1/lux.lock"),
+            .join("../lux-lib/resources/test/sample-tree/dependencies/5.1/lux.lock"),
     )
     .unwrap();
     let lua = Lua::new();

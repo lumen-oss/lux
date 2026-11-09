@@ -5,12 +5,13 @@ use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config::Config,
-    drivers::InstallPackages,
+    drivers::{InstallBuildDependencies, InstallPackages},
     lockfile::LockedPackageId,
     lua, operations,
     operations::install,
     package::db::PackageDB,
-    tree::{self, InstallTree, RockMatches},
+    transaction::Transaction,
+    tree::{self, RockMatches},
 };
 
 use miette::{miette, IntoDiagnostic, Result};
@@ -23,12 +24,14 @@ pub struct Uninstall {
 
 /// Uninstall one or multiple rocks from the user tree
 pub async fn uninstall(uninstall_args: Uninstall, config: Config) -> Result<()> {
-    let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
+    let user_tree = config.user_tree(lua::Version::from(&config)?.clone())?;
+    let build_tree = user_tree.build()?;
+    let regular = user_tree.regular();
 
     let package_matches = uninstall_args
         .packages
         .iter()
-        .map(|package_req| tree.match_rocks(package_req))
+        .map(|package_req| regular.match_rocks(package_req))
         .try_collect::<_, Vec<_>, tree::Error>()?;
 
     let (packages, nonexistent_packages, duplicate_packages) = package_matches.into_iter().fold(
@@ -65,7 +68,7 @@ multiple packages satisfying your version requirements were found:
         ));
     }
 
-    let lockfile = tree.lockfile()?;
+    let lockfile = regular.lockfile()?;
     let non_entrypoints = packages
         .iter()
         .filter_map(|pkg_id| {
@@ -91,11 +94,13 @@ multiple packages satisfying your version requirements were found:
         .partition(|pkg_id| lockfile.is_dependency(pkg_id));
 
     if dependencies.is_empty() {
+        let transaction = Transaction::new(&user_tree, &regular)?;
         operations::Uninstall::new()
-            .config(&config)
+            .target(&transaction)
             .packages(entrypoints)
             .remove()
             .await?;
+        transaction.commit()?;
     } else {
         let package_names = dependencies
             .iter()
@@ -127,8 +132,9 @@ Reinstall?
                 .into_diagnostic()
                 .map_err(|_| miette!("error prompting for reinstall"))?
         {
+            let transaction = Transaction::new(&user_tree, &regular)?;
             operations::Uninstall::new()
-                .config(&config)
+                .target(&transaction)
                 .packages(entrypoints)
                 .remove()
                 .await?;
@@ -149,15 +155,26 @@ Reinstall?
                 })
                 .collect_vec();
             operations::Uninstall::new()
-                .config(&config)
+                .target(&transaction)
                 .packages(dependencies)
                 .remove()
                 .await?;
-            InstallPackages::new(&config, &tree)
-                .package_db(PackageDB::from_config(&config).await?)
-                .packages(reinstall_specs)
+
+            let package_db = PackageDB::from_config(&config).await?;
+            let build_transaction = Transaction::new(&user_tree, &build_tree)?;
+            let build_dependencies = InstallBuildDependencies::new(&config, &build_transaction)
+                .packages(reinstall_specs.clone())
+                .package_db(package_db.clone())
                 .install()
                 .await?;
+            build_transaction.commit()?;
+
+            InstallPackages::new(&config, &transaction)
+                .packages(reinstall_specs)
+                .package_db(package_db)
+                .install(&build_dependencies.token)
+                .await?;
+            transaction.commit()?;
         } else {
             return Err(miette!("operation cancelled"));
         }
@@ -165,8 +182,9 @@ Reinstall?
 
     let mut has_dangling_rocks = true;
     while has_dangling_rocks {
-        let tree = config.user_tree(lua::Version::from(&config)?.clone())?;
-        let lockfile = tree.lockfile()?;
+        let user_tree = config.user_tree(lua::Version::from(&config)?.clone())?;
+        let regular = user_tree.regular();
+        let lockfile = regular.lockfile()?;
         let dangling_rocks = lockfile
             .rocks()
             .keys()
@@ -176,11 +194,13 @@ Reinstall?
         if dangling_rocks.is_empty() {
             has_dangling_rocks = false
         } else {
+            let transaction = Transaction::new(&user_tree, &regular)?;
             operations::Uninstall::new()
-                .config(&config)
+                .target(&transaction)
                 .packages(dangling_rocks)
                 .remove()
                 .await?;
+            transaction.commit()?;
         }
     }
 

@@ -12,7 +12,7 @@ use crate::{
     lockfile::{self, ReadOnly},
     lua,
     project::{self, Project, TomlDeError, TOML_FILE_NAME},
-    tree::{self, InstallTree, Tree},
+    tree::{self, Slot as TreeSlot, Tree},
     workspace::workspace_toml::{WorkspaceMemberSpec, WorkspaceToml},
 };
 use glob::glob;
@@ -252,7 +252,7 @@ impl Workspace {
     }
 
     pub fn tree(&self, config: &Config) -> Result<Tree, TreeError> {
-        self.lua_version_tree(self.lua_version(config)?, config)
+        self.lua_version_tree_context(self.lua_version(config)?, config)
     }
 
     pub fn lua_version(&self, config: &Config) -> Result<lua::Version, rockspec::Error> {
@@ -269,6 +269,14 @@ impl Workspace {
         lua_version: lua::Version,
         config: &Config,
     ) -> Result<Tree, TreeError> {
+        self.lua_version_tree_context(lua_version, config)
+    }
+
+    fn lua_version_tree_context(
+        &self,
+        lua_version: lua::Version,
+        config: &Config,
+    ) -> Result<Tree, TreeError> {
         let root_dir = config
             .workspace_tree()
             .map(|p| p.to_path_buf())
@@ -281,12 +289,12 @@ impl Workspace {
         self.root.join(LUX_DIR_NAME)
     }
 
-    pub fn test_tree(&self, config: &Config) -> Result<Tree, TreeError> {
-        Ok(self.tree(config)?.test_tree(config)?)
+    pub fn test_tree(&self, config: &Config) -> Result<TreeSlot, TreeError> {
+        Ok(self.tree(config)?.test()?)
     }
 
-    pub fn build_tree(&self, config: &Config) -> Result<Tree, TreeError> {
-        Ok(self.tree(config)?.build_tree(config)?)
+    pub fn build_tree(&self, config: &Config) -> Result<TreeSlot, TreeError> {
+        Ok(self.tree(config)?.build()?)
     }
 
     /// The path to this workspace's local config file.

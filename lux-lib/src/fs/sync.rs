@@ -116,6 +116,65 @@ pub(crate) fn link_dir(
     symlink_dir(&relative, &link)
 }
 
+pub(crate) fn replace_symlink(
+    target: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+) -> Result<(), super::Error> {
+    let target = absolute(target)?;
+    let link = absolute(link)?;
+    if let Some(parent) = link.parent() {
+        create_dir_all(parent)?;
+    }
+
+    let file_name = link
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_default();
+    let temp = link.with_file_name(format!(".{file_name}.tmp"));
+    remove_path(&temp)?;
+
+    let relative = relative_target(&target, &temp);
+    symlink_dir(&relative, &temp)?;
+
+    #[cfg(unix)]
+    {
+        rename(&temp, &link)?;
+    }
+    #[cfg(windows)]
+    {
+        if link.symlink_metadata().is_ok() {
+            remove_link(&link)?;
+        }
+        rename(&temp, &link)?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), super::Error> {
+    let from = from.as_ref();
+    let to = to.as_ref();
+    fs::rename(from, to).map_err(|source| super::Error::Rename {
+        from: from.to_path_buf(),
+        to: to.to_path_buf(),
+        source,
+    })
+}
+
+pub(crate) fn remove_path(path: impl AsRef<Path>) -> Result<(), super::Error> {
+    let path = path.as_ref();
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => remove_link(path),
+        Ok(metadata) if metadata.is_dir() => remove_dir_all(path),
+        Ok(_) => remove_file(path),
+        Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(super::Error::Metadata {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
 fn relative_target(target: &Path, link: &Path) -> PathBuf {
     link.parent()
         .and_then(|parent| pathdiff::diff_paths(target, parent))
@@ -178,6 +237,54 @@ fn symlink_dir(target: &Path, link: &Path) -> Result<(), super::Error> {
     super::windows::symlink_dir(target, link)
 }
 
+/// Recursively copy `src` into `dest`, preserving symlinks.
+pub(crate) fn copy_tree(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), super::Error> {
+    let src = src.as_ref();
+    let dest = dest.as_ref();
+    let metadata = fs::symlink_metadata(src).map_err(|source| super::Error::Metadata {
+        path: src.to_path_buf(),
+        source,
+    })?;
+
+    if metadata.file_type().is_symlink() {
+        let target = fs::read_link(src).map_err(|source| super::Error::Metadata {
+            path: src.to_path_buf(),
+            source,
+        })?;
+        if let Some(parent) = dest.parent() {
+            create_dir_all(parent)?;
+        }
+        #[cfg(unix)]
+        super::unix::symlink(&target, dest)?;
+        #[cfg(windows)]
+        {
+            if fs::metadata(src)
+                .map(|metadata| metadata.is_dir())
+                .unwrap_or(false)
+            {
+                symlink_dir(&target, dest)?;
+            } else {
+                symlink_file(&target, dest)?;
+            }
+        }
+        return Ok(());
+    }
+
+    if metadata.is_dir() {
+        create_dir_all(dest)?;
+        for entry in read_dir(src)? {
+            let entry = entry?;
+            copy_tree(entry.path(), dest.join(entry.file_name()))?;
+        }
+        return Ok(());
+    }
+
+    if let Some(parent) = dest.parent() {
+        create_dir_all(parent)?;
+    }
+    copy(src, dest).map(|_| ())
+}
+
 /// Recursively hard link the contents of a directory into `dest`.
 pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), super::Error> {
     create_dir_all(dest)?;
@@ -192,6 +299,15 @@ pub(crate) fn link_dir_all(src: &Path, dest: &Path) -> Result<(), super::Error> 
         }
     }
     Ok(())
+}
+
+/// Wrapped [`fs::create_dir`].
+pub(crate) fn create_dir(path: impl AsRef<Path>) -> Result<(), super::Error> {
+    let path = path.as_ref();
+    fs::create_dir(path).map_err(|source| super::Error::CreateDir {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// Wrapped [`fs::create_dir_all`].
@@ -261,6 +377,15 @@ pub(crate) fn create(path: impl AsRef<Path>) -> Result<fs::File, super::Error> {
     })
 }
 
+/// Wrapped [`std::fs::canonicalize`].
+pub(crate) fn canonicalize(path: impl AsRef<Path>) -> Result<PathBuf, super::Error> {
+    let path = path.as_ref();
+    std::fs::canonicalize(path).map_err(|source| super::Error::Metadata {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
 /// Wrapped [`std::path::absolute`].
 pub(crate) fn absolute(path: impl AsRef<Path>) -> Result<PathBuf, super::Error> {
     let path = path.as_ref();
@@ -290,6 +415,70 @@ mod tests {
 
         link_file(second.path(), link.path()).unwrap();
         assert_eq!(read_to_string(link.path()).unwrap(), "second");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_symlink_swaps_target() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let first = temp.child("first");
+        let second = temp.child("second");
+        let link = temp.child("link");
+        first.create_dir_all().unwrap();
+        second.create_dir_all().unwrap();
+        first.child("first.txt").write_str("first").unwrap();
+        second.child("second.txt").write_str("second").unwrap();
+
+        replace_symlink(first.path(), link.path()).unwrap();
+        assert_eq!(
+            read_to_string(link.child("first.txt").path()).unwrap(),
+            "first"
+        );
+
+        replace_symlink(second.path(), link.path()).unwrap();
+        assert_eq!(
+            read_to_string(link.child("second.txt").path()).unwrap(),
+            "second"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_tree_preserves_symlinks() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let src = temp.child("src");
+        let store = temp.child("store");
+        src.create_dir_all().unwrap();
+        store.create_dir_all().unwrap();
+        src.child("plain.txt").write_str("plain").unwrap();
+        store.child("artifact.txt").write_str("artifact").unwrap();
+
+        crate::fs::unix::symlink(store.path(), src.child("view").path()).unwrap();
+        crate::fs::unix::symlink(
+            store.child("artifact.txt").path(),
+            src.child("artifact-link").path(),
+        )
+        .unwrap();
+
+        let dest = temp.child("dest");
+        copy_tree(src.path(), dest.path()).unwrap();
+
+        assert_eq!(
+            read_to_string(dest.child("plain.txt").path()).unwrap(),
+            "plain"
+        );
+        assert_eq!(
+            std::fs::read_link(dest.child("view").path()).unwrap(),
+            store.path()
+        );
+        assert_eq!(
+            std::fs::read_link(dest.child("artifact-link").path()).unwrap(),
+            store.child("artifact.txt").path()
+        );
+        assert_eq!(
+            read_to_string(dest.child("view").child("artifact.txt").path()).unwrap(),
+            "artifact"
+        );
     }
 
     #[cfg(unix)]

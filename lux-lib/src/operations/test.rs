@@ -6,7 +6,6 @@ use crate::drivers::sync::{self, Sync, SyncMode, TargetSet};
 
 pub(crate) mod tiniest;
 use crate::fs;
-use crate::tree::InstallTree;
 use crate::workspace::{self, TreeError};
 use crate::{
     build::BuildBehaviour,
@@ -190,9 +189,10 @@ async fn run_project_tests(
         .await?;
 
     let lua_version = project.lua_version(&test_config)?.clone();
-    let project_tree = workspace.lua_version_tree(lua_version.clone(), &test_config)?;
-    let test_tree = workspace.test_tree(&test_config)?;
-    let mut paths = Paths::new(&project_tree)?;
+    let project_tree_ctx = workspace.lua_version_tree(lua_version.clone(), &test_config)?;
+    let regular = project_tree_ctx.regular();
+    let test_tree = project_tree_ctx.test().map_err(TreeError::from)?;
+    let mut paths = Paths::new(&regular)?;
     let test_tree_paths = Paths::new(&test_tree)?;
     paths.prepend(&test_tree_paths);
 
@@ -202,7 +202,8 @@ async fn run_project_tests(
             if spec_files.is_empty() {
                 tracing::warn!("no *.spec.luau or *.spec.lua files found in test/ or tests/");
             }
-            let tiniest_src = tiniest::ensure_installed(&test_tree, &test_config).await?;
+            let tiniest_src =
+                tiniest::ensure_installed(&project_tree_ctx, &test_tree, &test_config).await?;
             Some(tiniest::write_collector(workspace.root(), &spec_files, &tiniest_src).await?)
         }
         _ => None,

@@ -1,6 +1,6 @@
 use clap::Args;
 use lux_lib::package;
-use lux_lib::{config::Config, operations, rockspec::Rockspec, tree::InstallTree};
+use lux_lib::{config::Config, operations, rockspec::Rockspec};
 
 use miette::Result;
 
@@ -13,14 +13,15 @@ pub struct Info {
 
 pub async fn info(data: Info, config: Config) -> Result<()> {
     let tree = current_workspace_or_user_tree(&config)?;
+    let regular = tree.regular();
 
     let rockspec = operations::Download::new(&data.package, &config)
         .download_rockspec()
         .await?
         .rockspec;
 
-    if tree.match_rocks(&data.package)?.is_found() {
-        println!("Currently installed in {}", tree.root().display());
+    if regular.match_rocks(&data.package)?.is_found() {
+        println!("Currently installed in {}", regular.root().display());
     }
 
     println!("Package name: {}", rockspec.package());

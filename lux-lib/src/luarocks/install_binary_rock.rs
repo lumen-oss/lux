@@ -11,7 +11,7 @@ use crate::{
     lockfile::{self, LockedPackage, LockedPackageHashes, LockedPackageSpec},
     rockspec,
     rockspec::Rockspec,
-    tree::{self, InstallTree},
+    tree::{self, InstallSession},
 };
 use crate::{fs, lockfile::RemotePackageSourceUrl, rockspec::LuaVersionCompatibility};
 use bytes::Bytes;
@@ -49,7 +49,7 @@ pub enum Error {
 
 pub(crate) struct BinaryRockInstall<'a, T>
 where
-    T: InstallTree,
+    T: InstallSession,
 {
     rockspec: &'a rockspec::lua::Remote,
     spec: LockedPackageSpec,
@@ -63,7 +63,7 @@ where
 
 impl<'a, T> BinaryRockInstall<'a, T>
 where
-    T: InstallTree,
+    T: InstallSession,
 {
     pub(crate) fn new(
         rockspec: &'a rockspec::lua::Remote,
@@ -110,6 +110,11 @@ where
             _ => None,
         };
         let package = LockedPackage::new(self.spec, self.source, source_url, hashes);
+        if !matches!(self.behaviour, BuildBehaviour::Force) {
+            if let Some(existing) = self.tree.reuse_complete(&package, self.entry_type)? {
+                return Ok(existing);
+            }
+        }
         match self.tree.lockfile()?.get(&package.id()) {
             Some(package)
                 if matches!(
@@ -124,7 +129,7 @@ where
                 let cursor = Cursor::new(self.rock_bytes);
                 let mut zip = zip::ZipArchive::new(cursor)?;
                 zip.extract(&unpack_dir)?;
-                self.tree.prepare(&package.spec)?;
+                self.tree.prepare(&package)?;
                 let layout = self.tree.layout_for(&package.spec);
                 let sources = RockManifestSources {
                     root: unpack_dir.path().to_path_buf(),
@@ -141,6 +146,8 @@ where
                 if rockspec_path.is_file() {
                     fs::tokio::copy(&rockspec_path, layout.rockspec_path()).await?;
                     fs::tokio::remove_file(&rockspec_path).await?;
+                } else if let Ok(rockspec_str) = rockspec.to_lua_remote_rockspec_string() {
+                    fs::sync::write(layout.rockspec_path(), rockspec_str)?;
                 }
                 self.tree.finalize(&package, self.entry_type)?;
                 self.tree
@@ -155,6 +162,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::tree::InstallView;
     use std::path::PathBuf;
 
     use assert_fs::TempDir;
@@ -220,6 +228,8 @@ mod tests {
         let tree = config
             .user_tree(config.lua_version().unwrap().clone())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let local_package = BinaryRockInstall::new(
             &rockspec,
             rockspec.to_locked_package_spec(),
@@ -227,7 +237,7 @@ mod tests {
             remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
+            &transaction,
         )
         .install()
         .await
@@ -238,7 +248,7 @@ mod tests {
                 .parse()
                 .unwrap()
         );
-        let foo_bar_module = tree
+        let foo_bar_module = transaction
             .layout_for(&local_package.spec)
             .src
             .join("foo")
@@ -291,6 +301,8 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         let tree = config
             .user_tree(config.lua_version().unwrap().clone())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         BinaryRockInstall::new(
             &rockspec,
             rockspec.to_locked_package_spec(),
@@ -298,12 +310,12 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
+            &transaction,
         )
         .install()
         .await
         .unwrap();
-        assert!(tree.bin().join("mytool").is_executable());
+        assert!(transaction.bin().join("mytool").is_executable());
     }
 
     #[tokio::test]
@@ -340,6 +352,8 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
 
         let installed = BinaryRockInstall::new(
             &rockspec,
@@ -348,7 +362,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
+            &transaction,
         )
         .install()
         .await
@@ -401,6 +415,8 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         let tree = config
             .user_tree(config.lua_version().unwrap().clone())
             .unwrap();
+        let regular = tree.regular();
+        let transaction = crate::transaction::Transaction::new(&tree, &regular).unwrap();
         let local_package = BinaryRockInstall::new(
             &rockspec,
             rockspec.to_locked_package_spec(),
@@ -408,7 +424,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
+            &transaction,
         )
         .install()
         .await
@@ -437,12 +453,14 @@ source = { url = "https://example.com/test-binary-bin.zip" }
         );
 
         // let's make sure our own pack/unpack implementation roundtrips correctly
+        let transaction = crate::transaction::Transaction::new(&tree).unwrap();
         operations::Uninstall::new()
-            .config(&config)
+            .target(&transaction)
             .package(local_package.id())
             .remove()
             .await
             .unwrap();
+        transaction.commit().unwrap();
         let content = std::fs::read(&packed_rock).unwrap();
         let rock_bytes = Bytes::copy_from_slice(&content);
         let cursor = Cursor::new(rock_bytes.clone());
@@ -468,7 +486,7 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             remote::package::Source::Test,
             tree::EntryType::Entrypoint,
             &config,
-            &tree,
+            &transaction,
         )
         .install()
         .await

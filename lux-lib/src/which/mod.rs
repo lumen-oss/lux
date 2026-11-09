@@ -4,7 +4,7 @@ use std::{io, path::PathBuf};
 use crate::{
     config::Config,
     lua, rockspec,
-    tree::{self, InstallTree},
+    tree::{self},
 };
 use bon::Builder;
 use itertools::Itertools;
@@ -64,8 +64,9 @@ pub enum Error {
 fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
     let config = which.config;
     let lua_version = lua::Version::from(config)?;
-    let tree = config.user_tree(lua_version.clone())?;
-    let lockfile = tree.lockfile()?;
+    let tree_ctx = config.user_tree(lua_version.clone())?;
+    let regular = tree_ctx.regular();
+    let lockfile = regular.lockfile()?;
     let local_packages = if which.packages.is_empty() {
         lockfile.list().into_values().flatten().collect_vec()
     } else {
@@ -85,7 +86,7 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
     local_packages
         .into_iter()
         .filter_map(|pkg| {
-            let layout = tree.layout_for(&pkg.spec);
+            let layout = regular.layout_for(&pkg.spec);
             let lib_path = layout.lib.join(which.module.to_lib_path());
             if lib_path.is_file() {
                 return Some(lib_path);
@@ -116,21 +117,23 @@ fn do_search(which: Which<'_>) -> Result<PathBuf, Error> {
 mod tests {
     use super::*;
     use crate::config;
-    use assert_fs::prelude::PathCopy;
+    use assert_fs::prelude::{PathChild, PathCopy};
     use std::{path::PathBuf, str::FromStr};
 
     #[tokio::test]
     async fn test_which() {
-        let tree_path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/sample-tree");
+        let tree_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources/test/sample-tree/dependencies/5.1");
         let temp = assert_fs::TempDir::new().unwrap();
-        temp.copy_from(&tree_path, &["**"]).unwrap();
-        let tree_path = temp.to_path_buf();
         let config = config::Builder::new()
             .unwrap()
-            .user_tree(Some(tree_path.clone()))
+            .user_tree(Some(temp.to_path_buf()))
             .lua_version(Some(lua::Version::Lua51))
             .build()
+            .unwrap();
+        config.user_tree(lua::Version::Lua51).unwrap();
+        temp.child("dependencies/5.1")
+            .copy_from(&tree_path, &["**"])
             .unwrap();
 
         let result = Which::new(

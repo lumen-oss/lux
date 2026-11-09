@@ -17,7 +17,7 @@ use crate::{
     },
     path::{self, Paths},
     rockspec,
-    tree::{self, InstallTree},
+    tree::{self, InstallView},
     variables,
 };
 
@@ -58,18 +58,17 @@ impl BuildBackend for rockspec::build::backend::Make {
     #[tracing::instrument(name = "make::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
-        T: InstallTree,
+        T: InstallView,
     {
         let no_install = args.no_install;
         let lua = args.lua;
         let external_dependencies = args.external_dependencies;
         let config = args.config;
-        let tree = args.tree;
-        let layout = tree.layout_for(args.package);
+        let destination = args.tree;
+        let layout = destination.layout_for(args.package);
         let build_dir = args.build_dir;
 
-        let build_tree = tree.build_tree(config)?;
-        let build_paths = Paths::new(&build_tree)?;
+        let build_paths = Paths::new(&destination.build_slot()?)?;
         let lua_path = build_paths.package_path_prepended().joined();
         let lua_cpath = build_paths.package_cpath_prepended().joined();
         let bin_path = build_paths.path_prepended().joined();

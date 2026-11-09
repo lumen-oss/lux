@@ -27,8 +27,9 @@ pub async fn exec(run: Exec, config: Config) -> Result<()> {
             config.user_tree(lua_version)?
         }
     };
+    let regular = tree.regular();
 
-    let paths = Paths::new(&tree)?;
+    let paths = Paths::new(&regular)?;
     unsafe {
         // safe as long as this is single-threaded
         env::set_var("PATH", paths.path_prepended().joined());

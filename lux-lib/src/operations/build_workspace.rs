@@ -80,7 +80,7 @@ mod tests {
 
     use crate::{config, lua};
     #[cfg(feature = "impure_tests")]
-    use crate::{fs, tree::InstallTree};
+    use crate::{fs, tree::InstallView};
     use assert_fs::prelude::PathCopy;
     use std::path::PathBuf;
 
@@ -114,14 +114,14 @@ mod tests {
             .build()
             .unwrap();
         let workspace = Workspace::from_exact(project_root).unwrap().unwrap();
-        let tree = workspace.tree(&config).unwrap();
+        let regular = workspace.tree(&config).unwrap().regular();
         BuildWorkspace::new(&workspace, &config)
             .no_lock(false)
             .only_deps(false)
             .build()
             .await
             .unwrap();
-        let bin_dir = tree.bin();
+        let bin_dir = regular.bin();
         assert!(bin_dir.join("foo").is_file());
         assert!(bin_dir.join("bar").is_file());
     }
@@ -157,8 +157,8 @@ mod tests {
             .await
             .unwrap();
         let package = package.first().unwrap();
-        let tree = workspace.tree(&config).unwrap();
-        let src_dir = tree.layout_for(&package.spec).src;
+        let regular = workspace.tree(&config).unwrap().regular();
+        let src_dir = regular.layout_for(&package.spec).src;
         assert!(src_dir.join("init.lua").is_file());
     }
 

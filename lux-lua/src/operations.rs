@@ -5,16 +5,19 @@ use lux_lib::package;
 use std::{collections::HashMap, path::PathBuf};
 
 use itertools::Itertools;
-use lux_lib::tree::InstallTree;
+use lux_lib::tree::InstallView;
 use lux_lib::{
-    drivers::sync::{Sync, SyncMode, TargetSet},
-    drivers::InstallPackages,
+    drivers::{
+        sync::{Sync, SyncMode, TargetSet},
+        InstallBuildDependencies, InstallPackages,
+    },
     lockfile::LockedPackageId,
     lua,
     operations::{self, pin},
     package::db::PackageDB,
     rockspec::dependency,
-    tree::{RockMatches, Tree},
+    transaction::Transaction,
+    tree::{RockMatches, Slot as TreeSlot},
 };
 use mlua::prelude::*;
 use mlua_extras::typed::{Type, Typed, TypedDataMethods, TypedUserData};
@@ -58,9 +61,9 @@ impl TypedUserData for OperationsModule {
             "outdated",
             |_, (workspace, config): (WorkspaceLua, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
-                let tree = workspace.0.tree(&config.0).into_lua_err()?;
+                let regular = workspace.0.tree(&config.0).into_lua_err()?.regular();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
-                let rocks = tree.as_rock_list().into_lua_err()?;
+                let rocks = regular.as_rock_list().into_lua_err()?;
                 let mut outdated: HashMap<String, Vec<HashMap<String, String>>> = HashMap::new();
                 for rock in rocks.iter() {
                     if let Ok(Some(latest)) = rock.to_package().has_update(&package_db).await {
@@ -85,15 +88,32 @@ impl TypedUserData for OperationsModule {
             "install",
             |_, (packages, tree, config): (Vec<PackageInstallSpec>, TreeLua, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
-                let specs = packages.into_iter().map(|p| p.0).collect();
+                let specs = packages.into_iter().map(|p| p.0).collect::<Vec<_>>();
                 let package_db = PackageDB::from_config(&config.0).await.into_lua_err()?;
-                InstallPackages::new(&config.0, &tree.0)
-                    .package_db(package_db)
-                    .packages(specs)
+                let build_tree = tree.tree.build().into_lua_err()?;
+                let build_transaction =
+                    Transaction::new(&tree.tree, &build_tree).into_lua_err()?;
+                let build_dependencies = InstallBuildDependencies::new(&config.0, &build_transaction)
+                    .packages(specs.clone())
+                    .package_db(package_db.clone())
                     .install()
                     .await
-                    .into_lua_err()
-                    .map(|(pkgs, _)| pkgs.into_iter().map(LockedPackageLua).collect::<Vec<_>>())
+                    .into_lua_err()?;
+                build_transaction.commit().into_lua_err()?;
+
+                let transaction = Transaction::new(&tree.tree, &tree.slot).into_lua_err()?;
+                let packages = InstallPackages::new(&config.0, &transaction)
+                    .packages(specs)
+                    .package_db(package_db)
+                    .install(&build_dependencies.token)
+                    .await
+                    .into_lua_err()?
+                    .0;
+                transaction.commit().into_lua_err()?;
+                Ok(packages
+                    .into_iter()
+                    .map(LockedPackageLua)
+                    .collect::<Vec<_>>())
             },
         );
 
@@ -106,14 +126,27 @@ impl TypedUserData for OperationsModule {
             |_, (packages, tree, config): (Vec<LockedPackageIdLua>, Option<TreeLua>, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
                 let ids = packages.into_iter().map(|p| p.0);
-                operations::Uninstall::new()
-                    .config(&config.0)
+                let (tree_ctx, slot) = match tree {
+                    Some(tree) => (tree.tree, tree.slot),
+                    None => {
+                        let version = lua::Version::from(&config.0).into_lua_err()?;
+                        let tree = config.0.user_tree(version.clone()).into_lua_err()?;
+                        let slot = tree.regular();
+                        (tree, slot)
+                    }
+                };
+                let transaction = Transaction::new(&tree_ctx, &slot).into_lua_err()?;
+                let ids = operations::Uninstall::new()
+                    .target(&transaction)
                     .packages(ids)
-                    .maybe_tree(tree.map(|tree| tree.0))
                     .remove()
                     .await
-                    .into_lua_err()
-                    .map(|ids| ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
+                    .into_lua_err()?;
+                transaction.commit().into_lua_err()?;
+                Ok(ids
+                    .into_iter()
+                    .map(LockedPackageIdLua)
+                    .collect::<Vec<_>>())
             },
         );
 
@@ -212,8 +245,9 @@ impl TypedUserData for OperationsModule {
             )| async move {
                 let _runtime = lua::runtime().enter();
                 let deps = lua_impls::map_dependency_type_names(deps.0);
-                let tree = workspace.0.tree(&config.0).into_lua_err()?;
-                let ids_to_remove: Vec<LockedPackageId> = deps_to_ids(&deps, &tree);
+                let tree_ctx = workspace.0.tree(&config.0).into_lua_err()?;
+                let regular = tree_ctx.regular();
+                let ids_to_remove: Vec<LockedPackageId> = deps_to_ids(&deps, &regular);
 
                 if ids_to_remove.is_empty() {
                     return Ok(Vec::new());
@@ -226,14 +260,15 @@ impl TypedUserData for OperationsModule {
                     .await
                     .into_lua_err()?;
 
-                operations::Uninstall::new()
-                    .config(&config.0)
-                    .tree(tree)
+                let transaction = Transaction::new(&tree_ctx, &regular).into_lua_err()?;
+                let ids = operations::Uninstall::new()
+                    .target(&transaction)
                     .packages(ids_to_remove)
                     .remove()
                     .await
-                    .into_lua_err()
-                    .map(|ids| ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
+                    .into_lua_err()?;
+                transaction.commit().into_lua_err()?;
+                Ok(ids.into_iter().map(LockedPackageIdLua).collect::<Vec<_>>())
             },
         );
 
@@ -304,15 +339,17 @@ impl TypedUserData for OperationsModule {
             "dist_bin",
             |_, (project, tree, output, config): (ProjectLua, TreeLua, String, ConfigLua)| async move {
                 let _runtime = lua::runtime().enter();
-                operations::dist::ProjectBin::new()
+                let transaction = Transaction::new(&tree.tree, &tree.slot).into_lua_err()?;
+                let path = operations::dist::ProjectBin::new()
                     .project(&project.0)
-                    .tree(&tree.0)
+                    .target(&transaction)
                     .output(PathBuf::from(output))
                     .config(&config.0)
                     .compile()
                     .await
-                    .into_lua_err()
-                    .map(|path| path.to_slash_lossy().to_string())
+                    .into_lua_err()?;
+                transaction.commit().into_lua_err()?;
+                Ok(path.to_slash_lossy().to_string())
             },
         );
 
@@ -342,7 +379,7 @@ impl TypedUserData for OperationsModule {
         methods.add_function(
             "pin",
             |_, (package_id, tree, pin_state): (LockedPackageIdLua, TreeLua, PinnedStateLua)| {
-                pin::set_state(&package_id.0, &tree.0, pin_state.0).into_lua_err()
+                pin::set_state(&package_id.0, &tree.slot, pin_state.0).into_lua_err()
             },
         );
     }
@@ -396,7 +433,7 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
         .collect())
 }
 
-fn deps_to_ids(deps: &dependency::Kind<package::Name>, tree: &Tree) -> Vec<LockedPackageId> {
+fn deps_to_ids(deps: &dependency::Kind<package::Name>, tree: &TreeSlot) -> Vec<LockedPackageId> {
     let names = match deps {
         dependency::Kind::Regular(d) | dependency::Kind::Build(d) | dependency::Kind::Test(d) => d,
         dependency::Kind::External(_) => &Vec::default(),

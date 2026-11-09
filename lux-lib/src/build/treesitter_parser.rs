@@ -2,7 +2,7 @@ use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
 use crate::lua;
 use crate::rockspec;
-use crate::tree::InstallTree;
+use crate::tree::InstallView;
 use miette::Diagnostic;
 use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
@@ -40,7 +40,7 @@ impl BuildBackend for rockspec::build::backend::Treesitter {
     #[tracing::instrument(name = "treesitter_parser::run", skip_all, level = "debug")]
     async fn run<T>(self, args: RunBuildArgs<'_, T>) -> Result<BuildInfo, Self::Err>
     where
-        T: InstallTree,
+        T: InstallView,
     {
         let package = args.package;
         let tree = args.tree;

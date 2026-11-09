@@ -17,7 +17,7 @@ use crate::{
     fs, lua,
     path::{self, Paths},
     rockspec,
-    tree::{InstallTree, RockLayout},
+    tree::{InstallView, RockLayout},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -84,14 +84,14 @@ pub(crate) fn lua_module(
 pub(crate) async fn binary(
     source: &Path,
     target: &str,
-    tree: &impl InstallTree,
+    tree: &impl InstallView,
     layout: &RockLayout,
     lua: &lua::Installation,
     deploy: &rockspec::deploy::Spec,
     config: &Config,
 ) -> Result<PathBuf, Error> {
     fs::tokio::create_dir_all(&layout.bin).await?;
-    let paths = Paths::new(tree)?;
+    let paths = Paths::new(tree.slot())?;
     let script = if config.wrap_bin_scripts()
         && deploy.wrap_bin_scripts
         && is_compatible_lua_script(source, lua, &paths, config).await
@@ -290,7 +290,8 @@ mod tests {
             .join("resources/test/sample_lua_bin_script_valid");
         let temp_dir = assert_fs::TempDir::new().unwrap().to_path_buf();
         let tree = Tree::new(temp_dir, lua_version.clone(), &config).unwrap();
-        let paths = Paths::new(&tree).unwrap();
+        let regular = tree.regular();
+        let paths = Paths::new(&regular).unwrap();
         assert!(is_compatible_lua_script(&valid_script, &lua, &paths, &config).await);
         let invalid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_invalid");
@@ -309,11 +310,12 @@ mod tests {
             .unwrap();
         let lua_version = config.lua_version().unwrap();
         let lua = lua::Installation::new(lua_version, &config).await.unwrap();
-        let tree = config.user_tree(lua_version.clone()).unwrap();
+        let tree_ctx = config.user_tree(lua_version.clone()).unwrap();
+        let regular = tree_ctx.regular();
         let valid_script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources/test/sample_lua_bin_script_valid");
         let script_name = "test_script";
-        let script_path = wrapped_binary(&valid_script, script_name, &tree.bin(), &lua, &config)
+        let script_path = wrapped_binary(&valid_script, script_name, &regular.bin(), &lua, &config)
             .await
             .unwrap();
 

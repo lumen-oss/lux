@@ -5,11 +5,12 @@ use lux_lib::package;
 use lux_lib::{
     build::BuildBehaviour,
     config,
-    drivers::InstallPackages,
+    drivers::{InstallBuildDependencies, InstallPackages},
     git, lua,
     operations::{self, install},
     package::db::PackageDB,
     rockspec,
+    transaction::Transaction,
     tree::EntryType,
 };
 use std::path::PathBuf;
@@ -76,13 +77,27 @@ async fn install_and_use(package: package::Req, module_name: &str) {
     let tree = config
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
-    let installed = InstallPackages::new(&config, &tree)
-        .package(install_spec)
-        .package_db(PackageDB::from_config(&config).await.unwrap())
+    let build_tree = tree.build().unwrap();
+    let regular = tree.regular();
+    let package_db = PackageDB::from_config(&config).await.unwrap();
+    let build_transaction = Transaction::new(&tree, &build_tree).unwrap();
+    let build_dependencies = InstallBuildDependencies::new(&config, &build_transaction)
+        .package(install_spec.clone())
+        .package_db(package_db.clone())
         .install()
+        .await
+        .unwrap();
+    build_transaction.commit().unwrap();
+
+    let transaction = Transaction::new(&tree, &regular).unwrap();
+    let installed = InstallPackages::new(&config, &transaction)
+        .package(install_spec)
+        .package_db(package_db)
+        .install(&build_dependencies.token)
         .await
         .unwrap()
         .0;
+    transaction.commit().unwrap();
     assert!(!installed.is_empty());
 
     operations::Exec::new("lua", None, &config)
@@ -130,12 +145,26 @@ async fn test_install(install_spec: install::Spec) {
     let tree = config
         .user_tree(lua::Version::from(&config).unwrap().clone())
         .unwrap();
-    let installed = InstallPackages::new(&config, &tree)
-        .package(install_spec)
-        .package_db(PackageDB::from_config(&config).await.unwrap())
+    let build_tree = tree.build().unwrap();
+    let regular = tree.regular();
+    let package_db = PackageDB::from_config(&config).await.unwrap();
+    let build_transaction = Transaction::new(&tree, &build_tree).unwrap();
+    let build_dependencies = InstallBuildDependencies::new(&config, &build_transaction)
+        .package(install_spec.clone())
+        .package_db(package_db.clone())
         .install()
+        .await
+        .unwrap();
+    build_transaction.commit().unwrap();
+
+    let transaction = Transaction::new(&tree, &regular).unwrap();
+    let installed = InstallPackages::new(&config, &transaction)
+        .package(install_spec)
+        .package_db(package_db)
+        .install(&build_dependencies.token)
         .await
         .unwrap()
         .0;
+    transaction.commit().unwrap();
     assert!(!installed.is_empty());
 }
