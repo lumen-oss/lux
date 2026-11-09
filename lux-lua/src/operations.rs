@@ -1,6 +1,7 @@
 //! Functions for interacting with global state (currently installed packages user-wide,
 //! getting all packages from the manifest, etc.)
 
+use lux_lib::lockfile::locked_package;
 use lux_lib::package;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -9,7 +10,6 @@ use lux_lib::tree::InstallTree;
 use lux_lib::{
     drivers::sync::{Sync, SyncMode, TargetSet},
     drivers::InstallPackages,
-    lockfile::LockedPackageId,
     lua,
     operations::{self, pin},
     package::db::PackageDB,
@@ -213,7 +213,7 @@ impl TypedUserData for OperationsModule {
                 let _runtime = lua::runtime().enter();
                 let deps = lua_impls::map_dependency_type_names(deps.0);
                 let tree = workspace.0.tree(&config.0).into_lua_err()?;
-                let ids_to_remove: Vec<LockedPackageId> = deps_to_ids(&deps, &tree);
+                let ids_to_remove: Vec<locked_package::ID> = deps_to_ids(&deps, &tree);
 
                 if ids_to_remove.is_empty() {
                     return Ok(Vec::new());
@@ -396,7 +396,7 @@ async fn search(query: String, config: ConfigLua) -> mlua::Result<HashMap<String
         .collect())
 }
 
-fn deps_to_ids(deps: &dependency::Kind<package::Name>, tree: &Tree) -> Vec<LockedPackageId> {
+fn deps_to_ids(deps: &dependency::Kind<package::Name>, tree: &Tree) -> Vec<locked_package::ID> {
     let names = match deps {
         dependency::Kind::Regular(d) | dependency::Kind::Build(d) | dependency::Kind::Test(d) => d,
         dependency::Kind::External(_) => &Vec::default(),

@@ -4,7 +4,7 @@ use crate::remote;
 use std::io;
 
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     lockfile::{LockedPackage, LockedPackageLockType, Lockfile, PinnedState, ReadOnly, ReadWrite},
     lua,
@@ -332,7 +332,7 @@ fn mk_install_spec(
         tree::EntryType::DependencyOnly
     };
     install::Spec::new(req.clone(), entry_type)
-        .build_behaviour(BuildBehaviour::Force)
+        .build_behaviour(build::Behaviour::Force)
         .pin(PinnedState::Unpinned)
         .opt(package.opt())
         .build()

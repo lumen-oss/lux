@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use lux_lib::{
-    build::BuildBehaviour, config::Config, operations, path::LuaEnvironment, workspace::Workspace,
-};
+use lux_lib::{config::Config, operations, path::LuaEnvironment, workspace::Workspace};
 use miette::Result;
 
 use crate::build::{self, Build};
@@ -42,7 +40,12 @@ pub async fn run(run_args: Run, config: Config) -> Result<()> {
     };
 
     let package = run_args.build.package.clone();
-    build::build_with_behaviour(run_args.build, config.clone(), BuildBehaviour::Ignore).await?;
+    build::build_with_behaviour(
+        run_args.build,
+        config.clone(),
+        lux_lib::build::Behaviour::Ignore,
+    )
+    .await?;
 
     operations::Run::new()
         .workspace(&workspace)

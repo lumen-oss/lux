@@ -102,7 +102,7 @@ impl Installation {
                 .tree(&self.tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&self.config)
-                .behaviour(build::BuildBehaviour::Ignore)
+                .behaviour(build::Behaviour::Ignore)
                 .constraint(luarocks_req.version_req().clone().into())
                 .build()
                 .await?;

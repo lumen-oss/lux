@@ -1,6 +1,6 @@
 use crate::package;
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     drivers::sync::{self, Sync, SyncMode, TargetSet},
     lockfile::LockedPackage,
@@ -42,8 +42,8 @@ pub struct BuildWorkspace<'a> {
     /// Build only the dependencies
     only_deps: bool,
 
-    #[builder(default = BuildBehaviour::Force)]
-    behaviour: BuildBehaviour,
+    #[builder(default = build::Behaviour::Force)]
+    behaviour: build::Behaviour,
 }
 
 impl<State: build_workspace_builder::State + build_workspace_builder::IsComplete>

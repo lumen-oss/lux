@@ -1,8 +1,9 @@
+use crate::lockfile::locked_package;
 use crate::package;
 use crate::{
     config::Config,
     fs,
-    lockfile::{self, LockedPackage, LockedPackageId, LockedPackageSpec, Lockfile, ReadOnly},
+    lockfile::{self, LockedPackage, Lockfile, ReadOnly},
     lua, path,
     variables::{GetVariableError, HasVariables},
 };
@@ -41,7 +42,7 @@ pub trait InstallTree {
     /// Where unwrapped package binaries are installed
     fn unwrapped_bin(&self) -> PathBuf;
     /// The standard install layout for a package.
-    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout;
+    fn layout_for(&self, package: &locked_package::Spec) -> RockLayout;
     /// Create a [`Lockfile`] for this tree.
     fn lockfile(&self) -> Result<Lockfile<ReadOnly>, Error>;
     /// Get this tree's lockfile path.
@@ -55,7 +56,7 @@ pub trait InstallTree {
     /// Find installed rocks that match the given [`package::Req`].
     fn match_rocks(&self, req: &package::Req) -> Result<RockMatches, Error>;
     /// Create the standard directories (src, lib, etc.) for a package.
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error>;
+    fn prepare(&self, package: &locked_package::Spec) -> Result<(), Error>;
     /// Apply the custom layout once a package has been fully installed.
     ///
     /// For entrypoints, this creates the symlinks for the custom layout, if one is configured.
@@ -127,7 +128,7 @@ impl RockLayout {
 }
 
 /// A Lux install tree that supports multiple versions of the same dependency,
-/// with packages addressed by their [`LockedPackageId`]
+/// with packages addressed by their [`locked_package::ID`]
 #[derive(Clone, Debug)]
 pub struct Tree {
     /// The Lua version of the tree.
@@ -251,7 +252,7 @@ impl InstallTree for Tree {
         self.root_parent.join(self.version.to_string())
     }
 
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), Error> {
+    fn prepare(&self, package: &locked_package::Spec) -> Result<(), Error> {
         let layout = self.layout_for(package);
         fs::sync::create_dir_all(&layout.root)?;
         fs::sync::create_dir_all(&layout.lib)?;
@@ -312,7 +313,7 @@ impl InstallTree for Tree {
         self.root().join(LOCKFILE_NAME)
     }
 
-    fn layout_for(&self, package: &LockedPackageSpec) -> RockLayout {
+    fn layout_for(&self, package: &locked_package::Spec) -> RockLayout {
         RockLayout::new(
             self.root().join(format!(
                 "{}-{}@{}",
@@ -390,8 +391,8 @@ impl EntryType {
 #[derive(Clone, Debug)]
 pub enum RockMatches {
     NotFound(package::Req),
-    Single(LockedPackageId),
-    Many(NonEmpty<LockedPackageId>),
+    Single(locked_package::ID),
+    Many(NonEmpty<locked_package::ID>),
 }
 
 // Loosely mimic the Option<T> functions.
@@ -414,7 +415,7 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{self, LockedPackage, LockedPackageHashes},
+        lockfile::{self, locked_package, LockedPackage},
         lua,
         tree::{InstallTree, RockLayout},
         variables,
@@ -436,7 +437,7 @@ mod tests {
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
-        let mock_hashes = LockedPackageHashes {
+        let mock_hashes = locked_package::Hashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                 .parse()
                 .unwrap(),
@@ -521,7 +522,7 @@ mod tests {
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
-        let mock_hashes = LockedPackageHashes {
+        let mock_hashes = locked_package::Hashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                 .parse()
                 .unwrap(),

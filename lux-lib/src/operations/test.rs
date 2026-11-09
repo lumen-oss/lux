@@ -9,7 +9,7 @@ use crate::fs;
 use crate::tree::InstallTree;
 use crate::workspace::{self, TreeError};
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::{self, Config},
     lua,
     path::{self, Paths},
@@ -185,7 +185,7 @@ async fn run_project_tests(
         .mode(SyncMode::Open)
         .targets(TargetSet::member(project.toml().package().clone(), true))
         .no_lock(no_lock)
-        .behaviour(BuildBehaviour::Ignore)
+        .behaviour(build::Behaviour::Ignore)
         .sync()
         .await?;
 

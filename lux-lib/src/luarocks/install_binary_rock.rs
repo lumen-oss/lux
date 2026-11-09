@@ -1,14 +1,15 @@
+use crate::lockfile::locked_package;
 use std::io::{self, Cursor};
 
 use crate::remote;
 use crate::{
     build::{
+        self,
         external_dependency::{self, ExternalDependencyInfo},
-        BuildBehaviour,
     },
     config::Config,
     hash::HasIntegrity,
-    lockfile::{self, LockedPackage, LockedPackageHashes, LockedPackageSpec},
+    lockfile::{self, LockedPackage},
     rockspec,
     rockspec::Rockspec,
     tree::{self, InstallTree},
@@ -52,11 +53,11 @@ where
     T: InstallTree,
 {
     rockspec: &'a rockspec::lua::Remote,
-    spec: LockedPackageSpec,
+    spec: locked_package::Spec,
     rock_bytes: Bytes,
     source: remote::package::Source,
     entry_type: tree::EntryType,
-    behaviour: BuildBehaviour,
+    behaviour: build::Behaviour,
     config: &'a Config,
     tree: &'a T,
 }
@@ -67,7 +68,7 @@ where
 {
     pub(crate) fn new(
         rockspec: &'a rockspec::lua::Remote,
-        spec: LockedPackageSpec,
+        spec: locked_package::Spec,
         rock_bytes: Bytes,
         source: remote::package::Source,
         entry_type: tree::EntryType,
@@ -82,11 +83,11 @@ where
             config,
             tree,
             entry_type,
-            behaviour: BuildBehaviour::Ignore,
+            behaviour: build::Behaviour::Ignore,
         }
     }
 
-    pub(crate) fn behaviour(self, behaviour: BuildBehaviour) -> Self {
+    pub(crate) fn behaviour(self, behaviour: build::Behaviour) -> Self {
         Self { behaviour, ..self }
     }
 
@@ -99,7 +100,7 @@ where
 
         rockspec.validate_lua_version_from_config(self.config)?;
 
-        let hashes = LockedPackageHashes {
+        let hashes = locked_package::Hashes {
             rockspec: rockspec.hash().await?,
             source: self.rock_bytes.hash().await?,
         };
@@ -114,7 +115,7 @@ where
             Some(package)
                 if matches!(
                     self.behaviour,
-                    BuildBehaviour::Ignore | BuildBehaviour::Conflict
+                    build::Behaviour::Ignore | build::Behaviour::Conflict
                 ) =>
             {
                 Ok(package.clone())
@@ -166,7 +167,7 @@ mod tests {
     use crate::luarocks::rock_manifest::RockManifest;
     use crate::{
         config,
-        lockfile::{self, LockedPackageId, OptState, PinnedState},
+        lockfile::{self, OptState, PinnedState},
         lua,
         operations::download,
         package,
@@ -177,8 +178,8 @@ mod tests {
     use flaky_test::flaky_test;
 
     impl rockspec::lua::Remote {
-        fn to_locked_package_spec(&self) -> LockedPackageSpec {
-            LockedPackageSpec::new(
+        fn to_locked_package_spec(&self) -> locked_package::Spec {
+            locked_package::Spec::new(
                 self.package(),
                 self.version(),
                 lockfile::Constraint::Unconstrained,
@@ -316,14 +317,14 @@ source = { url = "https://example.com/test-binary-bin.zip" }
             url: "https://test.org".parse().unwrap(),
         };
         let rockspec = download::unpack_rockspec(&rock).await.unwrap();
-        let dependency = LockedPackageId::new(
+        let dependency = locked_package::ID::new(
             &package::Name::from("transitive-dependency"),
             &"1.0-1".parse().unwrap(),
             PinnedState::default(),
             OptState::default(),
             lockfile::Constraint::Unconstrained,
         );
-        let spec = LockedPackageSpec::new(
+        let spec = locked_package::Spec::new(
             rockspec.package(),
             rockspec.version(),
             lockfile::Constraint::Unconstrained,

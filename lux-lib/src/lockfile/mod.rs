@@ -13,8 +13,7 @@ use std::{
 use itertools::Itertools;
 
 use miette::Diagnostic;
-use serde::{de, Deserialize, Serialize, Serializer};
-use sha2::{Digest, Sha256};
+use serde::{Deserialize, Serialize, Serializer};
 use ssri::Integrity;
 use strum_macros::EnumIter;
 use thiserror::Error;
@@ -28,298 +27,22 @@ use crate::tree::{EntryType, InstallTree, Tree};
 
 pub mod constraint;
 mod guard;
+pub mod locked_package;
+mod opt_state;
+mod pinned_state;
+
+use locked_package::integrity_err_not_found;
 
 pub use constraint::Constraint;
 pub use guard::Guard;
+pub use locked_package::LockedPackage;
+pub use opt_state::OptState;
+pub use pinned_state::PinnedState;
 
 /// Bump this whenever an incompatible change is made to the lockfile format.
 /// Lockfiles with a different major version are rejected on load.
 const LOCKFILE_VERSION: u64 = 2;
 pub(crate) const LOCKFILE_VERSION_STR: &str = "2.0.0";
-
-#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
-pub enum PinnedState {
-    /// Unpinned packages can be updated
-    #[default]
-    Unpinned,
-    /// Pinned packages cannot be updated
-    Pinned,
-}
-
-impl Display for PinnedState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            PinnedState::Unpinned => "unpinned".fmt(f),
-            PinnedState::Pinned => "pinned".fmt(f),
-        }
-    }
-}
-
-impl From<bool> for PinnedState {
-    fn from(value: bool) -> Self {
-        if value {
-            Self::Pinned
-        } else {
-            Self::Unpinned
-        }
-    }
-}
-
-impl PinnedState {
-    pub fn as_bool(&self) -> bool {
-        match self {
-            Self::Unpinned => false,
-            Self::Pinned => true,
-        }
-    }
-
-    fn is_default(&self) -> bool {
-        &Self::default() == self
-    }
-}
-
-impl Serialize for PinnedState {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bool(self.as_bool())
-    }
-}
-
-impl<'de> Deserialize<'de> for PinnedState {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(match bool::deserialize(deserializer)? {
-            false => Self::Unpinned,
-            true => Self::Pinned,
-        })
-    }
-}
-
-#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Default)]
-pub enum OptState {
-    /// A required package
-    #[default]
-    Required,
-    /// An optional package
-    Optional,
-}
-
-impl OptState {
-    pub(crate) fn as_bool(&self) -> bool {
-        match self {
-            Self::Required => false,
-            Self::Optional => true,
-        }
-    }
-
-    fn is_default(&self) -> bool {
-        &Self::default() == self
-    }
-}
-
-impl From<bool> for OptState {
-    fn from(value: bool) -> Self {
-        if value {
-            Self::Optional
-        } else {
-            Self::Required
-        }
-    }
-}
-
-impl Display for OptState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            OptState::Required => "required".fmt(f),
-            OptState::Optional => "optional".fmt(f),
-        }
-    }
-}
-
-impl Serialize for OptState {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bool(self.as_bool())
-    }
-}
-
-impl<'de> Deserialize<'de> for OptState {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(match bool::deserialize(deserializer)? {
-            false => Self::Required,
-            true => Self::Optional,
-        })
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct LockedPackageSpec {
-    name: package::Name,
-    version: package::Version,
-    pinned: PinnedState,
-    opt: OptState,
-    dependencies: Vec<LockedPackageId>,
-    build_dependencies: Vec<LockedPackageId>,
-    // TODO: Deserialize this directly into a `LuaPackageReq`
-    constraint: Option<String>,
-}
-
-/// ID of a local package, a hash that is comprised of:
-/// - name
-/// - version
-/// - pinned state
-/// - opt state
-/// - lock constraint
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Clone)]
-pub struct LockedPackageId(String);
-
-impl LockedPackageId {
-    pub fn new(
-        name: &package::Name,
-        version: &package::Version,
-        pinned: PinnedState,
-        opt: OptState,
-        constraint: Constraint,
-    ) -> Self {
-        let mut hasher = Sha256::new();
-
-        hasher.update(format!(
-            "{}{}{}{}{}",
-            name,
-            version,
-            pinned.as_bool(),
-            opt.as_bool(),
-            match constraint {
-                Constraint::Unconstrained => String::default(),
-                Constraint::Constrained(version_req) => version_req.to_string(),
-            },
-        ));
-
-        Self(hex::encode(hasher.finalize()))
-    }
-
-    /// Constructs a package ID from a hashed string.
-    ///
-    /// # Safety
-    ///
-    /// Ensure that the hash you are providing to this function
-    /// is not malformed and resolves to a valid package ID for the target
-    /// tree you are working with.
-    pub unsafe fn from_unchecked(str: String) -> Self {
-        Self(str)
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-impl Display for LockedPackageId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl LockedPackageSpec {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        name: &package::Name,
-        version: &package::Version,
-        constraint: Constraint,
-        dependencies: Vec<LockedPackageId>,
-        build_dependencies: Vec<LockedPackageId>,
-        pinned: &PinnedState,
-        opt: &OptState,
-    ) -> Self {
-        Self {
-            name: name.clone(),
-            version: version.clone(),
-            pinned: *pinned,
-            opt: *opt,
-            dependencies,
-            build_dependencies,
-            constraint: match constraint {
-                Constraint::Unconstrained => None,
-                Constraint::Constrained(version_req) => Some(version_req.to_string()),
-            },
-        }
-    }
-
-    pub fn id(&self) -> LockedPackageId {
-        LockedPackageId::new(
-            self.name(),
-            self.version(),
-            self.pinned,
-            self.opt,
-            match &self.constraint {
-                None => Constraint::Unconstrained,
-                Some(_) => self.constraint(),
-            },
-        )
-    }
-
-    pub fn constraint(&self) -> Constraint {
-        // Safe to unwrap as the data can only end up in the struct as a valid constraint
-        unsafe { Constraint::try_from(&self.constraint).unwrap_unchecked() }
-    }
-
-    pub fn name(&self) -> &package::Name {
-        &self.name
-    }
-
-    pub fn version(&self) -> &package::Version {
-        &self.version
-    }
-
-    pub fn pinned(&self) -> PinnedState {
-        self.pinned
-    }
-
-    pub fn opt(&self) -> OptState {
-        self.opt
-    }
-
-    pub fn dependencies(&self) -> Vec<&LockedPackageId> {
-        self.dependencies.iter().collect()
-    }
-
-    pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
-        self.build_dependencies.iter().collect()
-    }
-
-    pub fn to_package(&self) -> package::Spec {
-        package::Spec::new(self.name.clone(), self.version.clone())
-    }
-
-    pub fn into_package_req(self) -> package::Req {
-        match self.constraint() {
-            Constraint::Unconstrained => self.name.into(),
-            Constraint::Constrained(version_req) => package::Req {
-                name: self.name,
-                version_req,
-            },
-        }
-    }
-
-    pub(crate) fn as_package_req(&self) -> package::Req {
-        match self.constraint() {
-            Constraint::Unconstrained => self.name.clone().into(),
-            Constraint::Constrained(version_req) => package::Req {
-                name: self.name.clone(),
-                version_req: version_req.clone(),
-            },
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase", tag = "type")]
@@ -354,224 +77,6 @@ impl Display for RemotePackageSourceUrl {
     }
 }
 
-// TODO(vhyrro): Move to `package/local.rs`
-
-/// A package whose source has been downloaded, hashed and which is installed in a tree.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct LockedPackage {
-    pub(crate) spec: LockedPackageSpec,
-    pub(crate) source: remote::package::Source,
-    pub(crate) source_url: Option<RemotePackageSourceUrl>,
-    pub(crate) hashes: LockedPackageHashes,
-}
-
-impl LockedPackage {
-    pub(crate) fn repin(mut self, pinned: PinnedState) -> Self {
-        self.spec.pinned = pinned;
-        self
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from(
-        package: &package::Spec,
-        constraint: Constraint,
-        source: remote::package::Source,
-        source_url: Option<RemotePackageSourceUrl>,
-        hashes: LockedPackageHashes,
-    ) -> Self {
-        Self::new(
-            LockedPackageSpec::new(
-                package.name(),
-                package.version(),
-                constraint,
-                Vec::default(),
-                Vec::default(),
-                &PinnedState::Unpinned,
-                &OptState::Required,
-            ),
-            source,
-            source_url,
-            hashes,
-        )
-    }
-
-    pub(crate) fn new(
-        spec: LockedPackageSpec,
-        source: remote::package::Source,
-        source_url: Option<RemotePackageSourceUrl>,
-        hashes: LockedPackageHashes,
-    ) -> Self {
-        Self {
-            spec,
-            source,
-            source_url,
-            hashes,
-        }
-    }
-
-    pub fn spec(&self) -> &LockedPackageSpec {
-        &self.spec
-    }
-
-    pub fn into_package_spec(self) -> package::Spec {
-        self.spec.to_package()
-    }
-
-    pub fn as_package_spec(&self) -> package::Spec {
-        self.spec.to_package()
-    }
-
-    pub fn id(&self) -> LockedPackageId {
-        self.spec.id()
-    }
-
-    pub fn name(&self) -> &package::Name {
-        self.spec.name()
-    }
-
-    pub fn version(&self) -> &package::Version {
-        self.spec.version()
-    }
-
-    pub fn pinned(&self) -> PinnedState {
-        self.spec.pinned()
-    }
-
-    pub fn opt(&self) -> OptState {
-        self.spec.opt()
-    }
-
-    pub fn dependencies(&self) -> Vec<&LockedPackageId> {
-        self.spec.dependencies()
-    }
-
-    pub fn build_dependencies(&self) -> Vec<&LockedPackageId> {
-        self.spec.build_dependencies()
-    }
-
-    pub fn constraint(&self) -> Constraint {
-        self.spec.constraint()
-    }
-
-    pub(crate) fn source(&self) -> &remote::package::Source {
-        &self.source
-    }
-
-    pub(crate) fn source_url(&self) -> Option<&RemotePackageSourceUrl> {
-        self.source_url.as_ref()
-    }
-
-    pub fn hashes(&self) -> &LockedPackageHashes {
-        &self.hashes
-    }
-
-    pub fn to_package(&self) -> package::Spec {
-        self.spec.to_package()
-    }
-
-    pub fn into_package_req(self) -> package::Req {
-        self.spec.into_package_req()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct LockedPackageIntermediate {
-    name: package::Name,
-    version: package::Version,
-    #[serde(default, skip_serializing_if = "PinnedState::is_default")]
-    pinned: PinnedState,
-    #[serde(default, skip_serializing_if = "OptState::is_default")]
-    opt: OptState,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    dependencies: Vec<LockedPackageId>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    build_dependencies: Vec<LockedPackageId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    constraint: Option<String>,
-    source: remote::package::Source,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    source_url: Option<RemotePackageSourceUrl>,
-    hashes: LockedPackageHashes,
-}
-
-impl TryFrom<LockedPackageIntermediate> for LockedPackage {
-    type Error = constraint::Error;
-
-    fn try_from(value: LockedPackageIntermediate) -> Result<Self, Self::Error> {
-        let constraint = Constraint::try_from(&value.constraint)?;
-        Ok(Self {
-            spec: LockedPackageSpec::new(
-                &value.name,
-                &value.version,
-                constraint,
-                value.dependencies,
-                value.build_dependencies,
-                &value.pinned,
-                &value.opt,
-            ),
-            source: value.source,
-            source_url: value.source_url,
-            hashes: value.hashes,
-        })
-    }
-}
-
-impl From<&LockedPackage> for LockedPackageIntermediate {
-    fn from(value: &LockedPackage) -> Self {
-        Self {
-            name: value.spec.name.clone(),
-            version: value.spec.version.clone(),
-            pinned: value.spec.pinned,
-            opt: value.spec.opt,
-            dependencies: value.spec.dependencies.clone(),
-            build_dependencies: value.spec.build_dependencies.clone(),
-            constraint: value.spec.constraint.clone(),
-            source: value.source.clone(),
-            source_url: value.source_url.clone(),
-            hashes: value.hashes.clone(),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for LockedPackage {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        LockedPackage::try_from(LockedPackageIntermediate::deserialize(deserializer)?)
-            .map_err(de::Error::custom)
-    }
-}
-
-impl Serialize for LockedPackage {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        LockedPackageIntermediate::from(self).serialize(serializer)
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
-pub struct LockedPackageHashes {
-    pub rockspec: Integrity,
-    pub source: Integrity,
-}
-
-impl Ord for LockedPackageHashes {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let a = (self.rockspec.to_hex().1, self.source.to_hex().1);
-        let b = (other.rockspec.to_hex().1, other.source.to_hex().1);
-        a.cmp(&b)
-    }
-}
-
-impl PartialOrd for LockedPackageHashes {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 pub trait LockfilePermissions {}
 #[derive(Clone)]
 pub struct ReadOnly;
@@ -585,10 +90,10 @@ impl LockfilePermissions for ReadWrite {}
 pub(crate) struct PackageLock {
     // NOTE: We cannot directly serialize to a `Sha256` object as they don't implement serde traits.
     // NOTE: We want to retain ordering of rocks when de/serializing.
-    rocks: BTreeMap<LockedPackageId, LockedPackage>,
+    rocks: BTreeMap<locked_package::ID, LockedPackage>,
 
     /// The entrypoints of the tree. Enforces one entrypoint per package name.
-    pub(crate) entrypoints: BTreeMap<package::Name, LockedPackageId>,
+    pub(crate) entrypoints: BTreeMap<package::Name, locked_package::ID>,
 }
 
 impl PackageLock {
@@ -623,7 +128,7 @@ impl PackageLock {
         );
     }
 
-    pub(crate) fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
+    pub(crate) fn get(&self, id: &locked_package::ID) -> Option<&LockedPackage> {
         self.rocks.get(id)
     }
 
@@ -631,11 +136,11 @@ impl PackageLock {
         self.rocks.is_empty()
     }
 
-    pub(crate) fn rocks(&self) -> &BTreeMap<LockedPackageId, LockedPackage> {
+    pub(crate) fn rocks(&self) -> &BTreeMap<locked_package::ID, LockedPackage> {
         &self.rocks
     }
 
-    pub(crate) fn is_entrypoint(&self, package: &LockedPackageId) -> bool {
+    pub(crate) fn is_entrypoint(&self, package: &locked_package::ID) -> bool {
         self.entrypoints.values().any(|id| id == package)
     }
 
@@ -644,7 +149,7 @@ impl PackageLock {
         self.entrypoints.get(name).and_then(|id| self.get(id))
     }
 
-    pub(crate) fn is_dependency(&self, package: &LockedPackageId) -> bool {
+    pub(crate) fn is_dependency(&self, package: &locked_package::ID) -> bool {
         self.rocks
             .values()
             .flat_map(|rock| rock.dependencies())
@@ -663,7 +168,7 @@ impl PackageLock {
         self.remove_by_id(&target.id())
     }
 
-    pub(crate) fn remove_by_id(&mut self, target: &LockedPackageId) {
+    pub(crate) fn remove_by_id(&mut self, target: &locked_package::ID) {
         self.rocks.remove(target);
         self.entrypoints.retain(|_, id| id != target);
     }
@@ -768,7 +273,7 @@ impl PackageLock {
     }
 
     /// Return all dependencies of a package, including itself
-    pub(crate) fn get_all_dependencies(&self, id: &LockedPackageId) -> HashSet<&LockedPackage> {
+    pub(crate) fn get_all_dependencies(&self, id: &locked_package::ID) -> HashSet<&LockedPackage> {
         let mut packages = HashSet::new();
         if let Some(local_pkg) = self.get(id) {
             packages.insert(local_pkg);
@@ -802,7 +307,7 @@ pub struct Lockfile<P: LockfilePermissions> {
     // TODO: Serialize this directly into a `Version`
     version: String,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    binaries: BTreeMap<LockedPackageId, RockBinaries>,
+    binaries: BTreeMap<locked_package::ID, RockBinaries>,
     #[serde(flatten)]
     lock: PackageLock,
 }
@@ -924,15 +429,15 @@ impl<P: LockfilePermissions> Lockfile<P> {
         &self.version
     }
 
-    pub fn rocks(&self) -> &BTreeMap<LockedPackageId, LockedPackage> {
+    pub fn rocks(&self) -> &BTreeMap<locked_package::ID, LockedPackage> {
         self.lock.rocks()
     }
 
-    pub fn is_dependency(&self, package: &LockedPackageId) -> bool {
+    pub fn is_dependency(&self, package: &locked_package::ID) -> bool {
         self.lock.is_dependency(package)
     }
 
-    pub fn is_entrypoint(&self, package: &LockedPackageId) -> bool {
+    pub fn is_entrypoint(&self, package: &locked_package::ID) -> bool {
         self.lock.is_entrypoint(package)
     }
 
@@ -955,7 +460,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
         self.lock.reachable().into_iter().cloned().collect()
     }
 
-    pub fn entry_type(&self, package: &LockedPackageId) -> EntryType {
+    pub fn entry_type(&self, package: &locked_package::ID) -> EntryType {
         if self.lock.is_entrypoint(package) {
             EntryType::Entrypoint
         } else {
@@ -964,7 +469,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     }
 
     /// The binaries installed in the tree for a given package.
-    pub(crate) fn binaries(&self, id: &LockedPackageId) -> Option<&RockBinaries> {
+    pub(crate) fn binaries(&self, id: &locked_package::ID) -> Option<&RockBinaries> {
         self.binaries.get(id)
     }
 
@@ -972,7 +477,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
         &self.lock
     }
 
-    pub fn get(&self, id: &LockedPackageId) -> Option<&LockedPackage> {
+    pub fn get(&self, id: &locked_package::ID) -> Option<&LockedPackage> {
         self.lock.get(id)
     }
 
@@ -981,7 +486,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     /// # Safety
     ///
     /// Ensure that the package is present in the lockfile before calling this function.
-    pub unsafe fn get_unchecked(&self, id: &LockedPackageId) -> &LockedPackage {
+    pub unsafe fn get_unchecked(&self, id: &locked_package::ID) -> &LockedPackage {
         self.lock.get(id).unwrap_unchecked()
     }
 
@@ -998,7 +503,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     }
 
     /// Find all rocks that match the requirement
-    pub(crate) fn find_rocks(&self, req: &package::Req) -> Vec<LockedPackageId> {
+    pub(crate) fn find_rocks(&self, req: &package::Req) -> Vec<locked_package::ID> {
         match self.list().get(req.name()) {
             Some(packages) => packages
                 .iter()
@@ -1249,7 +754,7 @@ impl Lockfile<ReadWrite> {
         self.lock.remove(target)
     }
 
-    pub(crate) fn remove_by_id(&mut self, target: &LockedPackageId) {
+    pub(crate) fn remove_by_id(&mut self, target: &locked_package::ID) {
         self.binaries.remove(target);
         self.lock.remove_by_id(target)
     }
@@ -1388,19 +893,6 @@ fn migrate_entrypoints(
     Ok(())
 }
 
-fn integrity_err_not_found(package: &LockedPackage) -> IntegrityError {
-    IntegrityError::PackageNotFound(
-        package.name().clone(),
-        Box::new(package.version().clone()),
-        package.spec.pinned,
-        package
-            .spec
-            .constraint
-            .clone()
-            .unwrap_or("UNCONSTRAINED".into()),
-    )
-}
-
 fn deserialize_url<'de, D>(deserializer: D) -> Result<Url, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -1419,12 +911,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs::remove_file, path::PathBuf};
-
+    use crate::{config, lua};
     use assert_fs::fixture::PathCopy;
     use insta::{assert_json_snapshot, sorted_redaction};
-
-    use crate::{config, lua};
+    use std::{fs::remove_file, path::PathBuf};
 
     #[test]
     fn parse_lockfile() {
@@ -1455,7 +945,7 @@ mod tests {
         )
         .unwrap();
 
-        let mock_hashes = LockedPackageHashes {
+        let mock_hashes = locked_package::Hashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                 .parse()
                 .unwrap(),

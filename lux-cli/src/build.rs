@@ -1,7 +1,7 @@
 use clap::Args;
 use lux_lib::package;
 use lux_lib::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     drivers::sync::{Sync, SyncMode, TargetSet},
     lockfile::LockedPackage,
@@ -26,13 +26,13 @@ pub struct Build {
 
 /// Returns `Some` if the `only_deps` arg is set to `false`.
 pub async fn build(data: Build, config: Config) -> Result<Vec<LockedPackage>> {
-    build_with_behaviour(data, config, BuildBehaviour::Force).await
+    build_with_behaviour(data, config, build::Behaviour::Force).await
 }
 
 pub async fn build_with_behaviour(
     data: Build,
     config: Config,
-    behaviour: BuildBehaviour,
+    behaviour: build::Behaviour,
 ) -> Result<Vec<LockedPackage>> {
     let workspace = Workspace::current_or_err()?;
     let report = Sync::new(&workspace, &config)

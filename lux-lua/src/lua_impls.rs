@@ -3,6 +3,7 @@
 //! Lua implementations for various types in lux-lib. These are used to convert between Lua and
 //! Rust types when calling Rust functions from Lua.
 
+use lux_lib::lockfile::locked_package;
 use lux_lib::package;
 use std::{collections::HashMap, path::PathBuf, str::FromStr, time::Duration};
 
@@ -18,14 +19,11 @@ use strum::IntoEnumIterator;
 use url::Url;
 
 use lux_lib::{
-    build::BuildBehaviour,
+    build,
     config::{self, Config},
     drivers::sync::SyncReport,
     git::{self},
-    lockfile::{
-        self, Guard, LockedPackage, LockedPackageHashes, LockedPackageId, Lockfile, OptState,
-        PinnedState, ReadOnly, ReadWrite,
-    },
+    lockfile::{self, Guard, LockedPackage, Lockfile, OptState, PinnedState, ReadOnly, ReadWrite},
     lua,
     operations::{self, download, install},
     package::db::PackageDB,
@@ -252,7 +250,7 @@ impl IntoLua for OptStateLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LockedPackageIdLua(pub LockedPackageId);
+pub struct LockedPackageIdLua(pub locked_package::ID);
 
 impl Typed for LockedPackageIdLua {
     fn ty() -> Type {
@@ -263,7 +261,7 @@ impl Typed for LockedPackageIdLua {
 impl FromLua for LockedPackageIdLua {
     fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         Ok(LockedPackageIdLua(unsafe {
-            LockedPackageId::from_unchecked(String::from_lua(value, lua)?)
+            locked_package::ID::from_unchecked(String::from_lua(value, lua)?)
         }))
     }
 }
@@ -875,11 +873,11 @@ impl mlua::UserData for PackageReqLua {
 }
 
 #[derive(Debug, Clone)]
-pub struct LockedPackageHashesLua(pub LockedPackageHashes);
+pub struct LockedPackageHashesLua(pub locked_package::Hashes);
 
 impl Typed for LockedPackageHashesLua {
     fn ty() -> Type {
-        Type::named("lockfile.LockedPackageHashes")
+        Type::named("lockfile.locked_package.Hashes")
     }
 }
 
@@ -3416,7 +3414,7 @@ mod definitions_registry {
     submit_definitions! {
         "package.Spec" => PackageSpecLua,
         "package.Req" => PackageReqLua,
-        "lockfile.LockedPackageHashes" => LockedPackageHashesLua,
+        "lockfile.locked_package.Hashes" => LockedPackageHashesLua,
         "lockfile.LockedPackage" => LockedPackageLua,
         "tree.RockLayout" => RockLayoutLua,
         "Tree" => TreeLua,
@@ -3761,7 +3759,7 @@ enum BuildBehaviourLua {
     Force,
 }
 
-impl From<BuildBehaviourLua> for BuildBehaviour {
+impl From<BuildBehaviourLua> for build::Behaviour {
     fn from(val: BuildBehaviourLua) -> Self {
         match val {
             BuildBehaviourLua::Ignore => Self::Ignore,

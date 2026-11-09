@@ -1,7 +1,8 @@
 use std::io;
 
 use crate::fs;
-use crate::lockfile::{FlushLockfileError, LockedPackage, LockedPackageId};
+use crate::lockfile::locked_package;
+use crate::lockfile::{FlushLockfileError, LockedPackage};
 use crate::lua;
 use crate::tree::{self, EntryType, InstallTree};
 use crate::{config::Config, tree::Tree};
@@ -31,7 +32,7 @@ pub enum Error {
 #[builder(start_fn = new, finish_fn(name = _build, vis = ""))]
 pub struct Uninstall<'a> {
     #[builder(field)]
-    packages: Vec<LockedPackageId>,
+    packages: Vec<locked_package::ID>,
     config: &'a Config,
     tree: Option<Tree>,
 }
@@ -43,7 +44,7 @@ where
     /// Add packages to remove.
     pub fn packages<I>(self, packages: I) -> Self
     where
-        I: IntoIterator<Item = LockedPackageId>,
+        I: IntoIterator<Item = locked_package::ID>,
     {
         Self {
             packages: self.packages.into_iter().chain(packages).collect_vec(),
@@ -52,7 +53,7 @@ where
     }
 
     /// Add a package to the set of packages to remove.
-    pub fn package(self, package: LockedPackageId) -> Self {
+    pub fn package(self, package: locked_package::ID) -> Self {
         self.packages(std::iter::once(package))
     }
 }
@@ -62,7 +63,7 @@ where
     State: uninstall_builder::State + uninstall_builder::IsComplete,
 {
     /// Remove the packages.
-    pub async fn remove(self) -> Result<Vec<LockedPackageId>, Error> {
+    pub async fn remove(self) -> Result<Vec<locked_package::ID>, Error> {
         let args = self._build();
         let tree = args.tree.unwrap_or(
             args.config
@@ -74,10 +75,10 @@ where
 
 // TODO: Remove dependencies recursively too!
 async fn remove(
-    package_ids: Vec<LockedPackageId>,
+    package_ids: Vec<locked_package::ID>,
     tree: Tree,
     config: &Config,
-) -> Result<Vec<LockedPackageId>, Error> {
+) -> Result<Vec<locked_package::ID>, Error> {
     let lockfile = tree.lockfile()?;
 
     let packages = package_ids

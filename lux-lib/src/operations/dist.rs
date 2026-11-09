@@ -540,6 +540,8 @@ mod tests {
     #[cfg(any(target_os = "linux", feature = "impure_tests"))]
     use super::*;
     #[cfg(target_os = "linux")]
+    use crate::lockfile::locked_package;
+    #[cfg(target_os = "linux")]
     use crate::package;
     #[cfg(target_os = "linux")]
     use crate::remote;
@@ -556,12 +558,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     use crate::{
         fs,
-        lockfile::{self, LockedPackage, LockedPackageHashes},
+        lockfile::{self, LockedPackage},
     };
 
     #[cfg(target_os = "linux")]
     fn mk_dummy_package(spec: package::Spec) -> LockedPackage {
-        let hashes = LockedPackageHashes {
+        let hashes = locked_package::Hashes {
             rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 .parse()
                 .unwrap(),

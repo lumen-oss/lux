@@ -8,11 +8,9 @@ use lux_lib::rockspec;
 use lux_lib::rockspec::Rockspec;
 use lux_lib::tree::InstallTree;
 use lux_lib::workspace::Workspace;
-use lux_lib::{build::BuildBehaviour::Force, config, lua, pipeline::build_local::Build, tree};
+use lux_lib::{build, config, lua, pipeline::build_local::Build, tree};
 use tokio::runtime::Builder;
 
-#[cfg(not(target_env = "msvc"))]
-use lux_lib::build::BuildBehaviour;
 use tracing::Instrument;
 
 #[flaky_test(tokio, times = 5)]
@@ -49,7 +47,7 @@ async fn builtin_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -88,7 +86,7 @@ async fn make_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -142,7 +140,7 @@ async fn test_build_rockspec(rockspec_path: PathBuf) {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -183,7 +181,7 @@ async fn treesitter_parser_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -229,7 +227,7 @@ async fn treesitter_parser_build_source_queries() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -287,7 +285,7 @@ async fn test_build_local_project_no_source() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -348,7 +346,7 @@ async fn test_build_local_project_only_src() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -410,7 +408,7 @@ fn test_build_multiple_treesitter_parsers() {
                         .tree(&tree)
                         .entry_type(tree::EntryType::Entrypoint)
                         .config(&config)
-                        .behaviour(Force)
+                        .behaviour(build::Behaviour::Force)
                         .build()
                         .await
                         .unwrap()
@@ -451,7 +449,7 @@ async fn build_project_with_git_dependency() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -485,7 +483,7 @@ async fn test_multiline_command_build() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(BuildBehaviour::Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();
@@ -526,7 +524,7 @@ async fn builtin_build_install_include() {
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(&config)
-        .behaviour(Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await
         .unwrap();

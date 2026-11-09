@@ -1,9 +1,10 @@
+use crate::lockfile::locked_package;
 use crate::package;
 use std::io;
 
 use crate::{
     fs,
-    lockfile::{FlushLockfileError, LockedPackageId, PinnedState},
+    lockfile::{FlushLockfileError, PinnedState},
     tree::{self, InstallTree, Tree},
 };
 use fs_extra::dir::CopyOptions;
@@ -17,7 +18,7 @@ use thiserror::Error;
 pub enum Error {
     #[error("package with ID '{0}' not found in the lockfile")]
     #[diagnostic(help("this is probably a bug"))]
-    PackageNotFound(LockedPackageId),
+    PackageNotFound(locked_package::ID),
     #[error("rock {rock} is already {}pinned!", if *.pin_state == PinnedState::Unpinned { "un" } else { "" })]
     PinStateUnchanged {
         pin_state: PinnedState,
@@ -47,7 +48,11 @@ pub enum Error {
     Fs(#[from] fs::Error),
 }
 
-pub fn set_state(package_id: &LockedPackageId, tree: &Tree, pin: PinnedState) -> Result<(), Error> {
+pub fn set_state(
+    package_id: &locked_package::ID,
+    tree: &Tree,
+    pin: PinnedState,
+) -> Result<(), Error> {
     let lockfile = tree.lockfile()?;
     let package = lockfile
         .get(package_id)

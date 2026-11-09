@@ -6,7 +6,6 @@ use crate::{args::PackageOrRockspec, build, workspace::exists_matching_workspace
 use clap::Args;
 use itertools::Itertools;
 use lux_lib::{
-    build::BuildBehaviour,
     config::Config,
     drivers::InstallPackages,
     lua,
@@ -124,7 +123,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                     let packages = InstallPackages::new(&temp_config, &tree)
                         .package(
                             install::Spec::new(package_req, tree::EntryType::Entrypoint)
-                                .build_behaviour(BuildBehaviour::Force)
+                                .build_behaviour(lux_lib::build::Behaviour::Force)
                                 .build(),
                         )
                         .package_db(PackageDB::from_config(&temp_config).await?)
@@ -189,7 +188,7 @@ pub async fn pack(args: Pack, config: Config) -> Result<()> {
                 .tree(&tree)
                 .entry_type(tree::EntryType::Entrypoint)
                 .config(&config)
-                .behaviour(BuildBehaviour::Force)
+                .behaviour(lux_lib::build::Behaviour::Force)
                 .build()
                 .await?;
             let rock_path = operations::Pack::new(dest_dir, tree, package)

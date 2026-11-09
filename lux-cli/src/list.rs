@@ -1,13 +1,9 @@
+use lux_lib::lockfile::locked_package;
 use std::collections::HashSet;
 
 use clap::Args;
 use itertools::Itertools as _;
-use lux_lib::{
-    config::Config,
-    lockfile::{LockedPackageId, PinnedState},
-    lua,
-    tree::InstallTree,
-};
+use lux_lib::{config::Config, lockfile::PinnedState, lua, tree::InstallTree};
 use miette::{IntoDiagnostic, Result};
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
@@ -33,7 +29,7 @@ pub fn list_installed(list_data: ListCmd, config: Config) -> Result<()> {
     let lockfile = tree.lockfile()?;
     let mut available_rocks = tree.list()?;
     if list_data.orphans {
-        let reachable: HashSet<LockedPackageId> = lockfile
+        let reachable: HashSet<locked_package::ID> = lockfile
             .reachable_rocks()
             .into_iter()
             .map(|package| package.id())

@@ -7,7 +7,7 @@ use super::reconcile::{reconcile_locks, SyncReport};
 
 use crate::drivers::{InstallPackages, InstallPackagesError};
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     fs,
     lockfile::{
@@ -361,7 +361,7 @@ fn install_specs_to_force(to_add: &[(tree::EntryType, LockedPackage)]) -> Vec<in
         .iter()
         .map(|(entry_type, pkg)| {
             install::Spec::new(pkg.clone().into_package_req(), *entry_type)
-                .build_behaviour(BuildBehaviour::Force)
+                .build_behaviour(build::Behaviour::Force)
                 .pin(pkg.pinned())
                 .opt(pkg.opt())
                 .constraint(pkg.constraint())
@@ -412,7 +412,7 @@ where
         .iter()
         .map(|dep| {
             install::Spec::new(dep.package_req().clone(), tree::EntryType::Entrypoint)
-                .build_behaviour(BuildBehaviour::Force)
+                .build_behaviour(build::Behaviour::Force)
                 .pin(*dep.pin())
                 .opt(*dep.opt())
                 .maybe_source(dep.source.clone())

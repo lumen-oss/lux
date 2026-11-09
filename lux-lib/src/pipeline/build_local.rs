@@ -1,12 +1,13 @@
+use crate::lockfile::locked_package;
 use crate::remote;
 use bon::Builder;
 use tracing::Instrument;
 
 use crate::{
-    build::{self, BuildBehaviour, Deploy, RemotePackageSourceSpec},
+    build::{self, Deploy, RemotePackageSourceSpec},
     config::Config,
     hash::HasIntegrity,
-    lockfile::{self, LockedPackage, LockedPackageSpec, OptState, PinnedState},
+    lockfile::{self, LockedPackage, OptState, PinnedState},
     lua,
     rockspec::{LuaVersionCompatibility, Rockspec},
     tree::{EntryType, InstallTree},
@@ -31,7 +32,7 @@ pub struct Build<'a, R: Rockspec + HasIntegrity, T: InstallTree> {
     opt: OptState,
     #[builder(default)]
     constraint: lockfile::Constraint,
-    behaviour: BuildBehaviour,
+    behaviour: build::Behaviour,
 
     #[builder(setters(vis = "pub(crate)"))]
     source_spec: Option<RemotePackageSourceSpec>,
@@ -67,7 +68,7 @@ where
 
     rockspec.validate_lua_version(&lua.version)?;
 
-    let spec = LockedPackageSpec::new(
+    let spec = locked_package::Spec::new(
         rockspec.package(),
         rockspec.version(),
         build.constraint,

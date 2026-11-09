@@ -12,7 +12,7 @@ use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::{
-    build::{self, BuildBehaviour},
+    build,
     config::Config,
     fs, lua,
     pipeline::build_local::Build,
@@ -114,7 +114,7 @@ pub(crate) async fn ensure_installed(tree: &Tree, config: &Config) -> Result<Pat
         .tree(tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
-        .behaviour(BuildBehaviour::Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await?;
     let mut lockfile = tree.lockfile()?.write_guard();

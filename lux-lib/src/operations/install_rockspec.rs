@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{self, BuildBehaviour},
+    build,
     config::Config,
     drivers::{InstallPackages, InstallPackagesError},
     lockfile::{LockedPackage, OptState, PinnedState},
@@ -96,7 +96,7 @@ impl<
             package::Req::from(name.clone()),
             tree::EntryType::Entrypoint,
         )
-        .build_behaviour(BuildBehaviour::Force)
+        .build_behaviour(build::Behaviour::Force)
         .pin(pin)
         .opt(OptState::Required)
         .build();

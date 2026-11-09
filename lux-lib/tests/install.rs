@@ -3,8 +3,7 @@ use flaky_test::flaky_test;
 use itertools::Itertools;
 use lux_lib::package;
 use lux_lib::{
-    build::BuildBehaviour,
-    config,
+    build, config,
     drivers::InstallPackages,
     git, lua,
     operations::{self, install},
@@ -28,7 +27,7 @@ async fn install_git_package() {
                     .unwrap(),
                 git_ref: Some(git::Ref::Tag("v6.0.3".into())),
             }))
-            .build_behaviour(BuildBehaviour::Force)
+            .build_behaviour(build::Behaviour::Force)
             .build();
     test_install(install_spec).await
 }
@@ -42,7 +41,7 @@ async fn install_http_package() {
     // See https://github.com/wahern/luaossl/issues/220#issuecomment-3401472124
     std::env::set_var("CFLAGS", "-Wno-error=incompatible-pointer-types");
     let install_spec = install::Spec::new("http@0.4-0".parse().unwrap(), EntryType::Entrypoint)
-        .build_behaviour(BuildBehaviour::Force)
+        .build_behaviour(build::Behaviour::Force)
         .build();
     test_install(install_spec).await;
     std::env::set_var("CFLAGS", cflags);
@@ -61,7 +60,7 @@ async fn install_and_use_toml_edit() {
 #[cfg(test)]
 async fn install_and_use(package: package::Req, module_name: &str) {
     let install_spec = install::Spec::new(package, EntryType::Entrypoint)
-        .build_behaviour(BuildBehaviour::Force)
+        .build_behaviour(build::Behaviour::Force)
         .build();
     let dir = TempDir::new().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
@@ -103,7 +102,7 @@ async fn no_build_artifacts_in_cwd() {
         .map(|entry| entry.into_path())
         .collect_vec();
     let install_spec = install::Spec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint)
-        .build_behaviour(BuildBehaviour::Force)
+        .build_behaviour(build::Behaviour::Force)
         .build();
     test_install(install_spec).await;
     let build_artifacts = WalkDir::new(&cwd)

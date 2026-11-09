@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use crate::package;
 use std::{collections::HashMap, io, path::PathBuf};
 
@@ -5,7 +6,7 @@ use super::{EntryType, InstallTree, RockLayout, Tree};
 use crate::{
     config::Config,
     fs,
-    lockfile::{LockedPackage, LockedPackageSpec, Lockfile, ReadOnly},
+    lockfile::{LockedPackage, Lockfile, ReadOnly},
     lua,
 };
 use miette::{Diagnostic, Result};
@@ -46,7 +47,10 @@ impl FlatDistTree {
         Ok(Self(tree))
     }
 
-    fn guard_no_conflicting_package(&self, package: &LockedPackageSpec) -> Result<(), io::Error> {
+    fn guard_no_conflicting_package(
+        &self,
+        package: &locked_package::Spec,
+    ) -> Result<(), io::Error> {
         let lockfile = self.lockfile().map_err(io::Error::other)?;
         match lockfile.has_rock(&package.clone().into_package_req(), None) {
             Some(existing_package) => {
@@ -95,7 +99,7 @@ impl InstallTree for FlatDistTree {
         self.0.root()
     }
 
-    fn layout_for(&self, _package: &LockedPackageSpec) -> RockLayout {
+    fn layout_for(&self, _package: &locked_package::Spec) -> RockLayout {
         RockLayout::new(self.0.root(), self.0.bin())
     }
 
@@ -107,7 +111,7 @@ impl InstallTree for FlatDistTree {
         self.0.unwrapped_bin()
     }
 
-    fn prepare(&self, package: &LockedPackageSpec) -> Result<(), super::Error> {
+    fn prepare(&self, package: &locked_package::Spec) -> Result<(), super::Error> {
         self.guard_no_conflicting_package(package)
             .map_err(super::Error::Io)?;
         let layout = self.layout_for(package);

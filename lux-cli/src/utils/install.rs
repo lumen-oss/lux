@@ -3,7 +3,7 @@
 use inquire::Confirm;
 use lux_lib::package;
 use lux_lib::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     lockfile::{OptState, PinnedState},
     operations::install,
@@ -35,12 +35,12 @@ pub fn apply_build_behaviour(
                             .with_default(false)
                             .prompt()
                             .is_ok_and(|overwrite_confirmed| overwrite_confirmed));
-                    overwrite.then_some(BuildBehaviour::Force)
+                    overwrite.then_some(build::Behaviour::Force)
                 }
                 // No entrypoint exists, so always force install. This will force dependencies
                 // designated as entrypoints to be rebuilt, since their layouts may change during
                 // reinstall.
-                None => Some(BuildBehaviour::Force),
+                None => Some(build::Behaviour::Force),
             };
             build_behaviour.map(|build_behaviour| {
                 install::Spec::new(req, tree::EntryType::Entrypoint)

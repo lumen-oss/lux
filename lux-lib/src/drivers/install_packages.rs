@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use crate::package;
 use std::{collections::HashMap, io};
 
@@ -8,12 +9,9 @@ use thiserror::Error;
 use tracing::Instrument;
 
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
-    lockfile::{
-        FlushLockfileError, LockedPackage, LockedPackageId, LockedPackageLockType, Lockfile,
-        ReadWrite,
-    },
+    lockfile::{FlushLockfileError, LockedPackage, LockedPackageLockType, Lockfile, ReadWrite},
     lua,
     luarocks::installation,
     package::db::PackageDB,
@@ -181,7 +179,7 @@ where
 
     // Entrypoints that are already installed. The requested build behaviour decides how to
     // react to them.
-    let mut conflicting_entrypoints: HashMap<LockedPackageId, LockedPackage> = HashMap::new();
+    let mut conflicting_entrypoints: HashMap<locked_package::ID, LockedPackage> = HashMap::new();
     let mut unforced_conflicts = Vec::new();
     for package in regular_packages
         .iter()
@@ -191,13 +189,13 @@ where
             None => continue,
             Some(existing) => match package.build_behaviour {
                 // Forced installs replace the existing entrypoint.
-                BuildBehaviour::Force => {
+                build::Behaviour::Force => {
                     conflicting_entrypoints.insert(existing.id(), existing.clone());
                 }
                 // `Ignore` tolerates re-installing the exact same version.
-                BuildBehaviour::Ignore if existing.version() == package.package.version() => {}
+                build::Behaviour::Ignore if existing.version() == package.package.version() => {}
                 // Any other existing entrypoint is a conflict.
-                BuildBehaviour::Ignore | BuildBehaviour::Conflict => {
+                build::Behaviour::Ignore | build::Behaviour::Conflict => {
                     unforced_conflicts.push(format!("{}@{}", existing.name(), existing.version()));
                 }
             },
@@ -215,7 +213,7 @@ where
         tree.cleanup(package, tree::EntryType::Entrypoint)?;
     }
 
-    let regular_entry_types: HashMap<LockedPackageId, tree::EntryType> = regular_packages
+    let regular_entry_types: HashMap<locked_package::ID, tree::EntryType> = regular_packages
         .iter()
         .map(|pkg| (pkg.package.spec.id(), pkg.entry_type))
         .collect();
@@ -237,13 +235,13 @@ where
             .await?;
     }
 
-    let mut installed_packages: HashMap<LockedPackageId, LockedPackage> = lockfile
+    let mut installed_packages: HashMap<locked_package::ID, LockedPackage> = lockfile
         .rocks()
         .iter()
         .map(|(id, package)| (id.clone(), package.clone()))
         .collect();
     installed_packages.extend(built.iter().map(|pkg| (pkg.spec().id(), pkg.clone())));
-    let mut installed_build_deps: HashMap<LockedPackageId, LockedPackage> = build_lockfile
+    let mut installed_build_deps: HashMap<locked_package::ID, LockedPackage> = build_lockfile
         .rocks()
         .iter()
         .map(|(id, package)| (id.clone(), package.clone()))
@@ -328,13 +326,13 @@ trait LockfileExt {
         self,
         pkg: &LockedPackage,
         entry_type: tree::EntryType,
-        installed_packages: &HashMap<LockedPackageId, LockedPackage>,
+        installed_packages: &HashMap<locked_package::ID, LockedPackage>,
     ) -> io::Result<()>;
 
     fn add_build_dependencies(
         self,
         pkg: &LockedPackage,
-        build_dependencies: &HashMap<LockedPackageId, LockedPackage>,
+        build_dependencies: &HashMap<locked_package::ID, LockedPackage>,
     ) -> io::Result<()>;
 }
 
@@ -343,7 +341,7 @@ impl LockfileExt for &mut Lockfile<ReadWrite> {
         self,
         pkg: &LockedPackage,
         entry_type: tree::EntryType,
-        installed_packages: &HashMap<LockedPackageId, LockedPackage>,
+        installed_packages: &HashMap<locked_package::ID, LockedPackage>,
     ) -> io::Result<()> {
         if entry_type == tree::EntryType::Entrypoint {
             self.add_entrypoint(pkg);
@@ -369,7 +367,7 @@ This is likely a bug in Lux.
     fn add_build_dependencies(
         self,
         pkg: &LockedPackage,
-        build_dependencies: &HashMap<LockedPackageId, LockedPackage>,
+        build_dependencies: &HashMap<locked_package::ID, LockedPackage>,
     ) -> io::Result<()> {
         for dependency_id in pkg.spec().build_dependencies() {
             self.add_build_dependency(

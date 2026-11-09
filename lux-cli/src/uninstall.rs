@@ -1,12 +1,12 @@
 use clap::Args;
 use inquire::Confirm;
 use itertools::Itertools;
+use lux_lib::lockfile::locked_package;
 use lux_lib::package;
 use lux_lib::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     drivers::InstallPackages,
-    lockfile::LockedPackageId,
     lua, operations,
     operations::install,
     package::db::PackageDB,
@@ -85,7 +85,7 @@ multiple packages satisfying your version requirements were found:
         ));
     }
 
-    let (dependencies, entrypoints): (Vec<LockedPackageId>, Vec<LockedPackageId>) = packages
+    let (dependencies, entrypoints): (Vec<locked_package::ID>, Vec<locked_package::ID>) = packages
         .iter()
         .cloned()
         .partition(|pkg_id| lockfile.is_dependency(pkg_id));
@@ -141,7 +141,7 @@ Reinstall?
                         package.clone().into_package_req(),
                         tree::EntryType::DependencyOnly,
                     )
-                    .build_behaviour(BuildBehaviour::Force)
+                    .build_behaviour(build::Behaviour::Force)
                     .pin(package.pinned())
                     .opt(package.opt())
                     .constraint(package.constraint())
