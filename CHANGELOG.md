@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.54.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.53.3...lux-lsp-v0.54.0) `lux-lsp` - 2026-11-09
+
+### Other
+- update Cargo.lock dependencies
+
+## [0.73.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.72.1...lux-lib-v0.73.0) `lux-lib` - 2026-11-09
+
+### Added
+- *(config)* Default `timout` to 0 ([#2223](https://github.com/lumen-oss/lux/pull/2223))
+- *(install-lua)* error reporting for each mirror
+- *(pack)* better detection of platform-specific rocks
+- *(error-reporting)* better diagnostics on source download failure
+- *(install-lua)* multiple (configurable) mirrors ([#2211](https://github.com/lumen-oss/lux/pull/2211))
+
+### Fixed
+- don't allow removing transitive dependencies
+- *(config)* [**breaking**] per-config HTTP clients honouring the timeout ([#2210](https://github.com/lumen-oss/lux/pull/2210))
+
+### Other
+- update luau ([#2220](https://github.com/lumen-oss/lux/pull/2220))
+
+## [0.54.0](https://github.com/lumen-oss/lux/compare/v0.53.3...v0.54.0) `lux-cli` - 2026-11-09
+
+### Fixed
+- *(config)* [**breaking**] per-config HTTP clients honouring the timeout ([#2210](https://github.com/lumen-oss/lux/pull/2210))
+
 ## [0.53.3](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.53.2...lux-lsp-v0.53.3) `lux-lsp` - 2026-11-03
 
 ### Other
