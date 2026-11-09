@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use crate::remote;
 use std::collections::HashMap;
 use std::io;
@@ -17,10 +18,7 @@ use crate::{
     config::Config,
     fs,
     hash::HasIntegrity,
-    lockfile::{
-        LockedPackage, LockedPackageHashes, LockedPackageId, LockedPackageSpec,
-        RemotePackageSourceUrl,
-    },
+    lockfile::{LockedPackage, RemotePackageSourceUrl},
     operations::{self, fetch, unpack},
     rockspec::Rockspec,
     tree::EntryType,
@@ -41,12 +39,12 @@ pub(crate) struct MaterialisedPackage {
     pub(crate) package: LockedPackage,
     pub(crate) rockspec: rockspec::lua::Remote,
     pub(crate) entry_type: EntryType,
-    pub(crate) build_behaviour: crate::build::BuildBehaviour,
+    pub(crate) build_behaviour: build::Behaviour,
     pub(crate) artifact: PackageSource,
     pub(crate) temp_dir: Option<TempDir>,
 }
 
-pub(crate) type MaterialiseArtifacts = Artifacts<HashMap<LockedPackageId, MaterialisedPackage>>;
+pub(crate) type MaterialiseArtifacts = Artifacts<HashMap<locked_package::ID, MaterialisedPackage>>;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -147,7 +145,7 @@ async fn materialise(
                     .hash()
                     .await
                     .map_err(|err| Error::Hash(name.clone(), err))?;
-                let hashes = LockedPackageHashes {
+                let hashes = locked_package::Hashes {
                     rockspec: rockspec_hash,
                     source: source_hash,
                 };
@@ -181,7 +179,7 @@ async fn materialise(
                 .hash()
                 .await
                 .map_err(|err| Error::Hash(name.clone(), err))?;
-            let hashes = LockedPackageHashes {
+            let hashes = locked_package::Hashes {
                 rockspec: rockspec_hash,
                 source: source_hash,
             };
@@ -244,7 +242,7 @@ fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> Path
 
 pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     rockspec: &R,
-    spec: LockedPackageSpec,
+    spec: locked_package::Spec,
     source_spec: Option<RemotePackageSourceSpec>,
     source: Option<remote::package::Source>,
     config: &Config,
@@ -280,7 +278,7 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
         }
     };
 
-    let hashes = LockedPackageHashes {
+    let hashes = locked_package::Hashes {
         rockspec: rockspec.hash().await?,
         source: source_metadata.hash.clone(),
     };

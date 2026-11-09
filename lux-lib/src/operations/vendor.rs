@@ -19,7 +19,7 @@ use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
-    build::{resolve_source_dir, BuildBehaviour},
+    build::{self, resolve_source_dir},
     config::Config,
     fs,
     lockfile::LockedPackageLockType,
@@ -256,7 +256,7 @@ async fn gather_install_specs(
                                 .cloned()
                                 .map(|dep| {
                                     install::Spec::new(dep, EntryType::Entrypoint)
-                                        .build_behaviour(BuildBehaviour::Ignore)
+                                        .build_behaviour(build::Behaviour::Ignore)
                                         .build()
                                 }),
                         );
@@ -308,7 +308,7 @@ fn push_dependencies<R: Rockspec>(
             .unique()
             .map(|dep| {
                 install::Spec::new(dep, EntryType::Entrypoint)
-                    .build_behaviour(BuildBehaviour::Ignore)
+                    .build_behaviour(build::Behaviour::Ignore)
                     .build()
             })
             .collect_vec(),
@@ -507,10 +507,11 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::lockfile::locked_package;
     use crate::remote;
     use crate::{
-        build::BuildBehaviour,
-        lockfile::{self, LockedPackage, LockedPackageSpec, OptState, PinnedState},
+        build,
+        lockfile::{self, LockedPackage, OptState, PinnedState},
     };
     #[cfg(feature = "impure_tests")]
     use {crate::config, assert_fs::prelude::PathCopy, std::path::PathBuf};
@@ -530,7 +531,7 @@ mod tests {
         artifact: PackageSource,
         temp_dir: Option<TempDir>,
     ) -> MaterialisedPackage {
-        let spec = LockedPackageSpec::new(
+        let spec = locked_package::Spec::new(
             rockspec.package(),
             rockspec.version(),
             lockfile::Constraint::Unconstrained,
@@ -543,7 +544,7 @@ mod tests {
             spec,
             source,
             None,
-            crate::lockfile::LockedPackageHashes {
+            crate::lockfile::locked_package::Hashes {
                 rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
                     .parse()
                     .unwrap(),
@@ -556,7 +557,7 @@ mod tests {
             package,
             rockspec,
             entry_type: EntryType::Entrypoint,
-            build_behaviour: BuildBehaviour::Ignore,
+            build_behaviour: build::Behaviour::Ignore,
             artifact,
             temp_dir,
         }

@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -12,9 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     fs,
     lockfile::{
-        load_lockfile, Error, LockedPackage, LockedPackageId, LockedPackageLockType,
-        LockfilePermissions, PackageLock, PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy,
-        LOCKFILE_VERSION_STR,
+        load_lockfile, Error, LockedPackage, LockedPackageLockType, LockfilePermissions,
+        PackageLock, PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, LOCKFILE_VERSION_STR,
     },
     rockspec::lua_dependency,
 };
@@ -39,7 +39,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
     pub(crate) fn rocks(
         &self,
         deps: &LockedPackageLockType,
-    ) -> &BTreeMap<LockedPackageId, LockedPackage> {
+    ) -> &BTreeMap<locked_package::ID, LockedPackage> {
         match deps {
             LockedPackageLockType::Regular => self.dependencies.rocks(),
             LockedPackageLockType::Test => self.test_dependencies.rocks(),
@@ -49,7 +49,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
 
     pub(crate) fn get(
         &self,
-        id: &LockedPackageId,
+        id: &locked_package::ID,
         deps: &LockedPackageLockType,
     ) -> Option<&LockedPackage> {
         match deps {
@@ -61,7 +61,7 @@ impl<P: LockfilePermissions> Lockfile<P> {
 
     pub(crate) fn is_entrypoint(
         &self,
-        package: &LockedPackageId,
+        package: &locked_package::ID,
         deps: &LockedPackageLockType,
     ) -> bool {
         match deps {

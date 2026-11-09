@@ -9,7 +9,7 @@ mod frozen;
 pub(crate) mod reconcile;
 
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     drivers::{InstallPackages, InstallPackagesError},
     lockfile::LockedPackageLockType,
@@ -120,8 +120,8 @@ pub struct Sync<'a> {
 
     targets: TargetSet,
 
-    #[builder(default = BuildBehaviour::Force)]
-    behaviour: BuildBehaviour,
+    #[builder(default = build::Behaviour::Force)]
+    behaviour: build::Behaviour,
 
     /// Build only the dependencies, not the workspace members.
     #[builder(default = false)]
@@ -163,7 +163,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
     .into_iter()
     .filter(|spec| !tree.match_rocks(&spec.package).is_ok_and(|m| m.is_found()))
     .map(|spec| install::Spec {
-        build_behaviour: BuildBehaviour::Force,
+        build_behaviour: build::Behaviour::Force,
         ..spec
     })
     .collect::<Vec<_>>();
@@ -176,7 +176,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
                 .is_ok_and(|m| m.is_found())
         })
         .map(|spec| install::Spec {
-            build_behaviour: BuildBehaviour::Force,
+            build_behaviour: build::Behaviour::Force,
             ..spec
         })
         .collect::<Vec<_>>();
@@ -191,7 +191,7 @@ async fn sync_open(args: &Sync<'_>) -> Result<SyncReport, Error> {
                     .is_ok_and(|m| m.is_found())
             })
             .map(|spec| install::Spec {
-                build_behaviour: BuildBehaviour::Force,
+                build_behaviour: build::Behaviour::Force,
                 ..spec
             })
             .collect::<Vec<_>>()
@@ -288,7 +288,7 @@ pub(crate) fn gather_dependencies(
                 }
                 packages.push(
                     install::Spec::new(dependency, EntryType::Entrypoint)
-                        .build_behaviour(BuildBehaviour::Ignore)
+                        .build_behaviour(build::Behaviour::Ignore)
                         .build(),
                 );
             }
@@ -298,7 +298,7 @@ pub(crate) fn gather_dependencies(
                 }
                 packages.push(
                     install::Spec::new(dependency.package_req().clone(), EntryType::Entrypoint)
-                        .build_behaviour(BuildBehaviour::Ignore)
+                        .build_behaviour(build::Behaviour::Ignore)
                         .pin(*dependency.pin())
                         .opt(*dependency.opt())
                         .maybe_source(dependency.source.clone())
@@ -314,7 +314,7 @@ pub(crate) fn gather_dependencies(
                 // From the perspective of a project, dependencies are entrypoints.
                 packages.push(
                     install::Spec::new(dependency.package_req().clone(), EntryType::Entrypoint)
-                        .build_behaviour(BuildBehaviour::Ignore)
+                        .build_behaviour(build::Behaviour::Ignore)
                         .pin(*dependency.pin())
                         .opt(*dependency.opt())
                         .maybe_source(dependency.source().clone())

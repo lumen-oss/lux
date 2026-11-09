@@ -249,7 +249,7 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    use crate::{build::BuildBehaviour, config, tree::EntryType};
+    use crate::{build, config, tree::EntryType};
 
     #[test]
     fn from_rockspec_builds_local_found_package() {
@@ -280,7 +280,7 @@ mod tests {
             package::Req::new("bar".into(), Some("1.0.0".into())).unwrap(),
             EntryType::DependencyOnly,
         )
-        .build_behaviour(BuildBehaviour::Ignore)
+        .build_behaviour(build::Behaviour::Ignore)
         .maybe_source(Some(rockspec::source::Spec::File(bar_dir)))
         .build();
 

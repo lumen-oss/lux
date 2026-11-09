@@ -1,6 +1,7 @@
+use crate::lockfile::locked_package;
 use crate::{
     fs,
-    lockfile::{LockedPackageSpec, OptState},
+    lockfile::OptState,
     tree::{InstallTree, Tree},
 };
 use std::path::{Path, PathBuf};
@@ -8,10 +9,10 @@ use std::path::{Path, PathBuf};
 /// A custom layout for installed packages, applied in addition to the standard tree layout.
 pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
     /// Arrange the package's files where external tools expect them.
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    fn apply_layout(&self, tree: &Tree, package: &locked_package::Spec) -> fs::Result<()>;
 
     /// Remove the files arranged by [`Self::apply_layout`].
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()>;
+    fn remove_layout(&self, tree: &Tree, package: &locked_package::Spec) -> fs::Result<()>;
 
     /// Whether the layout applies to dependency packages, not just entrypoints.
     fn layout_dependencies(&self) -> bool {
@@ -24,7 +25,7 @@ pub trait CustomRockLayout: std::fmt::Debug + Send + Sync {
 pub struct NvimLayout;
 
 impl NvimLayout {
-    fn target_for(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn target_for(tree: &Tree, package: &locked_package::Spec) -> PathBuf {
         let subdir = match package.opt() {
             OptState::Required => "start",
             OptState::Optional => "opt",
@@ -37,7 +38,7 @@ impl NvimLayout {
 }
 
 impl CustomRockLayout for NvimLayout {
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &Tree, package: &locked_package::Spec) -> fs::Result<()> {
         let custom_dir = Self::target_for(tree, package);
         fs::sync::create_dir_all(&custom_dir)?;
 
@@ -55,7 +56,7 @@ impl CustomRockLayout for NvimLayout {
         Ok(())
     }
 
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &Tree, package: &locked_package::Spec) -> fs::Result<()> {
         let target = Self::target_for(tree, package);
         if target.is_dir() {
             // SAFETY: does not follow symlinks, only removes them
@@ -80,7 +81,7 @@ impl RojoLayout {
             .join("Packages")
     }
 
-    fn index_dir(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn index_dir(tree: &Tree, package: &locked_package::Spec) -> PathBuf {
         Self::packages_dir(tree).join(format!(
             "_Index/{}@{}",
             package.name(),
@@ -88,17 +89,17 @@ impl RojoLayout {
         ))
     }
 
-    fn content_dir(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn content_dir(tree: &Tree, package: &locked_package::Spec) -> PathBuf {
         Self::index_dir(tree, package).join(package.name().to_string())
     }
 
-    fn stub_path(tree: &Tree, package: &LockedPackageSpec) -> PathBuf {
+    fn stub_path(tree: &Tree, package: &locked_package::Spec) -> PathBuf {
         Self::packages_dir(tree).join(format!("{}.lua", package.name()))
     }
 }
 
 impl CustomRockLayout for RojoLayout {
-    fn apply_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn apply_layout(&self, tree: &Tree, package: &locked_package::Spec) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -151,7 +152,7 @@ impl CustomRockLayout for RojoLayout {
         Ok(())
     }
 
-    fn remove_layout(&self, tree: &Tree, package: &LockedPackageSpec) -> fs::Result<()> {
+    fn remove_layout(&self, tree: &Tree, package: &locked_package::Spec) -> fs::Result<()> {
         if !tree.version().is_luau() {
             return Ok(());
         }
@@ -210,13 +211,13 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{self, LockedPackage, LockedPackageHashes},
+        lockfile::{self, locked_package, LockedPackage},
         lua,
         tree::{EntryType, InstallTree, NvimLayout, RojoLayout},
     };
 
-    fn mock_hashes() -> LockedPackageHashes {
-        LockedPackageHashes {
+    fn mock_hashes() -> locked_package::Hashes {
+        locked_package::Hashes {
             rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                 .parse()
                 .unwrap(),

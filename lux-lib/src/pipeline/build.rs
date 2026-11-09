@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use std::collections::{HashMap, HashSet};
 
 use bon::Builder;
@@ -8,7 +9,7 @@ use crate::rockspec;
 use crate::{
     build::Deploy,
     config::Config,
-    lockfile::{LockedPackage, LockedPackageId},
+    lockfile::LockedPackage,
     lua,
     luarocks::{
         self,
@@ -156,16 +157,16 @@ where
 
 fn order_by_build_dependencies(packages: Vec<MaterialisedPackage>) -> Vec<MaterialisedPackage> {
     fn visit(
-        id: LockedPackageId,
-        by_id: &mut HashMap<LockedPackageId, MaterialisedPackage>,
-        visited: &mut HashSet<LockedPackageId>,
+        id: locked_package::ID,
+        by_id: &mut HashMap<locked_package::ID, MaterialisedPackage>,
+        visited: &mut HashSet<locked_package::ID>,
         ordered: &mut Vec<MaterialisedPackage>,
     ) {
         if !visited.insert(id.clone()) {
             return;
         }
 
-        let build_dependencies: Vec<LockedPackageId> = by_id
+        let build_dependencies: Vec<locked_package::ID> = by_id
             .get(&id)
             .map(|package| {
                 package
@@ -187,7 +188,7 @@ fn order_by_build_dependencies(packages: Vec<MaterialisedPackage>) -> Vec<Materi
         }
     }
 
-    let mut by_id: HashMap<LockedPackageId, MaterialisedPackage> = packages
+    let mut by_id: HashMap<locked_package::ID, MaterialisedPackage> = packages
         .into_iter()
         .map(|package| (package.package.id(), package))
         .collect();
@@ -195,7 +196,7 @@ fn order_by_build_dependencies(packages: Vec<MaterialisedPackage>) -> Vec<Materi
     let mut ordered = Vec::new();
     let mut visited = HashSet::new();
 
-    let ids: Vec<LockedPackageId> = by_id.keys().cloned().collect();
+    let ids: Vec<locked_package::ID> = by_id.keys().cloned().collect();
     for id in ids {
         visit(id, &mut by_id, &mut visited, &mut ordered);
     }

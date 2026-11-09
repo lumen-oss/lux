@@ -1,6 +1,7 @@
 use crate::build::backend::BuildInfo;
 use crate::build::backend::RunBuildArgs;
 use crate::fs;
+use crate::lockfile::locked_package;
 use crate::rockspec;
 use crate::rockspec::LuaVersionCompatibility;
 use crate::rockspec::Rockspec;
@@ -10,7 +11,6 @@ use std::path::Path;
 
 use crate::{
     config::Config,
-    lockfile::LockedPackageSpec,
     luarocks::{self, install_rock_manifest, installation::exec, RockManifestSources},
 };
 
@@ -85,7 +85,7 @@ async fn install<R: Rockspec, T: InstallTree>(
     rockspec: &R,
     luarocks_tree: &Path,
     tree: &T,
-    package: &LockedPackageSpec,
+    package: &locked_package::Spec,
     config: &Config,
 ) -> Result<BuildInfo, Error> {
     let layout = tree.layout_for(package);
@@ -118,7 +118,7 @@ mod tests {
 
     use crate::{
         config,
-        lockfile::{self, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{self, locked_package, OptState, PinnedState},
         lua,
         rockspec::Rockspec,
         tree::InstallTree,
@@ -154,7 +154,7 @@ build = { type = "test-custom" }
             .build()
             .unwrap();
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
-        let package = LockedPackageSpec::new(
+        let package = locked_package::Spec::new(
             rockspec.package(),
             rockspec.version(),
             lockfile::Constraint::Unconstrained,

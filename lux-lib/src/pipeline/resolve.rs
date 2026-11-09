@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use crate::package;
 use crate::remote;
 use crate::rockspec;
@@ -11,11 +12,10 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     lockfile::{
-        LockedPackage, LockedPackageId, LockedPackageLockType, LockedPackageSpec, OptState,
-        PinnedState, RemotePackageSourceUrl,
+        LockedPackage, LockedPackageLockType, OptState, PinnedState, RemotePackageSourceUrl,
     },
     operations::install,
     package::db::PackageDB,
@@ -64,16 +64,16 @@ pub(crate) fn luarocks_build_backend_name<R: Rockspec>(rockspec: &R) -> Option<p
 }
 
 pub(crate) struct ResolvedPackage {
-    pub(crate) spec: LockedPackageSpec,
+    pub(crate) spec: locked_package::Spec,
     pub(crate) rockspec: rockspec::lua::Remote,
     pub(crate) source: remote::package::Source,
     pub(crate) source_url: Option<RemotePackageSourceUrl>,
     pub(crate) entry_type: EntryType,
-    pub(crate) build_behaviour: crate::build::BuildBehaviour,
+    pub(crate) build_behaviour: build::Behaviour,
     pub(crate) artifact: Option<PackageSource>,
 }
 
-pub(crate) type ResolvedArtifacts = Artifacts<HashMap<LockedPackageId, ResolvedPackage>>;
+pub(crate) type ResolvedArtifacts = Artifacts<HashMap<locked_package::ID, ResolvedPackage>>;
 
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
@@ -165,7 +165,7 @@ impl RequestKey {
 /// A discovered node in the dependency graph.
 struct Node {
     install_spec: install::Spec,
-    id: LockedPackageId,
+    id: locked_package::ID,
     found: FoundPackage,
     children: Vec<(bool, RequestKey)>,
 }
@@ -180,7 +180,7 @@ struct Resolver {
     nodes: HashMap<RequestKey, Node>,
     resolved: ResolvedArtifacts,
     installed: HashMap<LockedPackageLockType, Vec<LockedPackage>>,
-    installed_ids: HashMap<RequestKey, LockedPackageId>,
+    installed_ids: HashMap<RequestKey, locked_package::ID>,
 }
 
 impl Resolver {
@@ -283,7 +283,7 @@ impl Resolver {
             .constraint
             .clone()
             .unwrap_or_else(|| spec.package.version_req().clone().into());
-        let id = LockedPackageId::new(
+        let id = locked_package::ID::new(
             found.remote.spec.name(),
             found.remote.spec.version(),
             spec.pin,
@@ -300,7 +300,7 @@ impl Resolver {
         for dependency in found.rockspec.dependencies().current_platform() {
             let child_spec =
                 install::Spec::new(dependency.package_req().clone(), EntryType::DependencyOnly)
-                    .build_behaviour(BuildBehaviour::Ignore)
+                    .build_behaviour(build::Behaviour::Ignore)
                     .pin(spec.pin)
                     .opt(spec.opt)
                     .maybe_source(dependency.source().clone())
@@ -343,8 +343,8 @@ impl Resolver {
         &self,
         section: LockedPackageLockType,
         spec: &install::Spec,
-    ) -> Option<LockedPackageId> {
-        if !matches!(spec.build_behaviour, BuildBehaviour::Ignore) || spec.source.is_some() {
+    ) -> Option<locked_package::ID> {
+        if !matches!(spec.build_behaviour, build::Behaviour::Ignore) || spec.source.is_some() {
             return None;
         }
         self.installed
@@ -368,7 +368,7 @@ impl Resolver {
             ..
         } = self;
 
-        let mut ids: HashMap<RequestKey, LockedPackageId> = nodes
+        let mut ids: HashMap<RequestKey, locked_package::ID> = nodes
             .iter()
             .map(|(key, node)| (key.clone(), node.id.clone()))
             .collect();
@@ -398,7 +398,7 @@ impl Resolver {
                 .clone()
                 .unwrap_or_else(|| install_spec.package.version_req().clone().into());
 
-            let spec = LockedPackageSpec::new(
+            let spec = locked_package::Spec::new(
                 found.remote.spec.name(),
                 found.remote.spec.version(),
                 constraint,
@@ -526,7 +526,7 @@ fn build_dependency_specs(
                 .find(|dep| dep.name() == &name)
                 .map(|dep| {
                     install::Spec::new(dep.package_req().clone(), EntryType::Entrypoint)
-                        .build_behaviour(BuildBehaviour::Ignore)
+                        .build_behaviour(build::Behaviour::Ignore)
                         .pin(parent.pin)
                         .opt(parent.opt)
                         .maybe_source(dep.source().clone())
@@ -535,7 +535,7 @@ fn build_dependency_specs(
                 .or_else(|| {
                     Some(
                         install::Spec::new(package::Req::from(name), EntryType::Entrypoint)
-                            .build_behaviour(BuildBehaviour::Ignore)
+                            .build_behaviour(build::Behaviour::Ignore)
                             .pin(parent.pin)
                             .opt(parent.opt)
                             .build(),
@@ -551,7 +551,8 @@ mod tests {
 
     use super::*;
     use crate::config;
-    use crate::lockfile::{self, LockedPackageHashes};
+    use crate::lockfile::locked_package;
+    use crate::lockfile::{self};
     use crate::remote;
 
     fn rockspec(package: &str, dependencies: &[&str]) -> String {
@@ -602,7 +603,7 @@ mod tests {
             Err(err) => unreachable!("invalid package req: {err}"),
         };
         install::Spec::new(package, EntryType::Entrypoint)
-            .build_behaviour(BuildBehaviour::Ignore)
+            .build_behaviour(build::Behaviour::Ignore)
             .build()
     }
 
@@ -613,7 +614,7 @@ mod tests {
             lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
-            LockedPackageHashes {
+            locked_package::Hashes {
                 rockspec: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                     .parse()
                     .unwrap(),

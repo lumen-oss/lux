@@ -1,3 +1,4 @@
+use crate::lockfile::locked_package;
 use std::{
     collections::HashMap,
     future::Future,
@@ -9,7 +10,6 @@ use bon::Builder;
 use crate::{
     build::external_dependency::ExternalDependencyInfo,
     config::Config,
-    lockfile::LockedPackageSpec,
     lua, rockspec,
     tree::{InstallTree, RockLayout},
     variables::{self, Environment},
@@ -18,7 +18,7 @@ use crate::{
 #[derive(Builder)]
 #[builder(start_fn(name = "new"))]
 pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
-    pub(crate) package: &'a LockedPackageSpec,
+    pub(crate) package: &'a locked_package::Spec,
     pub(crate) no_install: bool,
     pub(crate) lua: &'a lua::Installation,
     pub(crate) external_dependencies: &'a HashMap<String, ExternalDependencyInfo>,

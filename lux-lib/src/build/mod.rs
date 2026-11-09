@@ -1,5 +1,6 @@
 use crate::build::backend::{BuildBackend, BuildInfo, RunBuildArgs};
 use crate::fs;
+use crate::lockfile::locked_package;
 use crate::lockfile::{self, RemotePackageSourceUrl};
 use crate::operations::{fetch, unpack};
 use crate::project;
@@ -13,12 +14,7 @@ use std::path::PathBuf;
 use std::{io, path::Path};
 use tracing::Instrument;
 
-use crate::{
-    config::Config,
-    hash::HasIntegrity,
-    lockfile::{LockedPackage, LockedPackageSpec},
-    lua, rockspec,
-};
+use crate::{config::Config, hash::HasIntegrity, lockfile::LockedPackage, lua, rockspec};
 use external_dependency::ExternalDependencyInfo;
 
 use itertools::Itertools;
@@ -161,9 +157,9 @@ impl From<source::Error> for Error {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BuildBehaviour {
+pub enum Behaviour {
     /// If a package with the same version is already installed, do nothing.
-    /// Otherwise, behave like [`BuildBehaviour::Conflict`].
+    /// Otherwise, behave like [`Behaviour::Conflict`].
     Ignore,
     /// Error if an entrypoint with the same name is already installed, even if
     /// it is the same version.
@@ -231,7 +227,7 @@ async fn run_build<R: Rockspec + HasIntegrity, T: InstallTree + Sync>(
 async fn install<R: Rockspec + HasIntegrity, T: InstallTree>(
     rockspec: &R,
     tree: &T,
-    package: &LockedPackageSpec,
+    package: &locked_package::Spec,
     lua: &lua::Installation,
     build_dir: &Path,
     entry_type: &EntryType,
@@ -328,7 +324,7 @@ pub(crate) struct Deploy<'a, R: Rockspec + HasIntegrity, T: InstallTree + Sync> 
     source_root: &'a Path,
     entry_type: EntryType,
     config: &'a Config,
-    behaviour: BuildBehaviour,
+    behaviour: Behaviour,
 }
 
 impl<R, T, State> DeployBuilder<'_, R, T, State>
@@ -359,7 +355,7 @@ where
         behaviour,
     } = deploy;
 
-    if matches!(behaviour, BuildBehaviour::Ignore | BuildBehaviour::Conflict) {
+    if matches!(behaviour, Behaviour::Ignore | Behaviour::Conflict) {
         if let Some(existing) = tree.lockfile()?.get(&package.id()) {
             return Ok(existing.clone());
         }
@@ -535,7 +531,7 @@ mod tests {
     use crate::pipeline::build_local::Build;
     use crate::{
         config,
-        lockfile::{self, LockedPackageHashes, LockedPackageSpec, OptState, PinnedState},
+        lockfile::{self, OptState, PinnedState},
         lua,
         project::Project,
     };
@@ -571,7 +567,7 @@ mod tests {
             lockfile::Constraint::Unconstrained,
             remote::package::Source::Test,
             None,
-            LockedPackageHashes {
+            locked_package::Hashes {
                 rockspec: "sha256-uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
                     .parse()
                     .unwrap(),
@@ -655,7 +651,7 @@ deploy = { wrap_bin_scripts = false }
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
-        let package = LockedPackageSpec::new(
+        let package = locked_package::Spec::new(
             rockspec.package(),
             rockspec.version(),
             lockfile::Constraint::Unconstrained,
@@ -732,7 +728,7 @@ build = {
             .tree(&tree)
             .entry_type(EntryType::Entrypoint)
             .config(&config)
-            .behaviour(BuildBehaviour::Force)
+            .behaviour(Behaviour::Force)
             .source_spec(RemotePackageSourceSpec::SrcRock(SrcRockSource {
                 bytes,
                 source_url: RemotePackageSourceUrl::Url {
@@ -789,7 +785,7 @@ build = {
             .tree(&tree)
             .entry_type(EntryType::Entrypoint)
             .config(&config)
-            .behaviour(BuildBehaviour::Force)
+            .behaviour(Behaviour::Force)
             .build()
             .await
             .unwrap();
@@ -837,7 +833,7 @@ build = {
         let tree = config
             .user_tree(config.lua_version().cloned().unwrap())
             .unwrap();
-        let package = LockedPackageSpec::new(
+        let package = locked_package::Spec::new(
             rockspec.package(),
             rockspec.version(),
             lockfile::Constraint::Unconstrained,
@@ -899,7 +895,7 @@ build = {
         config: &Config,
         tree: &Tree,
         entry_type: EntryType,
-        behaviour: BuildBehaviour,
+        behaviour: Behaviour,
     ) -> LockedPackage {
         let bytes = luatest_src_rock_bytes();
         let rock = download::PackedRockBytes {
@@ -940,8 +936,7 @@ build = {
         let config = luatest_config(&dir);
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
-        let package =
-            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        let package = build_luatest(&config, &tree, EntryType::Entrypoint, Behaviour::Force).await;
 
         assert_eq!(
             package.hashes().source,
@@ -969,20 +964,10 @@ build = {
         let config2 = luatest_config(&dir2);
         let tree2 = config2.user_tree(lua::Version::Lua51).unwrap();
 
-        let package1 = build_luatest(
-            &config1,
-            &tree1,
-            EntryType::Entrypoint,
-            BuildBehaviour::Force,
-        )
-        .await;
-        let package2 = build_luatest(
-            &config2,
-            &tree2,
-            EntryType::Entrypoint,
-            BuildBehaviour::Force,
-        )
-        .await;
+        let package1 =
+            build_luatest(&config1, &tree1, EntryType::Entrypoint, Behaviour::Force).await;
+        let package2 =
+            build_luatest(&config2, &tree2, EntryType::Entrypoint, Behaviour::Force).await;
 
         assert_eq!(package1, package2);
         assert_eq!(package1.hashes(), package2.hashes());
@@ -995,8 +980,7 @@ build = {
         let config = luatest_config(&dir);
         let tree = config.user_tree(lua::Version::Lua51).unwrap();
 
-        let package =
-            build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        let package = build_luatest(&config, &tree, EntryType::Entrypoint, Behaviour::Force).await;
         let bin = tree.bin().join("luatest");
         assert!(bin.is_file());
 
@@ -1009,17 +993,11 @@ build = {
         // Simulate a partially broken install.
         std::fs::remove_file(&bin).unwrap();
 
-        let skipped = build_luatest(
-            &config,
-            &tree,
-            EntryType::Entrypoint,
-            BuildBehaviour::Ignore,
-        )
-        .await;
+        let skipped = build_luatest(&config, &tree, EntryType::Entrypoint, Behaviour::Ignore).await;
         assert_eq!(skipped.id(), package.id());
         assert!(!bin.is_file());
 
-        build_luatest(&config, &tree, EntryType::Entrypoint, BuildBehaviour::Force).await;
+        build_luatest(&config, &tree, EntryType::Entrypoint, Behaviour::Force).await;
         assert!(bin.is_file());
     }
 }

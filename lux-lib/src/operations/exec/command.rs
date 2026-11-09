@@ -1,5 +1,5 @@
 use crate::{
-    build::BuildBehaviour,
+    build,
     config::Config,
     drivers::{InstallPackages, InstallPackagesError},
     lua,
@@ -40,7 +40,7 @@ pub(super) async fn install(command: &str, config: &Config) -> Result<(), Error>
         return Ok(());
     }
     let install_spec = install::Spec::new(package, tree::EntryType::Entrypoint)
-        .build_behaviour(BuildBehaviour::Force)
+        .build_behaviour(build::Behaviour::Force)
         .build();
     InstallPackages::new(config, &tree)
         .package(install_spec)

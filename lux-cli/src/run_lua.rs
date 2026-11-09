@@ -11,8 +11,6 @@ use miette::{IntoDiagnostic, Result, WrapErr};
 
 use crate::build::{self, Build};
 
-use lux_lib::build::BuildBehaviour;
-
 #[derive(Args, Default)]
 #[clap(disable_help_flag = true)]
 pub struct RunLua {
@@ -114,8 +112,12 @@ To exit type 'exit()' or <C-d>.
     }
 
     if workspace.is_some() {
-        build::build_with_behaviour(run_lua.build_args, config.clone(), BuildBehaviour::Ignore)
-            .await?;
+        build::build_with_behaviour(
+            run_lua.build_args,
+            config.clone(),
+            lux_lib::build::Behaviour::Ignore,
+        )
+        .await?;
     }
 
     let args = &run_lua.args.unwrap_or_default();

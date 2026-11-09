@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{
-    build::{self, BuildBehaviour},
+    build,
     config::Config,
     drivers::{InstallPackages, InstallPackagesError},
     hash::HasIntegrity,
@@ -74,8 +74,8 @@ where
 
     tree: &'a T,
 
-    #[builder(default = BuildBehaviour::Force)]
-    behaviour: BuildBehaviour,
+    #[builder(default = build::Behaviour::Force)]
+    behaviour: build::Behaviour,
 
     /// Workspace whose lockfile is preferred during dependency resolution.
     workspace: Option<&'a Workspace>,
@@ -97,7 +97,7 @@ impl<
         let rockspec = project.build_rockspec()?;
         let name = rockspec.package().clone();
 
-        let behaviour = if matches!(args.behaviour, BuildBehaviour::Ignore) {
+        let behaviour = if matches!(args.behaviour, build::Behaviour::Ignore) {
             match tree.lockfile()?.entrypoint(&name) {
                 Some(existing) => {
                     let source_hash = project.root().hash().await.map_err(Error::Hash)?;
@@ -106,7 +106,7 @@ impl<
                     {
                         return Ok(existing.clone());
                     }
-                    BuildBehaviour::Force
+                    build::Behaviour::Force
                 }
                 None => args.behaviour,
             }

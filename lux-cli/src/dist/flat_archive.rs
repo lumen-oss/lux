@@ -8,7 +8,7 @@ use std::{
 
 use clap::Args;
 use lux_lib::{
-    build::BuildBehaviour,
+    build,
     config::{self, Config},
     drivers::InstallPackages,
     lockfile::LockedPackage,
@@ -167,7 +167,7 @@ async fn install_package(
     let packages = InstallPackages::new(config, &tree)
         .package(
             install::Spec::new(package.clone(), tree::EntryType::Entrypoint)
-                .build_behaviour(BuildBehaviour::Force)
+                .build_behaviour(build::Behaviour::Force)
                 .build(),
         )
         .package_db(PackageDB::from_config(config).await?)
@@ -210,7 +210,7 @@ async fn install_rockspec(
         .tree(&tree)
         .entry_type(tree::EntryType::Entrypoint)
         .config(config)
-        .behaviour(BuildBehaviour::Force)
+        .behaviour(build::Behaviour::Force)
         .build()
         .await?;
     Ok((package, tree))
