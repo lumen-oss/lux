@@ -1,6 +1,6 @@
 use super::platform;
 use crate::{
-    git::{self, url::RemoteGitUrl},
+    git::{self},
     rockspec::platform::per_platform_from_intermediate,
     wally,
 };
@@ -241,7 +241,7 @@ const LUAROCKS_BUILD_RULES_URL: &str =
 #[error("failed to parse source url")]
 pub enum UrlError {
     Io(#[from] io::Error),
-    Git(#[from] git::url::Error),
+    Git(#[from] git::remote::url::Error),
     Url(#[source] <Url as FromStr>::Err),
     #[error("lux does not support rockspecs with CVS sources.")]
     #[diagnostic(
@@ -341,7 +341,7 @@ pub(crate) mod internal {
         /// Web URLs
         Url(Url),
         /// For the Git source control manager
-        Git(RemoteGitUrl),
+        Git(git::remote::Url),
     }
 
     impl FromStr for SourceUrl {

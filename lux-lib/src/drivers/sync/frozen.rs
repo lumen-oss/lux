@@ -12,7 +12,7 @@ use crate::{
     fs,
     lockfile::{
         FlushLockfileError, IntegrityError, LockedPackage, LockedPackageLockType, Lockfile,
-        PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy, WorkspaceLockfile,
+        PackageSyncSpec, ReadOnly, ReadWrite, SyncStrategy,
     },
     luarocks::installation::LUAROCKS_VERSION,
     operations::install,
@@ -395,7 +395,7 @@ fn validate_integrity(
 async fn install_missing_packages<T>(
     args: &Sync<'_>,
     tree: &T,
-    workspace_lockfile: &mut WorkspaceLockfile<ReadWrite>,
+    workspace_lockfile: &mut project::Lockfile<ReadWrite>,
     lock_type: &LockedPackageLockType,
     package_sync_spec: &PackageSyncSpec,
     report: &mut SyncReport,

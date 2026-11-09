@@ -9,7 +9,7 @@ use std::{
 use crate::{
     config::{self, Config},
     fs,
-    lockfile::{self, ReadOnly, WorkspaceLockfile},
+    lockfile::{self, ReadOnly},
     lua,
     project::{self, Project, TomlDeError, TOML_FILE_NAME},
     tree::{self, InstallTree, Tree},
@@ -237,15 +237,15 @@ impl Workspace {
     }
 
     /// Get the `lux.lock` lockfile in the project root.
-    pub fn lockfile(&self) -> Result<WorkspaceLockfile<ReadOnly>, Error> {
-        Ok(WorkspaceLockfile::new(self.lockfile_path())?)
+    pub fn lockfile(&self) -> Result<project::Lockfile<ReadOnly>, Error> {
+        Ok(project::Lockfile::new(self.lockfile_path())?)
     }
 
     /// Get the `lux.lock` lockfile in the project root, if present.
-    pub fn try_lockfile(&self) -> Result<Option<WorkspaceLockfile<ReadOnly>>, Error> {
+    pub fn try_lockfile(&self) -> Result<Option<project::Lockfile<ReadOnly>>, Error> {
         let path = self.lockfile_path();
         if path.is_file() {
-            Ok(Some(WorkspaceLockfile::load(path)?))
+            Ok(Some(project::Lockfile::load(path)?))
         } else {
             Ok(None)
         }

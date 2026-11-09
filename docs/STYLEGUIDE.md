@@ -31,6 +31,30 @@ impl Constraint {
 }
 ```
 
+### Module names
+
+A child module is named after the type it defines, and does not repeat its namespace.
+The namespace supplies the context, so the type drops it.
+
+```rust
+// Do
+// lockfile/guard.rs
+pub struct Guard { .. }
+
+// lockfile/mod.rs
+pub use guard::Guard;
+
+// call site
+lockfile::Guard
+
+// Don't
+// lockfile/lockfile_guard.rs
+pub struct LockfileGuard { .. }
+
+// call site
+lockfile::LockfileGuard
+```
+
 ### Call sites
 
 Types are qualified by the namespace, their functions by the type's module.
