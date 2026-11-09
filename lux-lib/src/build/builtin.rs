@@ -170,13 +170,20 @@ impl BuildBackend for rockspec::build::backend::Builtin {
         for bin_script in install::detect_binaries(build_dir) {
             if let Some(target) = bin_script.file_name() {
                 let file_name = target.to_string_lossy().to_string();
-                let installed_bin_script =
-                    install::binary(&bin_script, &file_name, tree, lua, args.deploy, config)
-                        .await
-                        .map_err(|err| Error::InstallBinary {
-                            file_name: file_name.clone(),
-                            source: err,
-                        })?;
+                let installed_bin_script = install::binary(
+                    &bin_script,
+                    &file_name,
+                    tree,
+                    &layout,
+                    lua,
+                    args.deploy,
+                    config,
+                )
+                .await
+                .map_err(|err| Error::InstallBinary {
+                    file_name: file_name.clone(),
+                    source: err,
+                })?;
                 if let Some(bin_script_file_name) = installed_bin_script.file_name() {
                     binaries.push(bin_script_file_name.into());
                 }

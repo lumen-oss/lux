@@ -56,6 +56,7 @@ impl BuildBackend for rockspec::build::backend::RustBinary {
     {
         let config = args.config;
         let build_dir = args.build_dir;
+        let layout = args.tree.layout_for(args.package);
 
         let mut install_args = vec!["install", "--root", ".", "--bins"];
         if config.build_profile() == build::Profile::Dev {
@@ -117,6 +118,7 @@ impl BuildBackend for rockspec::build::backend::RustBinary {
                     &bin_script,
                     &file_name,
                     args.tree,
+                    &layout,
                     args.lua,
                     args.deploy,
                     config,

@@ -96,7 +96,7 @@ impl InstallTree for FlatDistTree {
     }
 
     fn layout_for(&self, _package: &LockedPackageSpec) -> RockLayout {
-        RockLayout::new(self.0.root(), self.0.bin())
+        RockLayout::new(self.0.root())
     }
 
     fn bin(&self) -> PathBuf {

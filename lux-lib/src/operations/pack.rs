@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn platform_specific_when_package_has_binaries() {
         let temp = fs::tempfile::tempdir().unwrap();
-        let layout = RockLayout::new(temp.path().to_path_buf(), temp.path().join("bin"));
+        let layout = RockLayout::new(temp.path().to_path_buf());
         let rockspec = rockspec::lua::Remote::new(
             r#"
 package = "foo"

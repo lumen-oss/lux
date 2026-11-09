@@ -179,6 +179,17 @@ pub enum Error {
         to: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to create a link '{}' pointing to '{}'", link.display(), target.display())]
+    #[diagnostic(
+        code(lux_lib::fs::link),
+        help("ensure '{}' exists and that '{}' is on a filesystem that supports links", target.display(), link.display())
+    )]
+    Link {
+        target: std::path::PathBuf,
+        link: std::path::PathBuf,
+        symlink: Box<Error>,
+        hard_link: Box<Error>,
+    },
     #[error("{0}")]
     Other(String),
 }
