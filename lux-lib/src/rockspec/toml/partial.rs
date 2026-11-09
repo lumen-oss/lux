@@ -49,8 +49,9 @@ pub struct Partial {
     /// Rocks with C sources require a C compiler. Lux does not bundle one.
     #[serde(default)]
     pub(crate) build: rockspec::build::internal::Spec,
-    /// The LuaRocks rockspec format version to write to the generated rockspec ("1.0", "2.0", or "3.0").
-    /// Default: "3.0".
+    /// The LuaRocks rockspec format version to write to the generated rockspec
+    /// ("1.0", "2.0", "3.0", "3.1", or "3.2").
+    /// Defaults to "3.2" when `tl` is a build dependency, otherwise "3.0".
     #[cfg_attr(
         feature = "schema",
         schemars(extend("x-lux-toml-example" = r#"rockspec_format = "3.0""#))

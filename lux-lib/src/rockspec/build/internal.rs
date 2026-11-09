@@ -44,6 +44,9 @@ pub(crate) struct Spec {
     /// For Luau projects, `builtin` auto-detects `.luau` modules. Native
     /// dependencies are not supported. Luau modules are transpiled to Lua when
     /// the project targets a Lua runtime.
+    ///
+    /// For Teal projects, `builtin` installs `.tl` and `.d.tl` sources next to
+    /// Lua modules and compiles `.tl` modules when `tl` is a build dependency.
     #[serde(rename = "type", default)]
     #[display_lua(rename = "type")]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]

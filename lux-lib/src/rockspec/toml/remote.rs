@@ -109,10 +109,7 @@ impl Rockspec for Remote {
 rockspec_format = "{}"
 package = "{}"
 version = "{}""#,
-            self.local
-                .rockspec_format
-                .as_ref()
-                .unwrap_or(&rockspec::Format::default()),
+            self.local.generated_rockspec_format(),
             self.local.package,
             self.version()
         );

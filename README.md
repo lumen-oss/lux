@@ -109,7 +109,8 @@ The following table provides a brief comparison:
 | Load installed packages from multiple install trees                                     | :x: ([#1493](https://github.com/lumen-oss/lux/issues/1493)) | :white_check_mark: |
 | Static type checking                                                                    | :white_check_mark:           | :x:                |
 | Automatic Lua detection                                                                 | :white_check_mark:           | :x:                |
-| Luau support                                                                            | :white_check_mark:           | :x:                |
+| First-class Luau support                                                                | :white_check_mark:           | :x:                |
+| First-class Teal support                                                                | :white_check_mark:           | :x: ([#1942](https://github.com/luarocks/luarocks/pull/1942)) |
 | Generate a `.luarc` file with dependencies                                              | :white_check_mark:           | :x:                |
 | Git dependencies in local projects                                                      | :white_check_mark:           | :x:                |
 | Local dependencies in local projects                                                    | :white_check_mark:           | :x:                |

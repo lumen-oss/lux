@@ -1,4 +1,4 @@
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use std::{
     collections::{HashMap, HashSet},
@@ -64,6 +64,9 @@ pub enum Error {
         module: String,
         lua_version: lua::Version,
     },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Teal(#[from] compile::teal::Error),
 }
 
 impl BuildBackend for rockspec::build::backend::Builtin {
@@ -81,9 +84,11 @@ impl BuildBackend for rockspec::build::backend::Builtin {
         let tree = args.tree;
         let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
+        let build_dependencies = args.build_dependencies;
 
-        // Detect all Lua modules
-        let modules = autodetect_modules(build_dir, source_paths(build_dir, &self.modules))?
+        let (detected_modules, teal_files) =
+            autodetect_modules(build_dir, source_paths(build_dir, &self.modules))?;
+        let modules = detected_modules
             .into_iter()
             .chain(self.modules)
             .collect::<HashMap<_, _>>();
@@ -166,6 +171,17 @@ impl BuildBackend for rockspec::build::backend::Builtin {
             }
         }
 
+        if !teal_files.is_empty() {
+            install::sources(build_dir, &layout.src, &teal_files)?;
+            if build_dependencies
+                .iter()
+                .any(|dep| dep.name().to_string() == "tl")
+            {
+                compile::teal::compile(build_dir, &layout.src, &teal_files, lua, tree, config)
+                    .await?;
+            }
+        }
+
         let mut binaries = Vec::new();
         for bin_script in install::detect_binaries(build_dir) {
             if let Some(target) = bin_script.file_name() {
@@ -217,19 +233,25 @@ pub(crate) fn autodetect_modules(
     build_dir: &Path,
     exclude: HashSet<PathBuf>,
 ) -> Result<
-    HashMap<rockspec::build::backend::Module, rockspec::build::backend::ModuleSpec>,
+    (
+        HashMap<rockspec::build::backend::Module, rockspec::build::backend::ModuleSpec>,
+        Vec<PathBuf>,
+    ),
     AutoDetectModulesError,
 > {
-    WalkDir::new(build_dir.join("src"))
+    let (modules, teal_files): (Vec<_>, Vec<_>) = WalkDir::new(build_dir.join("src"))
         .into_iter()
         .chain(WalkDir::new(build_dir.join("lua")))
         .chain(WalkDir::new(build_dir.join("lib")))
         .filter_map(|file| {
             file.ok().and_then(|file| {
-                let is_lua_file = PathBuf::from(file.file_name())
+                let is_source = PathBuf::from(file.file_name())
                     .extension()
-                    .is_some_and(|ext| ext == "lua" || ext == "luau");
-                if is_lua_file && !exclude.contains(&file.clone().into_path()) {
+                    .is_some_and(|ext| matches!(ext.to_str(), Some("lua" | "luau" | "tl")));
+                if is_source
+                    && file.file_type().is_file()
+                    && !exclude.contains(&file.clone().into_path())
+                {
                     Some(file)
                 } else {
                     None
@@ -241,6 +263,9 @@ pub(crate) fn autodetect_modules(
                 pathdiff::diff_paths(build_dir.join(file.clone().into_path()), build_dir)
                     .unwrap_unchecked()
             };
+            if diff.extension().is_some_and(|ext| ext == "tl") {
+                return Ok::<_, AutoDetectModulesError>(Either::Right(diff));
+            }
 
             // NOTE(vhyrro): You may ask why we convert all paths to Lua module paths
             // just to convert them back later in the `run()` stage.
@@ -254,7 +279,7 @@ pub(crate) fn autodetect_modules(
                 .is_none_or(|parent| parent.as_os_str().is_empty())
             {
                 pathbuf.set_extension("");
-                Ok(rockspec::build::backend::Module::from_pathbuf(pathbuf)?)
+                rockspec::build::backend::Module::from_pathbuf(pathbuf)?
             } else {
                 let mut lua_module = rockspec::build::backend::Module::from_pathbuf(pathbuf)?;
                 // NOTE(mrcjkb): `build::backend::Module` does not parse as "<module>.init" from files named "init.lua"
@@ -266,19 +291,20 @@ pub(crate) fn autodetect_modules(
                     unsafe {
                         lua_module = lua_module.join(
                             &rockspec::build::backend::Module::from_str("init").unwrap_unchecked(),
-                        )
+                        );
                     }
                 }
-                Ok(lua_module)
+                lua_module
             };
-            lua_module.map(|lua_module| {
-                (
-                    lua_module,
-                    rockspec::build::backend::ModuleSpec::SourcePath(diff),
-                )
-            })
+            Ok::<_, AutoDetectModulesError>(Either::Left((
+                lua_module,
+                rockspec::build::backend::ModuleSpec::SourcePath(diff),
+            )))
         })
-        .try_collect()
+        .try_collect::<_, Vec<_>, _>()?
+        .into_iter()
+        .partition_map(|detected| detected);
+    Ok((modules.into_iter().collect(), teal_files))
 }
 
 #[cfg(test)]
@@ -298,8 +324,10 @@ mod tests {
         write_file(&root.join("src").join("bar").join("baz.luau"));
         write_file(&root.join("src").join("baz").join("init.luau"));
         write_file(&root.join("lua").join("legacy.lua"));
+        write_file(&root.join("src").join("teal").join("mod.tl"));
+        write_file(&root.join("src").join("teal.d.tl"));
 
-        let modules = autodetect_modules(root, Default::default()).unwrap();
+        let (modules, teal_files) = autodetect_modules(root, Default::default()).unwrap();
 
         let names = modules.keys().map(|m| m.to_string()).collect_vec();
         assert!(names.contains(&"foo".to_string()), "{names:?}");
@@ -314,5 +342,12 @@ mod tests {
             }
             _ => panic!("expected SourcePath for foo.luau"),
         }
+
+        let mut teal_files = teal_files
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect_vec();
+        teal_files.sort();
+        assert_eq!(teal_files, vec!["src/teal.d.tl", "src/teal/mod.tl"]);
     }
 }

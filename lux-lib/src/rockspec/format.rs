@@ -19,6 +19,10 @@ pub enum Format {
     #[serde(rename = "3.0")]
     #[default]
     _3_0,
+    #[serde(rename = "3.1")]
+    _3_1,
+    #[serde(rename = "3.2")]
+    _3_2,
 }
 
 impl FromStr for Format {
@@ -29,6 +33,8 @@ impl FromStr for Format {
             "1.0" => Ok(Self::_1_0),
             "2.0" => Ok(Self::_2_0),
             "3.0" => Ok(Self::_3_0),
+            "3.1" => Ok(Self::_3_1),
+            "3.2" => Ok(Self::_3_2),
             txt => Err(InvalidRockspecFormat(txt.to_string())),
         }
     }
@@ -40,6 +46,8 @@ impl Display for Format {
             Self::_1_0 => write!(f, "1.0"),
             Self::_2_0 => write!(f, "2.0"),
             Self::_3_0 => write!(f, "3.0"),
+            Self::_3_1 => write!(f, "3.1"),
+            Self::_3_2 => write!(f, "3.2"),
         }
     }
 }

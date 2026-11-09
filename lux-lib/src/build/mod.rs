@@ -396,6 +396,7 @@ where
             .config(config)
             .tree(tree)
             .build_dir(&build_dir)
+            .build_dependencies(rockspec.build_dependencies().current_platform())
             .build(),
     )
     .await?;
@@ -589,6 +590,7 @@ mod tests {
                 .config(&config)
                 .tree(&tree)
                 .build_dir(&build_dir)
+                .build_dependencies(rockspec.build_dependencies().current_platform())
                 .build(),
         )
         .await
