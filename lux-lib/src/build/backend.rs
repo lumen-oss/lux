@@ -8,7 +8,7 @@ use std::{
 use bon::Builder;
 
 use crate::{
-    build::external_dependency::ExternalDependencyInfo,
+    build::{dependency, external_dependency::ExternalDependencyInfo},
     config::Config,
     lua, rockspec,
     tree::{InstallTree, RockLayout},
@@ -27,6 +27,7 @@ pub(crate) struct RunBuildArgs<'a, T: InstallTree> {
     pub(crate) tree: &'a T,
     pub(crate) build_dir: &'a Path,
     pub(crate) build_dependencies: &'a [rockspec::lua_dependency::Spec],
+    pub(crate) dependency_layouts: &'a dependency::Layouts,
 }
 
 pub(crate) trait BuildBackend {
@@ -48,6 +49,7 @@ pub(crate) fn substitute_variables(
     output_paths: &RockLayout,
     lua: &lua::Installation,
     external_dependencies: &HashMap<String, ExternalDependencyInfo>,
+    dependency_layouts: &dependency::Layouts,
     config: &Config,
 ) -> Result<String, variables::Error> {
     variables::substitute(
@@ -55,6 +57,7 @@ pub(crate) fn substitute_variables(
             output_paths,
             lua,
             external_dependencies,
+            dependency_layouts,
             &Environment {},
             config,
         ],

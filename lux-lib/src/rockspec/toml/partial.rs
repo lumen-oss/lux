@@ -51,10 +51,13 @@ pub struct Partial {
     pub(crate) build: rockspec::build::internal::Spec,
     /// The LuaRocks rockspec format version to write to the generated rockspec
     /// ("1.0", "2.0", "3.0", "3.1", or "3.2").
-    /// Defaults to "3.2" when `tl` is a build dependency, otherwise "3.0".
+    /// Defaults to "3.2" when `tl` is a build dependency, otherwise "3.1".
+    ///
+    /// Format 3.1 and newer expose `$(LUA_VERSION)` and
+    /// `$(<BUILD_DEPENDENCY>_ROCKDIR)` to build commands and variables.
     #[cfg_attr(
         feature = "schema",
-        schemars(extend("x-lux-toml-example" = r#"rockspec_format = "3.0""#))
+        schemars(extend("x-lux-toml-example" = r#"rockspec_format = "3.1""#))
     )]
     pub(crate) rockspec_format: Option<rockspec::Format>,
     /// How to run the project with `lx run`.
@@ -160,12 +163,33 @@ version = "1.0.0"
     )]
     pub(crate) dependencies: Option<Vec<lua_dependency::Spec>>,
     /// Dependencies needed at build time. Same syntax as `dependencies`.
+    ///
+    /// Build dependencies are installed in a separate build tree. With rockspec
+    /// format 3.1 or newer, build commands and variables can access their
+    /// installation directory through `$(<NAME>_ROCKDIR)`, where `<NAME>` is the
+    /// dependency name in uppercase.
+    ///
+    /// Only build dependencies expose this variable.
+    /// Unlike Luarocks, Lux does not make regular dependencies available at build time.
     #[serde(default, deserialize_with = "parse_map_to_dependency_vec_opt")]
     #[cfg_attr(
         feature = "schema",
         schemars(
             with = "Option<std::collections::BTreeMap<String, crate::schema::DependencyEntry>>"
         )
+    )]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build_dependencies]
+foo = "1.0.0"
+
+[build]
+type = "cmake"
+
+[build.variables]
+FOO_INCLUDE_DIR = "$(FOO_ROCKDIR)/include"
+"#))
     )]
     pub(crate) build_dependencies: Option<Vec<lua_dependency::Spec>>,
     /// System (C/FFI) dependencies, discovered via pkg-config. Each entry may

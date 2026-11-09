@@ -85,6 +85,7 @@ impl BuildBackend for rockspec::build::backend::Builtin {
         let layout = tree.layout_for(package);
         let build_dir = args.build_dir;
         let build_dependencies = args.build_dependencies;
+        let dependency_layouts = args.dependency_layouts;
 
         let (detected_modules, teal_files) =
             autodetect_modules(build_dir, source_paths(build_dir, &self.modules))?;
@@ -111,15 +112,15 @@ impl BuildBackend for rockspec::build::backend::Builtin {
                 rockspec::build::backend::ModuleSpec::SourcePath(source) => {
                     if source.extension().map(|ext| ext == "c").unwrap_or(false) {
                         let absolute_source_paths = vec![build_dir.join(source)];
-                        c_files::compile(
-                            &absolute_source_paths,
-                            destination_path,
-                            &layout.lib,
-                            lua,
-                            external_dependencies,
-                            config,
-                        )
-                        .await?;
+                        c_files::Compiler::new()
+                            .files(&absolute_source_paths)
+                            .target_module(destination_path)
+                            .target_dir(&layout.lib)
+                            .lua(lua)
+                            .external_dependencies(external_dependencies)
+                            .config(config)
+                            .compile()
+                            .await?;
                     } else if source.extension().is_some_and(|ext| ext == "luau")
                         && !lua.version.is_luau()
                     {
@@ -144,29 +145,30 @@ impl BuildBackend for rockspec::build::backend::Builtin {
                     }
                 }
                 rockspec::build::backend::ModuleSpec::SourcePaths(files) => {
-                    let absolute_source_paths =
+                    let absolute_source_paths: Vec<PathBuf> =
                         files.iter().map(|file| build_dir.join(file)).collect();
-                    c_files::compile(
-                        &absolute_source_paths,
-                        destination_path,
-                        &layout.lib,
-                        lua,
-                        external_dependencies,
-                        config,
-                    )
-                    .await?
+                    c_files::Compiler::new()
+                        .files(&absolute_source_paths)
+                        .target_module(destination_path)
+                        .target_dir(&layout.lib)
+                        .lua(lua)
+                        .external_dependencies(external_dependencies)
+                        .config(config)
+                        .compile()
+                        .await?
                 }
                 rockspec::build::backend::ModuleSpec::ModulePaths(data) => {
-                    c_modules::compile(
-                        data,
-                        build_dir,
-                        destination_path,
-                        &layout.lib,
-                        lua,
-                        external_dependencies,
-                        config,
-                    )
-                    .await?
+                    c_modules::Compiler::new()
+                        .data(data)
+                        .source_dir(build_dir)
+                        .target_module(destination_path)
+                        .target_dir(&layout.lib)
+                        .lua(lua)
+                        .external_dependencies(external_dependencies)
+                        .dependency_layouts(dependency_layouts)
+                        .config(config)
+                        .compile()
+                        .await?
                 }
             }
         }

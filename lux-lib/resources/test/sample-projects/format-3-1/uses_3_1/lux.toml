@@ -1,0 +1,11 @@
+package = "uses_3_1"
+version = "0.1.0"
+lua = ">=5.1"
+
+[build]
+type = "command"
+build_command = "$(LUA) verify.lua $(A_ROCK_ROCKDIR) $(LUA_VERSION)"
+
+[build_dependencies.a_rock]
+path = "../a_rock"
+version = "0.1.0"

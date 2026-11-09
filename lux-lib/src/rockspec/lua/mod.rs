@@ -187,7 +187,7 @@ impl Local {
         use crate::rockspec::Rockspec;
 
         Self {
-            format: project.format().clone(),
+            format: Some(project.generated_rockspec_format()),
             package: project.package().clone(),
             version: project.version().clone(),
             description: project.description().clone(),

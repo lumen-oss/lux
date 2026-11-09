@@ -120,15 +120,38 @@ variables = {}
     #[serde(default)]
     pub(crate) install_pass: Option<bool>,
     /// Make variable assignments for the build pass.
+    ///
+    /// Supports the same variable substitutions as `variables`.
     #[serde(rename = "build_variables", default)]
     #[display_lua(rename = "build_variables")]
     pub(crate) make_build_variables: Option<HashMap<String, String>>,
     /// Make variable assignments for the install pass.
+    ///
+    /// Supports the same variable substitutions as `variables`.
     #[serde(rename = "install_variables", default)]
     #[display_lua(rename = "install_variables")]
     pub(crate) make_install_variables: Option<HashMap<String, String>>,
     /// Make or CMake variable assignments applied to both passes.
+    ///
+    /// Values support variable substitutions:
+    /// - `$(LUA_VERSION)`: target Lua version
+    /// - `$(<NAME>_ROCKDIR)`: install directory of a build dependency
+    /// - `$(PREFIX)`, `$(LIBDIR)`, `$(LUADIR)`, `$(BINDIR)`, `$(CONFDIR)`, `$(DOCDIR)`
+    /// - `$(LUA)`, `$(LUA_INCDIR)`, `$(LUA_LIBDIR)`, `$(LUA_BINDIR)`, `$(LUALIB)`
+    /// - `$(<EXTERNAL_DEP>_INCDIR)`, `$(<EXTERNAL_DEP>_LIBDIR)`, `$(<EXTERNAL_DEP>_BINDIR)`
+    /// - environment variables
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(extend("x-lux-toml-example" = r#"
+[build]
+type = "cmake"
+
+[build.variables]
+FOO_INCLUDE_DIR = "$(FOO_ROCKDIR)/include"
+LUA_VERSION = "$(LUA_VERSION)"
+"#))
+    )]
     pub(crate) variables: Option<HashMap<String, String>>,
     /// Contents of the generated "CMakeLists.txt". If unset, the project's own
     /// file is used.
@@ -149,6 +172,8 @@ cmake = """
     )]
     pub(crate) cmake_lists_content: Option<String>,
     /// Command to run to build the package.
+    ///
+    /// Supports the same variable substitutions as `build.variables`.
     #[serde(default)]
     #[cfg_attr(
         feature = "schema",
@@ -161,6 +186,8 @@ install_command = "make install"
     )]
     pub(crate) build_command: Option<String>,
     /// Command to run to install the package.
+    ///
+    /// Supports the same variable substitutions as `build.variables`.
     #[serde(default)]
     pub(crate) install_command: Option<String>,
     /// Files to install, by category ("lua", "lib", "conf", "bin").

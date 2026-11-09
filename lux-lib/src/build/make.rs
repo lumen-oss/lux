@@ -67,6 +67,7 @@ impl BuildBackend for rockspec::build::backend::Make {
         let tree = args.tree;
         let layout = tree.layout_for(args.package);
         let build_dir = args.build_dir;
+        let dependency_layouts = args.dependency_layouts;
 
         let build_tree = tree.build_tree(config)?;
         let build_paths = Paths::new(&build_tree)?;
@@ -87,6 +88,7 @@ impl BuildBackend for rockspec::build::backend::Make {
                         &layout,
                         lua,
                         external_dependencies,
+                        dependency_layouts,
                         config,
                     )?;
                     Ok(format!("{key}={substituted_value}").trim().to_string())
@@ -146,6 +148,7 @@ impl BuildBackend for rockspec::build::backend::Make {
                         &layout,
                         lua,
                         external_dependencies,
+                        dependency_layouts,
                         config,
                     )?;
                     Ok(format!("{key}={substituted_value}").trim().to_string())
