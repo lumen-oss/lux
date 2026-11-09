@@ -520,7 +520,7 @@ pub struct Builder {
     /// Whether to skip prompts, selecting the default option. Default: `false`.
     no_prompt: Option<bool>,
     /// Timeout for network operations, in seconds. `0` disables the timeout.
-    /// Default: `30`.
+    /// Default: `0`.
     #[cfg_attr(feature = "schema", schemars(with = "Option<u64>"))]
     timeout: Option<Duration>,
     /// Maximum number of parallel jobs, e.g. for downloads and installs.
@@ -712,7 +712,7 @@ impl Builder {
 
     /// Timeout on network operations, in seconds.
     /// 0 means no timeout (wait forever).
-    /// Default: 30 s
+    /// Default: 0 s
     pub fn timeout(self, timeout: Option<Duration>) -> Self {
         Self {
             timeout: timeout.or(self.timeout),
@@ -957,7 +957,7 @@ impl Builder {
             verbose: self.verbose.unwrap_or(false),
             no_progress: self.no_progress.unwrap_or(false),
             no_prompt: self.no_prompt.unwrap_or(false),
-            timeout: self.timeout.unwrap_or_else(|| Duration::from_secs(30)),
+            timeout: self.timeout.unwrap_or_else(|| Duration::from_secs(0)),
             max_jobs: match self.max_jobs.unwrap_or_else(|| {
                 std::thread::available_parallelism().map_or(1, |available| available.get())
             }) {
