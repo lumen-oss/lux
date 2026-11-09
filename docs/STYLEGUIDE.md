@@ -8,7 +8,8 @@ for the rationale.
 
 ### Modules
 
-A type is typically defined in a module whose final component is the type's name.
+A type that has functions which operate on it is typically defined in a module
+whose final component is the type's name.
 The components before it are the type's namespace, which re-exports the type:
 
 ```
@@ -57,7 +58,7 @@ lockfile::LockfileGuard
 
 ### Call sites
 
-Types are qualified by the namespace, their functions by the type's module.
+Types are qualified by the namespace. Functions and related types are qualified by the type's module.
 
 ```rust
 // Do
