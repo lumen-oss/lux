@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2](https://github.com/lumen-oss/lux/compare/kalua-v0.1.1...kalua-v0.1.2) `kalua` - 2026-11-10
+
+### Fixed
+- *(kalua)* don't inherit the Lux README
+
 ## [0.1.1](https://github.com/lumen-oss/lux/compare/kalua-v0.1.0...kalua-v0.1.1) `kalua` - 2026-10-24
 
 ### Fixed

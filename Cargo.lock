@@ -3315,7 +3315,7 @@ dependencies = [
 
 [[package]]
 name = "kalua"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "darklua",
  "miette 7.6.0",
@@ -3626,7 +3626,7 @@ dependencies = [
 
 [[package]]
 name = "lux-cli"
-version = "0.54.0"
+version = "0.55.0"
 dependencies = [
  "assert_fs",
  "base32",
@@ -3692,7 +3692,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lib"
-version = "0.73.0"
+version = "0.74.0"
 dependencies = [
  "assert_fs",
  "async-recursion",
@@ -3780,7 +3780,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lsp"
-version = "0.54.0"
+version = "0.55.0"
 dependencies = [
  "eyre",
  "lux-lib",
@@ -3795,7 +3795,7 @@ dependencies = [
 
 [[package]]
 name = "lux-lua"
-version = "0.54.0"
+version = "0.55.0"
 dependencies = [
  "assert_fs",
  "flaky_test",
