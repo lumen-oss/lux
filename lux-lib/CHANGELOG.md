@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.74.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.73.0...lux-lib-v0.74.0) `lux-lib` - 2026-11-10
+
+### Added
+- *(rockspec)* [**breaking**] support format 3.1 and make it the default
+- first-class teal support
+
 ## [0.73.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.72.1...lux-lib-v0.73.0) `lux-lib` - 2026-11-09
 
 ### Added
