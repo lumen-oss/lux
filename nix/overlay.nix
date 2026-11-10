@@ -225,7 +225,6 @@
           pname = "lux-lua";
           inherit (luxCargo) version;
 
-          # FIXME: This fails with permission denied on darwin
           buildPhaseCargoCommand = "xtask-lua ${dist-cmd}";
           nativeBuildInputs =
             crateArgs.nativeBuildInputs
@@ -234,15 +233,6 @@
             ];
 
           buildInputs = crateArgs.buildInputs ++ [luaPkg];
-
-          # HACK: For some reason, linking via pkg-config fails on darwin
-          env =
-            (crateArgs.env or {})
-            // final.lib.optionalAttrs final.stdenv.isDarwin {
-              LUA_LIB = "${luaPkg}/lib";
-              LUA_INCLUDE_DIR = "${luaPkg}/include";
-              RUSTFLAGS = "-L ${luaPkg}/lib -llua";
-            };
 
           installPhase = ''
             runHook preInstall
