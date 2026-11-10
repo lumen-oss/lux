@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.0](https://github.com/lumen-oss/lux/compare/v0.54.0...v0.55.0) `lux-cli` - 2026-11-10
+
+### Added
+- first-class teal support
+
 ## [0.54.0](https://github.com/lumen-oss/lux/compare/v0.53.3...v0.54.0) `lux-cli` - 2026-11-09
 
 ### Fixed
