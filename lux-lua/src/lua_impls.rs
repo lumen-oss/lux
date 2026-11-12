@@ -1361,7 +1361,7 @@ Default: A `.lux` directory in the workspace root.
             r#"Timeout on network operations, in seconds.
 0 means no timeout (wait forever)."#,
         );
-        methods.param("timeout", "Default: 30 s");
+        methods.param("timeout", "Default: 0 s (no timeout)");
         methods.add_method("timeout", |_, this, timeout: Option<u64>| {
             Ok(ConfigBuilderLua(
                 this.0.clone().timeout(timeout.map(Duration::from_secs)),
