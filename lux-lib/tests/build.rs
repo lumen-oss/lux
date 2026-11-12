@@ -110,7 +110,7 @@ async fn command_build() {
         return;
     }
     let rockspec =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luaposix-35.1-1.rockspec");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/luaposix-37.0-1.rockspec");
     test_build_rockspec(rockspec).await
 }
 
