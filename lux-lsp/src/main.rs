@@ -1,3 +1,5 @@
+use lux_workspace_hack as _;
+
 use std::borrow::Cow;
 use std::io::Write;
 use std::sync::Mutex;

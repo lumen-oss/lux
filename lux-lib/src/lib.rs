@@ -1,3 +1,5 @@
+use lux_workspace_hack as _;
+
 pub mod build;
 pub mod config;
 pub mod drivers;

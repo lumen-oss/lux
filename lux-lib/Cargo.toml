@@ -40,7 +40,6 @@ lets_find_up = "0.0"
 md5 = "0.8"
 nix-nar = "0.6"
 nonempty = { version = "0.12", features = ["serialize"] }
-openssl = "0.10"
 pkg-config = "0.3"
 remove_dir_all = "1.0"
 reqwest = { version = "0.13", default-features = false, features = [
@@ -63,7 +62,6 @@ tar = "0.4"
 thiserror = "2.0"
 toml_edit = "0.25"
 tree-sitter = "0.27"
-tree-sitter-config = "0.27"
 # NOTE: The default qjs-rt feature of tree-sitter-generate
 # includes a dependency on rquickjs, which brings in a dependency on libclang.
 tree-sitter-generate = { version = "0.27", default-features = false, features = [
@@ -72,7 +70,6 @@ tree-sitter-generate = { version = "0.27", default-features = false, features = 
 ] }
 tree-sitter-loader = "0.27"
 url = { version = "2.5", features = ["serde"] }
-vfs = "0.13"
 
 git2 = { workspace = true }
 ignore = { workspace = true }
@@ -128,7 +125,7 @@ luau-transpile = ["dep:kalua"]
 wally = []
 schema = ["dep:schemars"]
 vendored = ["vendored-openssl", "vendored-libgit2"]
-vendored-openssl = ["openssl/vendored", "reqwest/native-tls-vendored"]
+vendored-openssl = ["reqwest/native-tls-vendored"]
 vendored-libgit2 = ["git2/vendored-libgit2"]
 ssh-tests = []
 impure_tests = []

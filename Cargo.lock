@@ -3650,7 +3650,6 @@ dependencies = [
  "lux-lib",
  "lux-workspace-hack",
  "miette 7.6.0",
- "nucleo",
  "open",
  "path-absolutize",
  "path-slash",
@@ -3734,7 +3733,6 @@ dependencies = [
  "mlua",
  "nix-nar",
  "nonempty",
- "openssl",
  "ottavino",
  "ottavino-util",
  "path-slash",
@@ -3768,11 +3766,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tree-sitter",
- "tree-sitter-config",
  "tree-sitter-generate",
  "tree-sitter-loader",
  "url",
- "vfs",
  "walkdir",
  "which 8.0.6",
  "zip 9.5.0",
@@ -3852,11 +3848,9 @@ dependencies = [
  "hashbrown 0.17.1",
  "indexmap 1.9.3",
  "indexmap 2.14.2",
- "lock_api",
  "log",
  "memchr",
  "num-traits",
- "parking_lot",
  "percent-encoding",
  "predicates",
  "proc-macro2",
@@ -4338,27 +4332,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "nucleo"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5262af4c94921c2646c5ac6ff7900c2af9cbb08dc26a797e18130a7019c039d4"
-dependencies = [
- "nucleo-matcher",
- "parking_lot",
- "rayon",
-]
-
-[[package]]
-name = "nucleo-matcher"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf33f538733d1a5a3494b836ba913207f14d9d4a1d3cd67030c5061bdd2cac85"
-dependencies = [
- "memchr",
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -7091,19 +7064,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-config"
-version = "0.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c2b3da9755b6311163871c0cf8e920b420c22b7ba50db2bb9691590148c9300"
-dependencies = [
- "etcetera",
- "log",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "tree-sitter-generate"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7375,15 +7335,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vfs"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d33cbe2ac48f2a446f04c33aef4906078ffd224888df5ae60b7ed401ded771"
-dependencies = [
- "filetime",
-]
 
 [[package]]
 name = "vt100"

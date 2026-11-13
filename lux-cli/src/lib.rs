@@ -1,3 +1,5 @@
+use lux_workspace_hack as _;
+
 use crate::{
     args::{PackageOrRockspec, Preset},
     dist::{Bin, Dist, FlatArchive},
