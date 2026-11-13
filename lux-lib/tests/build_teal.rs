@@ -21,6 +21,12 @@ async fn test_build_teal() {
     temp_dir.copy_from(&project_root, &["**"]).unwrap();
     let tree_dir = assert_fs::TempDir::new().unwrap();
     let lua_version = lua::detect::installed_version().or(Some(lua::Version::Lua51));
+    if lua_version == Some(lua::Version::Lua55) {
+        println!("teal 0.24.8 is not supported on Lua 5.5 yet! Skipping...");
+        // FIXME: teal 0.24.8 predates the Lua 5.5 fix.
+        // See https://github.com/teal-language/tl/pull/1157
+        return;
+    }
     let config = config::Builder::new()
         .unwrap()
         .user_tree(Some(tree_dir.to_path_buf()))

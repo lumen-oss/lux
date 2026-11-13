@@ -1,3 +1,5 @@
+use lux_workspace_hack as _;
+
 use crate::{
     args::{PackageOrRockspec, Preset},
     dist::{Bin, Dist, FlatArchive},
@@ -205,7 +207,7 @@ pub struct Cli {
     pub allow_root: bool,
 
     /// Timeout on network operations, in seconds.{n}
-    /// 0 means no timeout (wait forever). Default is 30.
+    /// 0 means no timeout (wait forever). Default is 0.
     #[arg(long, global = true, value_name = "seconds")]
     pub timeout: Option<usize>,
 

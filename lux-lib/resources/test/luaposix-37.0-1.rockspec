@@ -1,4 +1,4 @@
-local _MODREV, _SPECREV = '35.1', '-1'
+local _MODREV, _SPECREV = '37.0', '-1'
 
 package = 'luaposix'
 version = _MODREV .. _SPECREV
@@ -14,7 +14,7 @@ description = {
 }
 
 dependencies = {
-   'lua >= 5.1, < 5.5',
+   'lua >= 5.1, < 5.6',
 }
 
 do
@@ -38,6 +38,8 @@ build = {
       .. ' PREFIX="$(PREFIX)"'
       .. ' LUA="$(LUA)"'
       .. ' LUA_INCDIR="$(LUA_INCDIR)"'
+      .. ' CC="$(CC)"'
+      .. ' LD="$(LD)"'
       .. ' CFLAGS="$(CFLAGS)"'
       .. ' LIBFLAG="$(LIBFLAG)"'
       .. ' LIB_EXTENSION="$(LIB_EXTENSION)"'
@@ -47,7 +49,6 @@ build = {
       ,
    install_command = '$(LUA) build-aux/luke install --quiet'
       .. ' INST_LIBDIR="$(LIBDIR)"'
-      .. ' LIB_EXTENSION="$(LIB_EXTENSION)"'
       .. ' INST_LUADIR="$(LUADIR)"'
       ,
 }
