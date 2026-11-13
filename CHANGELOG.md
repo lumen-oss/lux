@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.3.1](https://github.com/lumen-oss/lux/compare/lux-macros-v0.3.0...lux-macros-v0.3.1) `lux-macros` - 2026-11-13
+
+### Other
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+
+## [0.55.1](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.55.0...lux-lsp-v0.55.1) `lux-lsp` - 2026-11-13
+
+### Other
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+- fix homepage URL
+
+## [0.75.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.74.0...lux-lib-v0.75.0) `lux-lib` - 2026-11-13
+
+### Added
+- *(lua)* add `lua-mirror.lumen-labs.org` mirror ([#2235](https://github.com/lumen-oss/lux/pull/2235))
+
+### Fixed
+- *(upload)* [**breaking**] don't error when using default signing protocol ([#2245](https://github.com/lumen-oss/lux/pull/2245))
+- *(config/variables)* add defaults for `CC` & `LD` ([#2243](https://github.com/lumen-oss/lux/pull/2243))
+
+### Other
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+
+## [0.55.1](https://github.com/lumen-oss/lux/compare/v0.55.0...v0.55.1) `lux-cli` - 2026-11-13
+
+### Other
+- cross-compiled binary distributions ([#987](https://github.com/lumen-oss/lux/pull/987))
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+- fix homepage URL
+
 ## [0.74.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.73.0...lux-lib-v0.74.0) `lux-lib` - 2026-11-10
 
 ### Added
