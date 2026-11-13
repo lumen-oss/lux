@@ -3,6 +3,7 @@ use crate::fs;
 use crate::git;
 use crate::hash::HasIntegrity;
 use crate::lockfile::RemotePackageSourceUrl;
+use crate::operations::sign;
 use crate::package;
 use crate::project;
 use crate::reqwest::RequestBuilderExt;
@@ -185,6 +186,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Fs(#[from] fs::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Verify(#[from] sign::verify::Error),
 }
 
 /// A no-prompt implementer for auth_git2's prompter
@@ -445,6 +449,9 @@ async fn fetch_src_impl<R: Rockspec>(
                 .apply_access_token(config, url);
             let request = wally::apply_content_headers(request, url);
             let response = request.send().await?.error_for_status()?.bytes().await?;
+            if url.path().ends_with(".src.rock") {
+                sign::verify(config, url, &response).await?;
+            }
             let hash = response.hash().await.map_err(Error::Hash)?;
             let file_name = url
                 .path_segments()

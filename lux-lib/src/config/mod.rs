@@ -31,6 +31,7 @@ use crate::{target, variables::HasVariables};
 pub mod access_tokens;
 pub mod build;
 pub mod external_deps;
+pub mod verify;
 
 const DEV_PATH: &str = "dev/";
 const DEFAULT_LUA_MIRRORS: [&str; 3] = [
@@ -87,6 +88,7 @@ pub struct Config {
     luarc_file_name: String,
     wrap_bin_scripts: bool,
     package_types: remote::package::kind::FilterSpec,
+    verify: verify::Policy,
     no_tfa: bool,
 
     https_client_cache: OnceLock<Client>,
@@ -415,6 +417,12 @@ impl Config {
     pub fn package_types(&self) -> &remote::package::kind::FilterSpec {
         &self.package_types
     }
+
+    /// Whether and how to verify signatures of downloaded rockspecs and rocks.
+    pub fn verify(&self) -> verify::Policy {
+        self.verify
+    }
+
     /// Whether to disable prompts for two-factor authentication (2FA) codes.
     pub fn no_tfa(&self) -> bool {
         self.no_tfa
@@ -554,6 +562,9 @@ pub struct Builder {
     wrap_bin_scripts: Option<bool>,
     /// Which package types to include in searches.
     package_types: Option<remote::package::kind::FilterSpec>,
+    /// Whether and how to verify signatures of downloaded rockspecs and rocks.
+    /// Default: `off`.
+    verify: Option<verify::Policy>,
     /// Whether to disable prompts for two-factor authentication (2FA) codes.
     /// Default: `false`.
     no_tfa: Option<bool>,
@@ -803,6 +814,14 @@ impl Builder {
             ..self
         }
     }
+    /// Whether and how to verify signatures of downloaded rockspecs and rocks.
+    /// Default: `off`.
+    pub fn verify(self, verify: Option<verify::Policy>) -> Self {
+        Self {
+            verify: verify.or(self.verify),
+            ..self
+        }
+    }
     /// Whether to disable prompts for two-factor authentication (2FA) codes.
     /// Default: `false`.
     pub fn no_tfa(self, tfa: Option<bool>) -> Self {
@@ -930,6 +949,7 @@ impl Builder {
             luarc_file_name: other.luarc_file_name.or(self.luarc_file_name),
             wrap_bin_scripts: other.wrap_bin_scripts.or(self.wrap_bin_scripts),
             package_types: other.package_types.or(self.package_types),
+            verify: other.verify.or(self.verify),
             no_tfa: other.no_tfa.or(self.no_tfa),
         }
     }
@@ -941,6 +961,10 @@ impl Builder {
         let user_tree = self.user_tree.unwrap_or(data_dir.join("tree"));
 
         let lua_version = self.lua_version.or(lua::detect::installed_version());
+
+        let verify = self.verify.unwrap_or_default();
+        let mut package_types = self.package_types.unwrap_or_default();
+        verify.restrict_package_types(&mut package_types);
 
         Ok(normalise_base_urls(Config {
             enable_development_packages: self.enable_development_packages.unwrap_or(false),
@@ -981,7 +1005,8 @@ impl Builder {
                 .luarc_file_name
                 .unwrap_or_else(|| ".luarc.json".to_string()),
             wrap_bin_scripts: self.wrap_bin_scripts.unwrap_or(true),
-            package_types: self.package_types.unwrap_or_default(),
+            package_types,
+            verify,
             no_tfa: self.no_tfa.unwrap_or(false),
             https_client_cache: OnceLock::new(),
             http_client_cache: OnceLock::new(),
@@ -1025,6 +1050,7 @@ impl From<Config> for Builder {
             luarc_file_name: Some(value.luarc_file_name),
             wrap_bin_scripts: Some(value.wrap_bin_scripts),
             package_types: Some(value.package_types),
+            verify: Some(value.verify),
             no_tfa: Some(value.no_tfa),
         }
     }
@@ -1269,5 +1295,29 @@ mod tests {
             config.external_deps().lib_subdirs,
             vec![PathBuf::from("lib/x86_64-linux-gnu")]
         );
+    }
+
+    #[test]
+    fn require_verification_disables_binary_package_types() {
+        let config = Builder::default()
+            .verify(Some(verify::Policy::Require))
+            .build()
+            .unwrap();
+        assert!(!config.package_types().binary);
+
+        let config = Builder::default()
+            .verify(Some(verify::Policy::Warn))
+            .build()
+            .unwrap();
+        assert!(config.package_types().binary);
+    }
+
+    #[test]
+    fn verify_is_parsed_from_toml() {
+        let config = toml::from_str::<Builder>("verify = \"warn\"")
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(config.verify(), verify::Policy::Warn);
     }
 }

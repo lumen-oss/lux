@@ -202,6 +202,11 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub no_tfa: bool,
 
+    /// How to verify signatures of downloaded rockspecs and rocks.{n}
+    /// The signer's public key must be in your GPG keyring.
+    #[arg(long, global = true, value_enum, value_name = "policy")]
+    pub verify_policy: Option<lux_lib::config::verify::Policy>,
+
     /// Allow Lux to run as root (linux) or Administrator (windows).
     #[arg(long, global = true)]
     pub allow_root: bool,

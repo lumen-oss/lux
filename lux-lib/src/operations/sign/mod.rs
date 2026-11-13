@@ -1,6 +1,9 @@
 use miette::Diagnostic;
 use serde_enum_str::Serialize_enum_str;
 use thiserror::Error;
+use url::Url;
+
+use crate::config::Config;
 
 #[cfg(feature = "gpgme")]
 use std::io::Read;
@@ -133,4 +136,12 @@ pub(crate) fn file(content: &[u8], protocol: Protocol) -> Result<Option<Signatur
 #[cfg(not(feature = "gpgme"))]
 pub(crate) fn file(_content: &[u8], _protocol: Protocol) -> Result<Option<Signature>, Error> {
     Ok(None)
+}
+
+pub mod verify;
+use verify::Error as VerifyError;
+pub(crate) use verify::Verify;
+
+pub(crate) async fn verify(config: &Config, url: &Url, bytes: &[u8]) -> Result<(), VerifyError> {
+    Verify::new(config).verify(url, bytes).await
 }
