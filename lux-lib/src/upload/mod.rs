@@ -22,6 +22,8 @@ use url::Url;
 use gpgme::{Context, Data};
 #[cfg(feature = "gpgme")]
 use std::io::Read;
+#[cfg(feature = "gpgme")]
+use strum_macros::EnumIter;
 
 const TFA_TOKEN_HEADER: &str = "X-TFA-Token";
 
@@ -273,7 +275,7 @@ pub enum SignatureProtocol {
     None,
 }
 
-#[derive(Serialize_enum_str, Clone, PartialEq, Eq)]
+#[derive(Serialize_enum_str, Clone, PartialEq, Eq, EnumIter)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 #[cfg_attr(feature = "clap", clap(rename_all = "lowercase"))]
 #[serde(rename_all = "lowercase")]
@@ -283,10 +285,9 @@ pub enum SignatureProtocol {
     None,
     Assuan,
     CMS,
-    #[default]
-    Default,
     G13,
     GPGConf,
+    #[default]
     OpenPGP,
     Spawn,
     UIServer,
@@ -296,7 +297,6 @@ pub enum SignatureProtocol {
 impl From<SignatureProtocol> for gpgme::Protocol {
     fn from(val: SignatureProtocol) -> Self {
         match val {
-            SignatureProtocol::Default => gpgme::Protocol::Default,
             SignatureProtocol::OpenPGP => gpgme::Protocol::OpenPgp,
             SignatureProtocol::CMS => gpgme::Protocol::Cms,
             SignatureProtocol::GPGConf => gpgme::Protocol::GpgConf,
@@ -304,7 +304,9 @@ impl From<SignatureProtocol> for gpgme::Protocol {
             SignatureProtocol::G13 => gpgme::Protocol::G13,
             SignatureProtocol::UIServer => gpgme::Protocol::UiServer,
             SignatureProtocol::Spawn => gpgme::Protocol::Spawn,
-            SignatureProtocol::None => unreachable!(),
+            SignatureProtocol::None => {
+                unreachable!("cannot convert SignatureProtocol::None to a gpgme::Protocol")
+            }
         }
     }
 }
@@ -618,6 +620,16 @@ mod test {
     use httptest::responders::{json_encoded, status_code, Responder};
     use httptest::{Expectation, Server};
     use serial_test::serial;
+
+    #[cfg(feature = "gpgme")]
+    #[test]
+    fn signature_protocols_are_accepted_by_gpgme() {
+        use strum::IntoEnumIterator;
+
+        for protocol in SignatureProtocol::iter().filter(|p| p != &SignatureProtocol::None) {
+            let _ = gpgme::Context::from_protocol(protocol.into()).unwrap();
+        }
+    }
 
     #[test]
     fn test_deserialize_tfa_success() {
