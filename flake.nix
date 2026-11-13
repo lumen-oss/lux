@@ -146,7 +146,7 @@
           lua53-ci = mkDevShell (with pkgs; [lua5_3 neovim-unwrapped]);
           lua54-ci = mkDevShell (with pkgs; [lua5_4 neovim-unwrapped]);
           lua55-ci = mkDevShell (with pkgs; [lua5_5 neovim-unwrapped]);
-          luajit-ci = mkDevShell (with pkgs; [luajit neovim-unwrapped]);
+          luajit-ci = mkDevShell [pkgs.luajit pkgs.neovim-unwrapped];
 
           cd = mkBuildShell pkgs;
         };
