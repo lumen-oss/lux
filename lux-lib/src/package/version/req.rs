@@ -14,7 +14,7 @@ use super::{
 #[derive(Debug, Error, Diagnostic)]
 pub enum FromReqError {
     #[error("cannot parse version from non-exact version requirement '{0}'")]
-    NonExactVersionReq(semver::VersionReq),
+    NonExactVersionReq(VersionReq),
     #[error("cannot parse version from version requirement '*' (any version)")]
     Any,
 }
@@ -151,6 +151,12 @@ fn matches_caret(comparator: &Comparator, version: &semver::Version) -> bool {
     cmp_prerelease(&version.pre, &comparator.pre) != Ordering::Less
 }
 
+fn semver_req_matches(req: &semver::VersionReq, version: &semver::Version) -> bool {
+    req.comparators
+        .iter()
+        .all(|comparator| comparator_matches(comparator, version))
+}
+
 #[derive(Error, Debug, Diagnostic)]
 #[non_exhaustive]
 #[error(transparent)]
@@ -162,6 +168,12 @@ pub struct ReqError(#[from] SemverError);
 pub enum VersionReq {
     /// A VersionReq that matches a SemVer version.
     SemVer(semver::VersionReq),
+    /// A VersionReq that matches a SemVer version unless it is one of the excluded versions
+    /// (corresponds to LuaRocks' `~=` operator).
+    SemVerExcept {
+        req: semver::VersionReq,
+        excluded: Vec<semver::Version>,
+    },
     /// A VersionReq that matches only known dev versions.
     DevVer(DevVersion),
     /// A VersionReq that matches a arbitrary string version.
@@ -182,10 +194,12 @@ impl VersionReq {
 
     pub fn matches(&self, version: &Version) -> bool {
         match (self, version) {
-            (VersionReq::SemVer(req), Version::SemVer(ver)) => req
-                .comparators
-                .iter()
-                .all(|comparator| comparator_matches(comparator, &ver.version)),
+            (VersionReq::SemVer(req), Version::SemVer(ver)) => {
+                semver_req_matches(req, &ver.version)
+            }
+            (VersionReq::SemVerExcept { req, excluded }, Version::SemVer(ver)) => {
+                !excluded.contains(&ver.version) && semver_req_matches(req, &ver.version)
+            }
             (VersionReq::DevVer(req), Version::DevVer(ver)) => req == &ver.modrev,
             (VersionReq::StringVer(req), Version::StringVer(ver)) => req == &ver.modrev,
             (VersionReq::Any, _) => true,
@@ -203,17 +217,27 @@ impl VersionReq {
     }
 }
 
+fn luarocks_req_str(req: &semver::VersionReq) -> String {
+    let mut str = req.to_string();
+    if str.starts_with("=") {
+        str = str.replacen("=", "==", 1);
+    } else if str.starts_with("^") {
+        str = str.replacen("^", "~>", 1);
+    }
+    str
+}
+
 impl Display for VersionReq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionReq::SemVer(version_req) => {
-                let mut str = version_req.to_string();
-                if str.starts_with("=") {
-                    str = str.replacen("=", "==", 1);
-                } else if str.starts_with("^") {
-                    str = str.replacen("^", "~>", 1);
+            VersionReq::SemVer(version_req) => luarocks_req_str(version_req).fmt(f),
+            VersionReq::SemVerExcept { req, excluded } => {
+                let excluded = excluded.iter().format(", ~= ");
+                if req.comparators.is_empty() {
+                    write!(f, "~= {excluded}")
+                } else {
+                    write!(f, "{}, ~= {excluded}", luarocks_req_str(req))
                 }
-                str.fmt(f)
             }
             VersionReq::DevVer(name_req) => write!(f, "=={}", name_req),
             VersionReq::StringVer(name_req) => write!(f, "=={}", name_req),
@@ -238,6 +262,10 @@ impl FromStr for VersionReq {
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let text = correct_version_req_str(text);
+
+        if text.contains("~=") || text.contains("!=") {
+            return parse_except_req(&text);
+        }
 
         let trimmed = text.trim_start_matches('=').trim_start_matches('@').trim();
 
@@ -284,6 +312,35 @@ fn trim_specrev(version_str: &str) -> &str {
 
 fn is_known_dev_version_str(text: &str) -> bool {
     matches!(text, "dev" | "scm")
+}
+
+fn parse_except_req(text: &str) -> Result<VersionReq, ReqError> {
+    let (constraints, excluded) = split_excluded_versions(text)?;
+    let req = if constraints.is_empty() {
+        semver::VersionReq::STAR
+    } else {
+        parse_version_req(&constraints)?
+    };
+    Ok(VersionReq::SemVerExcept { req, excluded })
+}
+
+fn split_excluded_versions(text: &str) -> Result<(String, Vec<semver::Version>), SemverError> {
+    let mut constraints = Vec::new();
+    let mut excluded = Vec::new();
+    for constraint in text.split(',').map(str::trim).filter(|c| !c.is_empty()) {
+        match constraint
+            .strip_prefix("~=")
+            .or_else(|| constraint.strip_prefix("!="))
+        {
+            Some(version) => {
+                excluded.push(semver::Version::parse(&correct_version_string(
+                    version.trim(),
+                ))?);
+            }
+            None => constraints.push(constraint),
+        }
+    }
+    Ok((constraints.join(", "), excluded))
 }
 
 /// Transform LuaRocks constraints into constraints that can be parsed by the semver crate.

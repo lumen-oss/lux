@@ -119,9 +119,9 @@ windows = false
     /// `git`, `rev`, and `path` keys.
     ///
     /// Version requirements support the operators `==`, `~=`, `<`, `>`, `<=`,
-    /// `>=`, and `~>`. `~> 2` means `>= 2, < 3`. An operator is optional;
-    /// without one, the requirement is treated as `==`. Version requirements
-    /// are mandatory.
+    /// `>=`, and `~>`. `~> 2` means `>= 2, < 3`. `~= 1.5` excludes version
+    /// 1.5. `!=` is an alias for `~=`. An operator is optional. Without one,
+    /// the requirement is treated as `==`. Version requirements are mandatory.
     ///
     /// Dependencies are declared under `lua`, `[dependencies]`,
     /// `[build_dependencies]`, `[test_dependencies]`, and
