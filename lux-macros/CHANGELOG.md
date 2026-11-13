@@ -15,6 +15,11 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/lumen-oss/lux/compare/lux-macros-v0.3.0...lux-macros-v0.3.1) `lux-macros` - 2026-11-13
+
+### Other
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+
 ## [0.2.1](https://github.com/lumen-oss/lux/compare/lux-macros-v0.2.0...lux-macros-v0.2.1) `lux-macros` - 2026-07-20
 
 ### Dependencies
