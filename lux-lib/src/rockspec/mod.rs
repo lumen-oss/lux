@@ -168,7 +168,7 @@ impl<T: Rockspec> LuaVersionCompatibility for T {
             return Some(crate::lua::Version::Luau);
         }
         for (possibility, version) in [
-            ("5.5.0", crate::lua::Version::Lua54),
+            ("5.5.0", crate::lua::Version::Lua55),
             ("5.4.0", crate::lua::Version::Lua54),
             ("5.3.0", crate::lua::Version::Lua53),
             ("5.2.0", crate::lua::Version::Lua52),

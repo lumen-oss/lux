@@ -37,6 +37,12 @@ async fn install_git_package() {
 #[serial]
 #[cfg(not(target_env = "msvc"))] // http has dependencies that are not supported on Windows
 async fn install_http_package() {
+    if lua::detect::installed_version() == Some(lua::Version::Lua55) {
+        println!("http is not supported on Lua 5.5 yet! Skipping...");
+        // FIXME: http-0.4-0 depends on bit32, which has no Lua 5.5 rock.
+        // See https://github.com/daurnimator/lua-http/issues/245
+        return;
+    }
     let cflags = std::env::var("CFLAGS").unwrap_or_default();
     // See https://github.com/wahern/luaossl/issues/220#issuecomment-3401472124
     std::env::set_var("CFLAGS", "-Wno-error=incompatible-pointer-types");
@@ -101,9 +107,12 @@ async fn no_build_artifacts_in_cwd() {
         .filter_map(Result::ok)
         .map(|entry| entry.into_path())
         .collect_vec();
-    let install_spec = install::Spec::new("bit32@5.3.5".parse().unwrap(), EntryType::Entrypoint)
-        .build_behaviour(build::Behaviour::Force)
-        .build();
+    let install_spec = install::Spec::new(
+        "luafilesystem@1.9.0".parse().unwrap(),
+        EntryType::Entrypoint,
+    )
+    .build_behaviour(build::Behaviour::Force)
+    .build();
     test_install(install_spec).await;
     let build_artifacts = WalkDir::new(&cwd)
         .into_iter()

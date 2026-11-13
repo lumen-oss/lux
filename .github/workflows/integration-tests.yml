@@ -19,10 +19,7 @@ jobs:
         os: ["ubuntu-24.04", "macos-15"]
         lua: [
           { version: "5.1", feature: "lua51" },
-          { version: "5.4", feature: "lua54" },
-          # FIXME: Not many packages support Lua 5.5 yet,
-          # so we skip integration tests for Lua 5.5 for now.
-          # { version: "5.5", feature: "lua55" },
+          { version: "5.5", feature: "lua55" },
 
           # FIXME: the luajit devshell
           # is failing to build in CI with a strange 'command not found' error message.
