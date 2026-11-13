@@ -1033,6 +1033,18 @@ impl From<Config> for Builder {
 fn default_variables() -> impl Iterator<Item = (String, String)> {
     let cflags = env::var("CFLAGS").unwrap_or(target::default_cflags().into());
     let ldflags = env::var("LDFLAGS").unwrap_or("".into());
+    let default_cc = if cfg!(target_env = "msvc") {
+        "cl"
+    } else {
+        "cc"
+    };
+    let default_ld = if cfg!(target_env = "msvc") {
+        "link"
+    } else {
+        "ld"
+    };
+    let cc = env::var("CC").unwrap_or(default_cc.into());
+    let ld = env::var("LD").unwrap_or(default_ld.into());
     vec![
         ("MAKE".into(), "make".into()),
         ("CMAKE".into(), "cmake".into()),
@@ -1040,6 +1052,8 @@ fn default_variables() -> impl Iterator<Item = (String, String)> {
         ("OBJ_EXTENSION".into(), target::c_obj_extension().into()),
         ("CFLAGS".into(), cflags),
         ("LDFLAGS".into(), ldflags),
+        ("CC".into(), cc),
+        ("LD".into(), ld),
         ("LIBFLAG".into(), target::default_libflag().into()),
     ]
     .into_iter()
