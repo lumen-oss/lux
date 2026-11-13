@@ -15,14 +15,18 @@ use miette::{miette, IntoDiagnostic, Result};
 use crate::args::OutputFormat;
 
 #[cfg(feature = "gpgme")]
-use lux_lib::upload::SignatureProtocol;
+use lux_lib::operations::sign::Protocol;
 
 #[derive(Args)]
 pub struct Upload {
     /// The protocol to use when signing upload artefacts
     #[cfg(feature = "gpgme")]
     #[arg(long, default_value_t)]
-    sign_protocol: SignatureProtocol,
+    sign_protocol: Protocol,
+
+    /// Pack and upload a source rock alongside the rockspec.
+    #[arg(long)]
+    src_rock: bool,
 
     /// Package to upload.
     #[arg(short, long, visible_short_alias = 'p')]
@@ -60,7 +64,6 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
     }
 
     let workspace = Workspace::current_or_err()?;
-
     let package_db = PackageDB::from_config(&config).await?;
     let tfa_code = tfa_code_from_args_or_secret(&data, &config)?;
     let mut reports = Vec::new();
@@ -71,7 +74,8 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
             .config(&config)
             .maybe_tfa_code(tfa_code)
             .package_db(&package_db)
-            .mode(mode);
+            .mode(mode)
+            .pack_source_rock(data.src_rock);
 
         #[cfg(feature = "gpgme")]
         let project_upload = project_upload.sign_protocol(data.sign_protocol.clone());
@@ -84,7 +88,8 @@ pub async fn upload(data: Upload, config: Config) -> Result<()> {
                 .config(&config)
                 .maybe_tfa_code(tfa_code.clone())
                 .package_db(&package_db)
-                .mode(mode);
+                .mode(mode)
+                .pack_source_rock(data.src_rock);
 
             #[cfg(feature = "gpgme")]
             let project_upload = project_upload.sign_protocol(data.sign_protocol.clone());
@@ -113,7 +118,8 @@ async fn upload_rockspec(
         .rockspec(&rockspec)
         .config(config)
         .maybe_tfa_code(tfa_code)
-        .mode(mode);
+        .mode(mode)
+        .pack_source_rock(data.src_rock);
 
     #[cfg(feature = "gpgme")]
     let upload = upload.sign_protocol(data.sign_protocol.clone());
@@ -194,6 +200,9 @@ fn print_dry_run(
                     report.version,
                     config.server()
                 );
+                if let Some(source_rock) = &report.source_rock {
+                    println!("Dry run: would upload source rock {source_rock}");
+                }
                 println!();
                 println!("{}", report.content);
             }
@@ -207,6 +216,7 @@ fn print_dry_run(
                         "version": report.version.to_string(),
                         "server": config.server().to_string(),
                         "rockspec": &report.content,
+                        "source_rock": &report.source_rock,
                     })
                 })
                 .collect::<Vec<_>>();

@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{fs, project, tree::RockLayout};
+use crate::{fs, package, project, tree::RockLayout};
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -14,6 +14,15 @@ pub mod installation;
 
 pub use installation::Installation;
 pub mod rock_manifest;
+
+/// Returns the file name of a packed rock.
+pub(crate) fn rock_file_name(
+    name: &package::Name,
+    version: &package::Version,
+    ext: &str,
+) -> String {
+    format!("{name}-{version}.{ext}")
+}
 
 /// Retrieves the target compilation platform and returns it as a luarocks identifier.
 pub(crate) fn current_platform_luarocks_identifier() -> String {

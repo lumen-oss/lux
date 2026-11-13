@@ -31,15 +31,12 @@ fn current_file(lua: &Lua) -> Option<String> {
     }
 
     for level in 1.. {
-        match lua.inspect_stack(level, |debug| {
+        if let Some(path) = lua.inspect_stack(level, |debug| {
             debug.source().source.as_deref().map(str::to_string)
         })? {
-            Some(path) => {
-                if let Some(path) = path.strip_prefix('@') {
-                    return Some(path.to_string());
-                }
+            if let Some(path) = path.strip_prefix('@') {
+                return Some(path.to_string());
             }
-            _ => {}
         }
     }
 

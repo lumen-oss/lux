@@ -515,7 +515,7 @@ async fn download_src_rock_to_file(
     config: &Config,
 ) -> Result<PackedRock, Error> {
     let rock = search_and_download_src_rock(package_req, package_db, config).await?;
-    let full_rock_name = mk_packed_rock_name(&rock.name, &rock.version, "src.rock");
+    let full_rock_name = luarocks::rock_file_name(&rock.name, &rock.version, "src.rock");
     fs::tokio::write(
         destination_dir
             .map(|dest| dest.join(&full_rock_name))
@@ -570,7 +570,7 @@ async fn download_impl(args: ArchiveDownload<'_>) -> Result<PackedRockBytes, Src
     let package = args.package;
     let ext = args.ext;
     let server_url = args.server_url;
-    let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
+    let full_rock_name = luarocks::rock_file_name(package.name(), package.version(), ext);
     tracing::debug!(message = format!("📥 Downloading {full_rock_name}").as_str());
     let url = server_url.join(&full_rock_name)?;
     let response = config
@@ -584,7 +584,8 @@ async fn download_impl(args: ArchiveDownload<'_>) -> Result<PackedRockBytes, Src
     } else {
         match args.fallback_ext {
             Some(ext) => {
-                let full_rock_name = mk_packed_rock_name(package.name(), package.version(), ext);
+                let full_rock_name =
+                    luarocks::rock_file_name(package.name(), package.version(), ext);
                 let url = server_url.join(&full_rock_name)?;
                 config
                     .https_client()?
@@ -606,9 +607,6 @@ async fn download_impl(args: ArchiveDownload<'_>) -> Result<PackedRockBytes, Src
         file_name: full_rock_name,
         url,
     })
-}
-fn mk_packed_rock_name(name: &package::Name, version: &package::Version, ext: &str) -> String {
-    format!("{name}-{version}.{ext}")
 }
 
 pub(crate) async fn unpack_rockspec(

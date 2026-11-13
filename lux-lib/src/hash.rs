@@ -8,6 +8,8 @@ use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::source_tree::{is_lux_generated, is_vcs_dir};
+
 pub trait HasIntegrity {
     fn hash(&self) -> impl Future<Output = io::Result<Integrity>> + Send;
 }
@@ -82,17 +84,6 @@ impl VcsExcludingFileSystem {
         }
         Self { gitignore }
     }
-}
-
-fn is_vcs_dir(name: &str) -> bool {
-    matches!(name, ".git" | ".jj" | ".hg" | "_darcs" | ".svn" | ".bzr")
-}
-
-fn is_lux_generated(name: &str) -> bool {
-    matches!(
-        name,
-        crate::workspace::LUX_DIR_NAME | "lux.lock" | ".luarc.json" | ".emmyrc.json"
-    )
 }
 
 impl FileSystem for VcsExcludingFileSystem {
