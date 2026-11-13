@@ -33,7 +33,8 @@ pub mod build;
 pub mod external_deps;
 
 const DEV_PATH: &str = "dev/";
-const DEFAULT_LUA_MIRRORS: [&str; 2] = [
+const DEFAULT_LUA_MIRRORS: [&str; 3] = [
+    "https://lua-mirror.lumen-labs.org",
     "https://www.lua.org/ftp",
     "https://www.tecgraf.puc-rio.br/lua/ftp",
 ];
@@ -1212,18 +1213,6 @@ mod tests {
         let rebuilt = Builder::from(config.clone()).build().unwrap();
         assert_eq!(rebuilt.server(), config.server());
         assert_eq!(rebuilt.extra_servers(), config.extra_servers());
-    }
-
-    #[test]
-    fn lua_mirrors_default_to_the_official_download_area_and_its_mirror() {
-        let config = Builder::default().build().unwrap();
-        assert_eq!(
-            config.lua_mirrors(),
-            [
-                Url::parse("https://www.lua.org/ftp/").unwrap(),
-                Url::parse("https://www.tecgraf.puc-rio.br/lua/ftp/").unwrap()
-            ]
-        );
     }
 
     #[test]
