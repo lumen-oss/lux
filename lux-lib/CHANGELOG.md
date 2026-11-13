@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.75.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.74.0...lux-lib-v0.75.0) `lux-lib` - 2026-11-13
+
+### Added
+- *(lua)* add `lua-mirror.lumen-labs.org` mirror ([#2235](https://github.com/lumen-oss/lux/pull/2235))
+
+### Fixed
+- *(upload)* [**breaking**] don't error when using default signing protocol ([#2245](https://github.com/lumen-oss/lux/pull/2245))
+- *(config/variables)* add defaults for `CC` & `LD` ([#2243](https://github.com/lumen-oss/lux/pull/2243))
+
+### Other
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+
 ## [0.74.0](https://github.com/lumen-oss/lux/compare/lux-lib-v0.73.0...lux-lib-v0.74.0) `lux-lib` - 2026-11-10
 
 ### Added

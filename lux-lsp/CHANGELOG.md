@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.1](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.55.0...lux-lsp-v0.55.1) `lux-lsp` - 2026-11-13
+
+### Other
+- drop unused dependencies ([#2240](https://github.com/lumen-oss/lux/pull/2240))
+- fix homepage URL
+
 ## [0.54.0](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.53.3...lux-lsp-v0.54.0) `lux-lsp` - 2026-11-09
 
 ### Other
