@@ -11,7 +11,7 @@ use bzip2::read::BzDecoder;
 use ssri::{Algorithm, Integrity, IntegrityOpts};
 use tar::Archive;
 
-use crate::DynError;
+use crate::{gpgme_enabled, DynError};
 
 const VERSION: &str = "1.61";
 const SRI: &str = "sha256-eoVBPyvDVPT4qoMrcYrxIuSJZeng65AS7mWcE8Y4XJM=";
@@ -79,7 +79,7 @@ fn static_linking_requested() -> bool {
 }
 
 pub fn is_required() -> bool {
-    is_supported() && static_linking_requested()
+    is_supported() && static_linking_requested() && gpgme_enabled()
 }
 
 pub fn apply(command: &mut Command) -> Result<(), DynError> {
@@ -180,7 +180,8 @@ fn build(dependency: &Dependency, src_dir: &Path, prefix: &Path) -> Result<(), D
         .map(|jobs| jobs.get())
         .unwrap_or(1)
         .to_string();
-    run(Command::new(src_dir.join("configure"))
+    let mut configure = Command::new(src_dir.join("configure"));
+    configure
         .current_dir(src_dir)
         .arg("--enable-static")
         .arg("--disable-shared")
@@ -189,11 +190,26 @@ fn build(dependency: &Dependency, src_dir: &Path, prefix: &Path) -> Result<(), D
         .arg(prefix)
         .args(dependency.configure_args)
         .env("PATH", path_with_prefix(prefix)?)
-        .env("PKG_CONFIG_PATH", pkg_config_path(prefix)?))?;
+        .env("PKG_CONFIG_PATH", pkg_config_path(prefix)?);
+    configure_cross_compilation(&mut configure);
+    run(&mut configure)?;
     run(Command::new("make")
         .current_dir(src_dir)
         .arg("-j")
         .arg(&jobs))
+}
+
+fn configure_cross_compilation(configure: &mut Command) {
+    let Some(target) = crate::cross_target() else {
+        return;
+    };
+    configure.arg("--host").arg(&target);
+    let suffix = target.replace(['-', '.'], "_");
+    for tool in ["CC", "CXX", "AR", "RANLIB"] {
+        if let Ok(value) = env::var(format!("{tool}_{suffix}")) {
+            configure.env(tool, value);
+        }
+    }
 }
 
 fn install(src_dir: &Path) -> Result<(), DynError> {
@@ -253,7 +269,11 @@ fn run(command: &mut Command) -> Result<(), DynError> {
 }
 
 fn cache_dir() -> PathBuf {
-    crate::project_root().join("target/static-gpg")
+    let cache_dir = crate::project_root().join("target/static-gpg");
+    match crate::cross_target() {
+        Some(target) => cache_dir.join(target),
+        None => cache_dir,
+    }
 }
 
 fn prefix() -> PathBuf {

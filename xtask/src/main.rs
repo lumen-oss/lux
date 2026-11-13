@@ -12,8 +12,10 @@ use cargo_packager::{
     config::{AppImageConfig, Binary, DebianConfig, PacmanConfig, Resource},
     PackageFormat, SigningConfig,
 };
+use flate2::{write::GzEncoder, Compression};
 use serde::Deserialize;
 use strum::IntoEnumIterator;
+use target_lexicon::Triple;
 use xtask_lua::LuaFeature;
 
 mod static_gpg;
@@ -102,19 +104,19 @@ struct BuildOpts {
 }
 
 fn features(opts: &BuildOpts) -> Vec<String> {
-    #[cfg(not(target_env = "msvc"))]
-    let mut features = vec![
-        "gpgme".to_string(),
-        "luau-transpile".to_string(),
-        "wally".to_string(),
-    ];
-    #[cfg(target_env = "msvc")]
     let mut features = vec!["luau-transpile".to_string(), "wally".to_string()];
 
+    if gpgme_enabled() {
+        features.push("gpgme".to_string());
+    }
     if opts.vendored {
         features.push("vendored".to_string());
     }
     features
+}
+
+fn gpgme_enabled() -> bool {
+    !cfg!(target_env = "msvc") && !build_target().is_some_and(|target| target.contains("-freebsd"))
 }
 
 fn push_features(args: &mut Vec<String>, opts: &BuildOpts) {
@@ -147,6 +149,7 @@ fn build(opts: &BuildOpts) -> Result<(), DynError> {
 
     let mut command = Command::new(cargo);
     command.current_dir(project_root()).args(args);
+    apply_cross_env(&mut command);
     static_gpg::apply(&mut command)?;
     let status = command.status()?;
 
@@ -154,7 +157,10 @@ fn build(opts: &BuildOpts) -> Result<(), DynError> {
         Err("cargo build failed")?;
     }
 
-    let dest_dir = target_dir.join(profile);
+    let dest_dir = match build_target() {
+        Some(target) => target_dir.join(target).join(profile),
+        None => target_dir.join(profile),
+    };
 
     #[cfg(not(target_env = "msvc"))]
     let dest_bin = dest_dir.join("lx");
@@ -188,8 +194,9 @@ fn build(opts: &BuildOpts) -> Result<(), DynError> {
         ))
     })?;
 
+    let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
     if opts.release
-        && Command::new("strip")
+        && Command::new(&strip)
             .arg("--version")
             .stdout(Stdio::null())
             .status()
@@ -197,7 +204,7 @@ fn build(opts: &BuildOpts) -> Result<(), DynError> {
             .is_ok()
     {
         println!("stripping the binary");
-        let status = Command::new("strip").arg(&dest_bin).status()?;
+        let status = Command::new(&strip).arg(&dist_file).status()?;
         if !status.success() {
             Err("strip failed")?;
         }
@@ -224,6 +231,7 @@ fn lx(lx_args: Vec<String>, opts: &BuildOpts) -> Result<(), DynError> {
 
     let mut command = Command::new(cargo);
     command.current_dir(project_root()).args(args);
+    apply_cross_env(&mut command);
     static_gpg::apply(&mut command)?;
     let status = command.status()?;
 
@@ -299,10 +307,17 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
     }
     println!("building lux-cli...");
     build(&opts)?;
-    println!("building man pages...");
-    dist_man(&opts)?;
-    println!("building shell completions...");
-    dist_completions(&opts)?;
+    let target = build_target();
+    let is_freebsd = target
+        .as_deref()
+        .is_some_and(|target| target.contains("-freebsd"));
+    let tarball_target = target.filter(|target| target.contains("-musl") || is_freebsd);
+    if !is_freebsd {
+        println!("building man pages...");
+        dist_man(&opts)?;
+        println!("building shell completions...");
+        dist_completions(&opts)?;
+    }
     let project_root = project_root();
     let manifest_path = project_root.join("Cargo.toml");
     if !manifest_path.is_file() {
@@ -317,6 +332,36 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
     #[cfg(target_env = "msvc")]
     let lx_bin_path = dist_dir.join("lx.exe");
 
+    if !lx_bin_path.is_file() {
+        Err(format!("{} not found", lx_bin_path.display()))?;
+    }
+    if let Some(target) = tarball_target {
+        return dist_tarball(
+            &dist_dir,
+            &lx_bin_path,
+            &manifest.workspace.package.version,
+            &target,
+            opts.release,
+            &signing_config,
+        );
+    }
+    dist_native(
+        &dist_dir,
+        &lx_bin_path,
+        &manifest.workspace.package.version,
+        opts.release,
+        &signing_config,
+    )
+}
+
+fn dist_native(
+    dist_dir: &Path,
+    lx_bin_path: &Path,
+    version: &str,
+    release: bool,
+    signing_config: &SigningConfig,
+) -> Result<(), DynError> {
+    let project_root = project_root();
     let resources = if cfg!(target_env = "msvc") {
         vec![
             Resource::Single("target/dist/share/lux-lua/".into()),
@@ -357,9 +402,6 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
         Vec::new()
     };
 
-    if !lx_bin_path.is_file() {
-        Err(format!("{} not found", lx_bin_path.display()))?;
-    }
     let file_mappings = [
         ("target/dist/share/lux-lua", "usr/share/lux-lua"),
         ("target/dist/lib/pkgconfig", "usr/lib/pkgconfig"),
@@ -387,8 +429,8 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
 
     let config_builder = cargo_packager::Config::builder()
         .product_name("lux-cli")
-        .version(manifest.workspace.package.version)
-        .out_dir(&dist_dir)
+        .version(version)
+        .out_dir(dist_dir)
         .binaries(vec![Binary::new(lx_bin_path).main(true)])
         .resources(resources)
         .description("A luxurious package manager for Lua")
@@ -411,13 +453,59 @@ fn dist_package(opts: BuildOpts) -> Result<(), DynError> {
         .log_level(cargo_packager::config::LogLevel::Trace);
     // NOTE: The AppImage/linuxdeploy-<target>.AppImage will fail on NixOS.
     println!("building binary package...");
-    if opts.release {
-        cargo_packager::package_and_sign(config_builder.config(), &signing_config)
+    if release {
+        cargo_packager::package_and_sign(config_builder.config(), signing_config)
             .inspect_err(|err| eprintln!("failed to package lux:\n{err:?}"))?;
     } else {
         // GitHub Actions doesn't expose secrets on PR, so we don't sign the dry-run build.
         cargo_packager::package(config_builder.config())
             .inspect_err(|err| eprintln!("failed to package lux:\n{err:?}"))?;
+    }
+    Ok(())
+}
+
+fn dist_tarball(
+    dist_dir: &Path,
+    lx_bin_path: &Path,
+    version: &str,
+    target: &str,
+    release: bool,
+    signing_config: &SigningConfig,
+) -> Result<(), DynError> {
+    let tarball_path = dist_dir.join(format!("lux-{version}-{target}.tar.gz"));
+    println!("building {}", tarball_path.display());
+    let file = fs::File::create(&tarball_path)?;
+    let encoder = GzEncoder::new(file, Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    builder.append_path_with_name(lx_bin_path, "lx")?;
+    for (src, dest) in [
+        (dist_dir.join("share/lux-lua"), "share/lux-lua"),
+        (dist_dir.join("lib/pkgconfig"), "lib/pkgconfig"),
+    ] {
+        if src.is_dir() {
+            builder.append_dir_all(dest, &src)?;
+        } else {
+            Err(format!("{} missing", src.display()))?;
+        }
+    }
+    if !target.contains("-freebsd") {
+        for (src, dest) in [
+            (dist_dir.join("lx.1"), "lx.1"),
+            (dist_dir.join("_lx"), "completions/zsh/_lx"),
+            (dist_dir.join("lx.bash"), "completions/lx.bash"),
+            (dist_dir.join("lx.fish"), "completions/lx.fish"),
+            (dist_dir.join("lx.elv"), "completions/lx.elv"),
+        ] {
+            if src.is_file() {
+                builder.append_path_with_name(&src, dest)?;
+            } else {
+                Err(format!("{} missing", src.display()))?;
+            }
+        }
+    }
+    builder.into_inner()?.finish()?;
+    if release {
+        cargo_packager::sign::sign_file(signing_config, &tarball_path)?;
     }
     Ok(())
 }
@@ -439,6 +527,21 @@ fn gen_definitions() -> Result<(), DynError> {
         Err("lux-definitions failed")?;
     }
     Ok(())
+}
+
+fn build_target() -> Option<String> {
+    env::var("CARGO_BUILD_TARGET").ok()
+}
+
+fn cross_target() -> Option<String> {
+    build_target().filter(|target| target != &Triple::host().to_string())
+}
+
+fn apply_cross_env(command: &mut Command) {
+    if cross_target().is_some() {
+        command.env("PKG_CONFIG_ALLOW_CROSS", "1");
+        command.env("LIBZ_SYS_STATIC", "1");
+    }
 }
 
 fn project_root() -> PathBuf {
