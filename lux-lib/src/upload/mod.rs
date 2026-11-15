@@ -130,6 +130,11 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error("a package with the same rockspec content already exists on the server: '{0}'")]
     #[diagnostic(help("try uploading a rockspec with a different version"))]
     RockExists(Url),
+    #[error("cannot upload a package with a local source: '{}'", .0.display())]
+    #[diagnostic(help(
+        "set `[source].url` for releases and `[source].dev` for dev releases in lux.toml"
+    ))]
+    LocalSource(PathBuf),
     #[error("unable to read rockspec")]
     #[diagnostic(help("check that the rockspec exists and is readable"))]
     RockspecRead(#[from] std::io::Error),
@@ -447,6 +452,14 @@ async fn pack_source_rock<R: Rockspec>(
     Ok(PackedSourceRock { _dir: dir, path })
 }
 
+fn ensure_remote_source<R: Rockspec>(rockspec: &R) -> Result<(), Error> {
+    let source = &rockspec.source().current_platform().source_spec;
+    if let rockspec::source::Spec::File(path) = source {
+        return Err(Error::LocalSource(path.clone()));
+    }
+    Ok(())
+}
+
 async fn upload_prepared<R: Rockspec>(
     context: &Context<'_>,
     rockspec: &R,
@@ -456,6 +469,7 @@ async fn upload_prepared<R: Rockspec>(
     mode: Mode,
     source_rock: Option<PreparedSourceRock>,
 ) -> Result<PreparedRockspec, Error> {
+    ensure_remote_source(rockspec)?;
     let source_rock_name = source_rock.as_ref().map(|rock| rock.file_name.clone());
     let signed = sign::file(rockspec_content.as_bytes(), protocol)?;
     let prepared = PreparedRockspec::new(rockspec, rockspec_content, source_rock_name);
@@ -757,6 +771,7 @@ impl From<reqwest::Error> for Error {
 #[cfg(test)]
 mod test {
     use std::future::Future;
+    use std::io::Write;
     use std::pin::Pin;
     use std::sync::{Arc, Mutex};
 
@@ -772,6 +787,8 @@ mod test {
     use httptest::responders::{json_encoded, status_code, Responder};
     use httptest::{Expectation, Server};
     use serial_test::serial;
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
 
     #[cfg(feature = "gpgme")]
     #[test]
@@ -906,6 +923,54 @@ type = "builtin"
         (project_dir, config_dir, project, config, package_db)
     }
 
+    fn source_archive() -> Vec<u8> {
+        let mut archive = Vec::new();
+        {
+            let mut zip = ZipWriter::new(std::io::Cursor::new(&mut archive));
+            zip.start_file("src/foo.lua", SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(b"return {}").unwrap();
+            zip.finish().unwrap();
+        }
+        archive
+    }
+
+    fn expect_source_archive(server: &Server) {
+        server.expect(
+            Expectation::matching(request::path("/foo.zip"))
+                .respond_with(status_code(200).body(source_archive())),
+        );
+    }
+
+    async fn ready_with_remote_source(
+        server: &Server,
+    ) -> (
+        assert_fs::TempDir,
+        assert_fs::TempDir,
+        Project,
+        Config,
+        PackageDB,
+    ) {
+        let (project_dir, config_dir, _project, config, package_db) = ready(server).await;
+        let project_toml = format!(
+            r#"
+package = "foo"
+version = "1.0.0"
+lua = ">=5.1"
+
+[source]
+url = "{}"
+
+[build]
+type = "builtin"
+"#,
+            server.url_str("/foo.zip")
+        );
+        std::fs::write(project_dir.path().join("lux.toml"), project_toml).unwrap();
+        let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
+        (project_dir, config_dir, project, config, package_db)
+    }
+
     fn expect_tool_version(server: &Server, version: &str) {
         server.expect(
             Expectation::matching(request::path(TOOL_VERSION_PATH))
@@ -994,9 +1059,10 @@ type = "builtin"
             json_encoded(serde_json::json!({ "version": { "id": 123 } })),
         );
         expect_upload_rock(&server, 123, status_code(200));
+        expect_source_archive(&server);
 
         let (_project_dir, _config_dir, project, config, package_db) =
-            ready_with_source(&server).await;
+            ready_with_remote_source(&server).await;
         let upload = ProjectUpload::new()
             .project(&project)
             .config(&config)
@@ -1024,8 +1090,10 @@ type = "builtin"
                 .respond_with(status_code(200)),
         );
 
+        expect_source_archive(&server);
+
         let (_project_dir, _config_dir, project, config, package_db) =
-            ready_with_source(&server).await;
+            ready_with_remote_source(&server).await;
         let upload = ProjectUpload::new()
             .project(&project)
             .config(&config)
@@ -1041,6 +1109,27 @@ type = "builtin"
 
     #[tokio::test]
     #[serial]
+    async fn test_upload_rejects_local_source() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        server.expect(
+            Expectation::matching(request::path(UPLOAD_PATH))
+                .times(0)
+                .respond_with(status_code(200)),
+        );
+
+        let (_project_dir, _config_dir, project, config, package_db) =
+            ready_with_source(&server).await;
+        let error = upload(&project, &config, &package_db, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::LocalSource(_)));
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn test_upload_source_rock_dry_run() {
         let server = Server::run();
         expect_tool_version(&server, TOOL_VERSION);
@@ -1048,7 +1137,7 @@ type = "builtin"
         expect_rock_missing(&server);
 
         let (_project_dir, _config_dir, project, config, package_db) =
-            ready_with_source(&server).await;
+            ready_with_remote_source(&server).await;
         let upload = ProjectUpload::new()
             .project(&project)
             .config(&config)
