@@ -46,17 +46,20 @@ fn current_file(lua: &Lua) -> Option<String> {
     None
 }
 
+pub(crate) fn rock_root(
+    tree_root: &Path,
+    id: &locked_package::ID,
+    package: &LockedPackage,
+) -> PathBuf {
+    tree_root.join(format!("{}-{}@{}", id, package.name(), package.version()))
+}
+
 fn rock_layout(
     tree_root: &Path,
-    package_id: &locked_package::ID,
+    id: &locked_package::ID,
     package: &LockedPackage,
 ) -> (PathBuf, PathBuf) {
-    let rock_path = tree_root.join(format!(
-        "{}-{}@{}",
-        package_id,
-        package.name(),
-        package.version()
-    ));
+    let rock_path = rock_root(tree_root, id, package);
     (rock_path.join("src"), rock_path.join("lib"))
 }
 
@@ -183,53 +186,49 @@ fn find_trees_from_package_path(lua: &Lua) -> mlua::Result<Rc<Vec<PathBuf>>> {
     })
 }
 
-fn load_from_workspace_tree(
-    lua: &Lua,
-    module: &str,
-    current_file: &Path,
-) -> mlua::Result<Option<mlua::Function>> {
-    let Ok(current_file) = current_file.canonicalize() else {
-        return Ok(None);
-    };
-
-    let Some(tree_root) = current_file
+pub(crate) fn owning_package(file: &Path) -> Option<(PathBuf, locked_package::ID, LockedPackage)> {
+    let file = file.canonicalize().ok()?;
+    let tree_root = file
         .ancestors()
-        .find(|path| path.join("lux.lock").exists())
-    else {
-        return Ok(None);
-    };
-
-    let Some(lockfile) = cached_lockfile(tree_root) else {
-        return Ok(None);
-    };
-
-    // The package directory in a Lux tree is named `<id>-<name>-<version>`, so the hash is the
-    // first `-`-separated component relative to the tree root.
-    let Some(module_hash) = current_file
+        .find(|path| path.join("lux.lock").is_file())?;
+    let lockfile = cached_lockfile(tree_root)?;
+    let module_hash = file
         .strip_prefix(tree_root)
-        .ok()
-        .and_then(|rel| rel.components().next())
-        .and_then(|component| component.as_os_str().to_str())
-        .and_then(|component| component.split('-').next())
-    else {
-        return Ok(None);
-    };
-
+        .ok()?
+        .components()
+        .next()?
+        .as_os_str()
+        .to_str()?
+        .split('-')
+        .next()?;
     // NOTE(vhyrro): On safety - it's possible that the user *could* tamper
     // with the lux tree and malform the package hash. In this case, this
     // should never cause any security-related problems anyway, as we'll
     // crash right after this function returns None.
     let owner_id = unsafe { locked_package::ID::from_unchecked(module_hash.to_string()) };
-    let Some(package) = lockfile.get(&owner_id) else {
+    let package = lockfile.get(&owner_id)?;
+    Some((tree_root.to_path_buf(), owner_id, package.clone()))
+}
+
+fn load_from_workspace_tree(
+    lua: &Lua,
+    module: &str,
+    current_file: &Path,
+) -> mlua::Result<Option<mlua::Function>> {
+    let Some((tree_root, owner_id, package)) = owning_package(current_file) else {
         return Ok(None);
     };
 
     // Try the package that owns the requiring file first (for nested modules within the same
     // package).
-    let layout = rock_layout(tree_root, &owner_id, package);
+    let layout = rock_layout(&tree_root, &owner_id, &package);
     if let Some(loader) = load_file(lua, module, &layout)? {
         return Ok(Some(loader));
     }
+
+    let Some(lockfile) = cached_lockfile(&tree_root) else {
+        return Ok(None);
+    };
 
     // Loop over all dependencies to try and locate the module. A package's name does not
     // necessarily reflect its module name (`pathlib.nvim` -> pathlib, `nvim-nio` -> nio, and so
@@ -239,7 +238,7 @@ fn load_from_workspace_tree(
             continue;
         };
 
-        let layout = rock_layout(tree_root, dep_id, dep);
+        let layout = rock_layout(&tree_root, dep_id, dep);
         if let Some(loader) = load_file(lua, module, &layout)? {
             return Ok(Some(loader));
         }
