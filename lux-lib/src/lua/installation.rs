@@ -96,8 +96,11 @@ impl Installation {
     #[tracing::instrument(level = "trace", skip(config))]
     pub async fn new(version: &Version, config: &Config) -> Result<Self, Error> {
         let _lock = NEW_MUTEX.lock().await;
-        if let Some(lua_intallation) = Self::probe(version, config.external_deps()) {
-            return Ok(lua_intallation);
+        if let Some(installation) = Self::probe(version, config.external_deps()) {
+            return Ok(Self {
+                bin: resolve_bin(&installation.version, installation.bin),
+                ..installation
+            });
         }
         if version.is_luau() {
             if let Ok(bin) = PathBuf::try_from(Binary::new(version.clone(), config)) {
@@ -312,7 +315,11 @@ impl Installation {
         config.variables().get(variable).cloned().or(self
             .bin
             .clone()
-            .or(Binary::new(self.version.clone(), config).try_into().ok())
+            .or(Binary::Lua {
+                version: self.version.clone(),
+            }
+            .try_into()
+            .ok())
             .map(|bin| bin.to_slash_lossy().to_string()))
     }
 }
@@ -362,21 +369,18 @@ impl TryFrom<Binary> for PathBuf {
                         .or_else(|_| which("lune"))
                         .map_err(|_| Error::LuauBinaryNotFound);
                 }
+                // Finding the executable on the PATH doesn't need pkg-config or a full
+                // installation probe, so try that first.
+                if let Some(bin) = find_bin_on_path(&version) {
+                    return Ok(bin);
+                }
                 if let Some(lua_binary) =
                     Installation::probe(&version, &ExternalDependencySearchConfig::default())
                         .and_then(|lua_installation| lua_installation.bin)
                 {
                     return Ok(lua_binary);
                 }
-                if version.is_luajit() {
-                    if let Ok(path) = which("luajit") {
-                        return Ok(path);
-                    }
-                }
-                match which(format!("lua{}", version)) {
-                    Ok(path) => Ok(path),
-                    Err(_) => default_bin(version),
-                }
+                default_bin(version)
             }
             Binary::Custom(bin) => match which(&bin) {
                 Ok(path) => Ok(path),
@@ -384,6 +388,24 @@ impl TryFrom<Binary> for PathBuf {
             },
         }
     }
+}
+
+/// Finds a version-appropriate Lua binary on the PATH without probing pkg-config.
+fn find_bin_on_path(version: &Version) -> Option<PathBuf> {
+    if version.is_luau() {
+        return which("luau").or_else(|_| which("lune")).ok();
+    }
+    if version.is_luajit() {
+        if let Ok(path) = which("luajit") {
+            return Some(path);
+        }
+    }
+    which(format!("lua{version}")).ok()
+}
+
+/// Returns `bin` if already set, otherwise resolves a Lua binary from the PATH.
+fn resolve_bin(version: &Version, bin: Option<PathBuf>) -> Option<PathBuf> {
+    bin.or_else(|| find_bin_on_path(version).or_else(|| default_bin(version.clone()).ok()))
 }
 
 fn default_bin(version: Version) -> Result<PathBuf, Error> {
@@ -523,6 +545,59 @@ mod tests {
     use super::*;
     #[cfg(feature = "impure_tests")]
     use flaky_test::flaky_test;
+    #[cfg(unix)]
+    use serial_test::serial;
+    #[cfg(unix)]
+    use std::ffi::{OsStr, OsString};
+
+    #[cfg(unix)]
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    #[cfg(unix)]
+    impl EnvGuard {
+        fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn fake_executable(dir: &Path, name: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = dir.join(name);
+        std::fs::write(&path, "").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    fn test_installation(version: Version, bin: Option<PathBuf>) -> Installation {
+        Installation {
+            version,
+            dependency_info: ExternalDependencyInfo {
+                include_dir: None,
+                lib_dir: None,
+                bin_dir: None,
+                lib_info: None,
+                lib_name: None,
+            },
+            bin,
+        }
+    }
 
     #[cfg(feature = "impure_tests")]
     #[flaky_test(tokio, times = 5)]
@@ -536,6 +611,98 @@ mod tests {
         let lua_bin_path: PathBuf = lua_binary.try_into().unwrap();
         let pkg_version = detect::version_from_path(&lua_bin_path).unwrap();
         assert_eq!(&Version::from_version(pkg_version).unwrap(), lua_version);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn find_bin_on_path_resolves_versioned_binaries() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lua54 = fake_executable(temp.path(), "lua5.4");
+        let lua55 = fake_executable(temp.path(), "lua5.5");
+        let _path = EnvGuard::set("PATH", temp.path());
+
+        assert_eq!(find_bin_on_path(&Version::Lua54), Some(lua54));
+        assert_eq!(find_bin_on_path(&Version::Lua55), Some(lua55));
+        assert_eq!(find_bin_on_path(&Version::Lua53), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn find_bin_on_path_handles_luajit() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let luajit = fake_executable(temp.path(), "luajit");
+        let _path = EnvGuard::set("PATH", temp.path());
+
+        assert_eq!(find_bin_on_path(&Version::LuaJIT), Some(luajit.clone()));
+        assert_eq!(find_bin_on_path(&Version::LuaJIT52), Some(luajit));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn find_bin_on_path_prefers_luau_over_lune() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lune = fake_executable(temp.path(), "lune");
+        let _path = EnvGuard::set("PATH", temp.path());
+
+        assert_eq!(find_bin_on_path(&Version::Luau), Some(lune));
+
+        let luau = fake_executable(temp.path(), "luau");
+        assert_eq!(find_bin_on_path(&Version::Luau), Some(luau));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn binary_lua_resolves_from_path() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lua54 = fake_executable(temp.path(), "lua5.4");
+        let _path = EnvGuard::set("PATH", temp.path());
+
+        let bin: PathBuf = Binary::Lua {
+            version: Version::Lua54,
+        }
+        .try_into()
+        .unwrap();
+        assert_eq!(bin, lua54);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn resolve_bin_only_resolves_missing_binary() {
+        let temp = assert_fs::TempDir::new().unwrap();
+        let lua54 = fake_executable(temp.path(), "lua5.4");
+        let _path = EnvGuard::set("PATH", temp.path());
+
+        assert_eq!(resolve_bin(&Version::Lua54, None), Some(lua54));
+        assert_eq!(
+            resolve_bin(&Version::Lua54, Some(PathBuf::from("/custom/lua"))),
+            Some(PathBuf::from("/custom/lua"))
+        );
+    }
+
+    #[test]
+    fn lua_binary_or_config_override_prefers_config_variable() {
+        use std::collections::HashMap;
+
+        let config = crate::config::Builder::new()
+            .unwrap()
+            .variables(Some(HashMap::from([(
+                "LUA".to_string(),
+                "/custom/lua".to_string(),
+            )])))
+            .build()
+            .unwrap();
+        let installation =
+            test_installation(Version::Lua54, Some(PathBuf::from("/installation/lua")));
+
+        assert_eq!(
+            installation.lua_binary_or_config_override(&config),
+            Some("/custom/lua".to_string())
+        );
     }
 
     #[cfg(not(target_env = "msvc"))]
