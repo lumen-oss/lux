@@ -216,25 +216,33 @@ fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
 
 /// Resolves the source root inside an unpacked source rock.
 ///
-/// The source root is `<unpacked>/<repository>` when that directory is the only
-/// entry besides the rockspec. Otherwise the source root is the unpacked root.
+/// The source root is the single non-rockspec directory when it matches the
+/// wrapper name for the source: `<repository>` for git sources, or
+/// `<package>-<version>` for local directory sources. Otherwise the source
+/// root is the unpacked root.
 ///
-/// This matches the wrapper directory luarocks adds when packing a Git source rock,
+/// This matches the wrapper directory LuaRocks adds when packing a source rock,
 /// while leaving unwrapped source trees untouched.
 ///
-/// For a git source rock containing `foo/`:
+/// Examples:
 ///
-/// | unpacked contents        | returned source root |
-/// |--------------------------|----------------------|
-/// | `foo/` and the rockspec  | `<unpacked>/foo`     |
-/// | source files at the root | `<unpacked>`         |
+/// | unpacked contents               | returned source root             |
+/// |---------------------------------|----------------------------------|
+/// | `foo/` and the rockspec         | `<unpacked>/foo`                 |
+/// | `foo-1.0.0-1/` and the rockspec | `<unpacked>/foo-1.0.0-1`         |
+/// | source files at the root        | `<unpacked>`                     |
 fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> PathBuf {
-    if let rockspec::source::Spec::Git(git) = &rockspec.source().current_platform().source_spec {
-        let repo_dir = unpacked_root.join(git.url.repo());
-        if let Ok(Some(entry)) = unpack::single_non_rockspec_entry(unpacked_root) {
-            if entry == repo_dir && entry.is_dir() {
-                return repo_dir;
-            }
+    let wrapper = match &rockspec.source().current_platform().source_spec {
+        rockspec::source::Spec::Git(git) => git.url.repo().to_string(),
+        rockspec::source::Spec::File(_) => {
+            format!("{}-{}", rockspec.package(), rockspec.version())
+        }
+        _ => return unpacked_root.to_path_buf(),
+    };
+    let wrapper_dir = unpacked_root.join(wrapper);
+    if let Ok(Some(entry)) = unpack::single_non_rockspec_entry(unpacked_root) {
+        if entry == wrapper_dir && entry.is_dir() {
+            return wrapper_dir;
         }
     }
     unpacked_root.to_path_buf()
@@ -304,4 +312,36 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     };
 
     Ok((package, temp_dir, source_root))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_directory_src_rock_strips_package_wrapper() {
+        let source = tempfile::TempDir::new().unwrap();
+        let rockspec_content = format!(
+            r#"
+package = "foo"
+version = "1.0.0-1"
+source = {{ url = "file://{}" }}
+build = {{ type = "builtin" }}
+"#,
+            source.path().display()
+        );
+        let rockspec = crate::rockspec::lua::Remote::new(&rockspec_content).unwrap();
+
+        let unpacked = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            unpacked.path().join("foo-1.0.0-1.rockspec"),
+            &rockspec_content,
+        )
+        .unwrap();
+        let wrapper = unpacked.path().join("foo-1.0.0-1");
+        std::fs::create_dir(&wrapper).unwrap();
+        std::fs::write(wrapper.join("foo.lua"), "return {}").unwrap();
+
+        assert_eq!(src_rock_source_root(&rockspec, unpacked.path()), wrapper);
+    }
 }

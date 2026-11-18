@@ -19,6 +19,7 @@ pub mod project;
 pub mod rockspec;
 #[cfg(feature = "schema")]
 pub mod schema;
+pub(crate) mod source_tree;
 pub mod target;
 pub mod toolchains;
 pub mod tree;

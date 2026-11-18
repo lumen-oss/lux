@@ -1,3 +1,7 @@
+mod source;
+
+pub use source::{Error as SourceError, Source};
+
 use crate::fs;
 use crate::lockfile::LockedPackage;
 use crate::luarocks;

@@ -1,7 +1,9 @@
 use crate::package;
-use std::{env, io};
+use std::{env, io, path::PathBuf};
 
-use crate::operations::download;
+use crate::fs;
+use crate::luarocks;
+use crate::operations::{download, pack, sign};
 use crate::package::db::PackageDB;
 use crate::package::SpecRevIterator;
 use crate::rockspec;
@@ -14,16 +16,9 @@ use miette::Diagnostic;
 use reqwest::multipart::{Form, Part};
 use reqwest::StatusCode;
 use serde::Deserialize;
-use serde_enum_str::Serialize_enum_str;
+use tempfile::TempDir;
 use thiserror::Error;
 use url::Url;
-
-#[cfg(feature = "gpgme")]
-use gpgme::{Context, Data};
-#[cfg(feature = "gpgme")]
-use std::io::Read;
-#[cfg(feature = "gpgme")]
-use strum_macros::EnumIter;
 
 const TFA_TOKEN_HEADER: &str = "X-TFA-Token";
 
@@ -61,11 +56,13 @@ pub struct ProjectUpload<'a> {
     api_key: Option<ApiKey>,
     tfa_code: Option<String>,
     #[cfg(feature = "gpgme")]
-    sign_protocol: SignatureProtocol,
+    sign_protocol: sign::Protocol,
     config: &'a Config,
     package_db: &'a PackageDB,
     #[builder(default)]
     mode: Mode,
+    #[builder(default)]
+    pack_source_rock: bool,
 }
 
 impl<State> ProjectUploadBuilder<'_, State>
@@ -87,10 +84,12 @@ pub struct RockspecUpload<'a> {
     api_key: Option<ApiKey>,
     tfa_code: Option<String>,
     #[cfg(feature = "gpgme")]
-    sign_protocol: SignatureProtocol,
+    sign_protocol: sign::Protocol,
     config: &'a Config,
     #[builder(default)]
     mode: Mode,
+    #[builder(default)]
+    pack_source_rock: bool,
 }
 
 impl<State> RockspecUploadBuilder<'_, State>
@@ -134,14 +133,15 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error("unable to read rockspec")]
     #[diagnostic(help("check that the rockspec exists and is readable"))]
     RockspecRead(#[from] std::io::Error),
-    #[cfg(feature = "gpgme")]
-    #[error("GPG signing failed")]
-    #[diagnostic(help(
-        r#"ensure that a GPG agent is running and that a valid GPG signing key is registered.
-          if you'd like to skip the signing step, supply `--sign-protocol=none`
-        "#
-    ))]
-    Signature(#[from] gpgme::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Fs(#[from] fs::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourcePack(#[from] pack::SourceError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Sign(#[from] sign::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     ToolCheck(#[from] check::tool::Error),
@@ -163,6 +163,9 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error("the maximum supported number of rockspec revisions per version has been exceeded")]
     #[diagnostic(help("bump the version to a version that has not yet been published"))]
     MaxSpecRevsExceeded,
+    #[error("the rockspec was published but the source rock upload failed")]
+    #[diagnostic(help("bump the package revision and upload again to publish the source rock"))]
+    SourceRockUpload(#[source] Box<Error>),
     #[error("rock already exists on server. Error downloading existing rockspec")]
     #[diagnostic(forward(0))]
     SearchAndDownload(#[from] Box<download::Error>),
@@ -264,51 +267,15 @@ struct LuarocksErrorResponse {
     errors: Vec<String>,
 }
 
-#[derive(Serialize_enum_str, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[cfg_attr(feature = "clap", clap(rename_all = "lowercase"))]
-#[serde(rename_all = "lowercase")]
-#[derive(Default)]
-#[cfg(not(feature = "gpgme"))]
-pub enum SignatureProtocol {
-    #[default]
-    None,
+struct Context<'a> {
+    config: &'a Config,
+    client: &'a reqwest::Client,
+    api_key: &'a ApiKey,
 }
 
-#[derive(Serialize_enum_str, Clone, PartialEq, Eq, EnumIter)]
-#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
-#[cfg_attr(feature = "clap", clap(rename_all = "lowercase"))]
-#[serde(rename_all = "lowercase")]
-#[derive(Default)]
-#[cfg(feature = "gpgme")]
-pub enum SignatureProtocol {
-    None,
-    Assuan,
-    CMS,
-    G13,
-    GPGConf,
-    #[default]
-    OpenPGP,
-    Spawn,
-    UIServer,
-}
-
-#[cfg(feature = "gpgme")]
-impl From<SignatureProtocol> for gpgme::Protocol {
-    fn from(val: SignatureProtocol) -> Self {
-        match val {
-            SignatureProtocol::OpenPGP => gpgme::Protocol::OpenPgp,
-            SignatureProtocol::CMS => gpgme::Protocol::Cms,
-            SignatureProtocol::GPGConf => gpgme::Protocol::GpgConf,
-            SignatureProtocol::Assuan => gpgme::Protocol::Assuan,
-            SignatureProtocol::G13 => gpgme::Protocol::G13,
-            SignatureProtocol::UIServer => gpgme::Protocol::UiServer,
-            SignatureProtocol::Spawn => gpgme::Protocol::Spawn,
-            SignatureProtocol::None => {
-                unreachable!("cannot convert SignatureProtocol::None to a gpgme::Protocol")
-            }
-        }
-    }
+struct PackedSourceRock {
+    _dir: TempDir,
+    path: PathBuf,
 }
 
 #[tracing::instrument(
@@ -334,22 +301,33 @@ async fn upload_from_project(args: ProjectUpload<'_>) -> Result<PreparedRockspec
     #[cfg(feature = "gpgme")]
     let protocol = args.sign_protocol;
     #[cfg(not(feature = "gpgme"))]
-    let protocol = SignatureProtocol::None;
+    let protocol = sign::Protocol::None;
 
-    let signed = sign_rockspec(&rockspec_content, protocol)?;
-
-    upload_rockspec_content(
+    let context = Context {
         config,
         client,
-        &api_key,
-        PreparedRockspec {
-            package: rockspec.package().clone(),
-            version: rockspec.version().clone(),
-            content: rockspec_content,
-        },
-        signed,
+        api_key: &api_key,
+    };
+    let source_rock = if args.pack_source_rock {
+        prepare_source_rock(
+            &rockspec,
+            &rockspec_content,
+            config,
+            args.mode,
+            protocol.clone(),
+        )
+        .await?
+    } else {
+        None
+    };
+    upload_prepared(
+        &context,
+        &rockspec,
+        rockspec_content,
+        protocol,
         args.tfa_code,
         args.mode,
+        source_rock,
     )
     .await
 }
@@ -366,7 +344,7 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
     #[cfg(feature = "gpgme")]
     let protocol = args.sign_protocol;
     #[cfg(not(feature = "gpgme"))]
-    let protocol = SignatureProtocol::None;
+    let protocol = sign::Protocol::None;
     let config = args.config;
 
     let client = config.https_client()?;
@@ -391,22 +369,129 @@ async fn upload_from_rockspec(args: RockspecUpload<'_>) -> Result<PreparedRocksp
     }
 
     let rockspec_content = rockspec.to_lua_remote_rockspec_string()?;
-    let signed = sign_rockspec(&rockspec_content, protocol)?;
-
-    upload_rockspec_content(
+    let context = Context {
         config,
         client,
-        &api_key,
-        PreparedRockspec {
-            package: rockspec.package().clone(),
-            version: rockspec.version().clone(),
-            content: rockspec_content,
-        },
-        signed,
+        api_key: &api_key,
+    };
+    let source_rock = if args.pack_source_rock {
+        prepare_source_rock(
+            rockspec,
+            &rockspec_content,
+            config,
+            args.mode,
+            protocol.clone(),
+        )
+        .await?
+    } else {
+        None
+    };
+    upload_prepared(
+        &context,
+        rockspec,
+        rockspec_content,
+        protocol,
         args.tfa_code,
         args.mode,
+        source_rock,
     )
     .await
+}
+
+struct PreparedSourceRock {
+    file_name: String,
+    payload: Option<SourceRockPayload>,
+}
+
+struct SourceRockPayload {
+    bytes: Vec<u8>,
+    signature: Option<sign::Signature>,
+}
+
+async fn prepare_source_rock<R: Rockspec>(
+    rockspec: &R,
+    rockspec_content: &str,
+    config: &Config,
+    mode: Mode,
+    protocol: sign::Protocol,
+) -> Result<Option<PreparedSourceRock>, Error> {
+    if matches!(rockspec.version(), package::Version::DevVer(_)) {
+        tracing::warn!("skipping source rock for dev version");
+        return Ok(None);
+    }
+    let file_name = luarocks::rock_file_name(rockspec.package(), rockspec.version(), "src.rock");
+    if matches!(mode, Mode::DryRun) {
+        return Ok(Some(PreparedSourceRock {
+            file_name,
+            payload: None,
+        }));
+    }
+    let packed = pack_source_rock(rockspec, rockspec_content, config).await?;
+    let bytes = fs::tokio::read(&packed.path).await?;
+    let signature = sign::file(&bytes, protocol)?;
+    Ok(Some(PreparedSourceRock {
+        file_name,
+        payload: Some(SourceRockPayload { bytes, signature }),
+    }))
+}
+
+async fn pack_source_rock<R: Rockspec>(
+    rockspec: &R,
+    rockspec_content: &str,
+    config: &Config,
+) -> Result<PackedSourceRock, Error> {
+    let dir = fs::tempfile::tempdir()?;
+    let path = pack::Source::new(dir.path(), rockspec, rockspec_content, config)
+        .pack()
+        .await?;
+    Ok(PackedSourceRock { _dir: dir, path })
+}
+
+async fn upload_prepared<R: Rockspec>(
+    context: &Context<'_>,
+    rockspec: &R,
+    rockspec_content: String,
+    protocol: sign::Protocol,
+    tfa_code: Option<String>,
+    mode: Mode,
+    source_rock: Option<PreparedSourceRock>,
+) -> Result<PreparedRockspec, Error> {
+    let source_rock_name = source_rock.as_ref().map(|rock| rock.file_name.clone());
+    let signed = sign::file(rockspec_content.as_bytes(), protocol)?;
+    let prepared = PreparedRockspec::new(rockspec, rockspec_content, source_rock_name);
+    let tfa_token = match tfa_code.as_deref() {
+        Some(code) => Some(
+            helpers::verify_tfa_code(
+                context.client,
+                context.config.server(),
+                context.api_key,
+                code,
+            )
+            .await?,
+        ),
+        None => None,
+    };
+    let version_id =
+        upload_rockspec_content(context, &prepared, signed, tfa_token.as_ref(), mode).await?;
+    if let Some(rock) = source_rock {
+        if let Some(payload) = rock.payload {
+            let Some(version_id) = version_id else {
+                tracing::warn!("no version id in the response; skipping the source rock upload");
+                return Ok(prepared);
+            };
+            upload_rock(
+                context,
+                version_id,
+                rock.file_name,
+                payload.bytes,
+                payload.signature,
+                tfa_token.as_ref(),
+            )
+            .await
+            .map_err(|error| Error::SourceRockUpload(Box::new(error)))?;
+        }
+    }
+    Ok(prepared)
 }
 
 /// The rockspec that was or would have been uploaded.
@@ -415,32 +500,67 @@ pub struct PreparedRockspec {
     pub package: package::Name,
     pub version: package::Version,
     pub content: String,
+    pub source_rock: Option<String>,
+}
+
+impl PreparedRockspec {
+    fn new<R: Rockspec>(rockspec: &R, content: String, source_rock: Option<String>) -> Self {
+        Self {
+            package: rockspec.package().clone(),
+            version: rockspec.version().clone(),
+            content,
+            source_rock,
+        }
+    }
 }
 
 async fn upload_rockspec_content(
-    config: &Config,
-    client: &reqwest::Client,
-    api_key: &ApiKey,
-    rockspec: PreparedRockspec,
-    signed: Option<String>,
-    tfa_code: Option<String>,
+    context: &Context<'_>,
+    rockspec: &PreparedRockspec,
+    signed: Option<sign::Signature>,
+    tfa_token: Option<&TfaToken>,
     mode: Mode,
-) -> Result<PreparedRockspec, Error> {
-    let request =
-        prepare_upload_request(config, client, api_key, &rockspec, signed, tfa_code).await?;
-    if matches!(mode, Mode::Upload) {
-        send_upload_request(config, request).await?;
+) -> Result<Option<u64>, Error> {
+    if !matches!(mode, Mode::Upload) {
+        return Ok(None);
     }
-    Ok(rockspec)
+    let request = prepare_upload_request(
+        context.config,
+        context.client,
+        context.api_key,
+        rockspec,
+        signed,
+        tfa_token,
+    )?;
+    send_upload_request(context.config, request).await
 }
 
-async fn prepare_upload_request(
+fn add_signature_parts(
+    multipart: Form,
+    signature: sign::Signature,
+    signature_part: &'static str,
+    key_part: &'static str,
+    signature_file: &str,
+    key_file: &str,
+) -> Form {
+    multipart
+        .part(
+            signature_part,
+            Part::text(signature.signature).file_name(signature_file.to_string()),
+        )
+        .part(
+            key_part,
+            Part::text(signature.public_key).file_name(key_file.to_string()),
+        )
+}
+
+fn prepare_upload_request(
     config: &Config,
     client: &reqwest::Client,
     api_key: &ApiKey,
     rockspec: &PreparedRockspec,
-    signed: Option<String>,
-    tfa_code: Option<String>,
+    signed: Option<sign::Signature>,
+    tfa_token: Option<&TfaToken>,
 ) -> Result<reqwest::RequestBuilder, Error> {
     let part = Part::text(rockspec.content.clone())
         .file_name(format!(
@@ -449,24 +569,24 @@ async fn prepare_upload_request(
         ))
         .mime_str("application/octet-stream")?;
 
-    let multipart = {
-        let multipart = Form::new().part("rockspec_file", part);
-
-        match signed {
-            Some(signature) => {
-                let part = Part::text(signature).file_name("project.rockspec.sig");
-                multipart.part("rockspec_sig", part)
-            }
-            None => multipart,
-        }
+    let multipart = Form::new().part("rockspec_file", part);
+    let multipart = match signed {
+        Some(signature) => add_signature_parts(
+            multipart,
+            signature,
+            "rockspec_sig",
+            "rockspec_key",
+            "project.rockspec.sig",
+            "project.rockspec.pub",
+        ),
+        None => multipart,
     };
 
     let mut request = client
         .post(unsafe { url_for_method(config.server(), api_key, "upload")? })
         .multipart(multipart);
 
-    if let Some(code) = tfa_code {
-        let token = helpers::verify_tfa_code(client, config.server(), api_key, &code).await?;
+    if let Some(token) = tfa_token {
         request = request.header(TFA_TOKEN_HEADER, unsafe { token.get() });
     }
 
@@ -476,14 +596,34 @@ async fn prepare_upload_request(
 async fn send_upload_request(
     config: &Config,
     request: reqwest::RequestBuilder,
-) -> Result<(), Error> {
+) -> Result<Option<u64>, Error> {
     let response = request.send().await?;
+    parse_upload_response(config, response).await
+}
 
+#[derive(Deserialize)]
+struct Response {
+    version: Option<Version>,
+}
+
+#[derive(Deserialize)]
+struct Version {
+    id: u64,
+}
+
+async fn parse_upload_response(
+    config: &Config,
+    response: reqwest::Response,
+) -> Result<Option<u64>, Error> {
     let status = response.status();
     if status.is_server_error() {
         Err(Error::Server(config.server().clone(), status))
     } else if status.is_success() {
-        Ok(())
+        let body = response.text().await?;
+        Ok(serde_json::from_str::<Response>(&body)
+            .ok()
+            .and_then(|response| response.version)
+            .map(|version| version.id))
     } else {
         let response = response.json::<LuarocksErrorResponse>().await?;
         let errors = response.errors.into_iter().join("\n");
@@ -491,33 +631,40 @@ async fn send_upload_request(
     }
 }
 
-#[cfg(feature = "gpgme")]
-fn sign_rockspec(
-    rockspec_content: &str,
-    protocol: SignatureProtocol,
-) -> Result<Option<String>, Error> {
-    if let SignatureProtocol::None = protocol {
-        return Ok(None);
+async fn upload_rock(
+    context: &Context<'_>,
+    version_id: u64,
+    file_name: String,
+    bytes: Vec<u8>,
+    signed: Option<sign::Signature>,
+    tfa_token: Option<&TfaToken>,
+) -> Result<(), Error> {
+    let rock_part = Part::bytes(bytes)
+        .file_name(file_name)
+        .mime_str("application/octet-stream")?;
+    let multipart = Form::new().part("rock_file", rock_part);
+    let multipart = match signed {
+        Some(signature) => add_signature_parts(
+            multipart,
+            signature,
+            "rock_sig",
+            "rock_key",
+            "project.src.rock.sig",
+            "project.src.rock.pub",
+        ),
+        None => multipart,
+    };
+    let endpoint = format!("upload_rock/{version_id}");
+    let mut request = context
+        .client
+        .post(unsafe { url_for_method(context.config.server(), context.api_key, &endpoint)? })
+        .multipart(multipart);
+    if let Some(token) = tfa_token {
+        request = request.header(TFA_TOKEN_HEADER, unsafe { token.get() });
     }
-
-    let mut ctx = Context::from_protocol(protocol.into())?;
-    let mut signature = Data::new()?;
-
-    ctx.set_armor(true);
-    ctx.sign_detached(rockspec_content.to_owned(), &mut signature)?;
-
-    let mut signature_str = String::new();
-    signature.read_to_string(&mut signature_str)?;
-
-    Ok(Some(signature_str))
-}
-
-#[cfg(not(feature = "gpgme"))]
-fn sign_rockspec(
-    _rockspec_content: &str,
-    _protocol: SignatureProtocol,
-) -> Result<Option<String>, Error> {
-    Ok(None)
+    send_upload_request(context.config, request)
+        .await
+        .map(|_| ())
 }
 
 mod helpers {
@@ -609,14 +756,19 @@ impl From<reqwest::Error> for Error {
 
 #[cfg(test)]
 mod test {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
+
     use crate::TOOL_VERSION;
+    use bytes::Bytes;
 
     use super::*;
 
     use crate::config;
     use crate::lua;
     use assert_fs::prelude::*;
-    use httptest::matchers::{contains, request};
+    use httptest::matchers::{contains, matches, request};
     use httptest::responders::{json_encoded, status_code, Responder};
     use httptest::{Expectation, Server};
     use serial_test::serial;
@@ -626,7 +778,7 @@ mod test {
     fn signature_protocols_are_accepted_by_gpgme() {
         use strum::IntoEnumIterator;
 
-        for protocol in SignatureProtocol::iter().filter(|p| p != &SignatureProtocol::None) {
+        for protocol in sign::Protocol::iter().filter(|p| p != &sign::Protocol::None) {
             let _ = gpgme::Context::from_protocol(protocol.into()).unwrap();
         }
     }
@@ -722,6 +874,38 @@ type = "builtin"
         (project_dir, config_dir, project, config, package_db)
     }
 
+    async fn ready_with_source(
+        server: &Server,
+    ) -> (
+        assert_fs::TempDir,
+        assert_fs::TempDir,
+        Project,
+        Config,
+        PackageDB,
+    ) {
+        let (project_dir, config_dir, _project, config, package_db) = ready(server).await;
+        let source_dir = project_dir.path().join("source");
+        std::fs::create_dir_all(source_dir.join("src")).unwrap();
+        std::fs::write(source_dir.join("src/foo.lua"), "return {}").unwrap();
+        let project_toml = format!(
+            r#"
+package = "foo"
+version = "1.0.0"
+lua = ">=5.1"
+
+[source]
+url = "file://{}"
+
+[build]
+type = "builtin"
+"#,
+            source_dir.display()
+        );
+        std::fs::write(project_dir.path().join("lux.toml"), project_toml).unwrap();
+        let project = Project::from_exact(project_dir.path()).unwrap().unwrap();
+        (project_dir, config_dir, project, config, package_db)
+    }
+
     fn expect_tool_version(server: &Server, version: &str) {
         server.expect(
             Expectation::matching(request::path(TOOL_VERSION_PATH))
@@ -746,6 +930,28 @@ type = "builtin"
         server.expect(Expectation::matching(request::path(UPLOAD_PATH)).respond_with(responder));
     }
 
+    fn expect_upload_rock(server: &Server, version_id: u64, responder: impl Responder + 'static) {
+        let path = format!("/api/1/test-api-key/upload_rock/{version_id}");
+        server.expect(Expectation::matching(request::path(path)).respond_with(responder));
+    }
+
+    struct CaptureBody(Arc<Mutex<String>>);
+
+    impl Responder for CaptureBody {
+        fn respond<'a>(
+            &mut self,
+            request: &'a httptest::http::Request<Bytes>,
+        ) -> Pin<Box<dyn Future<Output = httptest::http::Response<Bytes>> + Send + 'a>> {
+            *self.0.lock().unwrap() = String::from_utf8_lossy(request.body()).into_owned();
+            Box::pin(async {
+                httptest::http::Response::builder()
+                    .status(200)
+                    .body(Bytes::new())
+                    .unwrap()
+            })
+        }
+    }
+
     async fn upload(
         project: &Project,
         config: &Config,
@@ -759,7 +965,7 @@ type = "builtin"
             .maybe_tfa_code(tfa_code)
             .package_db(package_db);
         #[cfg(feature = "gpgme")]
-        let upload = upload.sign_protocol(SignatureProtocol::None);
+        let upload = upload.sign_protocol(sign::Protocol::None);
         upload.upload_to_luarocks().await
     }
 
@@ -774,6 +980,135 @@ type = "builtin"
 
         let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
         upload(&project, &config, &package_db, None).await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_source_rock() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        expect_upload(
+            &server,
+            json_encoded(serde_json::json!({ "version": { "id": 123 } })),
+        );
+        expect_upload_rock(&server, 123, status_code(200));
+
+        let (_project_dir, _config_dir, project, config, package_db) =
+            ready_with_source(&server).await;
+        let upload = ProjectUpload::new()
+            .project(&project)
+            .config(&config)
+            .api_key(ApiKey::from(API_KEY))
+            .package_db(&package_db)
+            .pack_source_rock(true);
+        #[cfg(feature = "gpgme")]
+        let upload = upload.sign_protocol(sign::Protocol::None);
+
+        let prepared = upload.upload_to_luarocks().await.unwrap();
+        assert!(prepared.source_rock.is_some());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_source_rock_without_version_id() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        expect_upload(&server, status_code(200));
+        server.expect(
+            Expectation::matching(request::path(matches("^/api/1/test-api-key/upload_rock/")))
+                .times(0)
+                .respond_with(status_code(200)),
+        );
+
+        let (_project_dir, _config_dir, project, config, package_db) =
+            ready_with_source(&server).await;
+        let upload = ProjectUpload::new()
+            .project(&project)
+            .config(&config)
+            .api_key(ApiKey::from(API_KEY))
+            .package_db(&package_db)
+            .pack_source_rock(true);
+        #[cfg(feature = "gpgme")]
+        let upload = upload.sign_protocol(sign::Protocol::None);
+
+        let prepared = upload.upload_to_luarocks().await.unwrap();
+        assert!(prepared.source_rock.is_some());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_source_rock_dry_run() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+
+        let (_project_dir, _config_dir, project, config, package_db) =
+            ready_with_source(&server).await;
+        let upload = ProjectUpload::new()
+            .project(&project)
+            .config(&config)
+            .api_key(ApiKey::from(API_KEY))
+            .package_db(&package_db)
+            .mode(Mode::DryRun)
+            .pack_source_rock(true);
+        #[cfg(feature = "gpgme")]
+        let upload = upload.sign_protocol(sign::Protocol::None);
+
+        let prepared = upload.upload_to_luarocks().await.unwrap();
+        assert_eq!(
+            prepared.source_rock.as_deref(),
+            Some("foo-1.0.0-1.src.rock")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upload_sends_signature_parts() {
+        let server = Server::run();
+        let captured = Arc::new(Mutex::new(String::new()));
+        server.expect(
+            Expectation::matching(request::path(UPLOAD_PATH))
+                .respond_with(CaptureBody(captured.clone())),
+        );
+        let content = r#"
+package = "foo"
+version = "1.0.0-1"
+source = { url = "https://example.com/foo.zip" }
+build = { type = "builtin" }
+"#;
+        let rockspec = crate::rockspec::lua::Remote::new(content).unwrap();
+        let prepared = PreparedRockspec::new(&rockspec, content.to_string(), None);
+        let dir = assert_fs::TempDir::new().unwrap();
+        let config = config::Builder::default()
+            .server(Some(Url::parse(&server.url_str("/")).unwrap()))
+            .data_dir(Some(dir.path().to_path_buf()))
+            .cache_dir(Some(dir.path().to_path_buf()))
+            .lua_version(Some(lua::Version::Lua51))
+            .build()
+            .unwrap();
+        let signature = sign::Signature {
+            signature: "signature".to_string(),
+            public_key: "public key".to_string(),
+        };
+
+        let request = prepare_upload_request(
+            &config,
+            &reqwest::Client::new(),
+            &ApiKey::from(API_KEY),
+            &prepared,
+            Some(signature),
+            None,
+        )
+        .unwrap();
+        request.send().await.unwrap();
+
+        let captured = captured.lock().unwrap();
+        assert!(captured.contains("rockspec_sig"));
+        assert!(captured.contains("rockspec_key"));
     }
 
     #[tokio::test]
@@ -886,6 +1221,34 @@ type = "builtin"
         let err = upload(&project, &config, &package_db, Some("000000".into()))
             .await
             .unwrap_err();
+        assert!(matches!(err, Error::TfaCodeRejected(..)));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_upload_dry_run_rejects_tfa_code() {
+        let server = Server::run();
+        expect_tool_version(&server, TOOL_VERSION);
+        expect_status(&server, 200);
+        expect_rock_missing(&server);
+        server.expect(
+            Expectation::matching(request::path(VERIFY_TFA_PATH)).respond_with(json_encoded(
+                serde_json::json!({ "errors": ["Invalid verification code"] }),
+            )),
+        );
+
+        let (_project_dir, _config_dir, project, config, package_db) = ready(&server).await;
+        let upload = ProjectUpload::new()
+            .project(&project)
+            .config(&config)
+            .api_key(ApiKey::from(API_KEY))
+            .package_db(&package_db)
+            .mode(Mode::DryRun)
+            .maybe_tfa_code(Some("000000".to_string()));
+        #[cfg(feature = "gpgme")]
+        let upload = upload.sign_protocol(sign::Protocol::None);
+
+        let err = upload.upload_to_luarocks().await.unwrap_err();
         assert!(matches!(err, Error::TfaCodeRejected(..)));
     }
 

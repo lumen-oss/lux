@@ -15,6 +15,7 @@ pub mod pack;
 pub mod pin;
 pub mod run;
 pub mod run_lua;
+pub mod sign;
 pub mod test;
 pub mod uninstall;
 pub mod unpack;

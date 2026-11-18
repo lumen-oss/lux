@@ -164,6 +164,25 @@ pub(crate) fn create(path: impl AsRef<Path>) -> Result<fs::File, super::Error> {
     })
 }
 
+/// Wrapped [`fs::metadata`].
+#[cfg(unix)]
+pub(crate) fn metadata(path: impl AsRef<Path>) -> Result<fs::Metadata, super::Error> {
+    let path = path.as_ref();
+    fs::metadata(path).map_err(|source| super::Error::Metadata {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+/// Wrapped [`fs::canonicalize`].
+pub(crate) fn canonicalize(path: impl AsRef<Path>) -> Result<PathBuf, super::Error> {
+    let path = path.as_ref();
+    fs::canonicalize(path).map_err(|source| super::Error::Canonicalize {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
 /// Wrapped [`std::path::absolute`].
 pub(crate) fn absolute(path: impl AsRef<Path>) -> Result<PathBuf, super::Error> {
     let path = path.as_ref();

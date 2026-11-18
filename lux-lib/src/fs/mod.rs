@@ -116,6 +116,15 @@ pub enum Error {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to resolve the path '{}'", path.display())]
+    #[diagnostic(
+        code(lux_lib::fs::canonicalize),
+        help("ensure '{}' exists and is accessible", path.display())
+    )]
+    Canonicalize {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
     #[error("failed to rename '{}' to '{}'", from.display(), to.display())]
     #[diagnostic(
         code(lux_lib::fs::rename),
