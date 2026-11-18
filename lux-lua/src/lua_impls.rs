@@ -1195,6 +1195,9 @@ If installing packages for a project, use `project:tree(config)` instead"#,
         methods.document("Whether to skip prompts, selecting the default option");
         methods.add_method("no_prompt", |_, this, ()| Ok(this.0.no_prompt()));
 
+        methods.document("How signatures of downloaded rockspecs and rocks are verified");
+        methods.add_method("verify", |_, this, ()| Ok(this.0.verify().as_str()));
+
         methods.document(
             r#"Timeout on network operations, in seconds.
 0 means no timeout (wait forever)."#,
@@ -1355,6 +1358,16 @@ Default: A `.lux` directory in the workspace root.
         methods.param("no_progress", "Default: false");
         methods.add_method("no_prompt", |_, this, no_prompt: Option<bool>| {
             Ok(ConfigBuilderLua(this.0.clone().no_prompt(no_prompt)))
+        });
+
+        methods.document("How to verify signatures of downloaded rockspecs and rocks.");
+        methods.param("policy", r#""off", "warn", or "require""#);
+        methods.add_method("verify", |_, this, policy: Option<String>| {
+            let policy = policy
+                .map(|policy| policy.parse::<config::verify::Policy>())
+                .transpose()
+                .map_err(mlua::Error::RuntimeError)?;
+            Ok(ConfigBuilderLua(this.0.clone().verify(policy)))
         });
 
         methods.document(

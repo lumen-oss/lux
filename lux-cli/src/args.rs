@@ -78,6 +78,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_verify_policy() {
+        let args = ["lx", "--verify-policy", "warn", "install", "foo"];
+        let cli = Cli::try_parse_from(args).unwrap();
+        assert_eq!(
+            cli.verify_policy,
+            Some(lux_lib::config::verify::Policy::Warn)
+        );
+
+        let cli = Cli::try_parse_from(["lx", "install", "foo"]).unwrap();
+        assert_eq!(cli.verify_policy, None);
+    }
+
+    #[test]
     fn parses_preset_and_deprecated_nvim_flag() {
         let with_preset = Cli::try_parse_from(["lx", "--preset", "nvim", "list"]).unwrap();
         assert_eq!(with_preset.preset, Some(Preset::Nvim));

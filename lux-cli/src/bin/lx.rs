@@ -115,6 +115,7 @@ async fn main() -> Result<()> {
         ))
         .user_agent(Some(cli.user_agent.unwrap_or(DEFAULT_USER_AGENT.into())))
         .no_tfa(Some(cli.no_tfa))
+        .verify(cli.verify_policy)
         .build_profile(cli.profile);
 
     if let Some(preset) = preset {

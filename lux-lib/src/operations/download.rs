@@ -13,8 +13,9 @@ use miette::Diagnostic;
 use thiserror::Error;
 use url::{ParseError, Url};
 
+use crate::operations::sign;
 use crate::{
-    config::Config,
+    config::{self, Config},
     fs, git,
     lockfile::RemotePackageSourceUrl,
     luarocks,
@@ -292,6 +293,7 @@ async fn download_found_rock(
                 .error_for_status()?
                 .bytes()
                 .await?;
+            sign::verify(config, &url, &bytes).await?;
             let content = String::from_utf8(bytes.into())?;
             let rockspec = Rockspec {
                 rockspec: rockspec::lua::Remote::new(&content)
@@ -391,6 +393,9 @@ if the issue persists, the server may be temporarily unavailable."#
     #[error(transparent)]
     #[diagnostic(transparent)]
     Rockspec(#[from] rockspec::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Verify(#[from] sign::verify::Error),
     #[error("error initialising remote package DB")]
     #[diagnostic(forward(0))]
     PackageDB(#[from] package::db::Error),
@@ -473,6 +478,26 @@ pub enum SrcRockError {
     Request(#[from] crate::reqwest::Error),
     #[error("failed to parse source rock URL")]
     Parse(#[from] ParseError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Verify(#[from] sign::verify::Error),
+    #[error("binary rock '{0}' cannot be verified")]
+    #[diagnostic(help(
+        "binary rock signing is not supported yet; install from source or use warn/off"
+    ))]
+    UnverifiedBinary(String),
+}
+
+fn ensure_binary_verifiable(config: &Config, file_name: &str) -> Result<(), SrcRockError> {
+    let policy = config.verify();
+    if policy.allows_binary_rocks() {
+        if policy == config::verify::Policy::Warn {
+            tracing::warn!("{file_name} is a binary rock and is not verified");
+        }
+        Ok(())
+    } else {
+        Err(SrcRockError::UnverifiedBinary(file_name.to_string()))
+    }
 }
 
 #[tracing::instrument(name = "Downloading src.rock", skip_all)]
@@ -481,13 +506,15 @@ pub(crate) async fn src_rock(
     server_url: &Url,
     config: &Config,
 ) -> Result<PackedRockBytes, SrcRockError> {
-    ArchiveDownload::new()
+    let rock = ArchiveDownload::new()
         .package(package)
         .server_url(server_url)
         .config(config)
         .ext("src.rock")
         .download()
-        .await
+        .await?;
+    sign::verify(config, &rock.url, &rock.bytes).await?;
+    Ok(rock)
 }
 
 #[tracing::instrument(name = "Downloading binary rock", skip_all)]
@@ -497,6 +524,8 @@ pub(crate) async fn binary_rock(
     config: &Config,
 ) -> Result<PackedRockBytes, SrcRockError> {
     let ext = format!("{}.rock", luarocks::current_platform_luarocks_identifier());
+    let file_name = luarocks::rock_file_name(package.name(), package.version(), &ext);
+    ensure_binary_verifiable(config, &file_name)?;
     ArchiveDownload::new()
         .package(package)
         .server_url(server_url)
