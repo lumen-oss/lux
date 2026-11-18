@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.55.2](https://github.com/lumen-oss/lux/compare/lux-lsp-v0.55.1...lux-lsp-v0.55.2) `lux-lsp` - 2026-11-18
+
+### Other
+- update Cargo.lock dependencies
+
+## [0.75.1](https://github.com/lumen-oss/lux/compare/lux-lib-v0.75.0...lux-lib-v0.75.1) `lux-lib` - 2026-11-18
+
+### Other
+- update luau ([#2247](https://github.com/lumen-oss/lux/pull/2247))
+
+## [0.55.2](https://github.com/lumen-oss/lux/compare/v0.55.1...v0.55.2) `lux-cli` - 2026-11-18
+
+### Other
+- update Cargo.lock dependencies
+
 ## [0.3.1](https://github.com/lumen-oss/lux/compare/lux-macros-v0.3.0...lux-macros-v0.3.1) `lux-macros` - 2026-11-13
 
 ### Other
