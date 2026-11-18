@@ -5,6 +5,7 @@ use mlua::prelude::*;
 use mlua_extras::typed::{Type, Typed, TypedDataFields, TypedDataMethods, TypedUserData};
 
 mod config;
+mod datafile;
 #[cfg(feature = "definitions")]
 pub mod definitions;
 mod loader;
@@ -31,6 +32,7 @@ impl TypedUserData for LuxModule {
 
     fn add_fields<F: TypedDataFields<Self>>(fields: &mut F) {
         fields.add_field("config", config::ConfigModule);
+        fields.add_field("datafile", datafile::DatafileModule);
         fields.add_field("workspace", workspace::WorkspaceModule);
         fields.add_field("project", project::ProjectModule);
         fields.add_field("operations", operations::OperationsModule);

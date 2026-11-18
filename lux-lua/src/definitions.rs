@@ -20,6 +20,11 @@ pub fn definitions() -> Definitions {
             "Module for building a Lux `Config`",
         )
         .field(
+            "datafile",
+            Type::named("datafile.Module"),
+            "Module for resolving data files installed by Lux packages",
+        )
+        .field(
             "workspace",
             Type::named("workspace.Module"),
             "Module for interacting with a Lux workspace",
