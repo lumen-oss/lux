@@ -124,7 +124,9 @@ impl TryFrom<VersionReq> for Version {
                             .iter()
                             .any(|comparator| comparator.op != semver::Op::Exact) =>
                     {
-                        Err(FromReqError::NonExactVersionReq(version_req))
+                        Err(FromReqError::NonExactVersionReq(VersionReq::SemVer(
+                            version_req,
+                        )))
                     }
                     Ok(comparators) => {
                         let comparator = comparators.first();
@@ -141,7 +143,9 @@ impl TryFrom<VersionReq> for Version {
                             specrev: 1.into(),
                         }))
                     }
-                    Err(_) => Err(FromReqError::NonExactVersionReq(version_req)),
+                    Err(_) => Err(FromReqError::NonExactVersionReq(VersionReq::SemVer(
+                        version_req,
+                    ))),
                 }
             }
             VersionReq::DevVer(modrev) => Ok(Version::DevVer(DevVer {
@@ -152,6 +156,9 @@ impl TryFrom<VersionReq> for Version {
                 modrev,
                 specrev: 1.into(),
             })),
+            except @ VersionReq::SemVerExcept { .. } => {
+                Err(FromReqError::NonExactVersionReq(except))
+            }
             VersionReq::Any => Err(FromReqError::Any),
         }
     }
@@ -753,6 +760,27 @@ mod tests {
     #[test]
     fn parse_any_version_req() {
         assert_eq!(VersionReq::parse("*").unwrap(), VersionReq::Any);
+    }
+
+    #[test]
+    fn not_equal_version_req() {
+        let req = VersionReq::parse("~= 1.5").unwrap();
+        assert!(req.matches(&Version::parse("1.4.0").unwrap()));
+        assert!(req.matches(&Version::parse("1.6.0").unwrap()));
+        assert!(!req.matches(&Version::parse("1.5.0").unwrap()));
+        assert!(!req.matches(&Version::parse("1.5.0-1").unwrap()));
+        assert_eq!(req.to_string(), "~= 1.5.0");
+        assert_eq!(req, VersionReq::parse("!= 1.5").unwrap());
+
+        let req = VersionReq::parse(">= 1.0, ~= 1.5").unwrap();
+        assert!(req.matches(&Version::parse("1.4.0").unwrap()));
+        assert!(!req.matches(&Version::parse("1.5.0").unwrap()));
+        assert!(!req.matches(&Version::parse("0.9.0").unwrap()));
+        assert_eq!(req.to_string(), ">=1.0, ~= 1.5.0");
+        assert_eq!(VersionReq::parse(&req.to_string()).unwrap(), req);
+
+        let req = VersionReq::parse("~= 1.5, ~= 2.0").unwrap();
+        assert_eq!(req.to_string(), "~= 1.5.0, ~= 2.0.0");
     }
 
     #[test]

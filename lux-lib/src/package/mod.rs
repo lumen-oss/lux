@@ -233,6 +233,8 @@ mod tests {
         assert_eq!(package_req.to_string(), "foo<1.0.0");
         let package_req = Req::new("foo".into(), Some("~>1.0".into())).unwrap();
         assert_eq!(package_req.to_string(), "foo>=1.0.0, <1.1.0");
+        let package_req = Req::new("foo".into(), Some("~= 1.5".into())).unwrap();
+        assert_eq!(package_req.to_string(), "foo~= 1.5.0");
         let package_req = Req::new("foo".into(), Some(">=1.0.0, <1.1.0".into())).unwrap();
         assert_eq!(package_req.to_string(), "foo>=1.0.0, <1.1.0");
         let package_req = Req::new("foo".into(), None).unwrap();
