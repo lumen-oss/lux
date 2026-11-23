@@ -3689,7 +3689,7 @@ dependencies = [
  "walkdir",
  "which 8.0.6",
  "whoami",
- "zip 9.7.0",
+ "zip 9.7.3",
 ]
 
 [[package]]
@@ -3782,7 +3782,7 @@ dependencies = [
  "url",
  "walkdir",
  "which 8.0.6",
- "zip 9.7.0",
+ "zip 9.7.3",
 ]
 
 [[package]]
@@ -3820,7 +3820,7 @@ dependencies = [
  "tokio",
  "tracing-subscriber",
  "url",
- "zip 9.7.0",
+ "zip 9.7.3",
 ]
 
 [[package]]
@@ -8197,9 +8197,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.7.0"
+version = "9.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08687262e7c0f1284b259686f322805a8adaa8ef4d7210e76448950b3f083bf7"
+checksum = "63e50f7b2212e4635244be3c363b53273d159f2523eb7db3096c1d2861c1b603"
 dependencies = [
  "aes",
  "bzip2",
@@ -8219,7 +8219,7 @@ dependencies = [
  "sha1 0.11.0",
  "time",
  "typed-path",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
  "zeroize",
  "zopfli",
  "zstd 0.14.3",
