@@ -199,6 +199,7 @@ mod tests {
             ("< 2", "2.3.0", Some("< 3")),
             ("<= 2", "3.0.0", Some("<= 3")),
             ("*", "2.0.0", None),
+            ("~= 2.0", "2.0.0", None),
         ] {
             let req = VersionReq::parse(req).unwrap();
             let latest = Version::parse(latest).unwrap();
