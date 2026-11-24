@@ -214,13 +214,11 @@ fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
     }
 }
 
-/// Resolves the source root inside an unpacked source rock.
+/// Resolves the source root of a fetched source.
 ///
-/// The source root is `<unpacked>/<repository>` when that directory is the only
-/// entry besides the rockspec. Otherwise the source root is the unpacked root.
-///
-/// This matches the wrapper directory luarocks adds when packing a Git source rock,
-/// while leaving unwrapped source trees untouched.
+/// A `.src.rock` packs a Git checkout in a `<repository>` directory.
+/// That directory is the source root when the archive has no other entry besides the
+/// rockspec. Otherwise the source root is the unpacked root.
 ///
 /// For a git source rock containing `foo/`:
 ///
@@ -228,16 +226,20 @@ fn is_src_rock_url(source_url: &RemotePackageSourceUrl) -> bool {
 /// |--------------------------|----------------------|
 /// | `foo/` and the rockspec  | `<unpacked>/foo`     |
 /// | source files at the root | `<unpacked>`         |
-fn src_rock_source_root<R: Rockspec>(rockspec: &R, unpacked_root: &Path) -> PathBuf {
-    if let rockspec::source::Spec::Git(git) = &rockspec.source().current_platform().source_spec {
-        let repo_dir = unpacked_root.join(git.url.repo());
-        if let Ok(Some(entry)) = unpack::single_non_rockspec_entry(unpacked_root) {
-            if entry == repo_dir && entry.is_dir() {
-                return repo_dir;
-            }
-        }
+fn src_rock_source_root<R: Rockspec>(
+    rockspec: &R,
+    source_url: &RemotePackageSourceUrl,
+    unpacked_root: &Path,
+) -> PathBuf {
+    let git = match &rockspec.source().current_platform().source_spec {
+        rockspec::source::Spec::Git(git) if is_src_rock_url(source_url) => git,
+        _ => return unpacked_root.to_path_buf(),
+    };
+    let repo_dir = unpacked_root.join(git.url.repo());
+    match unpack::single_non_rockspec_entry(unpacked_root) {
+        Ok(Some(entry)) if entry == repo_dir && entry.is_dir() => repo_dir,
+        _ => unpacked_root.to_path_buf(),
     }
-    unpacked_root.to_path_buf()
 }
 
 pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
@@ -248,14 +250,6 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
     config: &Config,
 ) -> Result<(LockedPackage, TempDir, PathBuf), build::Error> {
     let temp_dir = fs::tempfile::tempdir()?;
-    let is_src_rock = match &source_spec {
-        Some(RemotePackageSourceSpec::SrcRock(_)) => true,
-        Some(RemotePackageSourceSpec::RockSpec(Some(source_url))) => {
-            config.vendor_dir().is_none() && is_src_rock_url(source_url)
-        }
-        _ => false,
-    };
-
     let source_metadata = match source_spec {
         Some(RemotePackageSourceSpec::SrcRock(SrcRockSource { bytes, source_url })) => {
             let hash = bytes.hash().await?;
@@ -297,11 +291,115 @@ pub(crate) async fn fetch_and_hash_source<R: Rockspec + HasIntegrity>(
         hashes,
     );
 
-    let source_root = if is_src_rock {
-        src_rock_source_root(rockspec, temp_dir.path())
-    } else {
-        temp_dir.path().to_path_buf()
-    };
+    let source_root = src_rock_source_root(rockspec, &source_metadata.source_url, temp_dir.path());
 
     Ok((package, temp_dir, source_root))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git_rockspec() -> rockspec::lua::Remote {
+        rockspec::lua::Remote::new(
+            r#"
+package = "busted"
+version = "2.3.0-1"
+source = { url = "git+https://github.com/lunarmodules/busted.git", tag = "v2.3.0" }
+"#,
+        )
+        .unwrap()
+    }
+
+    fn unpacked_git_src_rock() -> tempfile::TempDir {
+        let unpacked = tempfile::tempdir().unwrap();
+        std::fs::write(unpacked.path().join("busted-2.3.0-1.rockspec"), "").unwrap();
+        std::fs::create_dir(unpacked.path().join("busted")).unwrap();
+        unpacked
+    }
+
+    #[test]
+    fn src_rock_source_root_finds_nested_git_checkout() {
+        let unpacked = unpacked_git_src_rock();
+        let source_url = RemotePackageSourceUrl::Url {
+            url: "https://luarocks.org/busted-2.3.0-1.src.rock"
+                .parse()
+                .unwrap(),
+        };
+
+        assert_eq!(
+            src_rock_source_root(&git_rockspec(), &source_url, unpacked.path()),
+            unpacked.path().join("busted")
+        );
+    }
+
+    #[test]
+    fn locked_git_source_uses_unpacked_root() {
+        let unpacked = unpacked_git_src_rock();
+        let source_url = RemotePackageSourceUrl::Git {
+            url: "https://github.com/lunarmodules/busted.git".into(),
+            checkout_ref: "v2.3.0".into(),
+            submodules: false,
+        };
+
+        assert_eq!(
+            src_rock_source_root(&git_rockspec(), &source_url, unpacked.path()),
+            unpacked.path()
+        );
+    }
+
+    #[tokio::test]
+    async fn git_source_falls_back_to_src_rock_source_root() {
+        use httptest::{http::Response, matchers::request, Expectation, Server};
+        use std::io::Write;
+
+        let mut src_rock = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut src_rock));
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file("busted-2.3.0-1.rockspec", options).unwrap();
+            zip.write_all(b"").unwrap();
+            zip.start_file("busted/busted.lua", options).unwrap();
+            zip.write_all(b"return {}").unwrap();
+            zip.finish().unwrap();
+        }
+
+        let server = Server::run();
+        server.expect(
+            Expectation::matching(request::method_path("GET", "/busted-2.3.0-1.src.rock"))
+                .respond_with(Response::builder().status(200).body(src_rock).unwrap()),
+        );
+        let config = crate::config::Builder::new()
+            .unwrap()
+            .server(Some(server.url("/").to_string().parse().unwrap()))
+            .build()
+            .unwrap();
+        let spec = locked_package::Spec::new(
+            &"busted".into(),
+            &"2.3.0-1".parse().unwrap(),
+            crate::lockfile::Constraint::Unconstrained,
+            Vec::new(),
+            Vec::new(),
+            &crate::lockfile::PinnedState::default(),
+            &crate::lockfile::OptState::default(),
+        );
+        let source_url = RemotePackageSourceUrl::Git {
+            url: "https://127.0.0.1:1/busted.git".into(),
+            checkout_ref: "v2.3.0".into(),
+            submodules: false,
+        };
+
+        let (_, temp_dir, source_root) = fetch_and_hash_source(
+            &git_rockspec(),
+            spec,
+            Some(RemotePackageSourceSpec::RockSpec(Some(source_url))),
+            None,
+            &config,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(source_root, temp_dir.path().join("busted"));
+        assert!(source_root.join("busted.lua").is_file());
+    }
 }
