@@ -125,7 +125,17 @@ where
                         .fetch()
                         .await
                     {
-                        Ok(metadata) => Ok(metadata),
+                        Ok(metadata) => {
+                            tracing::warn!(
+                                message = format!(
+                                    "failed to fetch the source for {package}, falling back to a \
+                                     `.src.rock`. the installed source cannot be verified against \
+                                     the locked source hash."
+                                )
+                                .as_str()
+                            );
+                            Ok(metadata)
+                        }
                         Err(fallback_err) => Err(Error::SourceAndFallback {
                             package: package.to_string(),
                             source: Box::new(err),

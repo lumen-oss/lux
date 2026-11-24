@@ -369,7 +369,7 @@ pub enum IntegrityError {
     )]
     #[diagnostic(help(
         r#"the maintainer may have force-uploaded a different rockspec.
-check the rockspec source, then rerun the command with `--no-lock` to update the hash.
+check the rockspec source, then rerun the command with `--no-integrity-check` to install it anyway.
 "#
     ))]
     RockspecIntegrityMismatch {
@@ -385,7 +385,7 @@ check the rockspec source, then rerun the command with `--no-lock` to update the
     )]
     #[diagnostic(help(
         r#"the maintainer may have force-uploaded a different source or moved a tag.
-check the source URL, then rerun the command with `lx --no-lock` to update the hash.
+check the source URL, then rerun the command with `--no-integrity-check` to install it anyway.
 "#
     ))]
     SourceIntegrityMismatch {
